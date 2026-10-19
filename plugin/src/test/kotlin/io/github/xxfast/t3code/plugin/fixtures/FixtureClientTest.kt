@@ -9,6 +9,7 @@ import io.github.xxfast.t3code.plugin.ui.answersResponse
 import io.github.xxfast.t3code.plugin.ui.derivePendingThreadRequests
 import io.github.xxfast.t3code.plugin.ui.dismissal
 import io.github.xxfast.t3code.plugin.ui.instance
+import io.github.xxfast.t3code.plugin.ui.settled
 import io.github.xxfast.t3code.plugin.ui.nextModelSelection
 import io.github.xxfast.t3code.plugin.ui.setThreadInteractionMode
 import io.github.xxfast.t3code.plugin.ui.setThreadRuntimeMode
@@ -539,6 +540,38 @@ class FixtureClientTest {
   }
 
   @Test
+  fun `settle unpins and stamps, un-settle wakes it as upstream's orchestrator does`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == PINNED } }
+
+    client.dispatch(Command.ThreadSettle(commandId = "cmd_settle", threadId = PINNED))
+    val settled: Thread = client.threads.first { row(it, PINNED).settled }.let { row(it, PINNED) }
+    assertNotNull(settled.settledAt)
+    assertNull(settled.pinnedAt, "Settling unpins")
+    assertNull(settled.pinOrderKey)
+
+    client.dispatch(
+      Command.ThreadUnsettle(commandId = "cmd_unsettle", threadId = PINNED, reason = "user"),
+    )
+    val active: Thread = client.threads.first { !row(it, PINNED).settled }.let { row(it, PINNED) }
+    assertEquals("active", active.settledOverride)
+    assertNull(active.settledAt)
+    assertNotNull(active.unsettledAt)
+  }
+
+  @Test
+  fun `auto-settle opts out and back in`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == IDLE } }
+
+    client.dispatch(Command.ThreadAutoSettleSet(commandId = "c1", threadId = IDLE, enabled = false))
+    client.threads.first { row(it).autoSettleDisabledAt != null }
+
+    client.dispatch(Command.ThreadAutoSettleSet(commandId = "c2", threadId = IDLE, enabled = true))
+    client.threads.first { row(it).autoSettleDisabledAt == null }
+  }
+
+  @Test
   fun `pin and unpin flip the row`() = runTest {
     val client = FixtureClient(default, backgroundScope)
     client.threads.first { threads -> threads.any { it.id == IDLE } }
@@ -611,7 +644,7 @@ class FixtureClientTest {
     assertIs<ConnectionState.Error>(scenario.connection)
   }
 
-  private fun row(threads: List<Thread>): Thread = threads.single { it.id == IDLE }
+  private fun row(threads: List<Thread>, id: String = IDLE): Thread = threads.single { it.id == id }
 
   private fun message(threadId: String, messageId: String, text: String) =
     Command.MessageDispatch(

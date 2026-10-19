@@ -96,11 +96,15 @@ fun Sidebar(
   onNewThread: (() -> Unit)? = null, // null disables the button, as upstream does with no project
   onAddProject: (() -> Unit)? = null, // null hides the button: the desktop app owns projects
   onOpenSettings: (() -> Unit)? = null, // null hides the footer
+  settlement: Boolean = true, // whether the server settles threads; without it there's no shelf
+  actions: RowActions = RowActions(), // the rows' hover buttons
+  shelves: Shelves = Shelves(),
+  onShelvesChange: (Shelves) -> Unit = {},
 ) {
   val search: TextFieldState = rememberTextFieldState()
   val query: String = search.text.toString()
   val sections: ThreadSections =
-    remember(threads, query, filter) { sections(threads, query, filter) }
+    remember(threads, query, filter, settlement) { sections(threads, query, filter, settlement) }
   Column(Modifier.fillMaxSize()) {
     header()
     ThreadHeader(search, projects, favicons, filter, onFilterChange, onNewThread, onAddProject)
@@ -109,6 +113,7 @@ fun Sidebar(
         sections.inbox.isNotEmpty() || sections.settled.isNotEmpty() ->
           Sections(
             projects, favicons, providers, sections, selectedThreadId, onOpenThread, onContextMenu,
+            actions, shelves, onShelvesChange,
           )
 
         else -> Hint(emptyHint(projects.isEmpty(), query, filter))
@@ -286,13 +291,15 @@ private fun Sections(
   selectedThreadId: String?,
   onOpenThread: (String) -> Unit,
   onContextMenu: (threadId: String, x: Int, y: Int) -> Unit,
+  actions: RowActions,
+  shelves: Shelves,
+  onShelvesChange: (Shelves) -> Unit,
 ) {
   val byId: Map<String, Project> = remember(projects) { projects.associateBy { it.id } }
   // Only the Working and Waiting clocks need seconds; everything else is happy with minutes
   val ticking: Set<ThreadStatus> = setOf(ThreadStatus.Working, ThreadStatus.Waiting)
   val period: Long = if (sections.inbox.none { it.sidebarStatus() in ticking }) 30_000 else 1_000
   val now: Instant by rememberNow(period)
-  var settledOpen: Boolean by remember { mutableStateOf(true) }
   var shown: Int by remember { mutableIntStateOf(FIRST_PAGE) }
   val more: Int = moreCount(sections.settled.size, shown)
   val scroll: ScrollState = rememberScrollState()
@@ -314,6 +321,7 @@ private fun Sections(
                 selected = thread.id == selectedThreadId,
                 onClick = { onOpenThread(thread.id) },
                 onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
+                actions = actions,
               )
             },
           )
@@ -322,10 +330,14 @@ private fun Sections(
         add(MotionItem("settled-gap", fill = true))
         add(
           MotionItem("settled-header") {
-            SettledHeader(open = settledOpen, onToggle = { settledOpen = !settledOpen })
+            ShelfHeader(
+              label = shelfLabel("Settled", shelves.settled, sections.settled.size),
+              open = shelves.settled,
+              onToggle = { onShelvesChange(shelves.copy(settled = !shelves.settled)) },
+            )
           },
         )
-        if (!settledOpen) return@buildList
+        if (!shelves.settled) return@buildList
         for (thread in sections.settled.take(shown)) {
           add(
             MotionItem("settled:${thread.id}") {
@@ -337,6 +349,7 @@ private fun Sections(
                 selected = thread.id == selectedThreadId,
                 onClick = { onOpenThread(thread.id) },
                 onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
+                actions = actions,
               )
             },
           )
@@ -354,7 +367,8 @@ private fun Sections(
  * Upstream's card row (`SidebarThreadRow`, variant "card", Sidebar.tsx:2258 onwards): three
  * lines in a 78px surface. Project icon and name with the status at the right, the title, then
  * the branch (worktree glyph first) with the pull request badge and the provider stack at the
- * right. Pins show as a glyph; unpinning is in the context menu.
+ * right. Pins show as a glyph; unpinning is in the context menu. On hover the status gives way
+ * to the card's actions (Sidebar.tsx:2385 to 2442).
  */
 @Composable
 private fun InboxCard(
@@ -366,6 +380,7 @@ private fun InboxCard(
   selected: Boolean,
   onClick: () -> Unit,
   onContextMenu: (x: Int, y: Int) -> Unit,
+  actions: RowActions,
 ) {
   val status: ThreadStatus = thread.sidebarStatus()
   val top: TopStatus? = thread.topStatus()
@@ -387,7 +402,7 @@ private fun InboxCard(
     // A receding working card sits at 70% until hovered
     restAlpha = if (recede && status == ThreadStatus.Working) 0.7f else 1f,
     modifier = Modifier.padding(vertical = 2.dp), // the list item's `py-0.5`
-  ) { _ ->
+  ) { hovered ->
     Column(Modifier.height(CARD_HEIGHT).padding(horizontal = 10.dp, vertical = 8.dp)) {
       Row(
         modifier = Modifier.height(20.dp).fillMaxWidth(),
@@ -405,7 +420,10 @@ private fun InboxCard(
           overflow = TextOverflow.Ellipsis,
         )
         if (thread.pinned) Glyph("pin", subtle(0.65f), 12.dp)
-        if (top != null) {
+        val settle: ((String) -> Unit)? = actions.settle
+        if (hovered && settle != null) {
+          HoverAction("check", "Settle", "Settle thread") { settle(thread.id) }
+        } else if (top != null) {
           TopStatusLabel(thread, top, now)
         } else {
           Text(compactTime(thread.inboxAt(), now), style = small(), color = info)
@@ -506,9 +524,39 @@ private fun ProviderStack(thread: Thread, providers: Map<String, ServerProvider>
   }
 }
 
-/** `CollapsibleSectionHeader` (ui/collapsible-section-header.tsx): label, rule, chevron. */
+/**
+ * A row's hover button (Sidebar.tsx:2420): a glyph, maybe a word, muted until the pointer's on
+ * it. Its own click, so pressing it never opens the thread.
+ */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip sits on Compose's TooltipArea
 @Composable
-private fun SettledHeader(open: Boolean, onToggle: () -> Unit) {
+private fun HoverAction(glyph: String, label: String?, tooltip: String, onClick: () -> Unit) {
+  val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
+  val hovered: Boolean by interactions.collectIsHoveredAsState()
+  val color: Color =
+    if (hovered) JewelTheme.globalColors.text.normal else JewelTheme.globalColors.text.info
+  Tooltip(tooltip = { Text(tooltip) }) {
+    Row(
+      modifier = Modifier
+        .clip(RoundedCornerShape(6.dp))
+        .hoverable(interactions)
+        .clickable(interactionSource = interactions, indication = null, onClick = onClick)
+        .padding(horizontal = 6.dp, vertical = 2.dp),
+      horizontalArrangement = Arrangement.spacedBy(4.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Glyph(glyph, color, 14.dp)
+      if (label != null) Text(label, style = small(), color = color)
+    }
+  }
+}
+
+/**
+ * `CollapsibleSectionHeader` (ui/collapsible-section-header.tsx): label, rule, chevron. A shelf
+ * that's closed says how many rows it holds.
+ */
+@Composable
+private fun ShelfHeader(label: String, open: Boolean, onToggle: () -> Unit) {
   Row(
     modifier = Modifier
       .padding(top = 12.dp) // the thin spacer between the two sections
@@ -520,7 +568,7 @@ private fun SettledHeader(open: Boolean, onToggle: () -> Unit) {
     verticalAlignment = Alignment.CenterVertically,
   ) {
     Text(
-      text = "Settled",
+      text = label,
       style = small(),
       color = JewelTheme.globalColors.text.info,
       fontWeight = FontWeight.Medium,
@@ -539,7 +587,7 @@ private fun SettledHeader(open: Boolean, onToggle: () -> Unit) {
 /**
  * Upstream's slim row (variant "slim", Sidebar.tsx:2100 onwards): 36px, icon, title, pin,
  * badge, time. Settled rows read as secondary until hovered or open; the icon is at 40% and
- * grey the same way.
+ * grey the same way. On hover the time gives way to Un-settle (Sidebar.tsx:2211).
  */
 @Composable
 private fun SettledRow(
@@ -550,6 +598,7 @@ private fun SettledRow(
   selected: Boolean,
   onClick: () -> Unit,
   onContextMenu: (x: Int, y: Int) -> Unit,
+  actions: RowActions,
 ) {
   Selectable(selected, onClick, onContextMenu) { hovered ->
     val lit: Boolean = selected || hovered
@@ -576,11 +625,16 @@ private fun SettledRow(
       )
       if (thread.pinned) Glyph("pin", subtle(0.65f), 12.dp)
       thread.pullRequestBadge()?.let { PullRequestBadgeView(it) }
-      Text(
-        text = compactTime(thread.settledAt(), now),
-        style = small(),
-        color = JewelTheme.globalColors.text.info,
-      )
+      val settle: ((String) -> Unit)? = actions.settle
+      if (hovered && settle != null) {
+        HoverAction("undo-2", null, "Un-settle thread") { settle(thread.id) }
+      } else {
+        Text(
+          text = compactTime(thread.settledAt(), now),
+          style = small(),
+          color = JewelTheme.globalColors.text.info,
+        )
+      }
     }
   }
 }

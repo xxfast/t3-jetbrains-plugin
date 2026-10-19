@@ -65,11 +65,35 @@
         description="Pin or unpin the thread"
         icon="AllIcons.General.Pin"/>
       <action
+        id="T3Code.ToggleSettle"
+        class="io.github.xxfast.t3code.plugin.actions.SettleThreadAction"
+        text="Settle thread"
+        description="Settle or un-settle the thread"
+        icon="AllIcons.Actions.Checked"/>
+      <separator/>
+      <action
         id="T3Code.MarkUnread"
         class="io.github.xxfast.t3code.plugin.actions.MarkUnreadAction"
         text="Mark unread"
         description="Show the thread's latest run as unseen"
         icon="AllIcons.Toolwindows.NotificationsNew"/>
+      <group
+        id="T3Code.AutoSettle"
+        class="io.github.xxfast.t3code.plugin.actions.AutoSettleGroup"
+        text="Auto-settle behavior"
+        popup="true">
+        <action
+          id="T3Code.AutoSettleOn"
+          class="io.github.xxfast.t3code.plugin.actions.AutoSettleOnAction"
+          text="Enabled"
+          description="Settle the thread on its own once it's done"/>
+        <action
+          id="T3Code.AutoSettleOff"
+          class="io.github.xxfast.t3code.plugin.actions.AutoSettleOffAction"
+          text="Disabled"
+          description="Keep the thread in the inbox until it's settled by hand"/>
+      </group>
+      <separator/>
       <action
         id="T3Code.ToggleArchive"
         class="io.github.xxfast.t3code.plugin.actions.ArchiveThreadAction"

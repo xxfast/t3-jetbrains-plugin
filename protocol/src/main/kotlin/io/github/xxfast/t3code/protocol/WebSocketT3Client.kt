@@ -235,6 +235,9 @@ public class WebSocketT3Client internal constructor(
     val fresh = ServerInfo(
       providers = decodeEach(ServerProvider.serializer(), config["providers"]),
       serverResolvedCommandContext = resolved ?: false,
+      capabilities = capabilities.orEmpty()
+        .filterValues { flag -> (flag as? JsonPrimitive)?.booleanOrNull == true }
+        .keys,
     )
     info = rpc to fresh
     return fresh

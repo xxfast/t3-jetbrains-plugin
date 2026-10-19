@@ -102,6 +102,25 @@ class ThreadActionsLogicTest {
   }
 
   @Test
+  fun `settle toggles on the server's settled override`() {
+    val settled: Thread = row.copy(settledOverride = "settled", settledAt = "2026-10-19T09:00:00Z")
+    assertEquals("Settle thread", settleText(row))
+    assertEquals("Un-settle thread", settleText(settled))
+    assertEquals(Command.ThreadSettle(commandId = "c", threadId = row.id), settleCommand(row, "c"))
+    val unsettle = Command.ThreadUnsettle(commandId = "c", threadId = row.id, reason = "user")
+    assertEquals(unsettle, settleCommand(settled, "c"))
+    assertNull(disabledReason(ThreadActionKind.Settle, OPERATING, row))
+  }
+
+  @Test
+  fun `auto-settle is on until the thread opts out`() {
+    assertTrue(row.autoSettles)
+    assertFalse(row.copy(autoSettleDisabledAt = "2026-10-19T09:00:00Z").autoSettles)
+    val expected = Command.ThreadAutoSettleSet(commandId = "c", threadId = row.id, enabled = false)
+    assertEquals(expected, autoSettleCommand(row, enabled = false, "c"))
+  }
+
+  @Test
   fun `the active run is the newest one in flight`() {
     assertEquals("run_01JC4A2K7QB8", activeRun(view)?.id)
     val first: Run = runs.first()

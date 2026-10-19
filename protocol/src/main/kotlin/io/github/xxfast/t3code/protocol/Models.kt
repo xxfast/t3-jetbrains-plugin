@@ -95,4 +95,9 @@ public data class ServerInfo(
    * itself.
    */
   val serverResolvedCommandContext: Boolean,
+  /**
+   * The `environment.capabilities` flags that are `true` (`threadSettlement`, `threadSnooze`,
+   * ...). Upstream reads an absent flag as unsupported, so this only holds the ones that are on.
+   */
+  val capabilities: Set<String> = emptySet(),
 )

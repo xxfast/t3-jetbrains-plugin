@@ -2,6 +2,7 @@ package io.github.xxfast.t3code.plugin.actions
 
 import io.github.xxfast.t3code.plugin.ui.READ_ONLY as COMPOSER_READ_ONLY
 import io.github.xxfast.t3code.plugin.ui.operateBlockReason
+import io.github.xxfast.t3code.plugin.ui.settled
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.Thread
@@ -24,7 +25,7 @@ const val NO_THREAD: String = "No thread selected"
 /** Run statuses `interruptThreadTurn` looks for, commands.ts:787. */
 val INTERRUPTIBLE: Set<String> = setOf("preparing", "starting", "running", "waiting")
 
-enum class ThreadActionKind { Stop, Interrupt, Archive, Pin, MarkUnread }
+enum class ThreadActionKind { Stop, Interrupt, Archive, Pin, MarkUnread, Settle, AutoSettle }
 
 /**
  * Why no command can go out on [connection], or null when one can: [operateBlockReason], the one
@@ -39,7 +40,8 @@ fun disabledReason(kind: ThreadActionKind, connection: ConnectionState, row: Thr
   if (row == null) return NO_THREAD
   return when (kind) {
     // The shell row has no provider runtime, so Stop finds out from the thread itself
-    ThreadActionKind.Stop, ThreadActionKind.Pin -> null
+    ThreadActionKind.Stop, ThreadActionKind.Pin, ThreadActionKind.Settle,
+    ThreadActionKind.AutoSettle -> null
     ThreadActionKind.Interrupt -> if (row.interruptible) null else "Nothing running"
     // threadActionMenu.logic.ts: archive rejects a thread with an attached provider
     ThreadActionKind.Archive ->
@@ -67,6 +69,12 @@ fun archiveText(row: Thread?): String =
   if (row?.archived == true) "Unarchive thread" else "Archive thread"
 
 fun pinText(row: Thread?): String = if (row?.pinned == true) "Unpin thread" else "Pin thread"
+
+fun settleText(row: Thread?): String =
+  if (row?.settled == true) "Un-settle thread" else "Settle thread"
+
+/** Auto-settle is on until the thread opts out, threadActionMenu.logic.ts's `autoSettleEnabled`. */
+val Thread.autoSettles: Boolean get() = autoSettleDisabledAt == null
 
 /** The newest run in flight, what `interruptThreadTurn` picks with `findLast`, commands.ts:787. */
 fun activeRun(view: ThreadView): Run? = view.runs.lastOrNull { it.status in INTERRUPTIBLE }
@@ -116,3 +124,18 @@ fun pinCommand(row: Thread, commandId: String): Command =
   } else {
     Command.ThreadPin(commandId = commandId, threadId = row.id)
   }
+
+/**
+ * `settleThread` or `unsettleThread` (commands.ts:438 and 499), by where [row] is now. Un-settle
+ * from a client is always the user's doing.
+ */
+fun settleCommand(row: Thread, commandId: String): Command =
+  if (row.settled) {
+    Command.ThreadUnsettle(commandId = commandId, threadId = row.id, reason = "user")
+  } else {
+    Command.ThreadSettle(commandId = commandId, threadId = row.id)
+  }
+
+/** `setThreadAutoSettle`, commands.ts:459. */
+fun autoSettleCommand(row: Thread, enabled: Boolean, commandId: String): Command =
+  Command.ThreadAutoSettleSet(commandId = commandId, threadId = row.id, enabled = enabled)

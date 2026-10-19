@@ -4,15 +4,18 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.Presentation
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
+import io.github.xxfast.t3code.plugin.ChatController
 import io.github.xxfast.t3code.plugin.T3
 import io.github.xxfast.t3code.plugin.ThreadSelection
 import io.github.xxfast.t3code.plugin.ide.launchReporting
 import io.github.xxfast.t3code.plugin.ide.notify
+import io.github.xxfast.t3code.plugin.ui.supports
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
@@ -24,14 +27,19 @@ import kotlinx.coroutines.withTimeout
 /**
  * A thread lifecycle action. Acts on [T3DataKeys.THREAD_ID] from the context (the thread view, a
  * Sidebar row) and falls back to the selected thread, so Find Action and keymaps work anywhere.
- * Enablement is [disabledReason], and the reason is the description while disabled.
+ * Enablement is [disabledReason], and the reason is the description while disabled. Hidden when
+ * the server doesn't advertise [capability], and on the thread view's toolbar when [menuOnly].
  */
-abstract class ThreadAction(private val kind: ThreadActionKind) : AnAction(), DumbAware {
+abstract class ThreadAction(
+  private val kind: ThreadActionKind,
+  private val capability: String? = null,
+  private val menuOnly: Boolean = false,
+) : AnAction(), DumbAware {
   override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
   override fun update(e: AnActionEvent) {
     val project: Project? = e.project
-    if (project == null) {
+    if (project == null || !e.shows(project, capability, menuOnly)) {
       e.presentation.isEnabledAndVisible = false
       return
     }
@@ -58,6 +66,28 @@ abstract class ThreadAction(private val kind: ThreadActionKind) : AnAction(), Du
   protected open fun present(presentation: Presentation, row: Thread?) = Unit
 
   protected abstract suspend fun perform(target: ThreadTarget)
+}
+
+/**
+ * A submenu of thread actions, hidden like a [ThreadAction] when the server doesn't do
+ * [capability] or this is the thread view's toolbar.
+ */
+abstract class ThreadActionGroup(private val capability: String?) : DefaultActionGroup(),
+  DumbAware {
+  override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+
+  override fun update(e: AnActionEvent) {
+    val project: Project? = e.project
+    e.presentation.isEnabledAndVisible =
+      project != null && e.shows(project, capability, menuOnly = true)
+  }
+}
+
+/** Whether an action needing [capability] shows here at all. */
+private fun AnActionEvent.shows(project: Project, capability: String?, menuOnly: Boolean): Boolean {
+  if (menuOnly && isFromActionToolbar) return false
+  if (capability == null) return true
+  return ChatController.getInstance(project).catalog.value.supports(capability)
 }
 
 /** The thread an action acts on: the context's, else the selected one. */

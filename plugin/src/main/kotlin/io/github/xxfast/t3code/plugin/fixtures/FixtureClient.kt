@@ -1,6 +1,8 @@
 package io.github.xxfast.t3code.plugin.fixtures
 
 import com.intellij.openapi.diagnostic.Logger
+import io.github.xxfast.t3code.plugin.ui.THREAD_AUTO_SETTLE_OPT_OUT
+import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
 import io.github.xxfast.t3code.plugin.ui.instance
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.ConversationMessage
@@ -254,6 +256,43 @@ class FixtureClient(
           pinnedAt = null,
           pinOrderKey = null,
           updatedAt = if (alreadyUnpinned) row.updatedAt else now,
+        )
+      }
+
+      // Orchestrator.ts:2839
+      is Command.ThreadSettle -> updateRow(command.threadId) { row ->
+        val wasPinned: Boolean = row.pinnedAt != null
+        val alreadySettled: Boolean =
+          row.settledOverride == "settled" && row.settledAt != null && !wasPinned
+        row.copy(
+          settledOverride = "settled",
+          settledAt = if (alreadySettled) row.settledAt else command.settledAt ?: now,
+          pullRequests = row.pullRequests?.map { link -> link.copy(watch = null) },
+          unsettledAt = null,
+          pinnedAt = null,
+          pinOrderKey = null,
+          activeOrderKey = null,
+          updatedAt = if (alreadySettled) row.updatedAt else now,
+        )
+      }
+
+      // Orchestrator.ts:2855
+      is Command.ThreadUnsettle -> updateRow(command.threadId) { row ->
+        val alreadyActive: Boolean = row.settledOverride == "active"
+        row.copy(
+          settledOverride = "active",
+          settledAt = null,
+          unsettledAt = if (alreadyActive) row.unsettledAt else now,
+          updatedAt = if (alreadyActive) row.updatedAt else now,
+        )
+      }
+
+      // Orchestrator.ts:2889
+      is Command.ThreadAutoSettleSet -> updateRow(command.threadId) { row ->
+        val unchanged: Boolean = command.enabled == (row.autoSettleDisabledAt == null)
+        row.copy(
+          autoSettleDisabledAt = if (command.enabled) null else row.autoSettleDisabledAt ?: now,
+          updatedAt = if (unchanged) row.updatedAt else now,
         )
       }
 
@@ -690,6 +729,7 @@ class FixtureClient(
       ),
     ),
     serverResolvedCommandContext = true,
+    capabilities = setOf(THREAD_SETTLEMENT, THREAD_AUTO_SETTLE_OPT_OUT),
   )
 
   override fun connect() {

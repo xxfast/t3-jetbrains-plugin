@@ -2,7 +2,17 @@ package io.github.xxfast.t3code.plugin.actions
 
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.Presentation
+import com.intellij.openapi.actionSystem.Toggleable
+import io.github.xxfast.t3code.plugin.ThreadSelection
+import io.github.xxfast.t3code.plugin.ide.ProjectAwareness
+import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ide.ThreadVisits
+import io.github.xxfast.t3code.plugin.ui.ProjectFilter
+import io.github.xxfast.t3code.plugin.ui.THREAD_AUTO_SETTLE_OPT_OUT
+import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
+import io.github.xxfast.t3code.plugin.ui.nextCard
+import io.github.xxfast.t3code.plugin.ui.sections
+import io.github.xxfast.t3code.plugin.ui.settled
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.pinned
@@ -76,3 +86,48 @@ class MarkUnreadAction : ThreadAction(ThreadActionKind.MarkUnread) {
     target.client.dispatch(command)
   }
 }
+
+/**
+ * Settle or un-settle: upstream's `attemptSettle` and `attemptUnsettle`, Sidebar.tsx:3238 and
+ * 3284. Settling the thread this window has open moves on to the next card, the way upstream's
+ * `planForwardNavigation` does: picked before the command, followed once it lands.
+ */
+class SettleThreadAction : ThreadAction(ThreadActionKind.Settle, THREAD_SETTLEMENT) {
+  override fun present(presentation: Presentation, row: Thread?) {
+    presentation.text = settleText(row)
+  }
+
+  override suspend fun perform(target: ThreadTarget) {
+    val next: String? = if (target.row.settled) null else target.nextCard()
+    target.client.dispatch(settleCommand(target.row, target.commandId()))
+    if (next != null) T3Opener.getInstance(target.project).openThread(next)
+  }
+
+  /** The card after this thread when it's the open one, in the Sidebar's order and filter. */
+  private fun ThreadTarget.nextCard(): String? {
+    if (ThreadSelection.getInstance(project).selected.value != row.id) return null
+    val filter: ProjectFilter = ProjectAwareness.getInstance(project).filter.value
+    return nextCard(sections(client.threads.value, query = "", filter).inbox, row.id)
+  }
+}
+
+/** "Auto-settle behavior", threadActionMenu.logic.ts:173: Enabled and Disabled, one checked. */
+class AutoSettleGroup : ThreadActionGroup(THREAD_AUTO_SETTLE_OPT_OUT)
+
+/** One of [AutoSettleGroup]'s choices, `setThreadAutoSettle` with [enabled]. */
+abstract class AutoSettleAction(private val enabled: Boolean) :
+  ThreadAction(ThreadActionKind.AutoSettle, THREAD_AUTO_SETTLE_OPT_OUT, menuOnly = true),
+  Toggleable {
+  override fun present(presentation: Presentation, row: Thread?) {
+    Toggleable.setSelected(presentation, row?.autoSettles == enabled)
+  }
+
+  override suspend fun perform(target: ThreadTarget) {
+    if (target.row.autoSettles == enabled) return
+    target.client.dispatch(autoSettleCommand(target.row, enabled, target.commandId()))
+  }
+}
+
+class AutoSettleOnAction : AutoSettleAction(enabled = true)
+
+class AutoSettleOffAction : AutoSettleAction(enabled = false)

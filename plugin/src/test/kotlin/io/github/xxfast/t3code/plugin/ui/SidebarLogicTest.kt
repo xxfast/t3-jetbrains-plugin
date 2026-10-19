@@ -12,6 +12,7 @@ import java.time.Duration
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -62,6 +63,29 @@ class SidebarLogicTest {
     val sections: ThreadSections = sections(threads, "")
     assertEquals(setOf("idle", "running", "busy"), sections.inbox.map { it.id }.toSet())
     assertEquals(listOf("done"), sections.settled.map { it.id })
+  }
+
+  @Test
+  fun `without settlement on the server settled rows stay in the inbox`() {
+    val threads: List<Thread> = listOf(thread("idle"), thread("done", settledOverride = "settled"))
+    val sections: ThreadSections = sections(threads, "", settlement = false)
+    assertEquals(setOf("idle", "done"), sections.inbox.map { it.id }.toSet())
+    assertEquals(emptyList(), sections.settled)
+  }
+
+  @Test
+  fun `settling the open card moves to the next one, wrapping round`() {
+    val inbox: List<Thread> = listOf(thread("a"), thread("b"), thread("c"))
+    assertEquals("c", nextCard(inbox, "b"))
+    assertEquals("a", nextCard(inbox, "c"))
+    assertNull(nextCard(inbox, "settled"), "Not a card, nowhere to go")
+    assertNull(nextCard(listOf(thread("a")), "a"), "The only card")
+  }
+
+  @Test
+  fun `a closed shelf counts its rows`() {
+    assertEquals("Settled", shelfLabel("Settled", open = true, count = 3))
+    assertEquals("Settled (3)", shelfLabel("Settled", open = false, count = 3))
   }
 
   @Test

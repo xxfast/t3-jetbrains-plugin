@@ -19,6 +19,21 @@ val RUNNING: Set<String> = setOf("preparing", "queued", "starting", "running")
 const val FIRST_PAGE: Int = 10
 const val NEXT_PAGE: Int = 25
 
+/**
+ * Which shelves are open: upstream keeps `t3code:sidebar:settled-expanded` and friends in local
+ * storage (Sidebar.tsx:366), closed until opened.
+ */
+data class Shelves(val settled: Boolean = false)
+
+/**
+ * What a row's hover buttons do. A null member hides its button: the server doesn't do it, or
+ * this pairing can't operate.
+ */
+class RowActions(
+  /** Settles a card, un-settles a settled row. */
+  val settle: ((threadId: String) -> Unit)? = null,
+)
+
 /** The two sections of the threads panel: the inbox (pinned first) and settled. */
 data class ThreadSections(val inbox: List<Thread>, val settled: List<Thread>)
 
@@ -114,13 +129,15 @@ fun emptyHint(noProjects: Boolean, query: String, filter: ProjectFilter): String
 /**
  * Splits [threads] matching [query] by title. Inbox is pinned rows (by `pinOrderKey`, keyless
  * ones newest first) then active rows (keyless ones newest by `createdAt`/`unsettledAt`, then by
- * `activeOrderKey`). Settled is newest settled first. Archived and under-parent rows are dropped,
- * and so are rows from projects outside [filter].
+ * `activeOrderKey`). Settled is newest settled first, and only on a server that does
+ * [settlement] (Sidebar.tsx:636). Archived and under-parent rows are dropped, and so are rows
+ * from projects outside [filter].
  */
 fun sections(
   threads: List<Thread>,
   query: String,
   filter: ProjectFilter = ProjectFilter.All,
+  settlement: Boolean = true,
 ): ThreadSections {
   val needle: String = query.trim()
   val ids: Set<String> = threads.mapTo(HashSet()) { it.id }
@@ -130,7 +147,8 @@ fun sections(
       filter.allows(it.projectId) &&
       it.title.contains(needle, ignoreCase = true)
   }
-  val (settled: List<Thread>, inbox: List<Thread>) = visible.partition { it.settled }
+  val (settled: List<Thread>, inbox: List<Thread>) =
+    visible.partition { settlement && it.settled }
   val (pinned: List<Thread>, active: List<Thread>) = inbox.partition { it.pinned }
   val pinnedOrder: Comparator<Thread> = compareBy<Thread> { it.pinOrderKey == null }
     .thenBy { it.pinOrderKey }
@@ -147,6 +165,21 @@ fun sections(
     settled = settled.sortedWith(settledOrder),
   )
 }
+
+/**
+ * Where settling the open [current] thread moves to: the next inbox card after it, wrapping
+ * round, as `planForwardNavigation` (Sidebar.tsx:3213) picks it. Null when [current] isn't a
+ * card or it's the only one; upstream then starts a new thread, which the plugin can't yet (#17).
+ */
+fun nextCard(inbox: List<Thread>, current: String): String? {
+  val index: Int = inbox.indexOfFirst { it.id == current }
+  if (index == -1) return null
+  return (inbox.drop(index + 1) + inbox.take(index)).firstOrNull()?.id
+}
+
+/** A collapsed shelf's header counts its rows, as the section headers at Sidebar.tsx:4982 do. */
+fun shelfLabel(name: String, open: Boolean, count: Int): String =
+  if (open) name else "$name ($count)"
 
 /** How many rows "Show N more" reveals, `0` when all [total] are already [shown]. */
 fun moreCount(total: Int, shown: Int): Int = (total - shown).coerceIn(0, NEXT_PAGE)
