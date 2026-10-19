@@ -64,7 +64,7 @@ fun ThreadsPanel(
     SearchField(search)
     Box(Modifier.weight(1f)) {
       when {
-        sections.active.isNotEmpty() || sections.settled.isNotEmpty() ->
+        sections.inbox.isNotEmpty() || sections.settled.isNotEmpty() ->
           Sections(projects, sections, selectedThreadId, onOpenThread)
 
         projects.isEmpty() -> Hint("No projects yet. Open the T3 Code desktop app to add one.")
@@ -95,8 +95,8 @@ private fun Sections(
   onOpenThread: (String) -> Unit,
 ) {
   val titles: Map<String, String> = remember(projects) { projects.associate { it.id to it.title } }
-  // Only the "Working" clock needs seconds; settled rows are happy with minutes
-  val period: Long = if (sections.active.isEmpty()) 30_000 else 1_000
+  // Only the "Working" clock needs seconds; everything else is happy with minutes
+  val period: Long = if (sections.inbox.none { it.active }) 30_000 else 1_000
   val now: Instant by rememberNow(period)
   var settledOpen: Boolean by remember { mutableStateOf(true) }
   var shown: Int by remember { mutableIntStateOf(FIRST_PAGE) }
@@ -104,8 +104,8 @@ private fun Sections(
   val state: LazyListState = rememberLazyListState()
   VerticallyScrollableContainer(scrollState = state, modifier = Modifier.fillMaxSize()) {
     LazyColumn(state = state, modifier = Modifier.fillMaxSize()) {
-      items(sections.active, key = { "active:${it.id}" }) { thread ->
-        ActiveCard(
+      items(sections.inbox, key = { "inbox:${it.id}" }) { thread ->
+        InboxCard(
           thread = thread,
           projectTitle = titles[thread.projectId].orEmpty(),
           now = now,
@@ -132,7 +132,7 @@ private fun Sections(
 }
 
 @Composable
-private fun ActiveCard(
+private fun InboxCard(
   thread: Thread,
   projectTitle: String,
   now: Instant,
@@ -158,19 +158,27 @@ private fun ActiveCard(
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
         )
-        if (thread.waitingOnYou) {
-          Text(
+        when {
+          thread.waitingOnYou -> Text(
             text = "Waiting on you",
             style = JewelTheme.typography.small,
             color = JewelTheme.globalColors.text.warning,
           )
-        } else {
-          CircularProgressIndicator(Modifier.size(12.dp))
-          Text(
-            text = "Working ${duration(Duration.between(thread.runStartedAt(), now))}",
+
+          thread.active -> {
+            CircularProgressIndicator(Modifier.size(12.dp))
+            Text(
+              text = "Working ${duration(Duration.between(thread.runStartedAt(), now))}",
+              style = JewelTheme.typography.small,
+              color = accent(),
+              maxLines = 1,
+            )
+          }
+
+          else -> Text(
+            text = relativeTime(thread.updatedAt.toInstant(), now),
             style = JewelTheme.typography.small,
-            color = accent(),
-            maxLines = 1,
+            color = JewelTheme.globalColors.text.info,
           )
         }
       }

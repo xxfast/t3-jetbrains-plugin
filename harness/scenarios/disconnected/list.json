@@ -200,7 +200,8 @@
       "visibleItemCount": 5,
       "hasActionableProposedPlan": false,
       "createdAt": "2026-10-18T11:05:00.000Z",
-      "updatedAt": "2026-10-18T11:05:00.000Z"
+      "updatedAt": "2026-10-18T11:05:00.000Z",
+      "settledAt": "2026-10-18T11:05:00.000Z"
     },
     {
       "id": "thr_01JC1A2B3CSETTLE02",
@@ -223,7 +224,8 @@
       "visibleItemCount": 5,
       "hasActionableProposedPlan": false,
       "createdAt": "2026-10-17T16:20:00.000Z",
-      "updatedAt": "2026-10-17T16:20:00.000Z"
+      "updatedAt": "2026-10-17T16:20:00.000Z",
+      "settledAt": "2026-10-17T16:20:00.000Z"
     },
     {
       "id": "thr_01JC1A2B3CSETTLE03",
@@ -247,7 +249,8 @@
       "visibleItemCount": 5,
       "hasActionableProposedPlan": false,
       "createdAt": "2026-10-16T09:45:00.000Z",
-      "updatedAt": "2026-10-16T09:45:00.000Z"
+      "updatedAt": "2026-10-16T09:45:00.000Z",
+      "settledAt": "2026-10-16T09:45:00.000Z"
     },
     {
       "id": "thr_01JC1A2B3CSETTLE04",
@@ -270,7 +273,8 @@
       "visibleItemCount": 5,
       "hasActionableProposedPlan": false,
       "createdAt": "2026-10-15T14:00:00.000Z",
-      "updatedAt": "2026-10-15T14:00:00.000Z"
+      "updatedAt": "2026-10-15T14:00:00.000Z",
+      "settledAt": "2026-10-15T14:00:00.000Z"
     },
     {
       "id": "thr_01JC1A2B3CSETTLE05",
@@ -293,7 +297,8 @@
       "visibleItemCount": 5,
       "hasActionableProposedPlan": false,
       "createdAt": "2026-10-14T10:30:00.000Z",
-      "updatedAt": "2026-10-14T10:30:00.000Z"
+      "updatedAt": "2026-10-14T10:30:00.000Z",
+      "settledAt": "2026-10-14T10:30:00.000Z"
     },
     {
       "id": "thr_01JC1A2B3CSETTLE06",
@@ -317,7 +322,8 @@
       "visibleItemCount": 5,
       "hasActionableProposedPlan": false,
       "createdAt": "2026-10-12T18:10:00.000Z",
-      "updatedAt": "2026-10-12T18:10:00.000Z"
+      "updatedAt": "2026-10-12T18:10:00.000Z",
+      "settledAt": "2026-10-12T18:10:00.000Z"
     },
     {
       "id": "thr_01JC1A2B3CSETTLE07",
@@ -340,7 +346,8 @@
       "visibleItemCount": 5,
       "hasActionableProposedPlan": false,
       "createdAt": "2026-10-08T08:00:00.000Z",
-      "updatedAt": "2026-10-08T08:00:00.000Z"
+      "updatedAt": "2026-10-08T08:00:00.000Z",
+      "settledAt": "2026-10-08T08:00:00.000Z"
     },
     {
       "id": "thr_01JC1A2B3CSETTLE08",
@@ -363,7 +370,8 @@
       "visibleItemCount": 5,
       "hasActionableProposedPlan": false,
       "createdAt": "2026-09-30T12:00:00.000Z",
-      "updatedAt": "2026-09-30T12:00:00.000Z"
+      "updatedAt": "2026-09-30T12:00:00.000Z",
+      "settledAt": "2026-09-30T12:00:00.000Z"
     },
     {
       "id": "thr_01JBZQ2D8NARCHIVE",
@@ -388,7 +396,8 @@
       "hasActionableProposedPlan": false,
       "archivedAt": "2026-10-10T16:00:00.000Z",
       "createdAt": "2026-10-09T15:12:00.000Z",
-      "updatedAt": "2026-10-09T15:31:48.000Z"
+      "updatedAt": "2026-10-09T15:31:48.000Z",
+      "settledAt": "2026-10-09T15:31:48.000Z"
     }
   ]
 }

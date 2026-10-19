@@ -19,24 +19,33 @@ const val FIRST_PAGE: Int = 10
 const val NEXT_PAGE: Int = 25
 
 /** The two sections of the threads panel, archived threads left out. */
-data class ThreadSections(val active: List<Thread>, val settled: List<Thread>)
+data class ThreadSections(val inbox: List<Thread>, val settled: List<Thread>)
 
 val Thread.active: Boolean get() = activeRunId != null || status in RUNNING
 
 val Thread.waitingOnYou: Boolean get() = pendingRuntimeRequest != null || status == "waiting"
 
-/** Splits [threads] matching [query] by title. Active newest run first; settled pinned first. */
+/**
+ * Settled the way the desktop app means it: the server stamped `settledAt` (merged PR, days of
+ * inactivity, or the user settled it), unless the user overrode that either way. A thread that
+ * merely finished its last turn stays in the inbox.
+ */
+val Thread.settled: Boolean
+  get() = when (settledOverride) {
+    "settled" -> true
+    "active" -> false
+    else -> settledAt != null
+  }
+
+/** Splits [threads] matching [query] by title. Both sections pinned first, then newest. */
 fun sections(threads: List<Thread>, query: String): ThreadSections {
   val needle: String = query.trim()
-  val (active: List<Thread>, settled: List<Thread>) = threads
+  val (settled: List<Thread>, inbox: List<Thread>) = threads
     .filter { !it.archived && it.title.contains(needle, ignoreCase = true) }
-    .partition { it.active }
+    .partition { it.settled }
   val order: Comparator<Thread> = compareByDescending<Thread> { it.pinned }
     .thenByDescending { it.updatedAt.toInstant() }
-  return ThreadSections(
-    active = active.sortedByDescending { it.runStartedAt() },
-    settled = settled.sortedWith(order),
-  )
+  return ThreadSections(inbox = inbox.sortedWith(order), settled = settled.sortedWith(order))
 }
 
 /** How many rows "Show N more" reveals, `0` when all [total] are already [shown]. */

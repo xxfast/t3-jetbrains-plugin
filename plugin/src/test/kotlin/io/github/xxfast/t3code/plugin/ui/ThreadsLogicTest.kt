@@ -28,33 +28,43 @@ class ThreadsLogicTest {
   }
 
   @Test
-  fun `sections split active from settled and drop archived`() {
+  fun `settled is the server stamp unless overridden`() {
+    assertFalse(thread().settled, "An idle thread that just finished a turn stays in the inbox")
+    assertTrue(thread(settledAt = EPOCH).settled)
+    assertFalse(thread(settledAt = EPOCH, settledOverride = "active").settled)
+    assertTrue(thread(settledOverride = "settled").settled)
+  }
+
+  @Test
+  fun `sections split settled from the inbox and drop archived`() {
     val threads: List<Thread> = listOf(
       thread("idle"),
+      thread("done", settledAt = EPOCH),
       thread("running", status = "running"),
       thread("archived", archivedAt = "2026-10-19T00:00:00Z"),
       thread("busy", activeRunId = "r"),
     )
     val sections: ThreadSections = sections(threads, "")
-    assertEquals(setOf("running", "busy"), sections.active.map { it.id }.toSet())
-    assertEquals(listOf("idle"), sections.settled.map { it.id })
+    assertEquals(setOf("idle", "running", "busy"), sections.inbox.map { it.id }.toSet())
+    assertEquals(listOf("done"), sections.settled.map { it.id })
   }
 
   @Test
-  fun `active newest run first`() {
+  fun `inbox pinned first, then newest`() {
     val threads: List<Thread> = listOf(
-      thread("old", status = "running", runStartedAt = "2026-10-19T08:00:00Z"),
-      thread("new", status = "running", runStartedAt = "2026-10-19T09:00:00Z"),
+      thread("old", status = "running", updatedAt = "2026-10-19T08:00:00Z"),
+      thread("new", updatedAt = "2026-10-19T09:00:00Z"),
+      thread("pinned", updatedAt = "2026-09-01T00:00:00Z", pinnedAt = "2026-09-01T00:00:00Z"),
     )
-    assertEquals(listOf("new", "old"), sections(threads, "").active.map { it.id })
+    assertEquals(listOf("pinned", "new", "old"), sections(threads, "").inbox.map { it.id })
   }
 
   @Test
   fun `settled pinned first, then newest`() {
     val threads: List<Thread> = listOf(
-      thread("old", updatedAt = "2026-10-01T00:00:00Z"),
-      thread("new", updatedAt = "2026-10-18T00:00:00Z"),
-      thread("pinned", updatedAt = "2026-09-01T00:00:00Z", pinnedAt = "2026-09-01T00:00:00Z"),
+      thread("old", updatedAt = "2026-10-01T00:00:00Z", settledAt = EPOCH),
+      thread("new", updatedAt = "2026-10-18T00:00:00Z", settledAt = EPOCH),
+      thread("pinned", updatedAt = "2026-09-01T00:00:00Z", pinnedAt = EPOCH, settledAt = EPOCH),
     )
     assertEquals(listOf("pinned", "new", "old"), sections(threads, "").settled.map { it.id })
   }
@@ -62,12 +72,12 @@ class ThreadsLogicTest {
   @Test
   fun `search matches title case-insensitively`() {
     val threads: List<Thread> = listOf(
-      thread("a", title = "Fix Predictive Back"),
+      thread("a", title = "Fix Predictive Back", settledAt = EPOCH),
       thread("b", title = "Release notes"),
       thread("c", title = "Back to basics", status = "running"),
     )
     val sections: ThreadSections = sections(threads, "  back ")
-    assertEquals(listOf("c"), sections.active.map { it.id })
+    assertEquals(listOf("c"), sections.inbox.map { it.id })
     assertEquals(listOf("a"), sections.settled.map { it.id })
   }
 
@@ -127,6 +137,8 @@ class ThreadsLogicTest {
     updatedAt: String = EPOCH,
     archivedAt: String? = null,
     pinnedAt: String? = null,
+    settledAt: String? = null,
+    settledOverride: String? = null,
     pending: Boolean = false,
   ): Thread = BASE_THREAD.copy(
     id = id,
@@ -136,6 +148,8 @@ class ThreadsLogicTest {
     activityRunStartedAt = runStartedAt,
     archivedAt = archivedAt,
     pinnedAt = pinnedAt,
+    settledAt = settledAt,
+    settledOverride = settledOverride,
     pendingRuntimeRequest =
       if (pending) PendingRuntimeRequestSummary("r", "command", EPOCH) else null,
     updatedAt = updatedAt,
