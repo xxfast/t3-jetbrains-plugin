@@ -53,6 +53,14 @@ class WebSocketT3ClientTest {
     assertTrue(threads[2].archived)
     assertEquals(listOf("project-1"), client.projects.value.map { it.id })
 
+    // The partial snapshot that follows (resolvedRepositoryIdentityRoots, no threads) updates
+    // the project and must not empty the list
+    eventually { client.projects.value[0].repositoryIdentity != null }
+    assertEquals(
+      "github.com/xxfast/t3-jetbrains-plugin",
+      client.projects.value[0].repositoryIdentity?.canonicalKey,
+    )
+
     client.disconnect()
     assertEquals(ConnectionState.Disconnected, client.connection.value)
     assertEquals(3, client.threads.value.size)

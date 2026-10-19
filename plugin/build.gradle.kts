@@ -138,6 +138,11 @@ intellijPlatform {
   }
 }
 
+tasks.runIde {
+  // Open this repo as the project, the tool windows don't exist on the welcome screen
+  args(rootProject.projectDir.absolutePath)
+}
+
 intellijPlatformTesting {
   runIde {
     register("runHarness") {

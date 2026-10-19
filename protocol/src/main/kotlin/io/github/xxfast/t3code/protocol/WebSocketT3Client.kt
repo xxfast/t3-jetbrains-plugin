@@ -156,9 +156,18 @@ public class WebSocketT3Client internal constructor(
     when (item.string("kind")) {
       "snapshot" -> {
         val snapshot: JsonObject = item["snapshot"] as? JsonObject ?: return
-        _projects.value = decodeEach(Project.serializer(), snapshot["projects"])
-        _threads.value = decodeEach(Thread.serializer(), snapshot["threads"]) +
+        val projects: List<Project> = decodeEach(Project.serializer(), snapshot["projects"])
+        val threads: List<Thread> = decodeEach(Thread.serializer(), snapshot["threads"]) +
           decodeEach(Thread.serializer(), snapshot["archivedThreads"])
+        if (item.containsKey("resolvedRepositoryIdentityRoots")) {
+          // A partial follow-up: only the projects whose repository identity just resolved, and
+          // no threads. Replacing state with it would empty the list. Seen live on 2026-10-19.
+          _projects.update { current -> current.upsertAll(projects, Project::id) }
+          _threads.update { current -> current.upsertAll(threads, Thread::id) }
+        } else {
+          _projects.value = projects
+          _threads.value = threads
+        }
       }
 
       "thread.updated" -> decodeOrNull(Thread.serializer(), item["thread"])
@@ -250,6 +259,9 @@ private val IdleShell: JsonObject = buildJsonObject {
   put("visibleItemCount", 0)
   put("hasActionableProposedPlan", false)
 }
+
+private fun <T> List<T>.upsertAll(items: List<T>, id: (T) -> String): List<T> =
+  items.fold(this) { acc, item -> acc.upsert(item, id) }
 
 private fun <T> List<T>.upsert(item: T, id: (T) -> String): List<T> {
   val index: Int = indexOfFirst { id(it) == id(item) }

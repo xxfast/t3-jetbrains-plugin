@@ -52,6 +52,45 @@
         "pendingBackgroundTasks": [],
         "providerInstanceHistory": []
       }
+    },
+    {
+      "kind": "snapshot",
+      "snapshot": {
+        "schemaVersion": 1,
+        "snapshotSequence": 42,
+        "threads": [],
+        "archivedThreads": [],
+        "projects": [
+          {
+            "id": "project-1",
+            "title": "t3-jetbrains-plugin",
+            "workspaceRoot": "/Users/me/t3-jetbrains-plugin",
+            "repositoryIdentity": {
+              "canonicalKey": "github.com/xxfast/t3-jetbrains-plugin",
+              "locator": {
+                "source": "git-remote",
+                "remoteName": "origin",
+                "remoteUrl": "https://github.com/xxfast/t3-jetbrains-plugin.git"
+              },
+              "rootPath": "/Users/me/t3-jetbrains-plugin",
+              "displayName": "xxfast/t3-jetbrains-plugin",
+              "provider": "github",
+              "owner": "xxfast",
+              "name": "t3-jetbrains-plugin"
+            },
+            "defaultModelSelection": {
+              "instanceId": "codex",
+              "model": "gpt-5"
+            },
+            "scripts": [],
+            "createdAt": "2026-10-01T00:00:00.000Z",
+            "updatedAt": "2026-10-19T06:00:05.000Z"
+          }
+        ]
+      },
+      "resolvedRepositoryIdentityRoots": [
+        "/Users/me/t3-jetbrains-plugin"
+      ]
     }
   ]
 }

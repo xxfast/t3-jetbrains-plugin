@@ -267,6 +267,11 @@ No `archived`/`pinned` booleans; derive from `archivedAt`/`pinnedAt`.
 ```jsonc
 {"kind":"snapshot","snapshot":{"schemaVersion":1,"snapshotSequence":42,"threads":[ThreadShell...],"archivedThreads":[ThreadShell...],"projects":[ProjectShell...]},"resolvedRepositoryIdentityRoots":["..."] /*optional*/}
 {"kind":"synchronized"}                                          // only if requestCompletionMarker:true
+// Observed live 2026-10-19 (desktop 0.1.0, schemaVersion 2): the first snapshot is the full state.
+// It is followed by one snapshot per resolved repository root group, carrying
+// resolvedRepositoryIdentityRoots, the SAME snapshotSequence, only the projects whose
+// repositoryIdentity just resolved, and NO threads. Treat those as project upserts, never as
+// a replacement, or the thread list empties.
 {"kind":"project.updated","sequence":43,"project":ProjectShell}
 {"kind":"project.removed","sequence":44,"projectId":"..."}
 {"kind":"thread.updated","sequence":45,"location":"active"|"archive","thread":ThreadShell}

@@ -86,7 +86,10 @@ public class T3Auth(
   }
 }
 
+// HTTP/1.1 on purpose: on plain http the JDK client first asks for an h2c upgrade, and the
+// server's WebSocket upgrade handler answers that with an empty 400. Seen on 2026-10-19.
 internal fun defaultHttpClient(): HttpClient = HttpClient.newBuilder()
+  .version(HttpClient.Version.HTTP_1_1)
   .connectTimeout(Duration.ofSeconds(10))
   .build()
 

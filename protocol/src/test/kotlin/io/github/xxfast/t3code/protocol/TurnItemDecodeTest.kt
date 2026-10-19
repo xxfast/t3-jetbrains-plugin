@@ -25,7 +25,7 @@ class TurnItemDecodeTest {
 
   @Test
   fun runningThreadPicksTheBranchByType() {
-    val items: List<Pair<JsonObject, TurnItem>> = decode("running-thread.json")
+    val items: List<Pair<JsonObject, TurnItem>> = decode("default/running.json")
     assertTrue(items.isNotEmpty())
     for ((raw, item) in items) {
       val expected: KClass<out TurnItem> = branches[item.type] ?: TurnItem.Unknown::class

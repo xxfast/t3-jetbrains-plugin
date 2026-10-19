@@ -124,6 +124,9 @@ Hard-won, so recorded here rather than rediscovered.
   - `projects.list` is a constant upstream but not a registered RPC. Projects and the thread
     list both come from the `orchestration.subscribeShell` snapshot. One thread comes from
     `orchestration.subscribeThread`; render `projection.visibleTurnItems[].item`.
+  - `subscribeShell` sends the full snapshot first, then partial snapshots (same sequence,
+    `resolvedRepositoryIdentityRoots` set, projects only, zero threads). Upsert those; replacing
+    state with them empties the thread list. Seen live on 2026-10-19 with `schemaVersion: 2`.
   - No delta events. Streaming text is repeated `turn-item.updated` events carrying the whole
     item with `streaming: true`; upsert by id. A "turn" is a `Run`; `getTurnDiff` counts run
     ordinals.
@@ -140,6 +143,9 @@ Hard-won, so recorded here rather than rediscovered.
   Observed on 2026-10-19: neither `buildPlugin` nor `prepareSandbox_runHarness` reloaded the
   plugin into a running `runHarness` sandbox. Kotlin changes mean restarting the sandbox; JSON
   scenario edits still apply live.
+- The JDK `HttpClient` must be built with `version(HTTP_1_1)`. On plain http it otherwise sends
+  an h2c `Upgrade` on the first request and the T3 server's WebSocket upgrade handler answers
+  with an empty 400. `curl --http2` reproduces it; `curl --http1.1` gets the real answer.
 - Building against the local 263 can link 263-only APIs (Jewel `MenuComboBox`, `Icon(iconDescriptor=)`,
   `AnActionEvent.coroutineScope`) that don't exist on 253. CI compiling against `intellijIdea("2025.3")`
   plus `verifyPlugin` with a `pluginVerification { ides { } }` block is the guard.
