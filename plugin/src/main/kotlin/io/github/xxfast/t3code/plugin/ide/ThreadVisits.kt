@@ -90,6 +90,14 @@ class ThreadVisits(private val project: Project, private val scope: CoroutineSco
     Disposer.register(toolWindow.disposable) { job.cancel() }
   }
 
+  /**
+   * Dismisses a row's "Woke": a visit at [wokeAt], upstream's `useAcknowledgeThreadWoke`
+   * (apps/web/src/hooks/useThreadActions.ts:220).
+   */
+  fun acknowledge(threadId: String, wokeAt: String) {
+    scope.launch { visit(threadId, wokeAt) }
+  }
+
   /** Keeps a mark-unread on the open [row] from being visited away straight after. */
   fun markedUnread(row: Thread) {
     open.value?.takeIf { it.threadId == row.id }?.lastDispatched = row.visitKey
@@ -105,23 +113,23 @@ class ThreadVisits(private val project: Project, private val scope: CoroutineSco
       watermark.lastDispatched = row.visitKey
       watermark.lastDispatchAt = Instant.now()
       // Off the collector, so the echo of this visit can't cancel it
-      scope.launch { visit(row) }
+      scope.launch { visit(row.id, row.updatedAt) }
     }
   }
 
-  private suspend fun visit(row: Thread) {
+  private suspend fun visit(threadId: String, visitedAt: String) {
     try {
       client.dispatch(
         Command.ThreadVisit(
           commandId = UUID.randomUUID().toString(),
-          threadId = row.id,
-          visitedAt = row.updatedAt,
+          threadId = threadId,
+          visitedAt = visitedAt,
         ),
       )
     } catch (e: CancellationException) {
       throw e
     } catch (e: Exception) {
-      LOG.info("Couldn't record a visit to ${row.id}", e)
+      LOG.info("Couldn't record a visit to $threadId", e)
     }
   }
 

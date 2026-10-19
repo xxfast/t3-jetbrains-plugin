@@ -6,6 +6,7 @@ import io.github.xxfast.t3code.protocol.ServerInfo
 
 const val THREAD_SETTLEMENT: String = "threadSettlement"
 const val THREAD_AUTO_SETTLE_OPT_OUT: String = "threadAutoSettleOptOut"
+const val THREAD_SNOOZE: String = "threadSnooze"
 
 /**
  * Whether the server says it does [capability]. Upstream reads an unknown config as unsupported;

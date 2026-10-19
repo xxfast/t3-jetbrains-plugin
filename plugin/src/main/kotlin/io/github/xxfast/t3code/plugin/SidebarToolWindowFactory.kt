@@ -12,17 +12,21 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
 import io.github.xxfast.t3code.plugin.actions.SETTLE_ACTION
+import io.github.xxfast.t3code.plugin.actions.SNOOZE_GROUP
+import io.github.xxfast.t3code.plugin.actions.WAKE_ACTION
 import io.github.xxfast.t3code.plugin.actions.blockedBy
 import io.github.xxfast.t3code.plugin.actions.performThreadAction
 import io.github.xxfast.t3code.plugin.actions.showThreadMenu
 import io.github.xxfast.t3code.plugin.ide.ProjectAwareness
 import io.github.xxfast.t3code.plugin.ide.T3Opener
+import io.github.xxfast.t3code.plugin.ide.ThreadVisits
 import io.github.xxfast.t3code.plugin.ui.ConnectionBanner
 import io.github.xxfast.t3code.plugin.ui.ProjectFilter
 import io.github.xxfast.t3code.plugin.ui.RowActions
 import io.github.xxfast.t3code.plugin.ui.Shelves
 import io.github.xxfast.t3code.plugin.ui.Sidebar
 import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
+import io.github.xxfast.t3code.plugin.ui.THREAD_SNOOZE
 import io.github.xxfast.t3code.plugin.ui.supports
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.ServerInfo
@@ -73,17 +77,28 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
           )
         }
       }
-      // Settled rows stay on their shelf until the config says otherwise; buttons wait for it
+      // Shelved rows stay on their shelf until the config says otherwise; buttons wait for it
       val settlement: Boolean = catalog.supports(THREAD_SETTLEMENT, unknown = true)
+      val snooze: Boolean = catalog.supports(THREAD_SNOOZE, unknown = true)
       val operable: Boolean = blockedBy(connection) == null
       val actions: RowActions = remember(catalog, operable) {
+        fun can(capability: String): Boolean = operable && catalog.supports(capability)
         fun action(capability: String, id: String): ((String) -> Unit)? =
-          if (operable && catalog.supports(capability)) {
-            { threadId -> performThreadAction(project, threadId, id) }
+          if (can(capability)) { threadId -> performThreadAction(project, threadId, id) } else null
+        RowActions(
+          settle = action(THREAD_SETTLEMENT, SETTLE_ACTION),
+          snooze = if (can(THREAD_SNOOZE)) {
+            { threadId, x, y -> showThreadMenu(project, threadId, x, y, SNOOZE_GROUP) }
           } else {
             null
-          }
-        RowActions(settle = action(THREAD_SETTLEMENT, SETTLE_ACTION))
+          },
+          wake = action(THREAD_SNOOZE, WAKE_ACTION),
+          dismissWoke = if (operable) {
+            { threadId, wokeAt -> ThreadVisits.getInstance(project).acknowledge(threadId, wokeAt) }
+          } else {
+            null
+          },
+        )
       }
       val shelves: Shelves by SidebarShelves.get().shelves.collectAsState()
       Sidebar(
@@ -100,6 +115,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         onNewThread = null, // #17
         onOpenSettings = { T3.openSettings(project) },
         settlement = settlement,
+        snooze = snooze,
         actions = actions,
         shelves = shelves,
         onShelvesChange = SidebarShelves.get()::change,

@@ -3,6 +3,7 @@ package io.github.xxfast.t3code.plugin.fixtures
 import com.intellij.openapi.diagnostic.Logger
 import io.github.xxfast.t3code.plugin.ui.THREAD_AUTO_SETTLE_OPT_OUT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
+import io.github.xxfast.t3code.plugin.ui.THREAD_SNOOZE
 import io.github.xxfast.t3code.plugin.ui.instance
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.ConversationMessage
@@ -284,6 +285,30 @@ class FixtureClient(
           settledAt = null,
           unsettledAt = if (alreadyActive) row.unsettledAt else now,
           updatedAt = if (alreadyActive) row.updatedAt else now,
+        )
+      }
+
+      // Orchestrator.ts:2865. The server also refuses a snooze while a run is queued; the
+      // fixture doesn't check
+      is Command.ThreadSnooze -> updateRow(command.threadId) { row ->
+        val sameWakeTime: Boolean = row.snoozedUntil != null &&
+          Instant.parse(row.snoozedUntil) == Instant.parse(command.snoozedUntil)
+        val existingSnoozedAt: String? = if (sameWakeTime) row.snoozedAt else null
+        row.copy(
+          snoozedUntil = command.snoozedUntil,
+          limitRecovery = row.limitRecovery?.copy(snooze = false),
+          snoozedAt = existingSnoozedAt ?: now,
+          updatedAt = if (existingSnoozedAt == null) now else row.updatedAt,
+        )
+      }
+
+      // Orchestrator.ts:2879. The shell has no lastSnoozeWakeAt to stamp
+      is Command.ThreadUnsnooze -> updateRow(command.threadId) { row ->
+        val alreadyAwake: Boolean = row.snoozedUntil == null
+        row.copy(
+          snoozedUntil = null,
+          snoozedAt = null,
+          updatedAt = if (alreadyAwake) row.updatedAt else now,
         )
       }
 
@@ -729,7 +754,7 @@ class FixtureClient(
       ),
     ),
     serverResolvedCommandContext = true,
-    capabilities = setOf(THREAD_SETTLEMENT, THREAD_AUTO_SETTLE_OPT_OUT),
+    capabilities = setOf(THREAD_SETTLEMENT, THREAD_AUTO_SETTLE_OPT_OUT, THREAD_SNOOZE),
   )
 
   override fun connect() {

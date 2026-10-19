@@ -17,16 +17,23 @@ class SidebarShelves {
   private val properties: PropertiesComponent = PropertiesComponent.getInstance()
 
   private val state: MutableStateFlow<Shelves> =
-    MutableStateFlow(Shelves(settled = properties.getBoolean(SETTLED, false)))
+    MutableStateFlow(
+      Shelves(
+        settled = properties.getBoolean(SETTLED, false),
+        snoozed = properties.getBoolean(SNOOZED, false),
+      ),
+    )
   val shelves: StateFlow<Shelves> = state.asStateFlow()
 
   fun change(shelves: Shelves) {
     state.value = shelves
     properties.setValue(SETTLED, shelves.settled, false)
+    properties.setValue(SNOOZED, shelves.snoozed, false)
   }
 
   companion object {
     private const val SETTLED: String = "t3code:sidebar:settled-expanded"
+    private const val SNOOZED: String = "t3code:sidebar:snoozed-expanded"
 
     fun get(): SidebarShelves = service()
   }

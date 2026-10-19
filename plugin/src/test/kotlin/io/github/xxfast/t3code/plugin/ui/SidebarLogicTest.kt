@@ -74,6 +74,32 @@ class SidebarLogicTest {
   }
 
   @Test
+  fun `a snooze outranks settled and pinned, soonest to wake first`() {
+    val now: Instant = Instant.parse("2026-10-19T12:00:00Z")
+    val threads: List<Thread> = listOf(
+      thread("later").copy(snoozedUntil = "2026-10-21T09:00:00Z"),
+      thread("sooner", settledOverride = "settled", pinnedAt = EPOCH)
+        .copy(snoozedUntil = "2026-10-20T09:00:00Z"),
+      thread("woken").copy(snoozedUntil = "2026-10-19T09:00:00Z"),
+    )
+    val sections: ThreadSections = sections(threads, "", now = now)
+    assertEquals(listOf("sooner", "later"), sections.snoozed.map { it.id })
+    assertEquals(listOf("woken"), sections.inbox.map { it.id })
+    val unsupported: ThreadSections = sections(threads, "", snooze = false, now = now)
+    assertEquals(emptyList(), unsupported.snoozed)
+    assertEquals(listOf("sooner"), unsupported.settled.map { it.id })
+  }
+
+  @Test
+  fun `woke sits after failed and before done, and keeps the row from receding`() {
+    assertEquals(TopStatus.Woke, thread().topStatus(woke = true))
+    val failed: Thread = thread(status = "failed", latestRunId = "r")
+    assertEquals(TopStatus.Failed, failed.topStatus(woke = true))
+    assertTrue(thread().recedes(open = false))
+    assertFalse(thread().recedes(open = false, woke = true))
+  }
+
+  @Test
   fun `settling the open card moves to the next one, wrapping round`() {
     val inbox: List<Thread> = listOf(thread("a"), thread("b"), thread("c"))
     assertEquals("c", nextCard(inbox, "b"))
@@ -471,7 +497,7 @@ private const val EPOCH: String = "1970-01-01T00:00:00Z"
 private const val TEN_TO: String = "2026-10-19T11:50:00Z"
 
 /** A thread row with only what upstream requires. Tests copy it with the fields they care about. */
-private val BASE_THREAD: Thread = T3Json.decodeFromString(
+internal val BASE_THREAD: Thread = T3Json.decodeFromString(
   Thread.serializer(),
   """
     {

@@ -23,7 +23,7 @@ const val NEXT_PAGE: Int = 25
  * Which shelves are open: upstream keeps `t3code:sidebar:settled-expanded` and friends in local
  * storage (Sidebar.tsx:366), closed until opened.
  */
-data class Shelves(val settled: Boolean = false)
+data class Shelves(val settled: Boolean = false, val snoozed: Boolean = false)
 
 /**
  * What a row's hover buttons do. A null member hides its button: the server doesn't do it, or
@@ -32,10 +32,23 @@ data class Shelves(val settled: Boolean = false)
 class RowActions(
   /** Settles a card, un-settles a settled row. */
   val settle: ((threadId: String) -> Unit)? = null,
+  /** Opens the snooze presets at x, y on screen. */
+  val snooze: ((threadId: String, x: Int, y: Int) -> Unit)? = null,
+  /** Wakes a snoozed row now. */
+  val wake: ((threadId: String) -> Unit)? = null,
+  /** Dismisses "Woke": a visit at the wake time. Reading needs no operate scope. */
+  val dismissWoke: ((threadId: String, wokeAt: String) -> Unit)? = null,
 )
 
-/** The two sections of the threads panel: the inbox (pinned first) and settled. */
-data class ThreadSections(val inbox: List<Thread>, val settled: List<Thread>)
+/**
+ * The sections of the threads panel: the inbox (pinned first), then the snoozed and settled
+ * shelves.
+ */
+data class ThreadSections(
+  val inbox: List<Thread>,
+  val settled: List<Thread>,
+  val snoozed: List<Thread> = emptyList(),
+)
 
 val Thread.active: Boolean get() = activeRunId != null || status in RUNNING
 
@@ -129,15 +142,18 @@ fun emptyHint(noProjects: Boolean, query: String, filter: ProjectFilter): String
 /**
  * Splits [threads] matching [query] by title. Inbox is pinned rows (by `pinOrderKey`, keyless
  * ones newest first) then active rows (keyless ones newest by `createdAt`/`unsettledAt`, then by
- * `activeOrderKey`). Settled is newest settled first, and only on a server that does
- * [settlement] (Sidebar.tsx:636). Archived and under-parent rows are dropped, and so are rows
- * from projects outside [filter].
+ * `activeOrderKey`). Snoozed is soonest to wake first, settled newest settled first, each only on
+ * a server that does [snooze] or [settlement]; a snooze outranks settled, which outranks a pin
+ * (`resolveSidebarThreadSection`, Sidebar.logic.ts:123). Archived and under-parent rows are
+ * dropped, and so are rows from projects outside [filter].
  */
 fun sections(
   threads: List<Thread>,
   query: String,
   filter: ProjectFilter = ProjectFilter.All,
   settlement: Boolean = true,
+  snooze: Boolean = true,
+  now: Instant = Instant.now(),
 ): ThreadSections {
   val needle: String = query.trim()
   val ids: Set<String> = threads.mapTo(HashSet()) { it.id }
@@ -147,8 +163,9 @@ fun sections(
       filter.allows(it.projectId) &&
       it.title.contains(needle, ignoreCase = true)
   }
+  val (snoozed: List<Thread>, awake: List<Thread>) = visible.partition { snooze && it.snoozed(now) }
   val (settled: List<Thread>, inbox: List<Thread>) =
-    visible.partition { settlement && it.settled }
+    awake.partition { settlement && it.settled }
   val (pinned: List<Thread>, active: List<Thread>) = inbox.partition { it.pinned }
   val pinnedOrder: Comparator<Thread> = compareBy<Thread> { it.pinOrderKey == null }
     .thenBy { it.pinOrderKey }
@@ -160,9 +177,12 @@ fun sections(
     .thenBy { it.id }
   val settledOrder: Comparator<Thread> = compareByDescending<Thread> { it.settledAt() }
     .thenBy { it.id }
+  val snoozedOrder: Comparator<Thread> = compareBy<Thread> { it.snoozedUntil?.toInstantOrNull() }
+    .thenBy { it.id }
   return ThreadSections(
     inbox = pinned.sortedWith(pinnedOrder) + active.sortedWith(activeOrder),
     settled = settled.sortedWith(settledOrder),
+    snoozed = snoozed.sortedWith(snoozedOrder),
   )
 }
 
@@ -225,17 +245,21 @@ fun Thread.sidebarStatus(): ThreadStatus {
   }
 }
 
-/** A card's top-right status, Sidebar.tsx:1705 to 1724. Woke isn't ported: no snooze yet. */
-enum class TopStatus { Working, Waiting, Approval, Input, Limited, Failed, Done }
+/** A card's top-right status, Sidebar.tsx:1676 to 1724. [woke] is [Thread.woke]. */
+enum class TopStatus { Working, Waiting, Approval, Input, Limited, Failed, Woke, Done }
 
-fun Thread.topStatus(): TopStatus? = when (sidebarStatus()) {
+fun Thread.topStatus(woke: Boolean = false): TopStatus? = when (sidebarStatus()) {
   ThreadStatus.Working -> TopStatus.Working
   ThreadStatus.Waiting -> TopStatus.Waiting
   ThreadStatus.Approval -> TopStatus.Approval
   ThreadStatus.Input -> TopStatus.Input
   ThreadStatus.Limited -> TopStatus.Limited
   ThreadStatus.Failed -> TopStatus.Failed
-  ThreadStatus.Ready -> if (unread) TopStatus.Done else null
+  ThreadStatus.Ready -> when {
+    woke -> TopStatus.Woke
+    unread -> TopStatus.Done
+    else -> null
+  }
 }
 
 /** The status label; a working thread with an active goal says "Goal". */
@@ -246,14 +270,14 @@ fun Thread.topStatusLabel(top: TopStatus): String = when (top) {
 
 /**
  * `shouldRecedeSidebarThread`, Sidebar.logic.ts:892. [open] is upstream's `isActive`, the thread
- * the ChatView shows. Multi-select and woke aren't ported.
+ * the ChatView shows. Multi-select isn't ported.
  */
-fun Thread.recedes(open: Boolean): Boolean {
+fun Thread.recedes(open: Boolean, woke: Boolean = false): Boolean {
   val status: ThreadStatus = sidebarStatus()
   return when {
     open || status == ThreadStatus.Input -> false
     status == ThreadStatus.Working || status == ThreadStatus.Waiting -> true
-    status == ThreadStatus.Ready || status == ThreadStatus.Approval -> !unread
+    status == ThreadStatus.Ready || status == ThreadStatus.Approval -> !unread && !woke
     else -> false
   }
 }

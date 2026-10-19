@@ -1,21 +1,35 @@
 package io.github.xxfast.t3code.plugin.actions
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.Presentation
+import com.intellij.openapi.actionSystem.Separator
 import com.intellij.openapi.actionSystem.Toggleable
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.project.Project
+import io.github.xxfast.t3code.plugin.T3
 import io.github.xxfast.t3code.plugin.ThreadSelection
 import io.github.xxfast.t3code.plugin.ide.ProjectAwareness
 import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ide.ThreadVisits
 import io.github.xxfast.t3code.plugin.ui.ProjectFilter
+import io.github.xxfast.t3code.plugin.ui.SnoozePreset
 import io.github.xxfast.t3code.plugin.ui.THREAD_AUTO_SETTLE_OPT_OUT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
+import io.github.xxfast.t3code.plugin.ui.THREAD_SNOOZE
 import io.github.xxfast.t3code.plugin.ui.nextCard
 import io.github.xxfast.t3code.plugin.ui.sections
 import io.github.xxfast.t3code.plugin.ui.settled
+import io.github.xxfast.t3code.plugin.ui.snoozePresets
+import io.github.xxfast.t3code.plugin.ui.snoozed
+import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.pinned
+import java.time.Instant
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Stop: upstream's `stopThreadSession` (packages/client-runtime/src/operations/commands.ts:920
@@ -98,17 +112,25 @@ class SettleThreadAction : ThreadAction(ThreadActionKind.Settle, THREAD_SETTLEME
   }
 
   override suspend fun perform(target: ThreadTarget) {
-    val next: String? = if (target.row.settled) null else target.nextCard()
-    target.client.dispatch(settleCommand(target.row, target.commandId()))
-    if (next != null) T3Opener.getInstance(target.project).openThread(next)
+    val command: Command = settleCommand(target.row, target.commandId())
+    if (target.row.settled) target.client.dispatch(command) else target.park(command)
   }
+}
 
-  /** The card after this thread when it's the open one, in the Sidebar's order and filter. */
-  private fun ThreadTarget.nextCard(): String? {
-    if (ThreadSelection.getInstance(project).selected.value != row.id) return null
+/**
+ * Sends [command], which takes the row out of the inbox (a settle or a snooze), and when it's the
+ * thread this window has open moves on to the next card. The card is picked before the command
+ * goes, as upstream's `planForwardNavigation` (Sidebar.tsx:3213) does.
+ */
+private suspend fun ThreadTarget.park(command: Command) {
+  val next: String? = if (ThreadSelection.getInstance(project).selected.value == row.id) {
     val filter: ProjectFilter = ProjectAwareness.getInstance(project).filter.value
-    return nextCard(sections(client.threads.value, query = "", filter).inbox, row.id)
+    nextCard(sections(client.threads.value, query = "", filter).inbox, row.id)
+  } else {
+    null
   }
+  client.dispatch(command)
+  if (next != null) T3Opener.getInstance(project).openThread(next)
 }
 
 /** "Auto-settle behavior", threadActionMenu.logic.ts:173: Enabled and Disabled, one checked. */
@@ -131,3 +153,61 @@ abstract class AutoSettleAction(private val enabled: Boolean) :
 class AutoSettleOnAction : AutoSettleAction(enabled = true)
 
 class AutoSettleOffAction : AutoSettleAction(enabled = false)
+
+/**
+ * "Snooze" (threadActionMenu.logic.ts:131): upstream's presets as of when the menu opens, then
+ * "Custom…". Only on a thread that's awake; a snoozed one has [WakeThreadAction] instead.
+ */
+class SnoozeGroup : ThreadActionGroup(THREAD_SNOOZE) {
+  override fun update(e: AnActionEvent) {
+    super.update(e)
+    val project: Project = e.project ?: return
+    val client: T3Client = T3.get().client
+    val row: Thread? = e.threadRow(project, client)
+    val now: Instant = Instant.now()
+    if (row?.snoozed(now) == true) e.presentation.isVisible = false
+    val reason: String? = disabledReason(ThreadActionKind.Snooze, client.connection.value, row, now)
+    e.presentation.isEnabled = e.presentation.isVisible && reason == null
+    e.presentation.description = reason ?: templatePresentation.description
+  }
+
+  override fun getChildren(e: AnActionEvent?): Array<AnAction> {
+    val presets: List<AnAction> = snoozePresets(Instant.now()).map(::SnoozePresetAction)
+    return (presets + Separator.getInstance() + CustomSnoozeAction()).toTypedArray()
+  }
+}
+
+/** One of upstream's presets, `attemptSnooze` (Sidebar.tsx:3861) until [preset]'s time. */
+class SnoozePresetAction(private val preset: SnoozePreset) :
+  ThreadAction(ThreadActionKind.Snooze, THREAD_SNOOZE) {
+  init {
+    templatePresentation.text = presetText(preset)
+  }
+
+  override suspend fun perform(target: ThreadTarget) {
+    target.park(snoozeCommand(target.row, preset.snoozedUntil, target.commandId()))
+  }
+}
+
+/** "Custom…": upstream's `CustomSnoozeDialog`, a date and time or a duration. */
+class CustomSnoozeAction : ThreadAction(ThreadActionKind.Snooze, THREAD_SNOOZE) {
+  init {
+    templatePresentation.text = "Custom…"
+  }
+
+  override suspend fun perform(target: ThreadTarget) {
+    val until: Instant = withContext(Dispatchers.EDT) {
+      CustomSnoozeDialog(target.project).takeIf { it.showAndGet() }?.until
+    } ?: return
+    target.park(snoozeCommand(target.row, until, target.commandId()))
+  }
+}
+
+/** "Wake thread", `attemptUnsnooze` (Sidebar.tsx:3299): back to the inbox now. */
+class WakeThreadAction : ThreadAction(ThreadActionKind.Wake, THREAD_SNOOZE) {
+  override fun visible(row: Thread?): Boolean = row?.snoozed(Instant.now()) == true
+
+  override suspend fun perform(target: ThreadTarget) {
+    target.client.dispatch(wakeCommand(target.row, target.commandId()))
+  }
+}

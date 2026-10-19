@@ -2,6 +2,8 @@ package io.github.xxfast.t3code.plugin.actions
 
 import io.github.xxfast.t3code.plugin.ui.READ_ONLY as COMPOSER_READ_ONLY
 import io.github.xxfast.t3code.plugin.ui.operateBlockReason
+import io.github.xxfast.t3code.plugin.ui.SnoozePreset
+import io.github.xxfast.t3code.plugin.ui.canSnooze
 import io.github.xxfast.t3code.plugin.ui.settled
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.Run
@@ -11,6 +13,7 @@ import io.github.xxfast.t3code.protocol.archived
 import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.has
 import io.github.xxfast.t3code.protocol.pinned
+import java.time.Instant
 
 // The rules below port packages/client-runtime/src/operations/commands.ts and
 // apps/web/src/components/threadActionMenu.logic.ts at the pinned tag. Actions stay thin.
@@ -21,11 +24,14 @@ const val OPERATE: String = "orchestration:operate"
 const val NOT_CONNECTED: String = "Not connected"
 const val READ_ONLY: String = "Pairing is read only"
 const val NO_THREAD: String = "No thread selected"
+const val NOT_SNOOZABLE: String = "Waiting on you, or about to start a turn"
 
 /** Run statuses `interruptThreadTurn` looks for, commands.ts:787. */
 val INTERRUPTIBLE: Set<String> = setOf("preparing", "starting", "running", "waiting")
 
-enum class ThreadActionKind { Stop, Interrupt, Archive, Pin, MarkUnread, Settle, AutoSettle }
+enum class ThreadActionKind {
+  Stop, Interrupt, Archive, Pin, MarkUnread, Settle, AutoSettle, Snooze, Wake,
+}
 
 /**
  * Why no command can go out on [connection], or null when one can: [operateBlockReason], the one
@@ -34,14 +40,21 @@ enum class ThreadActionKind { Stop, Interrupt, Archive, Pin, MarkUnread, Settle,
 fun blockedBy(connection: ConnectionState): String? = operateBlockReason(connection)
   ?.let { reason -> if (reason == COMPOSER_READ_ONLY) READ_ONLY else reason }
 
-/** Why [kind] can't run on [row] right now, or null when it can. */
-fun disabledReason(kind: ThreadActionKind, connection: ConnectionState, row: Thread?): String? {
+/** Why [kind] can't run on [row] at [now], or null when it can. */
+fun disabledReason(
+  kind: ThreadActionKind,
+  connection: ConnectionState,
+  row: Thread?,
+  now: Instant = Instant.now(),
+): String? {
   blockedBy(connection)?.let { return it }
   if (row == null) return NO_THREAD
   return when (kind) {
     // The shell row has no provider runtime, so Stop finds out from the thread itself
     ThreadActionKind.Stop, ThreadActionKind.Pin, ThreadActionKind.Settle,
-    ThreadActionKind.AutoSettle -> null
+    ThreadActionKind.AutoSettle, ThreadActionKind.Wake -> null
+    // threadActionMenu.logic.ts's `canSnoozeNow`
+    ThreadActionKind.Snooze -> if (row.canSnooze(now)) null else NOT_SNOOZABLE
     ThreadActionKind.Interrupt -> if (row.interruptible) null else "Nothing running"
     // threadActionMenu.logic.ts: archive rejects a thread with an attached provider
     ThreadActionKind.Archive ->
@@ -139,3 +152,14 @@ fun settleCommand(row: Thread, commandId: String): Command =
 /** `setThreadAutoSettle`, commands.ts:459. */
 fun autoSettleCommand(row: Thread, enabled: Boolean, commandId: String): Command =
   Command.ThreadAutoSettleSet(commandId = commandId, threadId = row.id, enabled = enabled)
+
+/** `snoozeThread`, commands.ts:510: sleeps until [until]. */
+fun snoozeCommand(row: Thread, until: Instant, commandId: String): Command =
+  Command.ThreadSnooze(commandId = commandId, threadId = row.id, snoozedUntil = until.toString())
+
+/** `unsnoozeThread`, commands.ts:521, always the user's doing from a client. */
+fun wakeCommand(row: Thread, commandId: String): Command =
+  Command.ThreadUnsnooze(commandId = commandId, threadId = row.id, reason = "user")
+
+/** A snooze preset's menu entry, threadActionMenu.logic.ts:141: "Tomorrow (9:00 AM)". */
+fun presetText(preset: SnoozePreset): String = "${preset.label} (${preset.whenLabel})"

@@ -117,7 +117,7 @@ class FixtureClientTest {
     val scenario: Scenario = Scenario.merge(parts)
     val connected: ConnectionState.Connected = assertIs(scenario.connection)
     assertTrue(connected.session.has("orchestration:operate"), "Thread actions work in default")
-    assertEquals(24, scenario.threads.size)
+    assertEquals(26, scenario.threads.size)
     val demos: Set<String> = scenario.threads
       .filter { it.title.startsWith("Demo: ") }
       .map { it.id }
@@ -557,6 +557,23 @@ class FixtureClientTest {
     assertEquals("active", active.settledOverride)
     assertNull(active.settledAt)
     assertNotNull(active.unsettledAt)
+  }
+
+  @Test
+  fun `snooze keeps its first stamp for the same wake time, wake clears it`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == IDLE } }
+    val until = "2030-01-01T09:00:00Z"
+
+    client.dispatch(Command.ThreadSnooze(commandId = "c1", threadId = IDLE, snoozedUntil = until))
+    val snoozed: Thread = client.threads.first { row(it).snoozedUntil != null }.let(::row)
+    assertNotNull(snoozed.snoozedAt)
+    client.dispatch(Command.ThreadSnooze(commandId = "c2", threadId = IDLE, snoozedUntil = until))
+    assertEquals(snoozed.snoozedAt, row(client.threads.value).snoozedAt)
+
+    client.dispatch(Command.ThreadUnsnooze(commandId = "c3", threadId = IDLE, reason = "user"))
+    val awake: Thread = client.threads.first { row(it).snoozedUntil == null }.let(::row)
+    assertNull(awake.snoozedAt)
   }
 
   @Test

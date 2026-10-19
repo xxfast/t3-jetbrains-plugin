@@ -1,6 +1,7 @@
 package io.github.xxfast.t3code.plugin.actions
 
 import io.github.xxfast.t3code.plugin.fixtures.Scenario
+import io.github.xxfast.t3code.plugin.ui.SnoozePreset
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.ProviderSession
 import io.github.xxfast.t3code.protocol.Run
@@ -9,8 +10,10 @@ import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.PendingRuntimeRequestSummary
 import io.github.xxfast.t3code.protocol.generated.ServerAuthDescriptor
 import java.nio.file.Path
+import java.time.Instant
 import kotlin.io.path.readText
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -110,6 +113,30 @@ class ThreadActionsLogicTest {
     val unsettle = Command.ThreadUnsettle(commandId = "c", threadId = row.id, reason = "user")
     assertEquals(unsettle, settleCommand(settled, "c"))
     assertNull(disabledReason(ThreadActionKind.Settle, OPERATING, row))
+  }
+
+  @Test
+  fun `snooze and wake`() {
+    val until: Instant = Instant.parse("2026-10-20T09:00:00Z")
+    val snooze = Command.ThreadSnooze(
+      commandId = "c",
+      threadId = row.id,
+      snoozedUntil = "2026-10-20T09:00:00Z",
+    )
+    assertEquals(snooze, snoozeCommand(row, until, "c"))
+    val wake = Command.ThreadUnsnooze(commandId = "c", threadId = row.id, reason = "user")
+    assertEquals(wake, wakeCommand(row, "c"))
+    val preset = SnoozePreset("tomorrow", "Tomorrow", "9:00 AM", until)
+    assertEquals("Tomorrow (9:00 AM)", presetText(preset))
+  }
+
+  @Test
+  fun `snooze waits while the thread is asking`() {
+    val asking: Thread = row.copy(
+      pendingRuntimeRequest = PendingRuntimeRequestSummary("r", "approval", "2026-10-19T09:00:00Z"),
+    )
+    assertEquals(NOT_SNOOZABLE, disabledReason(ThreadActionKind.Snooze, OPERATING, asking))
+    assertNull(disabledReason(ThreadActionKind.Wake, OPERATING, asking))
   }
 
   @Test

@@ -45,6 +45,10 @@ abstract class ThreadAction(
     }
     val client: T3Client = T3.get().client
     val row: Thread? = e.threadRow(project, client)
+    if (!visible(row)) {
+      e.presentation.isEnabledAndVisible = false
+      return
+    }
     val reason: String? = disabledReason(kind, client.connection.value, row)
     present(e.presentation, row)
     e.presentation.isEnabled = reason == null
@@ -64,6 +68,9 @@ abstract class ThreadAction(
 
   /** Text and icon for [row], on the background thread. */
   protected open fun present(presentation: Presentation, row: Thread?) = Unit
+
+  /** Whether [row] has this action at all, like Wake only on a snoozed thread. */
+  protected open fun visible(row: Thread?): Boolean = true
 
   protected abstract suspend fun perform(target: ThreadTarget)
 }

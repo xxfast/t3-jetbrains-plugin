@@ -49,6 +49,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.intellij.ui.JBColor
 import io.github.xxfast.t3code.protocol.Project
@@ -97,20 +98,25 @@ fun Sidebar(
   onAddProject: (() -> Unit)? = null, // null hides the button: the desktop app owns projects
   onOpenSettings: (() -> Unit)? = null, // null hides the footer
   settlement: Boolean = true, // whether the server settles threads; without it there's no shelf
+  snooze: Boolean = true, // the same for snoozing
   actions: RowActions = RowActions(), // the rows' hover buttons
   shelves: Shelves = Shelves(),
   onShelvesChange: (Shelves) -> Unit = {},
 ) {
   val search: TextFieldState = rememberTextFieldState()
   val query: String = search.text.toString()
-  val sections: ThreadSections =
-    remember(threads, query, filter, settlement) { sections(threads, query, filter, settlement) }
+  // Snoozes wake on the minute; a half-minute tick is close enough to move them back in time
+  val minute: Instant by rememberNow(30_000)
+  val sections: ThreadSections = remember(threads, query, filter, settlement, snooze, minute) {
+    sections(threads, query, filter, settlement, snooze, minute)
+  }
   Column(Modifier.fillMaxSize()) {
     header()
     ThreadHeader(search, projects, favicons, filter, onFilterChange, onNewThread, onAddProject)
     Box(Modifier.weight(1f)) {
       when {
-        sections.inbox.isNotEmpty() || sections.settled.isNotEmpty() ->
+        sections.inbox.isNotEmpty() || sections.snoozed.isNotEmpty() ||
+          sections.settled.isNotEmpty() ->
           Sections(
             projects, favicons, providers, sections, selectedThreadId, onOpenThread, onContextMenu,
             actions, shelves, onShelvesChange,
@@ -303,8 +309,8 @@ private fun Sections(
   var shown: Int by remember { mutableIntStateOf(FIRST_PAGE) }
   val more: Int = moreCount(sections.settled.size, shown)
   val scroll: ScrollState = rememberScrollState()
-  // Upstream's settled header has mt-auto: it sits at the bottom until the list overflows, then
-  // scrolls with everything else. A min-height column with a filling gap is the same thing.
+  // Upstream's first shelf header has mt-auto: it sits at the bottom until the list overflows,
+  // then scrolls with everything else. A min-height column with a filling gap is the same thing.
   BoxWithConstraints(Modifier.fillMaxSize()) {
     val viewport: Dp = maxHeight
     VerticallyScrollableContainer(scrollState = scroll, modifier = Modifier.fillMaxSize()) {
@@ -326,8 +332,35 @@ private fun Sections(
             },
           )
         }
+        if (sections.snoozed.isNotEmpty() || sections.settled.isNotEmpty()) {
+          add(MotionItem("shelf-gap", fill = true))
+        }
+        fun slim(thread: Thread, shelf: Shelf) = MotionItem("${shelf.name}:${thread.id}") {
+          SlimRow(
+            thread = thread,
+            shelf = shelf,
+            project = byId[thread.projectId],
+            favicon = favicons[thread.projectId],
+            now = now,
+            selected = thread.id == selectedThreadId,
+            onClick = { onOpenThread(thread.id) },
+            onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
+            actions = actions,
+          )
+        }
+        if (sections.snoozed.isNotEmpty()) {
+          add(
+            MotionItem("snoozed-header") {
+              ShelfHeader(
+                label = shelfLabel("Snoozed", shelves.snoozed, sections.snoozed.size),
+                open = shelves.snoozed,
+                onToggle = { onShelvesChange(shelves.copy(snoozed = !shelves.snoozed)) },
+              )
+            },
+          )
+          if (shelves.snoozed) sections.snoozed.forEach { add(slim(it, Shelf.Snoozed)) }
+        }
         if (sections.settled.isEmpty()) return@buildList
-        add(MotionItem("settled-gap", fill = true))
         add(
           MotionItem("settled-header") {
             ShelfHeader(
@@ -338,22 +371,7 @@ private fun Sections(
           },
         )
         if (!shelves.settled) return@buildList
-        for (thread in sections.settled.take(shown)) {
-          add(
-            MotionItem("settled:${thread.id}") {
-              SettledRow(
-                thread = thread,
-                project = byId[thread.projectId],
-                favicon = favicons[thread.projectId],
-                now = now,
-                selected = thread.id == selectedThreadId,
-                onClick = { onOpenThread(thread.id) },
-                onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
-                actions = actions,
-              )
-            },
-          )
-        }
+        sections.settled.take(shown).forEach { add(slim(it, Shelf.Settled)) }
         if (more > 0) add(MotionItem("settled-more") { MoreRow(more, onClick = { shown += more }) })
       }
       // The container scrolls its content itself; a second verticalScroll here nests two
@@ -368,7 +386,7 @@ private fun Sections(
  * lines in a 78px surface. Project icon and name with the status at the right, the title, then
  * the branch (worktree glyph first) with the pull request badge and the provider stack at the
  * right. Pins show as a glyph; unpinning is in the context menu. On hover the status gives way
- * to the card's actions (Sidebar.tsx:2385 to 2442).
+ * to the card's actions (Sidebar.tsx:2385 to 2442), except "Woke", which stays to be dismissed.
  */
 @Composable
 private fun InboxCard(
@@ -383,14 +401,15 @@ private fun InboxCard(
   actions: RowActions,
 ) {
   val status: ThreadStatus = thread.sidebarStatus()
-  val top: TopStatus? = thread.topStatus()
-  val recede: Boolean = thread.recedes(selected)
+  val woke: Boolean = thread.woke(now)
+  val top: TopStatus? = thread.topStatus(woke)
+  val recede: Boolean = thread.recedes(selected, woke)
   val weight: FontWeight? = if (recede) null else FontWeight.Medium
   val normal: Color = JewelTheme.globalColors.text.normal
   val info: Color = JewelTheme.globalColors.text.info
   val titleColor: Color = when {
     recede -> info
-    thread.unread || status == ThreadStatus.Input -> normal
+    thread.unread || woke || status == ThreadStatus.Input -> normal
     status == ThreadStatus.Failed -> normal.copy(alpha = 0.95f)
     else -> normal.copy(alpha = 0.9f)
   }
@@ -421,12 +440,31 @@ private fun InboxCard(
         )
         if (thread.pinned) Glyph("pin", subtle(0.65f), 12.dp)
         val settle: ((String) -> Unit)? = actions.settle
-        if (hovered && settle != null) {
-          HoverAction("check", "Settle", "Settle thread") { settle(thread.id) }
-        } else if (top != null) {
-          TopStatusLabel(thread, top, now)
-        } else {
-          Text(compactTime(thread.inboxAt(), now), style = small(), color = info)
+        // `showSnoozeButton`, Sidebar.tsx:1896: not while it's asking or about to start a turn
+        val snooze: ((String, Int, Int) -> Unit)? = actions.snooze?.takeIf { thread.canSnooze(now) }
+        val controls: Boolean = hovered && (settle != null || snooze != null)
+        if (top == TopStatus.Woke) {
+          val dismiss: ((String, String) -> Unit)? = actions.dismissWoke
+          val at: String? = thread.wokeAt(now)
+          TopStatusLabel(thread, top, now, onClick = if (dismiss != null && at != null) {
+            { dismiss(thread.id, at) }
+          } else {
+            null
+          })
+        }
+        when {
+          controls -> {
+            if (snooze != null) {
+              HoverAction("clock", null, "Snooze thread") { x, y -> snooze(thread.id, x, y) }
+            }
+            if (settle != null) {
+              HoverAction("check", "Settle", "Settle thread") { _, _ -> settle(thread.id) }
+            }
+          }
+
+          top == TopStatus.Woke -> Unit
+          top != null -> TopStatusLabel(thread, top, now)
+          else -> Text(compactTime(thread.inboxAt(), now), style = small(), color = info)
         }
       }
       Spacer(Modifier.height(4.dp))
@@ -469,10 +507,17 @@ private val CARD_HEIGHT: Dp = 78.dp
 
 /**
  * The card's status slot (Sidebar.tsx:2345 to 2385): the status glyph, its label and, while
- * working or waiting, the clock, all in the status colour.
+ * working or waiting, the clock, all in the status colour. With [onClick] it's a button, which
+ * is how "Woke" gets dismissed.
  */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip sits on Compose's TooltipArea
 @Composable
-private fun TopStatusLabel(thread: Thread, top: TopStatus, now: Instant) {
+private fun TopStatusLabel(
+  thread: Thread,
+  top: TopStatus,
+  now: Instant,
+  onClick: (() -> Unit)? = null,
+) {
   val (glyph: String, color: Color) = when (top) {
     TopStatus.Working -> "circle-dashed" to accent()
     TopStatus.Waiting -> "circle-dot-dashed" to JewelTheme.globalColors.text.info
@@ -480,6 +525,7 @@ private fun TopStatusLabel(thread: Thread, top: TopStatus, now: Instant) {
     TopStatus.Input -> "message-circle-question" to indigo()
     TopStatus.Limited -> "circle-alert" to JewelTheme.globalColors.text.warning
     TopStatus.Failed -> "circle-alert" to JewelTheme.globalColors.text.error
+    TopStatus.Woke -> "alarm-clock" to JewelTheme.globalColors.text.warning
     TopStatus.Done -> "circle-check" to success()
   }
   val since: Instant? = when (top) {
@@ -487,15 +533,24 @@ private fun TopStatusLabel(thread: Thread, top: TopStatus, now: Instant) {
     TopStatus.Waiting -> thread.waitingSince()
     else -> null
   }
-  Row(
-    horizontalArrangement = Arrangement.spacedBy(4.dp),
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    Glyph(glyph, color, 16.dp)
-    Text(thread.topStatusLabel(top), style = small(), color = color, fontWeight = FontWeight.Medium)
-    if (since != null) {
-      Text(workingDuration(Duration.between(since, now)), style = small(), color = color)
+  val label: @Composable () -> Unit = {
+    Row(
+      modifier = if (onClick == null) Modifier else Modifier.clickable(onClick = onClick),
+      horizontalArrangement = Arrangement.spacedBy(4.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Glyph(glyph, color, 16.dp)
+      val name: String = thread.topStatusLabel(top)
+      Text(name, style = small(), color = color, fontWeight = FontWeight.Medium)
+      if (since != null) {
+        Text(workingDuration(Duration.between(since, now)), style = small(), color = color)
+      }
     }
+  }
+  if (onClick == null) {
+    label()
+  } else {
+    Tooltip(tooltip = { Text("Dismiss Woke notification") }) { label() }
   }
 }
 
@@ -526,21 +581,38 @@ private fun ProviderStack(thread: Thread, providers: Map<String, ServerProvider>
 
 /**
  * A row's hover button (Sidebar.tsx:2420): a glyph, maybe a word, muted until the pointer's on
- * it. Its own click, so pressing it never opens the thread.
+ * it. Its own click, so pressing it never opens the thread. [onClick] gets where on screen it was
+ * pressed, for a menu to open there.
  */
 @OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip sits on Compose's TooltipArea
 @Composable
-private fun HoverAction(glyph: String, label: String?, tooltip: String, onClick: () -> Unit) {
+private fun HoverAction(
+  glyph: String,
+  label: String?,
+  tooltip: String,
+  onClick: (x: Int, y: Int) -> Unit,
+) {
   val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
   val hovered: Boolean by interactions.collectIsHoveredAsState()
+  var pressedAt: IntOffset by remember { mutableStateOf(IntOffset.Zero) }
   val color: Color =
     if (hovered) JewelTheme.globalColors.text.normal else JewelTheme.globalColors.text.info
   Tooltip(tooltip = { Text(tooltip) }) {
     Row(
       modifier = Modifier
         .clip(RoundedCornerShape(6.dp))
+        .pointerInput(Unit) {
+          awaitEachGesture {
+            val press: MouseEvent? = awaitPointerEvent(PointerEventPass.Initial).awtEventOrNull
+            if (press != null) pressedAt = IntOffset(press.xOnScreen, press.yOnScreen)
+          }
+        }
         .hoverable(interactions)
-        .clickable(interactionSource = interactions, indication = null, onClick = onClick)
+        .clickable(
+          interactionSource = interactions,
+          indication = null,
+          onClick = { onClick(pressedAt.x, pressedAt.y) },
+        )
         .padding(horizontal = 6.dp, vertical = 2.dp),
       horizontalArrangement = Arrangement.spacedBy(4.dp),
       verticalAlignment = Alignment.CenterVertically,
@@ -584,14 +656,19 @@ private fun ShelfHeader(label: String, open: Boolean, onToggle: () -> Unit) {
   }
 }
 
+/** The shelves under the inbox, each a list of slim rows. */
+private enum class Shelf { Snoozed, Settled }
+
 /**
  * Upstream's slim row (variant "slim", Sidebar.tsx:2100 onwards): 36px, icon, title, pin,
- * badge, time. Settled rows read as secondary until hovered or open; the icon is at 40% and
- * grey the same way. On hover the time gives way to Un-settle (Sidebar.tsx:2211).
+ * badge, time. Shelved rows read as secondary until hovered or open; the icon is at 40% and
+ * grey the same way. A settled row shows when it settled and Un-settle on hover, a snoozed one
+ * how long until it wakes and Wake on hover (Sidebar.tsx:2151 to 2245).
  */
 @Composable
-private fun SettledRow(
+private fun SlimRow(
   thread: Thread,
+  shelf: Shelf,
   project: Project?,
   favicon: ImageBitmap?,
   now: Instant,
@@ -626,10 +703,21 @@ private fun SettledRow(
       if (thread.pinned) Glyph("pin", subtle(0.65f), 12.dp)
       thread.pullRequestBadge()?.let { PullRequestBadgeView(it) }
       val settle: ((String) -> Unit)? = actions.settle
-      if (hovered && settle != null) {
-        HoverAction("undo-2", null, "Un-settle thread") { settle(thread.id) }
-      } else {
-        Text(
+      val wake: ((String) -> Unit)? = actions.wake
+      when {
+        shelf == Shelf.Snoozed && hovered && wake != null ->
+          HoverAction("alarm-clock-off", null, "Wake thread now") { _, _ -> wake(thread.id) }
+
+        shelf == Shelf.Snoozed -> Text(
+          text = snoozeWakeLabel(thread.snoozedUntil.orEmpty(), now),
+          style = small(),
+          color = accent(),
+        )
+
+        hovered && settle != null ->
+          HoverAction("undo-2", null, "Un-settle thread") { _, _ -> settle(thread.id) }
+
+        else -> Text(
           text = compactTime(thread.settledAt(), now),
           style = small(),
           color = JewelTheme.globalColors.text.info,

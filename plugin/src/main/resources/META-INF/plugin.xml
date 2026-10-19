@@ -70,6 +70,19 @@
         text="Settle thread"
         description="Settle or un-settle the thread"
         icon="AllIcons.Actions.Checked"/>
+      <group
+        id="T3Code.Snooze"
+        class="io.github.xxfast.t3code.plugin.actions.SnoozeGroup"
+        text="Snooze"
+        description="Take the thread out of the inbox until later"
+        icon="AllIcons.Vcs.History"
+        popup="true"/>
+      <action
+        id="T3Code.Wake"
+        class="io.github.xxfast.t3code.plugin.actions.WakeThreadAction"
+        text="Wake thread"
+        description="Bring the snoozed thread back to the inbox now"
+        icon="AllIcons.Vcs.History"/>
       <separator/>
       <action
         id="T3Code.MarkUnread"

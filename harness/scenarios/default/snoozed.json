@@ -1,0 +1,67 @@
+{
+  "threads": [
+    {
+      "id": "thr_01JC4D1S2NSNOOZE01",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Revisit the file lock on Windows after the JDK bump",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC4D1S2NSNOOZE01"
+      },
+      "status": "completed",
+      "latestRunId": "run_01JC4D1S3ASN01",
+      "latestRunRequestedAt": "2026-10-18T14:00:00.000Z",
+      "latestRunStartedAt": "2026-10-18T14:00:01.000Z",
+      "latestRunCompletedAt": "2026-10-18T14:06:30.000Z",
+      "latestUserMessageAt": "2026-10-18T14:00:00.000Z",
+      "lastVisitedAt": "2026-10-18T14:07:00.000Z",
+      "snoozedAt": "2026-10-18T14:08:00.000Z",
+      "snoozedUntil": "2030-01-07T09:00:00.000Z",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-18T13:59:40.000Z",
+      "updatedAt": "2026-10-18T14:08:00.000Z"
+    },
+    {
+      "id": "thr_01JC4D2W3KWOKE0001",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Check the back stack restore once 0.6 is out",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC4D2W3KWOKE0001"
+      },
+      "status": "completed",
+      "branch": "back-stack-restore",
+      "latestRunId": "run_01JC4D2W4AWK01",
+      "latestRunRequestedAt": "2026-10-17T10:00:00.000Z",
+      "latestRunStartedAt": "2026-10-17T10:00:01.000Z",
+      "latestRunCompletedAt": "2026-10-17T10:12:00.000Z",
+      "latestUserMessageAt": "2026-10-17T10:00:00.000Z",
+      "lastVisitedAt": "2026-10-17T10:13:00.000Z",
+      "snoozedAt": "2026-10-17T10:14:00.000Z",
+      "snoozedUntil": "2026-10-19T09:00:00.000Z",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-17T09:59:40.000Z",
+      "updatedAt": "2026-10-17T10:14:00.000Z"
+    }
+  ]
+}

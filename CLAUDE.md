@@ -49,7 +49,7 @@ How it fits together:
 - A scenario is a folder in `harness/scenarios/`; the fixture client merges every `*.json` in it.
   `default/` is the thread list plus one demo thread per thread-level state (`running.json`,
   `waiting-approval.json`, `waiting-question.json`, `unknown-items.json`, `many-items.json`,
-  `unread.json`), and its `connection.json` grants the operate and terminal scopes so every
+  `unread.json`, `snoozed.json` with one sleeping and one woken), and its `connection.json` grants the operate and terminal scopes so every
   action is live. `disconnected/`, `pairing/`, `auth-error/`, `read-only/` (no operate) and
   `empty-server/` cover connection-level states; the ones with threads carry a byte-for-byte copy
   of `default/list.json`. Shapes are the same `:protocol` types the real client decodes, so

@@ -54,6 +54,8 @@ class ThreadPanel(
 const val SIDEBAR_PLACE: String = "T3Code.Sidebar"
 
 const val SETTLE_ACTION: String = "T3Code.ToggleSettle"
+const val SNOOZE_GROUP: String = "T3Code.Snooze"
+const val WAKE_ACTION: String = "T3Code.Wake"
 
 private fun threadContext(project: Project, threadId: String): DataContext =
   SimpleDataContext.builder()
@@ -67,13 +69,18 @@ fun performThreadAction(project: Project, threadId: String, actionId: String) {
   ActionUtil.invokeAction(action, threadContext(project, threadId), SIDEBAR_PLACE, null, null)
 }
 
-/** The thread actions for [threadId] as the IDE's own popup, at [x], [y] on screen. */
-fun showThreadMenu(project: Project, threadId: String, x: Int, y: Int) {
+/**
+ * The thread actions for [threadId] as the IDE's own popup, at [x], [y] on screen. [group] picks
+ * a registered submenu instead, like a row's snooze button does.
+ */
+fun showThreadMenu(project: Project, threadId: String, x: Int, y: Int, group: String? = null) {
   val context: DataContext = threadContext(project, threadId)
+  val actions: ActionGroup =
+    group?.let { ActionManager.getInstance().getAction(it) as? ActionGroup } ?: threadActions()
   JBPopupFactory.getInstance()
     .createActionGroupPopup(
       null,
-      threadActions(),
+      actions,
       context,
       JBPopupFactory.ActionSelectionAid.SPEEDSEARCH,
       true,
