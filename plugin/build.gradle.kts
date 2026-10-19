@@ -1,6 +1,8 @@
 import java.util.Properties
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.extensions.intellijPlatform
+import org.jetbrains.intellij.platform.gradle.models.ProductRelease
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -71,6 +73,11 @@ dependencies {
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.junit.jupiter)
   testRuntimeOnly(libs.junit.platform.launcher)
+  testRuntimeOnly(libs.junit4)
+}
+
+tasks.buildPlugin {
+  archiveBaseName = "t3-code"
 }
 
 tasks.test {
@@ -87,7 +94,19 @@ intellijPlatform {
     id = "io.github.xxfast.t3code"
     name = "T3 Code"
     version = project.version.toString()
-    description = "A native client for T3 Code's server, in your IDE."
+    description = """
+      Unofficial native client for <a href="https://github.com/pingdotgg/t3code">T3 Code</a>.
+      Pair with a running T3 server, browse its threads in a tool window, and open the files and
+      diffs they touch in the IDE.
+    """.trimIndent()
+    changeNotes = """
+      <b>0.1</b>
+      <ul>
+        <li>Pair with a T3 Code server using a pairing code or link.</li>
+        <li>Thread list and thread view in the T3 Code tool window.</li>
+        <li>Open files and diffs from a thread in the IDE.</li>
+      </ul>
+    """.trimIndent()
     vendor {
       name = "xxfast"
     }
@@ -95,6 +114,27 @@ intellijPlatform {
       sinceBuild = "253"
       untilBuild = provider { null }
     }
+  }
+
+  pluginVerification {
+    ides {
+      // The lowest platform we ship for, and whatever the newest EAP is today
+      create(IntelliJPlatformType.IntellijIdea, "2025.3")
+      latest {
+        types = listOf(IntelliJPlatformType.IntellijIdea)
+        channels = listOf(ProductRelease.Channel.EAP)
+      }
+    }
+  }
+
+  signing {
+    certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
+    privateKey = providers.environmentVariable("PRIVATE_KEY")
+    password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
+  }
+
+  publishing {
+    token = providers.environmentVariable("PUBLISH_TOKEN")
   }
 }
 

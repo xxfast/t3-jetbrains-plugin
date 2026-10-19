@@ -3,11 +3,23 @@
 A native JetBrains plugin for [T3 Code](https://github.com/pingdotgg/t3code). Threads, tool calls and
 permission prompts in a tool window; files, diffs and terminals in the IDE you already have.
 
+![T3 Code tool window](docs/screenshot.png)
+
 Unofficial, built for my own use. Will publish if it turns out useful to others.
 
 ## Status
 
-Design only. No code yet.
+0.1. Pair with a T3 server, browse its threads, read a thread as it runs, and open the files and
+diffs it touches in the IDE. Nothing else yet, see the roadmap.
+
+## Install
+
+1. Download the zip from [Releases](https://github.com/xxfast/t3-jetbrains-plugin/releases).
+2. Settings > Plugins > gear > Install Plugin from Disk, pick the zip.
+3. Settings > Tools > T3 Code, set the server URL (the desktop app listens on
+   `http://127.0.0.1:3773`).
+4. In T3's desktop app, Settings > Connections, make a pairing code or link. Paste it into the
+   banner in the T3 Code tool window.
 
 ## Why
 
