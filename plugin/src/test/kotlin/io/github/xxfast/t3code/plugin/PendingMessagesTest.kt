@@ -1,7 +1,12 @@
 package io.github.xxfast.t3code.plugin
 
+import io.github.xxfast.t3code.plugin.ui.nextModelSelection
 import io.github.xxfast.t3code.plugin.ui.optimisticMessage
+import io.github.xxfast.t3code.plugin.ui.setThreadRuntimeMode
+import io.github.xxfast.t3code.plugin.ui.updateThreadModelSelection
 import io.github.xxfast.t3code.protocol.ConversationMessage
+import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.time.Instant
 import kotlin.test.assertEquals
@@ -115,6 +120,42 @@ class PendingMessagesTest {
   }
 
   @Test
+  fun `a model drafted mid-run rides on the next message and goes once it's delivered`() {
+    val drafted: PendingMessages = PendingMessages().draftedModel(OPUS)
+    val sent: PendingMessages = drafted.sent(message("m1"), model = OPUS)
+    assertEquals("m1", sent.modelDraftCarrier)
+    assertEquals(OPUS, sent.modelDraft, "Still the pick until the server has it")
+    val delivered: PendingMessages = sent.delivered("m1", sequence = 4)
+    assertNull(delivered.modelDraft)
+    assertNull(delivered.modelDraftCarrier)
+  }
+
+  @Test
+  fun `a refused send keeps the draft for the next one`() {
+    val sent: PendingMessages = PendingMessages().draftedModel(OPUS).sent(message("m1"), OPUS)
+    val failed: PendingMessages = sent.failed("m1", "nope")
+    assertEquals(OPUS, failed.modelDraft)
+    assertNull(failed.modelDraftCarrier)
+  }
+
+  @Test
+  fun `a newer draft isn't dropped by an older send`() {
+    val sonnet: ModelSelection = nextModelSelection(null, "claude", "sonnet")
+    val sent: PendingMessages = PendingMessages().draftedModel(OPUS).sent(message("m1"), OPUS)
+    val redrafted: PendingMessages = sent.draftedModel(sonnet).delivered("m1", sequence = 4)
+    assertEquals(sonnet, redrafted.modelDraft)
+  }
+
+  @Test
+  fun `a model set while idle replaces the draft`() {
+    val set: Command = updateThreadModelSelection("t1", OPUS, "codex", true, "c1")
+    val picked: PendingMessages = PendingMessages().draftedModel(OPUS).picked(set)
+    assertNull(picked.modelDraft)
+    val mode: Command = setThreadRuntimeMode("t1", "auto", "c2")
+    assertEquals(OPUS, PendingMessages().draftedModel(OPUS).picked(mode).modelDraft)
+  }
+
+  @Test
   fun `a refused send leaves and says why`() {
     val failed: PendingMessages = PendingMessages()
       .sent(message("m1"))
@@ -125,6 +166,8 @@ class PendingMessagesTest {
     assertEquals("Couldn't send: nope", failed.error)
   }
 }
+
+private val OPUS: ModelSelection = nextModelSelection(null, "claude", "opus")
 
 private fun message(messageId: String): TurnItem.UserMessage =
   optimisticMessage("t1", messageId, "text", Instant.EPOCH, emptyList())

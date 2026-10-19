@@ -8,7 +8,13 @@ import io.github.xxfast.t3code.plugin.ui.answerLines
 import io.github.xxfast.t3code.plugin.ui.answersResponse
 import io.github.xxfast.t3code.plugin.ui.derivePendingThreadRequests
 import io.github.xxfast.t3code.plugin.ui.dismissal
+import io.github.xxfast.t3code.plugin.ui.instance
+import io.github.xxfast.t3code.plugin.ui.nextModelSelection
+import io.github.xxfast.t3code.plugin.ui.setThreadInteractionMode
+import io.github.xxfast.t3code.plugin.ui.setThreadRuntimeMode
+import io.github.xxfast.t3code.plugin.ui.updateThreadModelSelection
 import io.github.xxfast.t3code.plugin.ui.seedUserInputDraftAnswers
+import io.github.xxfast.t3code.plugin.ui.slug
 import io.github.xxfast.t3code.plugin.ui.buildPendingUserInputAnswers
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.RuntimeRequest
@@ -17,6 +23,8 @@ import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.ModelSelection
+import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TurnItem
@@ -385,6 +393,43 @@ class FixtureClientTest {
     assertEquals(emptySet(), pending.requestIds)
     val answers: JsonObject? = after.runtimeRequests.single().answers
     assertEquals(listOf("Dismissed"), answerLines(item.questions, answers))
+  }
+
+  @Test
+  fun `the model and both modes reach the thread the view shows`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == IDLE } }
+    val providers: List<ServerProvider> = client.serverInfo().providers
+    assertEquals(true, providers.single { it.instanceId == "codex" }.showInteractionModeToggle)
+    assertEquals(false, providers.single { it.instanceId == "claude" }.showInteractionModeToggle)
+    val before: ThreadView = client.thread(IDLE).first()
+
+    client.dispatch(setThreadRuntimeMode(IDLE, "full-access", "c1"))
+    client.dispatch(setThreadInteractionMode(IDLE, "plan", "c2"))
+    val opus: ModelSelection = nextModelSelection(before.thread.modelSelection, "claude", "opus")
+    client.dispatch(updateThreadModelSelection(IDLE, opus, "codex", true, "c3"))
+
+    val after: ThreadView = client.thread(IDLE).first()
+    assertEquals("full-access", after.thread.runtimeMode)
+    assertEquals("plan", after.thread.interactionMode)
+    assertEquals("claude", after.thread.modelSelection.instance)
+    assertEquals("opus", after.thread.modelSelection.slug)
+    assertEquals("claude", after.thread.providerInstanceId, "The row moves to the instance")
+  }
+
+  @Test
+  fun `a provider switch moves the row too`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == IDLE } }
+    val opus: ModelSelection = nextModelSelection(null, "claude", "opus")
+    val command: Command = updateThreadModelSelection(IDLE, opus, "codex", false, "c1")
+    assertIs<Command.ProviderSwitch>(command)
+
+    client.dispatch(command)
+
+    val after: ThreadView = client.thread(IDLE).first()
+    assertEquals("claude", after.thread.providerInstanceId)
+    assertEquals("opus", after.thread.modelSelection.slug)
   }
 
   @Test

@@ -9,6 +9,7 @@ import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.has
 import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.Command.MessageDispatch.DispatchMode
+import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.ProviderApprovalOption
 import io.github.xxfast.t3code.protocol.generated.ProviderCapabilities
 import io.github.xxfast.t3code.protocol.generated.TurnCapabilities
@@ -168,7 +169,10 @@ fun dispatchMode(
 fun deliveryIntent(serverResolved: Boolean, requested: ComposerDispatchMode): String? =
   if (serverResolved && requested != ComposerDispatchMode.QUEUE) requested.wire else null
 
-/** The `message.dispatch` the desktop app sends for a plain-text follow-up. */
+/**
+ * The `message.dispatch` the desktop app sends for a plain-text follow-up, with a model picked
+ * mid-run riding along as [modelSelection].
+ */
 fun messageDispatch(
   threadId: String,
   commandId: String,
@@ -178,6 +182,7 @@ fun messageDispatch(
   requested: ComposerDispatchMode,
   activeRun: Run?,
   capabilities: ProviderCapabilities?,
+  modelSelection: ModelSelection? = null,
 ): Command.MessageDispatch = Command.MessageDispatch(
   createdBy = "user",
   creationSource = "web",
@@ -187,6 +192,7 @@ fun messageDispatch(
   text = text,
   attachments = emptyList(),
   deliveryIntent = deliveryIntent(serverResolved, requested),
+  modelSelection = modelSelection,
   dispatchMode = dispatchMode(serverResolved, requested, activeRun, capabilities),
 )
 

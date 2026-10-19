@@ -73,6 +73,8 @@ fun ChatView(
   draft: TextFieldState, // what's typed in the composer
   pending: PendingRequest?, // an approval or question that takes over the composer
   pendingActions: PendingActions,
+  footer: ComposerFooterState?, // the thread's model and modes, null until the catalog loads
+  footerActions: ComposerFooterActions,
   onSend: (text: String, mode: ComposerDispatchMode) -> Unit,
   onQueueChange: (Boolean) -> Unit,
   onRetry: () -> Unit, // resubscribe after an error
@@ -106,6 +108,8 @@ fun ChatView(
           draft = draft,
           pending = pending,
           pendingActions = pendingActions,
+          footer = footer,
+          footerActions = footerActions,
           onSend = onSend,
           onQueueChange = onQueueChange,
           modifier = Modifier

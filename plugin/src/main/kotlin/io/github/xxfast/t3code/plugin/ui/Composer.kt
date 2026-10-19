@@ -54,6 +54,8 @@ fun Composer(
   modifier: Modifier = Modifier,
   pending: PendingRequest? = null,
   pendingActions: PendingActions = PendingActions(),
+  footer: ComposerFooterState? = null,
+  footerActions: ComposerFooterActions = ComposerFooterActions(),
 ) {
   val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
   val focused: Boolean by interactions.collectIsFocusedAsState()
@@ -94,6 +96,8 @@ fun Composer(
           label = label,
           onSend = ::send,
           onQueueChange = onQueueChange,
+          footer = footer,
+          footerActions = footerActions,
         )
       }
     }
@@ -115,6 +119,8 @@ private fun MessageInput(
   label: String,
   onSend: (alternate: Boolean) -> Unit,
   onQueueChange: (Boolean) -> Unit,
+  footer: ComposerFooterState?,
+  footerActions: ComposerFooterActions,
 ) {
   Column {
     TextArea(
@@ -133,6 +139,7 @@ private fun MessageInput(
       horizontalArrangement = Arrangement.spacedBy(8.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
+      footer?.let { ComposerFooterModeControls(it, state.enabled, footerActions) }
       if (state.showQueueToggle) {
         CheckboxRow(
           text = "Queue instead of steering",

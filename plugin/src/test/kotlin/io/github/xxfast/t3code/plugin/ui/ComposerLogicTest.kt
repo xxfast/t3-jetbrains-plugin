@@ -115,6 +115,23 @@ class ComposerLogicTest {
   }
 
   @Test
+  fun `a model drafted mid-run rides on the message`() {
+    val opus: ModelSelection = nextModelSelection(null, "claude", "opus")
+    val command: Command.MessageDispatch = messageDispatch(
+      threadId = "t1",
+      commandId = "c1",
+      messageId = "m1",
+      text = "hi",
+      serverResolved = true,
+      requested = ComposerDispatchMode.QUEUE,
+      activeRun = null,
+      capabilities = null,
+      modelSelection = opus,
+    )
+    assertEquals(opus, command.modelSelection)
+  }
+
+  @Test
   fun `active run is the last one still going`() {
     val runs: List<Run> = listOf(
       run("a", "waiting"),

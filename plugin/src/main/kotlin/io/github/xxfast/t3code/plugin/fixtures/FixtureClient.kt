@@ -1,6 +1,7 @@
 package io.github.xxfast.t3code.plugin.fixtures
 
 import com.intellij.openapi.diagnostic.Logger
+import io.github.xxfast.t3code.plugin.ui.instance
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.ConversationMessage
 import io.github.xxfast.t3code.protocol.FileContents
@@ -20,6 +21,7 @@ import io.github.xxfast.t3code.protocol.generated.ChatFileAttachment
 import io.github.xxfast.t3code.protocol.generated.ChatImageAttachment
 import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.LatestVisibleMessageSummary
+import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
@@ -281,8 +283,13 @@ class FixtureClient(
         row.copy(interactionMode = command.interactionMode, updatedAt = now)
       }
 
+      // Both move the row to the selection's instance, like the server
       is Command.ThreadModelSelectionSet -> updateRow(command.threadId) { row ->
-        row.copy(modelSelection = command.modelSelection, updatedAt = now)
+        row.withModel(command.modelSelection, now)
+      }
+
+      is Command.ProviderSwitch -> updateRow(command.threadId) { row ->
+        row.withModel(command.modelSelection, now)
       }
 
       is Command.CheckpointRollback -> overlay.update { overlay ->
@@ -638,9 +645,28 @@ class FixtureClient(
   }
 
   override suspend fun serverInfo(): ServerInfo = ServerInfo(
+    // Codex shows Plan/Build and takes two runtime modes; Claude hides the toggle and takes all
+    // four. Switch a thread's model to see one or the other.
     providers = listOf(
-      provider("codex", "Codex", "gpt-5" to "GPT-5", "gpt-5-mini" to "GPT-5 mini"),
-      provider("claude", "Claude", "opus" to "Opus", "sonnet" to "Sonnet"),
+      provider(
+        instanceId = "codex",
+        driver = "codex",
+        displayName = "Codex",
+        showInteractionModeToggle = true,
+        supportedRuntimeModes = listOf("approval-required", "full-access"),
+        models = listOf(
+          model("gpt-5", "GPT-5"),
+          model("gpt-5-mini", "GPT-5 mini", badge = "new"),
+          model("gpt-4.1", "GPT-4.1", isLegacy = true),
+        ),
+      ),
+      provider(
+        instanceId = "claude",
+        driver = "claudeAgent",
+        displayName = "Claude",
+        showInteractionModeToggle = false,
+        models = listOf(model("opus", "Opus"), model("sonnet", "Sonnet")),
+      ),
     ),
     serverResolvedCommandContext = true,
   )
@@ -730,21 +756,38 @@ private const val UPLOAD_URL_TTL_MILLIS: Long = 10 * 60_000
 
 private fun provider(
   instanceId: String,
+  driver: String,
   displayName: String,
-  vararg models: Pair<String, String>,
+  showInteractionModeToggle: Boolean,
+  supportedRuntimeModes: List<String>? = null,
+  models: List<ServerProviderModel>,
 ): ServerProvider = ServerProvider(
   instanceId = instanceId,
-  driver = instanceId,
+  driver = driver,
   displayName = displayName,
+  showInteractionModeToggle = showInteractionModeToggle,
+  supportedRuntimeModes = supportedRuntimeModes,
   enabled = true,
   installed = true,
   version = "fixture",
   status = "ready",
   auth = ServerProviderAuth(status = "authenticated"),
   checkedAt = "2026-10-19T06:00:00.000Z",
-  models = models.map { (slug, name) ->
-    ServerProviderModel(slug = slug, name = name, isCustom = false, capabilities = null)
-  },
+  models = models,
+)
+
+private fun model(
+  slug: String,
+  name: String,
+  badge: String? = null,
+  isLegacy: Boolean? = null,
+): ServerProviderModel = ServerProviderModel(
+  slug = slug,
+  name = name,
+  badge = badge,
+  isCustom = false,
+  isLegacy = isLegacy,
+  capabilities = null,
 )
 
 private val PATCH: String = """
@@ -759,3 +802,10 @@ private val PATCH: String = """
    }
 
 """.trimIndent()
+
+/** [selection] on this row, and its instance as the row's provider. */
+private fun Thread.withModel(selection: ModelSelection, now: String): Thread = copy(
+  modelSelection = selection,
+  providerInstanceId = selection.instance ?: providerInstanceId,
+  updatedAt = now,
+)

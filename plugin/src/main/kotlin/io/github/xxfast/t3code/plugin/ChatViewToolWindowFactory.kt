@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
@@ -27,6 +28,9 @@ import io.github.xxfast.t3code.plugin.ui.Advance
 import io.github.xxfast.t3code.plugin.ide.VcsStatuses
 import io.github.xxfast.t3code.plugin.ide.threadCwd
 import io.github.xxfast.t3code.plugin.ui.ChatView
+import io.github.xxfast.t3code.plugin.ui.ComposerFooterActions
+import io.github.xxfast.t3code.plugin.ui.ComposerFooterState
+import io.github.xxfast.t3code.plugin.ui.ModelChangeBlock
 import io.github.xxfast.t3code.plugin.ui.ComposerState
 import io.github.xxfast.t3code.plugin.ui.PendingUserInputDraftAnswer
 import io.github.xxfast.t3code.plugin.ui.Hint
@@ -38,19 +42,32 @@ import io.github.xxfast.t3code.plugin.ui.activeRun
 import io.github.xxfast.t3code.plugin.ui.advance
 import io.github.xxfast.t3code.plugin.ui.answersResponse
 import io.github.xxfast.t3code.plugin.ui.approvalResponse
+import io.github.xxfast.t3code.plugin.ui.composerFooter
 import io.github.xxfast.t3code.plugin.ui.composerState
 import io.github.xxfast.t3code.plugin.ui.setPendingUserInputCustomAnswer
 import io.github.xxfast.t3code.plugin.ui.derivePendingThreadRequests
 import io.github.xxfast.t3code.plugin.ui.dismissal
+import io.github.xxfast.t3code.plugin.ui.getStartedThreadModelChangeBlockReason
+import io.github.xxfast.t3code.plugin.ui.instance
 import io.github.xxfast.t3code.plugin.ui.mergeOptimistic
+import io.github.xxfast.t3code.plugin.ui.nextModelSelection
 import io.github.xxfast.t3code.plugin.ui.pendingRequest
 import io.github.xxfast.t3code.plugin.ui.seedUserInputDraftAnswers
+import io.github.xxfast.t3code.plugin.ui.setThreadInteractionMode
+import io.github.xxfast.t3code.plugin.ui.setThreadRuntimeMode
+import io.github.xxfast.t3code.plugin.ui.slug
+import io.github.xxfast.t3code.plugin.ui.threadSupportsProviderHandoff
 import io.github.xxfast.t3code.plugin.ui.togglePendingUserInputOptionSelection
+import io.github.xxfast.t3code.plugin.ui.toggledInteractionMode
+import io.github.xxfast.t3code.plugin.ui.updateThreadModelSelection
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.Project as T3Project
+import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.T3Client
+import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import io.github.xxfast.t3code.protocol.generated.UserInputQuestion
 import java.util.UUID
@@ -104,7 +121,7 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
   val requests: PendingThreadRequests = remember(view?.runtimeRequests, view?.items) {
     derivePendingThreadRequests(view?.runtimeRequests.orEmpty(), view?.items.orEmpty())
   }
-  LaunchedEffect(view, requests, pending.delivered, pending.responding) {
+  LaunchedEffect(view, requests, pending.delivered, pending.responding, pending.settings) {
     view?.let { controller.reconcile(it, requests.requestIds) }
   }
   val shown: ThreadView? = remember(view, pending.messages) {
@@ -121,6 +138,8 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
   )
   val (request: PendingRequest?, actions: PendingActions) =
     rememberPendingRequest(view, requests, pending.responding, controller)
+  val (footer: ComposerFooterState?, footerActions: ComposerFooterActions) =
+    rememberComposerFooter(view, pending, connection, controller)
   val projectId: String? = view?.thread?.projectId
   // One subscription per checkout, shared by every tab showing it
   val cwd: String? = threadCwd(view?.thread, projects)
@@ -135,6 +154,8 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
     draft = draft,
     pending = request,
     pendingActions = actions,
+    footer = footer,
+    footerActions = footerActions,
     onSend = { text, mode -> view?.let { controller.send(it, text, mode) } },
     onQueueChange = { queue = it },
     onRetry = onRetry,
@@ -216,3 +237,89 @@ private fun rememberPendingRequest(
   )
   return request to actions
 }
+
+
+/**
+ * The footer's model, runtime mode and Plan/Build for [view]'s thread: the server's values, or
+ * what was just picked until the row confirms it, or a model drafted for the next message. The
+ * catalog is `server.getConfig`'s providers, fetched (and retried) for each connection.
+ */
+@Composable
+private fun rememberComposerFooter(
+  view: ThreadView?,
+  pending: PendingMessages,
+  connection: ConnectionState,
+  controller: ChatController,
+): Pair<ComposerFooterState?, ComposerFooterActions> {
+  val connected: Boolean = connection is ConnectionState.Connected
+  LaunchedEffect(connected) {
+    if (connected) controller.loadCatalog() else controller.dropCatalog()
+  }
+  val info: ServerInfo? by controller.catalog.collectAsState()
+  val thread: Thread? = view?.thread
+  val selection: ModelSelection? =
+    thread?.let { pending.modelDraft ?: pending.settings.modelSelection(it) }
+  val instanceId: String? = selection?.instance ?: thread?.providerInstanceId
+  val footer: ComposerFooterState? = info?.let { catalog ->
+    if (thread == null) return@let null
+    composerFooter(
+      providers = catalog.providers,
+      instanceId = instanceId,
+      model = selection?.slug,
+      runtimeMode = pending.settings.runtimeMode(thread),
+      interactionMode = pending.settings.interactionMode(thread),
+    )
+  }
+
+  fun commandId(): String = UUID.randomUUID().toString()
+
+  val actions = ComposerFooterActions(
+    onModel = onModel@{ pickedInstance, model ->
+      val current: ThreadView = view ?: return@onModel
+      val row: Thread = current.thread
+      val block: ModelChangeBlock? = getStartedThreadModelChangeBlockReason(
+        providers = info?.providers.orEmpty(),
+        hasStartedSession = current.runs.isNotEmpty(),
+        supportsProviderSwitchingViaHandoff = threadSupportsProviderHandoff(current),
+        currentInstance = row.providerInstanceId,
+        currentModel = row.modelSelection.slug,
+        nextInstance = pickedInstance,
+        nextModel = model,
+      )
+      val next: ModelSelection = nextModelSelection(selection, pickedInstance, model)
+      when {
+        block != null -> controller.blocked(row.id, block.toString())
+
+        // Mid-run, the pick rides on the next message instead
+        activeRun(current.runs) != null -> controller.draftModel(row.id, next)
+
+        else -> {
+          val command: Command = updateThreadModelSelection(
+            threadId = row.id,
+            selection = next,
+            rowInstance = row.providerInstanceId,
+            serverResolved = info?.serverResolvedCommandContext ?: false,
+            commandId = commandId(),
+          )
+          controller.dispatchForThread(current, command)
+        }
+      }
+    },
+    onRuntimeMode = { mode ->
+      view?.let { current ->
+        val command: Command = setThreadRuntimeMode(current.thread.id, mode, commandId())
+        controller.dispatchForThread(current, command)
+      }
+    },
+    onToggleInteractionMode = {
+      if (view != null && footer != null) {
+        val next: String = toggledInteractionMode(footer.interactionMode)
+        val command: Command = setThreadInteractionMode(view.thread.id, next, commandId())
+        controller.dispatchForThread(view, command)
+      }
+    },
+  )
+  return footer to actions
+}
+
+private val LOG: Logger = Logger.getInstance(ChatViewToolWindowFactory::class.java)

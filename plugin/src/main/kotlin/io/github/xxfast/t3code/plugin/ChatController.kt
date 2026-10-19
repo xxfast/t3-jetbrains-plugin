@@ -19,13 +19,17 @@ import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -52,6 +56,11 @@ class ChatController(private val scope: CoroutineScope) {
 
   private val drafts: ConcurrentHashMap<String, TextFieldState> = ConcurrentHashMap()
 
+  private val _catalog: MutableStateFlow<ServerInfo?> = MutableStateFlow(null)
+
+  /** `server.getConfig` for this connection: providers and their models. Null until it loads. */
+  val catalog: StateFlow<ServerInfo?> = _catalog
+
   /** What's typed for [threadId], kept across hosts and thread switches like upstream's drafts. */
   fun draft(threadId: String): TextFieldState =
     drafts.computeIfAbsent(threadId) { TextFieldState() }
@@ -62,7 +71,71 @@ class ChatController(private val scope: CoroutineScope) {
    */
   fun reconcile(view: ThreadView, waiting: Set<String>) {
     update(view.thread.id) { pending ->
-      pending.reconciled(view.items, view.messages, view.sequence, waiting)
+      val reconciled: PendingMessages =
+        pending.reconciled(view.items, view.messages, view.sequence, waiting)
+      reconciled.copy(settings = reconciled.settings.reconciled(view.thread, view.sequence))
+    }
+  }
+
+  /** [selection] waits for [threadId]'s next message: upstream doesn't switch a running thread. */
+  fun draftModel(threadId: String, selection: ModelSelection) {
+    update(threadId) { pending -> pending.draftedModel(selection) }
+  }
+
+  /** Says why a pick did nothing, under [threadId]'s composer. */
+  fun blocked(threadId: String, reason: String) {
+    update(threadId) { pending -> pending.copy(error = reason) }
+  }
+
+  /**
+   * Fetches `server.getConfig` until it answers, backing off, for as long as the caller runs; a
+   * send that fetches it refreshes it too. Call while connected, cancel when the connection goes.
+   */
+  suspend fun loadCatalog() {
+    var wait: Duration = 1.seconds
+    while (true) {
+      try {
+        _catalog.value = client.serverInfo()
+        return
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        LOG.info("No provider catalog yet, trying again in $wait", e)
+        delay(wait)
+        wait = minOf(wait * 2, 30.seconds)
+      }
+    }
+  }
+
+  /** The connection went: the next one gets its own catalog. */
+  fun dropCatalog() {
+    _catalog.value = null
+  }
+
+  /**
+   * Dispatches a thread command for [view]'s thread, like a pick in the composer's footer. A
+   * thread setting shows at once and gives way to the thread row; a refusal puts the row's value
+   * back and says why under the composer, like a failed send.
+   */
+  fun dispatchForThread(view: ThreadView, command: OrchestrationV2Command) {
+    val threadId: String = view.thread.id
+    update(threadId) { pending -> pending.picked(command) }
+    scope.launch {
+      try {
+        val sequence: Long = client.dispatch(command)
+        update(threadId) { pending ->
+          pending.copy(settings = pending.settings.delivered(command, sequence))
+        }
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        LOG.info("Couldn't ${command.type} on $threadId", e)
+        val reason: String = e.message ?: e.javaClass.simpleName
+        update(threadId) { pending ->
+          val error = "Couldn't change it: $reason"
+          pending.copy(settings = pending.settings.failed(command), error = error)
+        }
+      }
     }
   }
 
@@ -103,11 +176,14 @@ class ChatController(private val scope: CoroutineScope) {
     val messageId: String = UUID.randomUUID().toString()
     val message: TurnItem.UserMessage =
       optimisticMessage(threadId, messageId, text, Instant.now(), view.items)
-    update(threadId) { pending -> pending.sent(message) }
+    // A model picked mid-run rides on this message
+    val model: ModelSelection? = _outboxes.value[threadId]?.modelDraft
+    update(threadId) { pending -> pending.sent(message, model) }
     draft(threadId).clearText()
     scope.launch {
       try {
         val info: ServerInfo = client.serverInfo()
+        _catalog.value = info
         val run: Run? = activeRun(view.runs)
         val command: Command.MessageDispatch = messageDispatch(
           threadId = threadId,
@@ -118,6 +194,7 @@ class ChatController(private val scope: CoroutineScope) {
           requested = mode,
           activeRun = run,
           capabilities = activeCapabilities(run, view.providerThreads, view.providerSessions),
+          modelSelection = model,
         )
         val sequence: Long = client.dispatch(command)
         update(threadId) { pending -> pending.delivered(messageId, sequence) }

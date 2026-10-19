@@ -2,39 +2,81 @@ package io.github.xxfast.t3code.plugin
 
 import io.github.xxfast.t3code.plugin.ui.deliveredIds
 import io.github.xxfast.t3code.protocol.ConversationMessage
+import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 
 /**
  * One thread's outbox: messages sent but not yet acknowledged by the server, which of those are
  * still being dispatched ([inFlight]), the server's sequence for each one it took ([delivered]),
- * the approvals and questions being answered ([responding]), and why the last send or answer
- * failed. Pure, so [ChatController] stays a thin shell.
+ * the approvals and questions being answered ([responding]), the thread settings picked but not
+ * yet confirmed ([settings]), and why the last send, answer or pick failed. Pure, so
+ * [ChatController] stays a thin shell.
  */
 data class PendingMessages(
   val messages: List<TurnItem.UserMessage> = emptyList(),
   val inFlight: Set<String> = emptySet(),
   val delivered: Map<String, Long> = emptyMap(),
   val responding: Set<String> = emptySet(),
+  val settings: PendingSettings = PendingSettings(),
+  /**
+   * A model picked while a run was going. Upstream never changes a running thread's model; the
+   * pick waits as a composer draft and rides on the next message (`onProviderModelSelect`,
+   * `ChatView.tsx:7467`; `resolveThreadMetadataUpdateForNextTurn`, `ChatView.logic.ts:472`).
+   */
+  val modelDraft: ModelSelection? = null,
+  /** The message carrying [modelDraft], once one is on its way. */
+  val modelDraftCarrier: String? = null,
   val error: String? = null,
 ) {
   val sending: Boolean get() = inFlight.isNotEmpty()
 
-  /** [message] is on its way. A new send clears the last error. */
-  fun sent(message: TurnItem.UserMessage): PendingMessages = copy(
+  /**
+   * [message] is on its way, carrying [model] when it's the drafted one. A new send clears the
+   * last error.
+   */
+  fun sent(message: TurnItem.UserMessage, model: ModelSelection? = null): PendingMessages = copy(
     messages = messages + message,
     inFlight = inFlight + message.messageId,
+    modelDraftCarrier =
+      if (model != null && model == modelDraft) message.messageId else modelDraftCarrier,
     error = null,
   )
 
+  /** [selection] waits for the next message. A newer draft isn't carried by an older send. */
+  fun draftedModel(selection: ModelSelection): PendingMessages =
+    copy(modelDraft = selection, modelDraftCarrier = null, error = null)
+
+  /** A thread command is on its way; a model set now replaces any draft. */
+  fun picked(command: Command): PendingMessages {
+    val model: Boolean =
+      command is Command.ThreadModelSelectionSet || command is Command.ProviderSwitch
+    return copy(
+      settings = settings.picked(command),
+      modelDraft = if (model) null else modelDraft,
+      modelDraftCarrier = if (model) null else modelDraftCarrier,
+      error = null,
+    )
+  }
+
   /** The server took [messageId] at [sequence], what `orchestration.dispatchCommand` answered. */
-  fun delivered(messageId: String, sequence: Long): PendingMessages =
-    copy(inFlight = inFlight - messageId, delivered = delivered + (messageId to sequence))
+  fun delivered(messageId: String, sequence: Long): PendingMessages {
+    val carried: Boolean = modelDraftCarrier == messageId
+    return copy(
+      inFlight = inFlight - messageId,
+      delivered = delivered + (messageId to sequence),
+      modelDraft = if (carried) null else modelDraft,
+      modelDraftCarrier = if (carried) null else modelDraftCarrier,
+    )
+  }
 
   /** The server refused [messageId], so it never shows up. */
   fun failed(messageId: String, error: String): PendingMessages = copy(
     messages = messages.filterNot { it.messageId == messageId },
     inFlight = inFlight - messageId,
     delivered = delivered - messageId,
+    // The draft stays for the next try
+    modelDraftCarrier = modelDraftCarrier.takeUnless { it == messageId },
     error = error,
   )
 
