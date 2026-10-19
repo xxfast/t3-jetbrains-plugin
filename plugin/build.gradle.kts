@@ -103,6 +103,8 @@ intellijPlatformTesting {
     register("runHarness") {
       sandboxDirectory = layout.buildDirectory.dir("harness-sandbox")
       task {
+        // Open this repo as the project, the tool window doesn't exist on the welcome screen
+        args(rootProject.projectDir.absolutePath)
         systemProperty(
           "t3code.fixtures",
           rootProject.layout.projectDirectory.dir("harness/scenarios").asFile.absolutePath,

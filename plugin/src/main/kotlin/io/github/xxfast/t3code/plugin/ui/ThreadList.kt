@@ -97,7 +97,7 @@ private fun ThreadRow(thread: Thread, now: Instant, onClick: () -> Unit) {
 }
 
 @Composable
-private fun StatusBadge(badge: ThreadBadge) {
+internal fun StatusBadge(badge: ThreadBadge) {
   val tint: Color = when (badge) {
     ThreadBadge.Running -> JewelTheme.globalColors.borders.focused
     ThreadBadge.WaitingOnYou -> JewelTheme.globalColors.text.warning
