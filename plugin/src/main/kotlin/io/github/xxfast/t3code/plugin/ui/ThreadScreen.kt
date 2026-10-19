@@ -62,9 +62,10 @@ fun ThreadScreen(
     header()
     TopBar(view, onBack)
     Divider(Orientation.Horizontal, Modifier.fillMaxWidth())
-    if (view == null) {
+    if (view == null || view.items.isEmpty()) {
+      val hint: String = if (view == null) "Loading..." else "Nothing in this thread yet"
       Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-        Text("Loading…", color = JewelTheme.globalColors.text.info, textAlign = TextAlign.Center)
+        Text(hint, color = JewelTheme.globalColors.text.info, textAlign = TextAlign.Center)
       }
     } else {
       val processor: MarkdownProcessor = remember { MarkdownProcessor() }
