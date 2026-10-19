@@ -68,10 +68,10 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
     }
   }
 
-  /** Selects [threadId] and shows it where the settings say: an editor tab or "T3 Chat". */
+  /** Selects [threadId] and shows it where the settings say: an editor tab or "T3 Chat View". */
   fun openThread(threadId: String) {
     ThreadSelection.getInstance(project).select(threadId)
-    val title: String = client.threads.value.find { it.id == threadId }?.title ?: "T3 Chat"
+    val title: String = client.threads.value.find { it.id == threadId }?.title ?: "T3 Chat View"
     scope.launch(Dispatchers.EDT) {
       if (project.isDisposed) return@launch
       when (T3Settings.get().openThreadsIn) {
@@ -225,7 +225,7 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
 
   companion object {
     const val NOTIFICATION_GROUP: String = "T3 Code"
-    const val CHAT_TOOL_WINDOW: String = "T3 Chat"
+    const val CHAT_TOOL_WINDOW: String = "T3 Chat View"
 
     private val LOG: Logger = Logger.getInstance(T3Opener::class.java)
 

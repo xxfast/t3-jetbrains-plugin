@@ -54,7 +54,7 @@ import org.jetbrains.jewel.ui.typography
 
 /** T3's sidebar: search, active threads as cards, then the settled ones as a paged list. */
 @Composable
-fun ThreadsPanel(
+fun Sidebar(
   projects: List<Project>,
   threads: List<Thread>,
   selectedThreadId: String?,

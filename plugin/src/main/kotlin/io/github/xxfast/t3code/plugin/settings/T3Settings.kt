@@ -8,10 +8,10 @@ import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.components.service
 
-/** Where a thread opens: an editor tab, or the "T3 Chat" tool window. */
+/** Where a thread opens: an editor tab, or the "T3 Chat View" tool window. */
 enum class ThreadHost(val label: String) {
   EDITOR("Editor tab"),
-  TOOL_WINDOW("T3 Chat tool window"),
+  TOOL_WINDOW("T3 Chat View tool window"),
 }
 
 /** Where the server is. Nothing secret lives here; the credential is in [T3Credentials]. */

@@ -60,7 +60,7 @@ import org.jetbrains.jewel.ui.typography
 private val MAX_CONTENT_WIDTH = 760.dp
 
 @Composable
-fun ThreadScreen(
+fun ChatView(
   view: ThreadView?, // null until the first snapshot arrives
   project: Project?, // for the breadcrumb
   favicon: ImageBitmap?, // the project's, when ProjectIcons has it

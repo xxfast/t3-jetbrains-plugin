@@ -71,6 +71,9 @@ plugin needs a rule the desktop app has (how the sidebar sorts, what a row shows
 is derived), port the upstream function from `~/Developer/XXFAST/TS/T3Code` with the same name,
 the same precedence and the same edge cases, and say in a comment which upstream file it mirrors.
 Upstream drifts; a one-to-one port is a diff away from catching up, a reinterpretation isn't.
+Names follow upstream too, down to the tool windows: the thread list is the **Sidebar**
+(`Sidebar.tsx`, tool window "T3 Sidebar"), the conversation is the **ChatView** (`ChatView.tsx`,
+tool window "T3 Chat View"). Don't invent friendlier names.
 
 The plugin mirrors server state and never reimplements T3 logic. Decode with `ignoreUnknownKeys`, fall
 back to a generic renderer for anything unrecognised, and open files, diffs and terminals in the IDE

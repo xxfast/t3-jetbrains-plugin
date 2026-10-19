@@ -14,7 +14,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 
-class ThreadsLogicTest {
+class SidebarLogicTest {
   @Test
   fun `active is a run in flight or a running status`() {
     assertTrue(thread(activeRunId = "r").active)

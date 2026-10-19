@@ -60,7 +60,7 @@ class ThreadFileEditor(
 
   override fun getPreferredFocusedComponent(): JComponent = panel
 
-  override fun getName(): String = "T3 Chat"
+  override fun getName(): String = "T3 Chat View"
 
   override fun getFile(): ThreadVirtualFile = file
 
@@ -70,7 +70,7 @@ class ThreadFileEditor(
 
   override fun isValid(): Boolean = true
 
-  // Switching tabs moves the selection in T3 Threads along with it
+  // Switching tabs moves the selection in T3 Sidebar along with it
   override fun selectNotify() {
     ThreadSelection.getInstance(project).select(file.threadId)
   }

@@ -12,14 +12,14 @@ import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
 import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ui.ConnectionBanner
-import io.github.xxfast.t3code.plugin.ui.ThreadsPanel
+import io.github.xxfast.t3code.plugin.ui.Sidebar
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.T3Client
 import javax.swing.JComponent
 import org.jetbrains.jewel.bridge.JewelComposePanel
 
-/** "T3 Threads": T3's sidebar. Opening a thread is [T3Opener.openThread]'s business. */
-class ThreadsToolWindowFactory : ToolWindowFactory, DumbAware {
+/** "T3 Sidebar": T3's sidebar. Opening a thread is [T3Opener.openThread]'s business. */
+class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
   override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
     val t3: T3 = T3.get()
     val client: T3Client = t3.client
@@ -44,7 +44,7 @@ class ThreadsToolWindowFactory : ToolWindowFactory, DumbAware {
           )
         }
       }
-      ThreadsPanel(
+      Sidebar(
         projects = projects,
         threads = threads,
         selectedThreadId = selected,

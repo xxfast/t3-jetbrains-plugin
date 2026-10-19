@@ -12,7 +12,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import org.junit.jupiter.api.Test
 
-class ThreadScreenLogicTest {
+class ChatViewLogicTest {
   @Test
   fun `no runs is just the items`() {
     val rows: List<ThreadRow> = threadRows(emptyList(), listOf(notice("a"), notice("b")))
