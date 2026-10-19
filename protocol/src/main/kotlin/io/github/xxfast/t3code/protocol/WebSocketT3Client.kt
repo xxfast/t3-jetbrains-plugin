@@ -25,20 +25,21 @@ import kotlinx.serialization.json.put
 
 /** The real [T3Client]: HTTP for the handshake, one Effect RPC socket for everything else. */
 public class WebSocketT3Client internal constructor(
-  private val auth: T3Auth,
-  private val socketUri: URI,
+  private val auth: suspend () -> T3Auth,
+  private val socketUri: suspend () -> URI,
   private val credential: suspend () -> Credential?,
   private val scope: CoroutineScope,
   private val http: HttpClient,
 ) : T3Client {
+  /** [baseUrl] is read on every connection attempt, so a settings change lands on reconnect. */
   public constructor(
-    baseUrl: String,
+    baseUrl: suspend () -> String,
     credential: suspend () -> Credential?,
     scope: CoroutineScope,
     http: HttpClient = defaultHttpClient(),
   ) : this(
-    auth = T3Auth(baseUrl, http),
-    socketUri = URI("${baseUrl.trimEnd('/').replaceFirst("http", "ws")}$SOCKET_PATH"),
+    auth = { T3Auth(baseUrl(), http) },
+    socketUri = { URI("${baseUrl().trimEnd('/').replaceFirst("http", "ws")}$SOCKET_PATH") },
     credential = credential,
     scope = scope,
     http = http,
@@ -121,10 +122,12 @@ public class WebSocketT3Client internal constructor(
     while (true) {
       _connection.value = ConnectionState.Connecting
       try {
+        val auth: T3Auth = auth()
         auth.probe()
         val credential: Credential = credential()
           ?: return run { _connection.value = ConnectionState.Unpaired }
-        val rpc: RpcConnection = RpcConnection.open(http, socketUri, credential.accessToken, scope)
+        val rpc: RpcConnection =
+          RpcConnection.open(http, socketUri(), credential.accessToken, scope)
         try {
           _connection.value = ConnectionState.Connected(auth.probe(credential))
           active.value = rpc

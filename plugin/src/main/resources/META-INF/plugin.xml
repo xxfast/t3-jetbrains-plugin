@@ -20,5 +20,10 @@
       id="T3 Code"
       anchor="right"
       factoryClass="io.github.xxfast.t3code.plugin.T3ToolWindowFactory"/>
+    <applicationConfigurable
+      parentId="tools"
+      instance="io.github.xxfast.t3code.plugin.settings.T3Configurable"
+      id="io.github.xxfast.t3code.settings"
+      displayName="T3 Code"/>
   </extensions>
 </idea-plugin>

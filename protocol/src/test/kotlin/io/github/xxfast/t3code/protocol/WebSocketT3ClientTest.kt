@@ -31,8 +31,8 @@ class WebSocketT3ClientTest {
     credential: Credential? = Credential("test"),
     socketUri: URI = rpc.uri,
   ): WebSocketT3Client = WebSocketT3Client(
-    auth = T3Auth(http.baseUrl),
-    socketUri = socketUri,
+    auth = { T3Auth(http.baseUrl) },
+    socketUri = { socketUri },
     credential = { credential },
     scope = scope,
     http = defaultHttpClient(),

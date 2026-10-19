@@ -1,0 +1,87 @@
+package io.github.xxfast.t3code.plugin.settings
+
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.asContextElement
+import com.intellij.openapi.options.BoundConfigurable
+import com.intellij.openapi.ui.DialogPanel
+import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.ui.dsl.builder.Cell
+import com.intellij.ui.dsl.builder.bindText
+import com.intellij.ui.dsl.builder.columns
+import com.intellij.ui.dsl.builder.COLUMNS_LARGE
+import com.intellij.ui.dsl.builder.panel
+import io.github.xxfast.t3code.plugin.T3
+import io.github.xxfast.t3code.protocol.ConnectionState
+import javax.swing.JComponent
+import javax.swing.JEditorPane
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
+
+class T3Configurable : BoundConfigurable("T3 Code") {
+  private var status: Job? = null
+
+  override fun createPanel(): DialogPanel {
+    lateinit var comment: Cell<JEditorPane>
+    val panel: DialogPanel = panel {
+      row("Server URL") {
+        textField()
+          .bindText(T3Settings.get()::serverUrl)
+          .columns(COLUMNS_LARGE)
+      }
+      row {
+        button("Pair...") {
+          apply()
+          PairDialog().takeIf { it.showAndGet() }?.let { T3.get().pair(it.input) }
+        }
+        button("Forget credential") { T3.get().forget() }
+      }
+      row { comment = comment("Checking...") }
+    }
+    status = T3.get().watch { connection ->
+      val url: String = T3Settings.get().serverUrl
+      val paired: Boolean = T3Credentials.load(url) != null
+      val text: String = when {
+        connection is ConnectionState.AuthError -> connection.message
+        paired -> "Paired with $url"
+        else -> "Not paired with $url"
+      }
+      withContext(Dispatchers.EDT + ModalityState.any().asContextElement()) {
+        comment.component.text = text
+      }
+    }
+    return panel
+  }
+
+  override fun apply() {
+    val before: String = T3Settings.get().serverUrl
+    super.apply()
+    if (T3Settings.get().serverUrl != before) T3.get().reconnect()
+  }
+
+  override fun disposeUIResources() {
+    status?.cancel()
+    status = null
+    super.disposeUIResources()
+  }
+}
+
+private class PairDialog : DialogWrapper(true) {
+  var input: String = ""
+
+  init {
+    title = "Pair with T3 Code"
+    init()
+  }
+
+  override fun createCenterPanel(): JComponent = panel {
+    row("Pairing link or code") {
+      textField()
+        .bindText(::input)
+        .columns(COLUMNS_LARGE)
+        .focused()
+    }
+    row { comment("Desktop app > Settings > Connections > create a pairing link") }
+  }
+}
