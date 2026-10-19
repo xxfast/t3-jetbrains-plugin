@@ -34,12 +34,10 @@ client is a supported shape, not a hack.
 
 Targets IntelliJ Platform 2025.3 and later, so IDEA, Android Studio, WebStorm, Rider and friends.
 
-## Roadmap for v0
+## Roadmap
 
-1. Pair with a local or remote server, bearer token auth.
-2. Thread list and thread view.
-3. Open file and diff from a thread.
-4. Generated contracts and a nightly contract check against the latest upstream release.
+Work items are [GitHub issues](https://github.com/xxfast/t3-jetbrains-plugin/issues), one per
+milestone step. [`ROADMAP.md`](ROADMAP.md) has the milestone goals and the order.
 
 ## Licence
 

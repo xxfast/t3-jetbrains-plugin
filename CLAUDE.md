@@ -5,7 +5,9 @@ Guidance for Claude Code when working in this repository.
 ## What this is
 
 A native JetBrains plugin that is a client for T3 Code's server. Nothing is built yet; this repo holds
-the design and the decisions so far. Read `README.md` first, then `contracts/README.md`.
+the design and the decisions so far. Read `README.md` first, then `contracts/README.md`. Work items are
+GitHub issues; `ROADMAP.md` has the order. When asked to do an issue, its **Done when** is the
+acceptance test.
 
 ## Decisions already made
 
@@ -20,7 +22,8 @@ Don't relitigate these. Change them only if the user asks.
   hand-port the whole surface.
 - Target IntelliJ Platform 2025.3 and later (`sinceBuild = 253`, no `untilBuild`). Jewel is bundled from
   251.2, Android Studio is on 262.
-- v0 scope: pair with a server, thread list, thread view, open file and diff. Nothing else.
+- 0.1 scope: pair with a server, thread list, thread view, open file and diff. Nothing else.
+  Milestones on GitHub are product versions (`0.1`, `0.2`, `0.3`), see `ROADMAP.md`.
 
 ## Principles
 
@@ -49,6 +52,12 @@ Hard-won, so recorded here rather than rediscovered.
   and is the handshake; it advertises `bearer-access-token` as a session method. `/api/orchestration/
   snapshot` and the rest return 401 `EnvironmentAuthInvalidError` without one. Transport is Effect RPC
   over WebSocket (JSON-RPC and ndjson) plus HTTP routes.
+- Auth, from upstream `docs/internals/environment-auth.md`: a non-desktop client pairs with a
+  one-time token or pairing link minted in the desktop app, exchanged at `/oauth/token`. Bearer
+  clients fetch a short-lived ticket from `/api/auth/websocket-ticket` for the socket upgrade; the
+  token never goes in the URL. Every RPC declares a required scope and the server checks it per call.
+- Upstream tags are `v0.1.1-preview.*` and `v0.1.1-nightly.*` as of Oct 2026. `T3CODE_VERSION` still
+  says `v0.1.0`. Bump before generating contracts.
 
 ## Style
 
