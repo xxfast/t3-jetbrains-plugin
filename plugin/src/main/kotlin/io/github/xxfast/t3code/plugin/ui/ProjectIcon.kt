@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -33,23 +34,33 @@ import org.jetbrains.jewel.ui.typography
 // plugin doesn't ship the whole lucide set.
 
 @Composable
-fun ProjectIcon(project: Project, favicon: ImageBitmap?, size: Dp = 16.dp) {
+fun ProjectIcon(
+  project: Project,
+  favicon: ImageBitmap?,
+  size: Dp = 16.dp,
+  muted: Boolean = false, // upstream's `grayscale` on rows that aren't open or hovered
+) {
   val dark: Boolean = JewelTheme.isDark
+  // `muted` is upstream's `grayscale`: the image loses its saturation, the tints go grey
+  fun tone(color: Color): Color = if (muted) color.greyscale() else color
   when (val icon: StoredProjectIcon? = project.projectIcon) {
-    is StoredProjectIcon.Monogram -> Monogram(icon.text, projectIconColor(icon.color, dark), size)
+    is StoredProjectIcon.Monogram ->
+      Monogram(icon.text, tone(projectIconColor(icon.color, dark)), size)
     is StoredProjectIcon.Emoji -> Box(Modifier.size(size), contentAlignment = Alignment.Center) {
       Text(icon.emoji, style = TextStyle(fontSize = (size.value * 0.8f).sp))
     }
 
-    is StoredProjectIcon.Lucide -> Glyph("folder-code", projectIconColor(icon.color, dark), size)
+    is StoredProjectIcon.Lucide ->
+      Glyph("folder-code", tone(projectIconColor(icon.color, dark)), size)
     else -> if (favicon != null) {
       Image(
         bitmap = favicon,
         contentDescription = null,
         modifier = Modifier.size(size).clip(RoundedCornerShape(25)),
+        colorFilter = if (muted) GREYSCALE else null,
       )
     } else {
-      val color: Color = projectIconColor(projectColorName(project.title), dark)
+      val color: Color = tone(projectIconColor(projectColorName(project.title), dark))
       Monogram(projectMonogram(project.title), color, size)
     }
   }
@@ -121,6 +132,15 @@ fun PullRequestBadgeView(badge: PullRequestBadge) {
     Glyph(glyph, tone, 13.dp)
     Text(badge.text, color = tone, style = JewelTheme.typography.small, maxLines = 1)
   }
+}
+
+private val GREYSCALE: ColorFilter =
+  ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+
+/** The colour's luminance as a grey, what a CSS `grayscale()` does to it. */
+private fun Color.greyscale(): Color {
+  val l: Float = 0.2126f * red + 0.7152f * green + 0.0722f * blue
+  return Color(l, l, l, alpha)
 }
 
 /** Anchors the plugin's class loader for [PathIconKey]. */

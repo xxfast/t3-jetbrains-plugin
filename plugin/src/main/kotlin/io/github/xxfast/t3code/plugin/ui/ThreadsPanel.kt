@@ -161,7 +161,7 @@ private fun InboxCard(
   onClick: () -> Unit,
 ) {
   val spaced: Modifier = Modifier.padding(vertical = 3.dp)
-  Selectable(selected, onClick, rest = subtle(0.05f), modifier = spaced) {
+  Selectable(selected, onClick, rest = subtle(0.05f), modifier = spaced) { _ ->
     Column(
       modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
       verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -244,15 +244,20 @@ private fun SettledRow(
   selected: Boolean,
   onClick: () -> Unit,
 ) {
-  Selectable(selected, onClick) {
+  Selectable(selected, onClick) { hovered ->
     Row(
       modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
       horizontalArrangement = Arrangement.spacedBy(8.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      // Dimmed like upstream's settled rows, which sit at 40% until hovered
-      Box(Modifier.alpha(if (selected) 1f else 0.4f)) {
-        if (project != null) ProjectIcon(project, favicon) else Box(Modifier.size(16.dp))
+      // Upstream's slim row: the icon is at 40% and greyscale unless the row is open or hovered
+      val muted: Boolean = !(selected || hovered)
+      Box(Modifier.alpha(if (muted) 0.4f else 1f)) {
+        if (project != null) {
+          ProjectIcon(project, favicon, muted = muted)
+        } else {
+          Box(Modifier.size(16.dp))
+        }
       }
       Text(
         text = thread.title,
@@ -272,7 +277,7 @@ private fun SettledRow(
 
 @Composable
 private fun MoreRow(count: Int, onClick: () -> Unit) {
-  Selectable(selected = false, onClick = onClick) {
+  Selectable(selected = false, onClick = onClick) { _ ->
     Row(
       modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
       horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -291,7 +296,7 @@ private fun Selectable(
   onClick: () -> Unit,
   rest: Color = Color.Transparent,
   modifier: Modifier = Modifier,
-  content: @Composable () -> Unit,
+  content: @Composable (hovered: Boolean) -> Unit,
 ) {
   val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
   val hovered: Boolean by interactions.collectIsHoveredAsState()
@@ -309,6 +314,6 @@ private fun Selectable(
       .hoverable(interactions)
       .clickable(interactionSource = interactions, indication = null, onClick = onClick),
   ) {
-    content()
+    content(hovered)
   }
 }
