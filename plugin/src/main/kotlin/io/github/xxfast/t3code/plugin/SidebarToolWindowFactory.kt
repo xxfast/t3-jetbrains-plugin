@@ -11,8 +11,10 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
 import io.github.xxfast.t3code.plugin.actions.showThreadMenu
+import io.github.xxfast.t3code.plugin.ide.ProjectAwareness
 import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ui.ConnectionBanner
+import io.github.xxfast.t3code.plugin.ui.ProjectFilter
 import io.github.xxfast.t3code.plugin.ui.Sidebar
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.T3Client
@@ -32,7 +34,9 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
     val selection: ThreadSelection = ThreadSelection.getInstance(project)
     val opener: T3Opener = T3Opener.getInstance(project)
     val icons: ProjectIcons = ProjectIcons.get()
+    val awareness: ProjectAwareness = ProjectAwareness.getInstance(project)
     val panel: JComponent = JewelComposePanel {
+      val filter: ProjectFilter by awareness.filter.collectAsState()
       val connection by client.connection.collectAsState()
       val projects by client.projects.collectAsState()
       val threads by client.threads.collectAsState()
@@ -58,6 +62,8 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         favicons = favicons,
         header = header,
         onContextMenu = { threadId, x, y -> showThreadMenu(project, threadId, x, y) },
+        filter = filter,
+        onFilterChange = awareness::choose,
       )
     }
     val content: Content = ContentFactory.getInstance().createContent(panel, null, false)

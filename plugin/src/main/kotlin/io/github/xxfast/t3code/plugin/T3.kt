@@ -6,6 +6,7 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
 import io.github.xxfast.t3code.plugin.fixtures.FixtureClient
+import io.github.xxfast.t3code.plugin.ide.serverIsLocal
 import io.github.xxfast.t3code.plugin.settings.T3Configurable
 import io.github.xxfast.t3code.plugin.settings.T3Credentials
 import io.github.xxfast.t3code.plugin.settings.T3Settings
@@ -92,6 +93,9 @@ class T3(private val scope: CoroutineScope) {
     private val LOG: Logger = Logger.getInstance(T3::class.java)
 
     fun get(): T3 = service()
+
+    /** Whether the server's paths are this machine's paths, see [serverIsLocal]. */
+    fun serverIsLocal(): Boolean = serverIsLocal(T3Settings.get().serverUrl)
 
     fun openSettings(project: Project) {
       ShowSettingsUtil.getInstance().showSettingsDialog(project, T3Configurable::class.java)

@@ -39,6 +39,35 @@ class PathsTest {
   }
 
   @Test
+  fun `a loopback server shares this disk, anything else doesn't`() {
+    assertTrue(serverIsLocal("http://127.0.0.1:3773"))
+    assertTrue(serverIsLocal("http://localhost:3773/"))
+    assertTrue(serverIsLocal("http://[::1]:3773"))
+    assertFalse(serverIsLocal("https://t3.example.com"))
+    assertFalse(serverIsLocal("http://192.168.1.20:3773"))
+    assertFalse(serverIsLocal("not a url"))
+  }
+
+  @Test
+  fun `a local server's existing paths are files here, wherever they are`() {
+    val base: Path = Path.of("/work/kstore")
+    val elsewhere: Path = Path.of("/work/router/Foo.kt")
+    assertEquals(elsewhere, localPath(elsewhere, base, serverIsLocal = true) { true })
+    assertEquals(null, localPath(elsewhere, base, serverIsLocal = true) { false })
+    val inside: Path = Path.of("/work/kstore/Foo.kt")
+    assertEquals(null, localPath(inside, base, serverIsLocal = true) { false }, "Not on disk")
+  }
+
+  @Test
+  fun `a remote server's paths only count inside this IDE project`() {
+    val base: Path = Path.of("/work/kstore")
+    val inside: Path = Path.of("/work/kstore/Foo.kt")
+    assertEquals(inside, localPath(inside, base, serverIsLocal = false) { false })
+    assertEquals(null, localPath(Path.of("/work/router/Foo.kt"), base, false) { true })
+    assertEquals(null, localPath(inside, base = null, serverIsLocal = false) { true })
+  }
+
+  @Test
   fun `worktree wins over workspace root`() {
     assertEquals("/wt/a", cwdOf("/wt/a", "/work/kstore"))
     assertEquals("/work/kstore", cwdOf(null, "/work/kstore"))

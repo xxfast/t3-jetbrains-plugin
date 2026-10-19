@@ -79,9 +79,10 @@ fun ChatView(
   onOpenFile: (path: String) -> Unit, // "Open" on a file_change row
   onDiffFile: (TurnItem.FileChange) -> Unit, // "Diff" on a file_change row
   onDiffRun: (Run) -> Unit, // "Diff" on a run's line
+  vcs: VcsSummary? = null, // the checkout's git line under the title, when there's one
 ) {
   Column(Modifier.fillMaxSize()) {
-    Breadcrumb(view, project, favicon)
+    Breadcrumb(view, project, favicon, vcs)
     Divider(Orientation.Horizontal, Modifier.fillMaxWidth())
     // A stream that fails after rendering keeps the thread and says so on top
     if (error != null && view != null) ErrorLine(error, onRetry)
@@ -152,24 +153,40 @@ private fun ErrorLine(error: String, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun Breadcrumb(view: ThreadView?, project: Project?, favicon: ImageBitmap?) {
-  Row(
-    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-    horizontalArrangement = Arrangement.spacedBy(6.dp),
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    if (project != null) {
-      // Upstream's ChatHeader: the favicon at 14px, then the name, then the separator
-      ProjectIcon(project, favicon, 14.dp)
-      Text(project.title, color = JewelTheme.globalColors.text.info, maxLines = 1)
-      Text("/", color = JewelTheme.globalColors.text.info)
+private fun Breadcrumb(
+  view: ThreadView?,
+  project: Project?,
+  favicon: ImageBitmap?,
+  vcs: VcsSummary?,
+) {
+  Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.spacedBy(6.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      if (project != null) {
+        // Upstream's ChatHeader: the favicon at 14px, then the name, then the separator
+        ProjectIcon(project, favicon, 14.dp)
+        Text(project.title, color = JewelTheme.globalColors.text.info, maxLines = 1)
+        Text("/", color = JewelTheme.globalColors.text.info)
+      }
+      Text(
+        text = view?.thread?.title.orEmpty(),
+        modifier = Modifier.weight(1f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
     }
-    Text(
-      text = view?.thread?.title.orEmpty(),
-      modifier = Modifier.weight(1f),
-      maxLines = 1,
-      overflow = TextOverflow.Ellipsis,
-    )
+    if (vcs != null) {
+      Text(
+        text = vcs.text(),
+        style = JewelTheme.typography.small,
+        color = JewelTheme.globalColors.text.info,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+    }
   }
 }
 

@@ -36,7 +36,7 @@ abstract class ThreadAction(private val kind: ThreadActionKind) : AnAction(), Du
       return
     }
     val client: T3Client = T3.get().client
-    val row: Thread? = row(client, threadId(e, project))
+    val row: Thread? = e.threadRow(project, client)
     val reason: String? = disabledReason(kind, client.connection.value, row)
     present(e.presentation, row)
     e.presentation.isEnabled = reason == null
@@ -46,7 +46,7 @@ abstract class ThreadAction(private val kind: ThreadActionKind) : AnAction(), Du
   override fun actionPerformed(e: AnActionEvent) {
     val project: Project = e.project ?: return
     val client: T3Client = T3.get().client
-    val row: Thread = row(client, threadId(e, project)) ?: return
+    val row: Thread = e.threadRow(project, client) ?: return
     val live: ThreadView? = e.getData(T3DataKeys.THREAD_VIEW)?.takeIf { it.thread.id == row.id }
     val target = ThreadTarget(project, client, row, live)
     val text: String = e.presentation.text ?: templateText ?: "do that"
@@ -58,13 +58,15 @@ abstract class ThreadAction(private val kind: ThreadActionKind) : AnAction(), Du
   protected open fun present(presentation: Presentation, row: Thread?) = Unit
 
   protected abstract suspend fun perform(target: ThreadTarget)
-
-  private fun threadId(e: AnActionEvent, project: Project): String? =
-    e.getData(T3DataKeys.THREAD_ID) ?: ThreadSelection.getInstance(project).selected.value
-
-  private fun row(client: T3Client, threadId: String?): Thread? =
-    threadId?.let { id -> client.threads.value.find { it.id == id } }
 }
+
+/** The thread an action acts on: the context's, else the selected one. */
+fun AnActionEvent.threadId(project: Project): String? =
+  getData(T3DataKeys.THREAD_ID) ?: ThreadSelection.getInstance(project).selected.value
+
+/** The row for [threadId] in the client's thread list. */
+fun AnActionEvent.threadRow(project: Project, client: T3Client): Thread? =
+  threadId(project)?.let { id -> client.threads.value.find { it.id == id } }
 
 /** What an action acts on: [row], and the host's live view of it when there is one. */
 class ThreadTarget(

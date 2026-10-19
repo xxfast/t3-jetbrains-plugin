@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.archived
 import io.github.xxfast.t3code.protocol.generated.ThreadLinkedPullRequest
@@ -54,15 +55,79 @@ private fun Thread.activeAnchor(): Instant =
   maxOf(createdAt.toInstant(), (unsettledAt ?: createdAt).toInstant())
 
 /**
+ * Which T3 projects the Sidebar lists. Upstream's sidebar has no such filter; this one is ours,
+ * so an IDE window can default to the projects it has open.
+ */
+sealed interface ProjectFilter {
+  data object All : ProjectFilter
+
+  data class Only(val ids: Set<String>) : ProjectFilter
+}
+
+fun ProjectFilter.allows(projectId: String): Boolean = when (this) {
+  ProjectFilter.All -> true
+  is ProjectFilter.Only -> projectId in ids
+}
+
+/**
+ * The project picker's entries: "All projects", then "N projects" while a match picked several,
+ * then each project. [filters] runs parallel to [labels]; [selected] indexes both.
+ */
+data class FilterChoices(
+  val labels: List<String>,
+  val filters: List<ProjectFilter>,
+  val selected: Int,
+  val names: List<String>, // what the current filter lists, for the tooltip
+)
+
+fun filterChoices(projects: List<Project>, filter: ProjectFilter): FilterChoices {
+  val chosen: List<Project> = projects.filter { filter.allows(it.id) }
+  val several: Boolean = filter is ProjectFilter.Only && chosen.size > 1
+  val labels: List<String> = buildList {
+    add(ALL_PROJECTS)
+    if (several) add("${chosen.size} projects")
+    projects.forEach { add(it.title) }
+  }
+  val filters: List<ProjectFilter> = buildList {
+    add(ProjectFilter.All)
+    if (several) add(filter)
+    projects.forEach { add(ProjectFilter.Only(setOf(it.id))) }
+  }
+  val selected: Int = filters.indexOf(filter).coerceAtLeast(0)
+  val names: List<String> =
+    if (filter == ProjectFilter.All) emptyList() else chosen.map { it.title }
+  return FilterChoices(labels, filters, selected, names)
+}
+
+const val ALL_PROJECTS: String = "All projects"
+
+/** What the Sidebar says with no rows to show, so a narrowing filter is visible as one. */
+fun emptyHint(noProjects: Boolean, query: String, filter: ProjectFilter): String = when {
+  noProjects -> "No projects yet. Open the T3 Code desktop app to add one."
+  query.isNotBlank() -> "No threads match"
+  filter is ProjectFilter.Only && filter.ids.size == 1 -> "No threads in this project"
+  filter is ProjectFilter.Only -> "No threads in these projects"
+  else -> "No threads"
+}
+
+/**
  * Splits [threads] matching [query] by title. Inbox is pinned rows (by `pinOrderKey`, keyless
  * ones newest first) then active rows (keyless ones newest by `createdAt`/`unsettledAt`, then by
- * `activeOrderKey`). Settled is newest settled first. Archived and under-parent rows are dropped.
+ * `activeOrderKey`). Settled is newest settled first. Archived and under-parent rows are dropped,
+ * and so are rows from projects outside [filter].
  */
-fun sections(threads: List<Thread>, query: String): ThreadSections {
+fun sections(
+  threads: List<Thread>,
+  query: String,
+  filter: ProjectFilter = ProjectFilter.All,
+): ThreadSections {
   val needle: String = query.trim()
   val ids: Set<String> = threads.mapTo(HashSet()) { it.id }
   val visible: List<Thread> = threads.filter {
-    !it.archived && !it.shownUnderParent(ids) && it.title.contains(needle, ignoreCase = true)
+    !it.archived &&
+      !it.shownUnderParent(ids) &&
+      filter.allows(it.projectId) &&
+      it.title.contains(needle, ignoreCase = true)
   }
   val (settled: List<Thread>, inbox: List<Thread>) = visible.partition { it.settled }
   val (pinned: List<Thread>, active: List<Thread>) = inbox.partition { it.pinned }

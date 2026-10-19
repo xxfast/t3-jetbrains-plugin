@@ -74,6 +74,13 @@
         text="Archive thread"
         description="Archive or unarchive the thread"
         icon="AllIcons.FileTypes.Archive"/>
+      <separator/>
+      <action
+        id="T3Code.OpenWorktree"
+        class="io.github.xxfast.t3code.plugin.actions.OpenWorktreeAction"
+        text="Open worktree in new window"
+        description="Open the thread's worktree as its own IDE window"
+        icon="AllIcons.Actions.MenuOpen"/>
     </group>
   </actions>
 </idea-plugin>

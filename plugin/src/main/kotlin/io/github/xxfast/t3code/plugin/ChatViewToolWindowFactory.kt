@@ -20,9 +20,12 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
 import io.github.xxfast.t3code.plugin.actions.threadActions
+import io.github.xxfast.t3code.plugin.ide.ProjectAwareness
 import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ide.ThreadVisits
 import io.github.xxfast.t3code.plugin.ui.Advance
+import io.github.xxfast.t3code.plugin.ide.VcsStatuses
+import io.github.xxfast.t3code.plugin.ide.threadCwd
 import io.github.xxfast.t3code.plugin.ui.ChatView
 import io.github.xxfast.t3code.plugin.ui.ComposerState
 import io.github.xxfast.t3code.plugin.ui.PendingUserInputDraftAnswer
@@ -30,6 +33,7 @@ import io.github.xxfast.t3code.plugin.ui.Hint
 import io.github.xxfast.t3code.plugin.ui.PendingActions
 import io.github.xxfast.t3code.plugin.ui.PendingRequest
 import io.github.xxfast.t3code.plugin.ui.PendingThreadRequests
+import io.github.xxfast.t3code.plugin.ui.VcsSummary
 import io.github.xxfast.t3code.plugin.ui.activeRun
 import io.github.xxfast.t3code.plugin.ui.advance
 import io.github.xxfast.t3code.plugin.ui.answersResponse
@@ -76,6 +80,7 @@ class ChatViewToolWindowFactory : ToolWindowFactory, DumbAware {
     // Thread actions act on the selection, which is what this window shows
     toolWindow.setTitleActions(listOf(threadActions()))
     ThreadVisits.getInstance(project).follow(toolWindow)
+    ProjectAwareness.getInstance(project) // selects this window's worktree thread, if it has one
   }
 }
 
@@ -117,6 +122,10 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
   val (request: PendingRequest?, actions: PendingActions) =
     rememberPendingRequest(view, requests, pending.responding, controller)
   val projectId: String? = view?.thread?.projectId
+  // One subscription per checkout, shared by every tab showing it
+  val cwd: String? = threadCwd(view?.thread, projects)
+  val vcs: VcsSummary? by remember(cwd) { VcsStatuses.getInstance(project).summary(cwd) }
+    .collectAsState()
   ChatView(
     view = shown,
     error = load.error,
@@ -132,6 +141,7 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
     onOpenFile = { path -> view?.let { opener.openFile(it, path) } },
     onDiffFile = { change -> view?.let { opener.showDiff(it, change) } },
     onDiffRun = { run -> view?.let { opener.showRunDiff(it, run) } },
+    vcs = vcs,
   )
 }
 

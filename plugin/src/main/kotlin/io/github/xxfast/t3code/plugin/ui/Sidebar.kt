@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -57,9 +58,11 @@ import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.Orientation
 import org.jetbrains.jewel.ui.component.CircularProgressIndicator
 import org.jetbrains.jewel.ui.component.Divider
+import org.jetbrains.jewel.ui.component.ListComboBox
 import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.TextField
+import org.jetbrains.jewel.ui.component.Tooltip
 import org.jetbrains.jewel.ui.component.VerticallyScrollableContainer
 import org.jetbrains.jewel.ui.icon.IconKey
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
@@ -76,21 +79,23 @@ fun Sidebar(
   header: @Composable () -> Unit = {}, // the connection banner, shown only when not connected
   // A row was right-clicked at x, y on screen
   onContextMenu: (threadId: String, x: Int, y: Int) -> Unit = { _, _, _ -> },
+  filter: ProjectFilter = ProjectFilter.All, // which projects' threads to list
+  onFilterChange: (ProjectFilter) -> Unit = {},
 ) {
   val search: TextFieldState = rememberTextFieldState()
   val query: String = search.text.toString()
-  val sections: ThreadSections = remember(threads, query) { sections(threads, query) }
+  val sections: ThreadSections =
+    remember(threads, query, filter) { sections(threads, query, filter) }
   Column(Modifier.fillMaxSize()) {
     header()
     SearchField(search)
+    if (projects.size > 1) ProjectPicker(projects, filter, onFilterChange)
     Box(Modifier.weight(1f)) {
       when {
         sections.inbox.isNotEmpty() || sections.settled.isNotEmpty() ->
           Sections(projects, favicons, sections, selectedThreadId, onOpenThread, onContextMenu)
 
-        projects.isEmpty() -> Hint("No projects yet. Open the T3 Code desktop app to add one.")
-        query.isNotBlank() -> Hint("No threads match")
-        else -> Hint("No threads")
+        else -> Hint(emptyHint(projects.isEmpty(), query, filter))
       }
     }
   }
@@ -106,6 +111,39 @@ private fun SearchField(state: TextFieldState) {
       Icon(AllIconsKeys.Actions.Search, contentDescription = null, Modifier.padding(end = 6.dp))
     },
   )
+}
+
+/**
+ * Ours, not upstream's: the projects this window lists, defaulting to the ones it has open. A
+ * match can pick several; it shows as "N projects", their names in the tooltip.
+ */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip sits on Compose's TooltipArea
+@Composable
+private fun ProjectPicker(
+  projects: List<Project>,
+  filter: ProjectFilter,
+  onFilterChange: (ProjectFilter) -> Unit,
+) {
+  val choices: FilterChoices = remember(projects, filter) { filterChoices(projects, filter) }
+  // Both read fresh in the callback, whichever lambda the combo box kept
+  val latest: FilterChoices by rememberUpdatedState(choices)
+  val current: ProjectFilter by rememberUpdatedState(filter)
+  val tooltip: String = choices.names.joinToString("\n").ifEmpty { ALL_PROJECTS }
+  Tooltip(tooltip = { Text(tooltip) }) {
+    ListComboBox(
+      items = choices.labels,
+      selectedIndex = choices.selected,
+      // Only a real change: some Jewel versions call back for the programmatic index too, and
+      // persisting that would freeze the automatic match
+      onSelectedItemChange = { index ->
+        val picked: ProjectFilter? = latest.filters.getOrNull(index)
+        if (picked != null && picked != current) onFilterChange(picked)
+      },
+      modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+      // Titles repeat (two checkouts of one repo, a project called "All projects"); keys mustn't
+      itemKeys = { index, _ -> index },
+    )
+  }
 }
 
 @Composable

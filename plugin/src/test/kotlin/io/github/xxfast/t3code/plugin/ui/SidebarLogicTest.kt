@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.generated.DelegatedFrom
@@ -180,6 +181,50 @@ class SidebarLogicTest {
   }
 
   @Test
+  fun `the project filter drops rows from other projects`() {
+    val threads: List<Thread> = listOf(
+      thread("a").copy(projectId = "kstore"),
+      thread("b").copy(projectId = "router"),
+      thread("c").copy(projectId = "other"),
+    )
+    fun shown(filter: ProjectFilter): List<String> =
+      sections(threads, "", filter).inbox.map { it.id }
+    assertEquals(listOf("a", "b", "c"), shown(ProjectFilter.All).sorted())
+    assertEquals(listOf("b"), shown(ProjectFilter.Only(setOf("router"))))
+    assertEquals(listOf("a", "b"), shown(ProjectFilter.Only(setOf("kstore", "router"))).sorted())
+  }
+
+  @Test
+  fun `an empty list says when the filter is why`() {
+    val one: ProjectFilter = ProjectFilter.Only(setOf("kstore"))
+    val two: ProjectFilter = ProjectFilter.Only(setOf("kstore", "router"))
+    assertEquals("No threads in this project", emptyHint(false, "", one))
+    assertEquals("No threads in these projects", emptyHint(false, "", two))
+    assertEquals("No threads", emptyHint(false, "", ProjectFilter.All))
+    assertEquals("No threads match", emptyHint(false, "x", one))
+    assertTrue(emptyHint(true, "", one).startsWith("No projects yet"))
+  }
+
+  @Test
+  fun `the picker lists all, a several-project match, then each project`() {
+    val projects: List<Project> = listOf(project("kstore", "KStore"), project("router", "Router"))
+    val all: FilterChoices = filterChoices(projects, ProjectFilter.All)
+    assertEquals(listOf("All projects", "KStore", "Router"), all.labels)
+    assertEquals(0, all.selected)
+    assertEquals(emptyList(), all.names)
+    val one: FilterChoices = filterChoices(projects, ProjectFilter.Only(setOf("router")))
+    assertEquals(2, one.selected)
+    assertEquals(listOf("Router"), one.names)
+    val both: ProjectFilter = ProjectFilter.Only(setOf("kstore", "router"))
+    val several: FilterChoices = filterChoices(projects, both)
+    assertEquals(listOf("All projects", "2 projects", "KStore", "Router"), several.labels)
+    assertEquals(1, several.selected)
+    assertEquals(both, several.filters[several.selected])
+    assertEquals(ProjectFilter.Only(setOf("kstore")), several.filters[2])
+    assertEquals(listOf("KStore", "Router"), several.names)
+  }
+
+  @Test
   fun `unread is a run completed after the last visit`() {
     assertTrue(thread(completedAt = "2026-10-19T12:00:00Z", visitedAt = TEN_TO).unread)
     assertFalse(thread(completedAt = TEN_TO, visitedAt = "2026-10-19T12:00:00Z").unread)
@@ -312,6 +357,16 @@ private fun link(
     updatedAt = updatedAt, syncedAt = EPOCH,
   ),
   stack = null,
+)
+
+private fun project(id: String, title: String): Project = T3Json.decodeFromString(
+  Project.serializer(),
+  """
+    {
+      "id": "$id", "title": "$title", "workspaceRoot": "/code/$id", "scripts": [],
+      "createdAt": "$EPOCH", "updatedAt": "$EPOCH"
+    }
+  """,
 )
 
 private const val EPOCH: String = "1970-01-01T00:00:00Z"

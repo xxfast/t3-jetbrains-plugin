@@ -114,6 +114,7 @@
       },
       "status": "running",
       "branch": "ios-26-back",
+      "worktreePath": "/Users/xxfast/.t3/worktrees/Decompose-Router/ios-26-back",
       "latestRunId": "run_01JC4B2W6S8T",
       "activeRunId": "run_01JC4B2W6S8T",
       "activityRunStartedAt": "2026-10-19T08:04:10.000Z",

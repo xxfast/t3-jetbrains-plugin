@@ -41,7 +41,7 @@ import io.github.xxfast.t3code.protocol.Project as T3Project
 
 /**
  * Opens what a thread points at: files in the editor, changes in the diff viewer. It opens, it
- * never applies; nothing here writes to disk. Files outside this IDE project come from the server
+ * never applies; nothing here writes to disk. Files that aren't here come from the server
  * as read-only copies.
  */
 @Service(Service.Level.PROJECT)
@@ -164,15 +164,18 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
     return SimpleDiffRequest(path, content(sides.before), right, "Before", "After")
   }
 
-  /** The thread's cwd, and the local path when it's inside this IDE project. */
+  /**
+   * The thread's cwd, and the file on this disk the path is, by [localPath]: with the server on
+   * this machine any existing file, another project's included (the IDE gives it its own "not
+   * part of the project" banner); with a remote one, only files inside this IDE project.
+   */
   private data class Where(val cwd: String, val local: Path?, val t3Project: T3Project?)
 
   private fun where(view: ThreadView, path: String): Where {
     val t3Project: T3Project? = client.projects.value.find { it.id == view.thread.projectId }
     val cwd: String = cwdOf(view.thread.worktreePath, t3Project?.workspaceRoot ?: ".")
-    val resolved: Path = resolve(cwd, path)
     val base: Path? = project.basePath?.let { Path.of(it) }
-    val local: Path? = resolved.takeIf { base != null && isUnder(base, it) }
+    val local: Path? = localPath(resolve(cwd, path), base, T3.serverIsLocal())
     return Where(cwd, local, t3Project)
   }
 
