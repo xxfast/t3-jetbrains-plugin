@@ -8,7 +8,27 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
+import io.github.xxfast.t3code.plugin.ui.AttachmentClass
 import io.github.xxfast.t3code.plugin.ui.ComposerDispatchMode
+import io.github.xxfast.t3code.plugin.ui.DraftAttachment
+import io.github.xxfast.t3code.plugin.ui.DraftExtras
+import io.github.xxfast.t3code.plugin.ui.PASTED_IMAGE_NAME
+import io.github.xxfast.t3code.plugin.ui.ReviewCommentContext
+import io.github.xxfast.t3code.plugin.ui.encodePng
+import io.github.xxfast.t3code.plugin.ui.attachmentLimitError
+import io.github.xxfast.t3code.plugin.ui.classifyAttachment
+import io.github.xxfast.t3code.plugin.ui.messageContext
+import io.github.xxfast.t3code.plugin.ui.outgoingText
+import io.github.xxfast.t3code.plugin.ui.toRecord
+import io.github.xxfast.t3code.plugin.ui.uploadUrlInput
+import io.github.xxfast.t3code.plugin.ui.uploadedAttachment
+import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
+import io.github.xxfast.t3code.protocol.generated.ChatAttachment
+import io.github.xxfast.t3code.protocol.generated.MessageContext
+import java.awt.Image
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Path
 import io.github.xxfast.t3code.plugin.ui.activeCapabilities
 import io.github.xxfast.t3code.plugin.ui.activeRun
 import io.github.xxfast.t3code.plugin.ui.messageDispatch
@@ -30,6 +50,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -64,6 +85,200 @@ class ChatController(private val scope: CoroutineScope) {
   /** What's typed for [threadId], kept across hosts and thread switches like upstream's drafts. */
   fun draft(threadId: String): TextFieldState =
     drafts.computeIfAbsent(threadId) { TextFieldState() }
+
+  private val _extras: MutableStateFlow<Map<String, DraftExtras>> = MutableStateFlow(emptyMap())
+
+  /** Every thread's draft attachments and context, by thread id. */
+  val extras: StateFlow<Map<String, DraftExtras>> = _extras
+
+  /**
+   * One attachment's upload, by local id: the bytes until they're up, the job moving them, and
+   * the id the server minted, so removing the chip can stop the job and release the id.
+   */
+  private class Transfer(@Volatile var bytes: ByteArray?) {
+    @Volatile var job: Job? = null
+    @Volatile var minted: String? = null
+  }
+
+  private val transfers: ConcurrentHashMap<String, Transfer> = ConcurrentHashMap()
+
+  /** Adds [comment], a selection from the editor, to [threadId]'s draft. */
+  fun addContext(threadId: String, comment: ReviewCommentContext) {
+    updateExtras(threadId) { extras -> extras.withComment(comment) }
+  }
+
+  fun removeContext(threadId: String, contextId: String) {
+    updateExtras(threadId) { extras -> extras.withoutComment(contextId) }
+  }
+
+  /** Why an attach never started, shown under the chips. */
+  fun refuse(threadId: String, reason: String) {
+    updateExtras(threadId) { extras -> extras.refused(reason) }
+  }
+
+  /** Checks then reads [paths] off the EDT and attaches each, see [attach]. */
+  fun attachFiles(threadId: String, paths: List<Path>) {
+    scope.launch(Dispatchers.IO) {
+      for (path in paths) attachFile(threadId, path)
+    }
+  }
+
+  // Refused on its size before a byte is read, so a huge drop never lands in memory
+  private fun attachFile(threadId: String, path: Path) {
+    val name: String = path.fileName?.toString() ?: path.toString()
+    val unreadable = "'$name' is empty or could not be read."
+    if (!Files.isRegularFile(path)) return refuse(threadId, unreadable)
+    val mimeType: String? = try {
+      Files.probeContentType(path)
+    } catch (_: Exception) {
+      null
+    }
+    val accepted: AttachmentClass.Accepted = when (val kind = classifyAttachment(name, mimeType)) {
+      is AttachmentClass.Refused -> return refuse(threadId, kind.reason)
+      is AttachmentClass.Accepted -> kind
+    }
+    val bytes: ByteArray = try {
+      val size: Long = Files.size(path)
+      val existing: List<DraftAttachment> = extrasOf(threadId).attachments
+      attachmentLimitError(name, accepted.kind, accepted.mimeType, size, existing)
+        ?.let { reason -> return refuse(threadId, reason) }
+      Files.readAllBytes(path)
+    } catch (e: IOException) {
+      LOG.info("Couldn't read $path", e)
+      return refuse(threadId, unreadable)
+    }
+    attach(threadId, name, mimeType, bytes)
+  }
+
+  /**
+   * Attaches [bytes] to [threadId]'s draft. The desktop app's path, not the issue's: mint with
+   * `attachments.createUploadUrl`, POST the bytes, and the minted id goes straight into
+   * `message.dispatch.attachments` (`apps/web/src/lib/attachmentUploadQueue.ts`).
+   * `assets.persistChatAttachments` is only for data-URL images, which the plugin never makes.
+   */
+  fun attach(threadId: String, name: String, mimeType: String?, bytes: ByteArray) {
+    val accepted: AttachmentClass.Accepted = when (val kind = classifyAttachment(name, mimeType)) {
+      is AttachmentClass.Refused -> return refuse(threadId, kind.reason)
+      is AttachmentClass.Accepted -> kind
+    }
+    val attachment = DraftAttachment(
+      id = UUID.randomUUID().toString(),
+      name = name,
+      kind = accepted.kind,
+      mimeType = accepted.mimeType,
+      sizeBytes = bytes.size.toLong(),
+    )
+    // Before the chip shows, so a remove as fast as the eye can't miss it
+    transfers[attachment.id] = Transfer(bytes)
+    var started = false
+    updateExtras(threadId) { extras ->
+      val error: String? = attachmentLimitError(
+        name = name,
+        kind = attachment.kind,
+        mimeType = attachment.mimeType,
+        sizeBytes = attachment.sizeBytes,
+        existing = extras.attachments,
+      )
+      started = error == null
+      if (error != null) extras.refused(error) else extras.attaching(attachment)
+    }
+    if (!started) {
+      transfers.remove(attachment.id)
+      return
+    }
+    upload(threadId, attachment)
+  }
+
+  /** A pasted image, encoded as PNG off the EDT, see [attach]. */
+  fun attachImage(threadId: String, image: Image) {
+    scope.launch(Dispatchers.IO) {
+      val bytes: ByteArray = try {
+        encodePng(image)
+      } catch (e: Exception) {
+        LOG.info("Couldn't encode a pasted image", e)
+        return@launch refuse(threadId, "The pasted image could not be read.")
+      }
+      attach(threadId, PASTED_IMAGE_NAME, "image/png", bytes)
+    }
+  }
+
+  /** Upstream's manual retry: release the failed upload's id and start again. */
+  fun retryAttachment(threadId: String, id: String) {
+    val attachment: DraftAttachment =
+      extrasOf(threadId).attachments.find { it.id == id } ?: return
+    val transfer: Transfer = transfers[id] ?: return
+    if (transfer.bytes == null) return
+    transfer.job?.cancel()
+    transfer.minted?.let(::release)
+    transfer.minted = null
+    updateExtras(threadId) { extras -> extras.retrying(id) }
+    upload(threadId, attachment)
+  }
+
+  /** Drops the chip, stops its upload and releases what the server minted for it. */
+  fun removeAttachment(threadId: String, id: String) {
+    val transfer: Transfer? = transfers.remove(id)
+    transfer?.job?.cancel()
+    transfer?.minted?.let(::release)
+    updateExtras(threadId) { extras -> extras.withoutAttachment(id) }
+  }
+
+  // `deletePendingAttachmentUpload`: best effort, failures aren't the user's problem
+  private fun release(attachmentId: String) {
+    scope.launch {
+      try {
+        client.deleteAttachment(attachmentId)
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        LOG.info("Couldn't release attachment $attachmentId", e)
+      }
+    }
+  }
+
+  // `runAttachmentUploadCycle` in packages/client-runtime/src/state/attachments.ts: mint, then
+  // transfer. A failed mint says it couldn't start; a failed transfer says why.
+  private fun upload(threadId: String, attachment: DraftAttachment) {
+    val transfer: Transfer = transfers[attachment.id] ?: return
+    val bytes: ByteArray = transfer.bytes ?: return
+    transfer.job = scope.launch {
+      val minted: AttachmentCreateUploadUrlResult = try {
+        client.createUploadUrl(uploadUrlInput(attachment))
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        LOG.info("Couldn't start uploading ${attachment.name}", e)
+        updateExtras(threadId) { it.uploadFailed(attachment.id, "Upload could not start") }
+        return@launch
+      }
+      transfer.minted = minted.attachmentId
+      // Removed while minting: nobody will release this id but us
+      if (transfers[attachment.id] !== transfer) return@launch release(minted.attachmentId)
+      try {
+        client.upload(minted.relativeUrl, attachment.mimeType, bytes)
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        LOG.info("Couldn't upload ${attachment.name}", e)
+        val reason: String = e.message ?: "Upload failed"
+        updateExtras(threadId) { it.uploadFailed(attachment.id, reason) }
+        return@launch
+      }
+      transfer.bytes = null
+      val uploaded: ChatAttachment = uploadedAttachment(attachment, minted.attachmentId)
+      updateExtras(threadId) { it.uploaded(attachment.id, uploaded) }
+    }
+  }
+
+  private fun extrasOf(threadId: String): DraftExtras = _extras.value[threadId] ?: DraftExtras()
+
+  private fun updateExtras(threadId: String, change: (DraftExtras) -> DraftExtras) {
+    _extras.update { all ->
+      val before: DraftExtras = all[threadId] ?: DraftExtras()
+      val after: DraftExtras = change(before)
+      if (after == before) all else all + (threadId to after)
+    }
+  }
 
   /**
    * Retires the pending messages [view] acknowledges, or that it dropped after taking them, and
@@ -174,12 +389,21 @@ class ChatController(private val scope: CoroutineScope) {
   fun send(view: ThreadView, text: String, mode: ComposerDispatchMode) {
     val threadId: String = view.thread.id
     val messageId: String = UUID.randomUUID().toString()
+    // Attachments and context ride along; the pinned server always advertises
+    // `inlineMessageContext` (apps/server/src/environment/ServerEnvironment.ts:226), so the
+    // records go as `context`, never the legacy text serialisation
+    val extras: DraftExtras = extrasOf(threadId)
+    val outgoing: String = outgoingText(text, extras)
+    val context: MessageContext? = messageContext(extras.comments.map { it.toRecord() })
+    val attachments: List<ChatAttachment> = extras.ready
     val message: TurnItem.UserMessage =
-      optimisticMessage(threadId, messageId, text, Instant.now(), view.items)
+      optimisticMessage(threadId, messageId, outgoing, Instant.now(), view.items)
+        .copy(context = context, attachments = attachments)
     // A model picked mid-run rides on this message
     val model: ModelSelection? = _outboxes.value[threadId]?.modelDraft
     update(threadId) { pending -> pending.sent(message, model) }
     draft(threadId).clearText()
+    updateExtras(threadId) { DraftExtras() }
     scope.launch {
       try {
         val info: ServerInfo = client.serverInfo()
@@ -189,21 +413,24 @@ class ChatController(private val scope: CoroutineScope) {
           threadId = threadId,
           commandId = UUID.randomUUID().toString(),
           messageId = messageId,
-          text = text,
+          text = outgoing,
           serverResolved = info.serverResolvedCommandContext,
           requested = mode,
           activeRun = run,
           capabilities = activeCapabilities(run, view.providerThreads, view.providerSessions),
           modelSelection = model,
-        )
+        ).copy(attachments = attachments, context = context)
         val sequence: Long = client.dispatch(command)
         update(threadId) { pending -> pending.delivered(messageId, sequence) }
+        // The message holds them now; they're no longer the draft's to release
+        extras.attachments.forEach { transfers.remove(it.id) }
       } catch (e: CancellationException) {
         throw e
       } catch (e: Exception) {
         LOG.info("Couldn't send to $threadId", e)
         val reason: String = e.message ?: e.javaClass.simpleName
         update(threadId) { pending -> pending.failed(messageId, "Couldn't send: $reason") }
+        updateExtras(threadId) { current -> current.restored(extras) }
         withContext(Dispatchers.EDT) {
           val draft: TextFieldState = draft(threadId)
           if (draft.text.isEmpty()) draft.setTextAndPlaceCursorAtEnd(text)

@@ -72,9 +72,17 @@ fun composerState(
   )
 }
 
-/** Whether [text] goes out now. Blank never does, and one send at a time. */
-fun sendable(text: String, state: ComposerState): Boolean =
-  state.enabled && !state.sending && text.isNotBlank()
+/**
+ * Whether [text] goes out now. One send at a time, and nothing while an attachment in [extras]
+ * is uploading or failed. Blank text goes only with attachments: `hasSendableContent` in
+ * upstream's `deriveComposerSendState` (`ChatView.logic.ts`) counts the prompt, images, terminal
+ * and element contexts, never review comments.
+ */
+fun sendable(text: String, state: ComposerState, extras: DraftExtras = DraftExtras()): Boolean =
+  state.enabled &&
+    !state.sending &&
+    extras.blockReason == null &&
+    (text.isNotBlank() || extras.hasContent)
 
 /** Upstream's `ComposerDispatchMode`, `packages/client-runtime/src/state/composerDispatch.ts`. */
 enum class ComposerDispatchMode(val wire: String) {

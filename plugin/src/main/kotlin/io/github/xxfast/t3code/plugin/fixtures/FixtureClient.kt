@@ -12,6 +12,7 @@ import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.T3Client
+import io.github.xxfast.t3code.protocol.T3Exception
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
@@ -96,6 +97,9 @@ class FixtureClient(
   private val online: MutableStateFlow<Boolean> = MutableStateFlow(true)
   private var loadedStamp: List<Pair<String, Long>>? = null
   private val sequence: AtomicLong = AtomicLong(0)
+
+  /** Attachments minted by [createUploadUrl] and not deleted, by their number. */
+  private val minted: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
   /** The fake assistant replies in flight, by thread id, so an interrupt can stop one. */
   private val replies: ConcurrentHashMap<String, Job> = ConcurrentHashMap()
@@ -621,14 +625,31 @@ class FixtureClient(
     input: AttachmentCreateUploadUrlInput,
   ): AttachmentCreateUploadUrlResult {
     val id: Long = sequence.incrementAndGet()
+    minted += id.toString()
     return AttachmentCreateUploadUrlResult(
       attachmentId = "att_fixture_$id",
-      relativeUrl = "/api/attachments/fixture/$id",
+      relativeUrl = "$UPLOAD_PATH$id",
       expiresAt = (System.currentTimeMillis() + UPLOAD_URL_TTL_MILLIS).toDouble(),
     )
   }
 
-  override suspend fun upload(relativeUrl: String, mimeType: String, bytes: ByteArray) = Unit
+  // Slow enough to see the chip's spinner, and a refusal to design the failed chip against
+  override suspend fun upload(relativeUrl: String, mimeType: String, bytes: ByteArray) {
+    delay(UPLOAD_MILLIS)
+    if (relativeUrl.removePrefix(UPLOAD_PATH) !in minted) {
+      throw T3Exception.Transport("Upload rejected (404): no such attachment")
+    }
+    if (bytes.size > UPLOAD_MAX_BYTES) {
+      throw T3Exception.Transport("Upload rejected (413): the fixture server takes up to 1 MiB")
+    }
+  }
+
+  override suspend fun deleteAttachment(attachmentId: String) {
+    minted -= attachmentId.removePrefix("att_fixture_")
+  }
+
+  /** Whether [attachmentId] was minted and not deleted since. */
+  fun holds(attachmentId: String): Boolean = attachmentId.removePrefix("att_fixture_") in minted
 
   override suspend fun persistAttachments(
     input: PersistChatAttachmentsInput,
@@ -753,6 +774,9 @@ private fun answerAttachment(
 
 // Upstream's ATTACHMENT_UPLOAD_URL_TTL_MS, contracts/src/assets.ts
 private const val UPLOAD_URL_TTL_MILLIS: Long = 10 * 60_000
+private const val UPLOAD_MILLIS: Long = 300
+private const val UPLOAD_MAX_BYTES: Int = 1024 * 1024
+private const val UPLOAD_PATH: String = "/api/attachments/fixture/"
 
 private fun provider(
   instanceId: String,

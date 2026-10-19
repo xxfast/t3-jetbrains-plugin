@@ -56,6 +56,8 @@ fun Composer(
   pendingActions: PendingActions = PendingActions(),
   footer: ComposerFooterState? = null,
   footerActions: ComposerFooterActions = ComposerFooterActions(),
+  extras: DraftExtras = DraftExtras(),
+  attachmentActions: AttachmentActions = AttachmentActions(),
 ) {
   val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
   val focused: Boolean by interactions.collectIsFocusedAsState()
@@ -64,7 +66,7 @@ fun Composer(
   // [alternate] is Ctrl/Cmd+Enter while running: the other follow-up behaviour, steer <-> queue
   fun send(alternate: Boolean) {
     val text: String = draft.text.toString()
-    if (!sendable(text, state)) return
+    if (!sendable(text, state, extras)) return
     onSend(text.trim(), resolveComposerDispatchMode(state.running, alternate, state.queue))
   }
 
@@ -80,8 +82,15 @@ fun Composer(
       modifier = Modifier
         .fillMaxWidth()
         .border(1.dp, outline, RoundedCornerShape(16.dp))
+        .fileDropTarget(
+          enabled = state.enabled && pending == null,
+          onFiles = attachmentActions.onFiles,
+          onRefused = attachmentActions.onRefused,
+        )
         .padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 6.dp),
     ) {
+      // Above whatever takes the box, so context added during an approval still shows
+      ComposerChips(extras, state.enabled, attachmentActions)
       when (pending) {
         is PendingRequest.Approval ->
           ComposerPendingApprovalPanel(pending, state.enabled, pendingActions)
@@ -98,6 +107,8 @@ fun Composer(
           onQueueChange = onQueueChange,
           footer = footer,
           footerActions = footerActions,
+          extras = extras,
+          attachmentActions = attachmentActions,
         )
       }
     }
@@ -121,11 +132,16 @@ private fun MessageInput(
   onQueueChange: (Boolean) -> Unit,
   footer: ComposerFooterState?,
   footerActions: ComposerFooterActions,
+  extras: DraftExtras,
+  attachmentActions: AttachmentActions,
 ) {
   Column {
     TextArea(
       state = draft,
-      modifier = Modifier.fillMaxWidth().composerKeys(draft, state.running, onSend),
+      modifier = Modifier
+        .fillMaxWidth()
+        .pasteAttachments(state.enabled, attachmentActions)
+        .composerKeys(draft, state.running, onSend),
       enabled = state.enabled,
       lineLimits = TextFieldLineLimits.MultiLine(minHeightInLines = 2, maxHeightInLines = 12),
       interactionSource = interactions,
@@ -140,6 +156,7 @@ private fun MessageInput(
       verticalAlignment = Alignment.CenterVertically,
     ) {
       footer?.let { ComposerFooterModeControls(it, state.enabled, footerActions) }
+      AttachButton(state.enabled, attachmentActions)
       if (state.showQueueToggle) {
         CheckboxRow(
           text = "Queue instead of steering",
@@ -156,7 +173,7 @@ private fun MessageInput(
           key = AllIconsKeys.General.ArrowUp,
           contentDescription = label,
           onClick = { onSend(false) },
-          enabled = sendable(draft.text.toString(), state),
+          enabled = sendable(draft.text.toString(), state, extras),
         )
       }
     }

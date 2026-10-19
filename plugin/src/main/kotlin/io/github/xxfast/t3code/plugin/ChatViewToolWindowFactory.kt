@@ -32,6 +32,7 @@ import io.github.xxfast.t3code.plugin.ui.ComposerFooterActions
 import io.github.xxfast.t3code.plugin.ui.ComposerFooterState
 import io.github.xxfast.t3code.plugin.ui.ModelChangeBlock
 import io.github.xxfast.t3code.plugin.ui.ComposerState
+import io.github.xxfast.t3code.plugin.ui.DraftExtras
 import io.github.xxfast.t3code.plugin.ui.PendingUserInputDraftAnswer
 import io.github.xxfast.t3code.plugin.ui.Hint
 import io.github.xxfast.t3code.plugin.ui.PendingActions
@@ -111,6 +112,7 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
   val favicons: Map<String, ImageBitmap> by ProjectIcons.get().favicons.collectAsState()
   val connection: ConnectionState by client.connection.collectAsState()
   val outboxes: Map<String, PendingMessages> by controller.outboxes.collectAsState()
+  val extras: Map<String, DraftExtras> by controller.extras.collectAsState()
   val pending: PendingMessages = outboxes[threadId] ?: PendingMessages()
   var queue: Boolean by remember(threadId) { mutableStateOf(false) }
   val draft: TextFieldState = remember(threadId) { controller.draft(threadId) }
@@ -163,6 +165,8 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
     onDiffFile = { change -> view?.let { opener.showDiff(it, change) } },
     onDiffRun = { run -> view?.let { opener.showRunDiff(it, run) } },
     vcs = vcs,
+    extras = extras[threadId] ?: DraftExtras(),
+    attachmentActions = rememberAttachmentActions(project, threadId, controller),
   )
 }
 

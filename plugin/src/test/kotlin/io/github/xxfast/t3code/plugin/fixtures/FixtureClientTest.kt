@@ -22,6 +22,15 @@ import io.github.xxfast.t3code.protocol.ServerSession
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
+import io.github.xxfast.t3code.plugin.ui.contextLabels
+import io.github.xxfast.t3code.plugin.ui.fileReviewComment
+import io.github.xxfast.t3code.plugin.ui.messageContext
+import io.github.xxfast.t3code.plugin.ui.reviewCommentReference
+import io.github.xxfast.t3code.plugin.ui.toRecord
+import io.github.xxfast.t3code.protocol.T3Exception
+import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
+import io.github.xxfast.t3code.protocol.generated.ChatAttachment
+import io.github.xxfast.t3code.protocol.generated.ChatFileAttachment
 import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
@@ -263,6 +272,76 @@ class FixtureClientTest {
     assertEquals("completed", done.runs.single().status)
     client.threads.first { row(it).status == "idle" }
   }
+
+  @Test
+  fun `a send with attachments and context carries them onto the item`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == IDLE } }
+    val input = AttachmentCreateUploadUrlInput.File(
+      name = "notes.txt",
+      mimeType = "text/plain",
+      sizeBytes = 5,
+    )
+    val minted = client.createUploadUrl(input)
+    client.upload(minted.relativeUrl, "text/plain", "hello".toByteArray())
+    val comment = fileReviewComment("c1", "src/a.kt", 1, 1, "", "val a = 1")
+    val attachment = ChatFileAttachment(
+      id = minted.attachmentId,
+      name = "notes.txt",
+      mimeType = "text/plain",
+      sizeBytes = 5,
+    )
+    val context = messageContext(listOf(comment.toRecord()))
+
+    client.dispatch(
+      message(IDLE, messageId = "m1", text = "see ${reviewCommentReference(comment)}")
+        .copy(attachments = listOf(attachment), context = context),
+    )
+
+    val sent: ThreadView = client.thread(IDLE).first { view -> view.items.isNotEmpty() }
+    val user: TurnItem.UserMessage = assertIs(sent.items.single())
+    assertEquals(listOf<ChatAttachment>(attachment), user.attachments)
+    assertEquals(context, user.context)
+    assertEquals(listOf("a.kt L1"), contextLabels(user.context))
+    assertEquals(context, sent.messages.single().context)
+  }
+
+  @Test
+  fun `uploads take a moment and the fixture refuses big ones`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val small = client.createUploadUrl(image(10))
+    val started: Long = testScheduler.currentTime
+    client.upload(small.relativeUrl, "image/png", ByteArray(10))
+    assertTrue(testScheduler.currentTime - started >= 300, "Slow enough to see the spinner")
+
+    val big = client.createUploadUrl(image(1024 * 1024 + 1))
+    val refused = runCatching {
+      client.upload(big.relativeUrl, "image/png", ByteArray(1024 * 1024 + 1))
+    }.exceptionOrNull()
+    assertIs<T3Exception.Transport>(refused)
+    assertTrue(refused.message.orEmpty().contains("1 MiB"))
+  }
+
+  @Test
+  fun `a deleted attachment is released and takes no bytes`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val minted = client.createUploadUrl(image(10))
+    assertTrue(client.holds(minted.attachmentId))
+
+    client.deleteAttachment(minted.attachmentId)
+
+    assertFalse(client.holds(minted.attachmentId))
+    val refused = runCatching {
+      client.upload(minted.relativeUrl, "image/png", ByteArray(10))
+    }.exceptionOrNull()
+    assertTrue(refused?.message.orEmpty().contains("404"))
+  }
+
+  private fun image(size: Int) = AttachmentCreateUploadUrlInput.Image(
+    name = "a.png",
+    mimeType = "image/png",
+    sizeBytes = size.toLong(),
+  )
 
   @Test
   fun `interrupting cancels the reply in flight`() = runTest {

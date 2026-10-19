@@ -142,7 +142,7 @@ class FakeRpcServer : WebSocketServer(InetSocketAddress("127.0.0.1", 0)), AutoCl
 
         "orchestration.dispatchCommand" -> conn.send(exit(id, """{"sequence":42}"""))
 
-        "terminal.close" -> conn.send(exit(id, "null"))
+        "terminal.close", "attachments.delete" -> conn.send(exit(id, "null"))
 
         "server.getConfig" -> conn.send(exit(id, fixture("server-config.json")))
 

@@ -203,6 +203,20 @@ class WebSocketT3ClientTest {
   }
 
   @Test
+  fun deleteAttachmentSendsTheMintedId() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+    client.connection.first { it is ConnectionState.Connected }
+
+    client.deleteAttachment("att_123")
+
+    val payload: JsonObject =
+      rpc.requests("attachments.delete").single().getValue("payload").jsonObject
+    assertEquals(setOf("attachmentId"), payload.keys)
+    assertEquals("att_123", payload.string("attachmentId"))
+  }
+
+  @Test
   fun terminalCloseSendsTheThreadTerminalAndHistoryChoice() = realTimeTest {
     val client: WebSocketT3Client = client()
     client.connect()

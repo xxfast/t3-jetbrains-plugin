@@ -82,5 +82,14 @@
         description="Open the thread's worktree as its own IDE window"
         icon="AllIcons.Actions.MenuOpen"/>
     </group>
+
+    <!-- The editor selection as context on the selected thread's draft -->
+    <action
+      id="T3Code.AddSelectionToThread"
+      class="io.github.xxfast.t3code.plugin.actions.AddSelectionToThreadAction"
+      text="Add to T3 thread"
+      description="Add the selection, with its path and lines, to the selected T3 thread's message">
+      <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+    </action>
   </actions>
 </idea-plugin>

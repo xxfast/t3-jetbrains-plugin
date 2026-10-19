@@ -110,6 +110,13 @@ public interface T3Client {
    */
   public suspend fun upload(relativeUrl: String, mimeType: String, bytes: ByteArray)
 
+  /**
+   * `attachments.delete`: releases an attachment minted by [createUploadUrl] that no message
+   * took, what `deletePendingAttachmentUpload` in
+   * `packages/client-runtime/src/state/attachments.ts` does when a draft drops it.
+   */
+  public suspend fun deleteAttachment(attachmentId: String)
+
   /** `assets.persistChatAttachments`. */
   public suspend fun persistAttachments(
     input: PersistChatAttachmentsInput,

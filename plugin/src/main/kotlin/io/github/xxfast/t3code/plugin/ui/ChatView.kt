@@ -82,6 +82,8 @@ fun ChatView(
   onDiffFile: (TurnItem.FileChange) -> Unit, // "Diff" on a file_change row
   onDiffRun: (Run) -> Unit, // "Diff" on a run's line
   vcs: VcsSummary? = null, // the checkout's git line under the title, when there's one
+  extras: DraftExtras = DraftExtras(), // the draft's attachments and context
+  attachmentActions: AttachmentActions = AttachmentActions(),
 ) {
   Column(Modifier.fillMaxSize()) {
     Breadcrumb(view, project, favicon, vcs)
@@ -112,6 +114,8 @@ fun ChatView(
           footerActions = footerActions,
           onSend = onSend,
           onQueueChange = onQueueChange,
+          extras = extras,
+          attachmentActions = attachmentActions,
           modifier = Modifier
             .widthIn(max = MAX_CONTENT_WIDTH)
             .fillMaxWidth()
@@ -280,7 +284,7 @@ private fun ItemRow(
   onDiffFile: (TurnItem.FileChange) -> Unit,
 ) {
   when (item) {
-    is TurnItem.UserMessage -> UserBubble(item.text)
+    is TurnItem.UserMessage -> UserBubble(item)
 
     is TurnItem.AssistantMessage -> Box(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
       MarkdownText(item.text, processor)
@@ -375,19 +379,33 @@ private fun ItemRow(
   }
 }
 
+/**
+ * A user message, its context links taken out of the text and its context labels and attachment
+ * names as dim lines underneath. `MessagesTimeline.tsx` draws the links as inline chips, images
+ * as thumbnails and files as rows; names are enough here for now.
+ */
 @Composable
-private fun UserBubble(text: String) {
+private fun UserBubble(message: TurnItem.UserMessage) {
+  val text: String = remember(message.text) { stripContextReferences(message.text) }
+  val extras: List<String> = remember(message.context, message.attachments) {
+    contextLabels(message.context) + message.attachments.map { it.name }
+  }
   BoxWithConstraints(
     modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
     contentAlignment = Alignment.CenterEnd,
   ) {
-    Text(
-      text = text,
+    Column(
       modifier = Modifier
         .widthIn(max = maxWidth * 0.7f)
         .background(subtle(0.07f), RoundedCornerShape(12.dp))
         .padding(horizontal = 14.dp, vertical = 10.dp),
-    )
+      verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+      if (text.isNotEmpty()) Text(text)
+      extras.forEach { line ->
+        Text(line, style = JewelTheme.typography.small, color = JewelTheme.globalColors.text.info)
+      }
+    }
   }
 }
 
