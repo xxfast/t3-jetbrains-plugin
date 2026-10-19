@@ -1,0 +1,195 @@
+{
+  "threads": [
+    {
+      "id": "thr_01JC4C7U1NUNREAD01",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Port the codec benchmarks to kotlinx-benchmark",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC4C7U1NUNREAD01"
+      },
+      "status": "completed",
+      "branch": "kotlinx-benchmark",
+      "latestRunId": "run_01JC4C7U2AUR01",
+      "latestRunRequestedAt": "2026-10-19T09:02:00.000Z",
+      "latestRunStartedAt": "2026-10-19T09:02:01.000Z",
+      "latestRunCompletedAt": "2026-10-19T09:20:44.000Z",
+      "latestUserMessageAt": "2026-10-19T09:02:00.000Z",
+      "lastVisitedAt": "2026-10-19T09:02:00.000Z",
+      "itemCount": 31,
+      "visibleItemCount": 31,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-19T09:01:40.000Z",
+      "updatedAt": "2026-10-19T09:20:44.000Z"
+    },
+    {
+      "id": "thr_01JC4C9R2DREAD0001",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Why does the back stack restore twice on Android?",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC4C9R2DREAD0001"
+      },
+      "status": "completed",
+      "latestRunId": "run_01JC4C9R3BRD01",
+      "latestRunRequestedAt": "2026-10-19T07:10:00.000Z",
+      "latestRunStartedAt": "2026-10-19T07:10:01.000Z",
+      "latestRunCompletedAt": "2026-10-19T07:14:12.000Z",
+      "latestUserMessageAt": "2026-10-19T07:10:00.000Z",
+      "lastVisitedAt": "2026-10-19T07:30:00.000Z",
+      "itemCount": 9,
+      "visibleItemCount": 9,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-19T07:09:30.000Z",
+      "updatedAt": "2026-10-19T07:14:12.000Z"
+    },
+    {
+      "id": "thr_01JC1A2B3CUNREAD02",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Document the iOS swipe-back threshold",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CUNREAD02"
+      },
+      "status": "completed",
+      "latestRunId": "run_01JC1A2B4CUR02",
+      "latestRunRequestedAt": "2026-10-18T16:00:00.000Z",
+      "latestRunStartedAt": "2026-10-18T16:00:01.000Z",
+      "latestRunCompletedAt": "2026-10-18T16:08:30.000Z",
+      "latestUserMessageAt": "2026-10-18T16:00:00.000Z",
+      "lastVisitedAt": "2026-10-18T16:00:00.000Z",
+      "itemCount": 12,
+      "visibleItemCount": 12,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-18T15:59:30.000Z",
+      "updatedAt": "2026-10-18T16:08:30.000Z",
+      "settledOverride": "settled",
+      "settledAt": "2026-10-18T16:08:30.000Z"
+    },
+    {
+      "id": "thr_01JC4D2F5KFAILUNRD",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Run the wasmJs browser tests headless",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC4D2F5KFAILUNRD"
+      },
+      "status": "failed",
+      "lastError": "Provider process exited with code 1",
+      "lastErrorClass": "provider_error",
+      "latestRunId": "run_01JC4D2F6MFU01",
+      "latestRunRequestedAt": "2026-10-19T09:30:00.000Z",
+      "latestRunStartedAt": "2026-10-19T09:30:01.000Z",
+      "latestRunCompletedAt": "2026-10-19T09:33:17.000Z",
+      "latestUserMessageAt": "2026-10-19T09:30:00.000Z",
+      "lastVisitedAt": "2026-10-19T09:30:00.000Z",
+      "itemCount": 6,
+      "visibleItemCount": 6,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-19T09:29:40.000Z",
+      "updatedAt": "2026-10-19T09:33:17.000Z"
+    }
+  ],
+  "runs": {
+    "thr_01JC4C7U1NUNREAD01": [
+      {
+        "id": "run_01JC4C7U2AUR01",
+        "threadId": "thr_01JC4C7U1NUNREAD01",
+        "ordinal": 1,
+        "status": "completed",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "userMessageId": "msg_01JC4C7U1PUR01",
+        "requestedAt": "2026-10-19T09:02:00.000Z",
+        "startedAt": "2026-10-19T09:02:01.000Z",
+        "completedAt": "2026-10-19T09:20:44.000Z"
+      }
+    ],
+    "thr_01JC4C9R2DREAD0001": [
+      {
+        "id": "run_01JC4C9R3BRD01",
+        "threadId": "thr_01JC4C9R2DREAD0001",
+        "ordinal": 1,
+        "status": "completed",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "userMessageId": "msg_01JC4C9R2ERD01",
+        "requestedAt": "2026-10-19T07:10:00.000Z",
+        "startedAt": "2026-10-19T07:10:01.000Z",
+        "completedAt": "2026-10-19T07:14:12.000Z"
+      }
+    ],
+    "thr_01JC1A2B3CUNREAD02": [
+      {
+        "id": "run_01JC1A2B4CUR02",
+        "threadId": "thr_01JC1A2B3CUNREAD02",
+        "ordinal": 1,
+        "status": "completed",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "userMessageId": "msg_01JC1A2B3DUR02",
+        "requestedAt": "2026-10-18T16:00:00.000Z",
+        "startedAt": "2026-10-18T16:00:01.000Z",
+        "completedAt": "2026-10-18T16:08:30.000Z"
+      }
+    ],
+    "thr_01JC4D2F5KFAILUNRD": [
+      {
+        "id": "run_01JC4D2F6MFU01",
+        "threadId": "thr_01JC4D2F5KFAILUNRD",
+        "ordinal": 1,
+        "status": "failed",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "userMessageId": "msg_01JC4D2F5MFU01",
+        "requestedAt": "2026-10-19T09:30:00.000Z",
+        "startedAt": "2026-10-19T09:30:01.000Z",
+        "completedAt": "2026-10-19T09:33:17.000Z"
+      }
+    ]
+  }
+}

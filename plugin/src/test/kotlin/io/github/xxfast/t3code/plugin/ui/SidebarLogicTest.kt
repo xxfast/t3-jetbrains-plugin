@@ -179,6 +179,73 @@ class SidebarLogicTest {
     assertEquals("16d", ago("2026-10-03T08:00:00Z"))
   }
 
+  @Test
+  fun `unread is a run completed after the last visit`() {
+    assertTrue(thread(completedAt = "2026-10-19T12:00:00Z", visitedAt = TEN_TO).unread)
+    assertFalse(thread(completedAt = TEN_TO, visitedAt = "2026-10-19T12:00:00Z").unread)
+    assertFalse(thread(completedAt = TEN_TO, visitedAt = TEN_TO).unread, "Equal is seen")
+  }
+
+  @Test
+  fun `unread without a visit, a completion, or a parsable stamp`() {
+    assertFalse(thread(completedAt = TEN_TO).unread, "No visit on record reads as seen")
+    assertFalse(thread(visitedAt = TEN_TO).unread, "Nothing completed yet")
+    assertTrue(thread(completedAt = TEN_TO, visitedAt = "garbage").unread)
+    assertFalse(thread(completedAt = "garbage", visitedAt = TEN_TO).unread)
+    assertFalse(thread(completedAt = "garbage", visitedAt = "garbage").unread)
+  }
+
+  @Test
+  fun `visit when the row moved past the last visit`() {
+    val behind: Thread = thread(updatedAt = "2026-10-19T12:00:00Z", visitedAt = TEN_TO)
+    assertTrue(shouldVisit(behind, lastDispatched = null))
+    assertTrue(shouldVisit(behind, lastDispatched = "t:2026-10-19T11:00:00Z"))
+    assertFalse(shouldVisit(behind, lastDispatched = behind.visitKey), "Once per watermark")
+    val caughtUp: Thread = thread(updatedAt = TEN_TO, visitedAt = TEN_TO)
+    assertFalse(shouldVisit(caughtUp, lastDispatched = null))
+    assertTrue(shouldVisit(thread(updatedAt = TEN_TO, visitedAt = "garbage"), null))
+  }
+
+  @Test
+  fun `a never visited thread gets a visit, a row without a time doesn't`() {
+    val never: Thread = thread(updatedAt = TEN_TO)
+    assertTrue(shouldVisit(never, lastDispatched = null))
+    assertFalse(shouldVisit(never, lastDispatched = never.visitKey))
+    assertFalse(shouldVisit(thread(updatedAt = "garbage", visitedAt = EPOCH), null))
+  }
+
+  @Test
+  fun `the watermark reads a missing or unparsable visit as unseen`() {
+    assertTrue(unseenCompletion(thread(completedAt = TEN_TO)))
+    assertTrue(unseenCompletion(thread(completedAt = TEN_TO, visitedAt = "garbage")))
+    assertTrue(unseenCompletion(thread(completedAt = TEN_TO, visitedAt = EPOCH)))
+    assertFalse(unseenCompletion(thread(completedAt = TEN_TO, visitedAt = TEN_TO)))
+    assertFalse(unseenCompletion(thread(visitedAt = EPOCH)), "Nothing completed")
+    assertFalse(unseenCompletion(thread(completedAt = "garbage")))
+    assertFalse(thread(completedAt = TEN_TO).unread, "The Sidebar's rule differs on purpose")
+  }
+
+  @Test
+  fun `visits wait out the throttle unless a completion is unseen`() {
+    val behind: Thread = thread(updatedAt = "2026-10-19T12:00:00Z", visitedAt = TEN_TO)
+    assertEquals(Duration.ofSeconds(7), visitDelay(behind, Duration.ofSeconds(3)))
+    assertEquals(Duration.ZERO, visitDelay(behind, Duration.ofSeconds(10)))
+    val unseen: Thread = behind.copy(latestRunCompletedAt = "2026-10-19T12:00:00Z")
+    assertEquals(Duration.ZERO, visitDelay(unseen, Duration.ZERO))
+    val neverVisited: Thread = thread(updatedAt = TEN_TO, completedAt = TEN_TO)
+    assertEquals(Duration.ZERO, visitDelay(neverVisited, Duration.ZERO))
+  }
+
+  @Test
+  fun `card status puts limited and failed ahead of done`() {
+    val unread: Thread = thread(completedAt = "2026-10-19T12:00:00Z", visitedAt = TEN_TO)
+    assertEquals(CardStatus.Done, unread.cardStatus())
+    assertEquals(CardStatus.Failed, unread.copy(status = "failed").cardStatus())
+    val limited: Thread = unread.copy(status = "failed", lastErrorClass = "usage_limit")
+    assertEquals(CardStatus.Limited, limited.cardStatus())
+    assertEquals(null, thread().cardStatus())
+  }
+
   private fun thread(
     id: String = "t",
     title: String = id,
@@ -199,7 +266,11 @@ class SidebarLogicTest {
     delegatedFrom: String? = null,
     pending: Boolean = false,
     pullRequests: List<ThreadPullRequestLink>? = null,
+    completedAt: String? = null,
+    visitedAt: String? = null,
   ): Thread = BASE_THREAD.copy(
+    latestRunCompletedAt = completedAt,
+    lastVisitedAt = visitedAt,
     id = id,
     title = title,
     status = status,
@@ -244,6 +315,7 @@ private fun link(
 )
 
 private const val EPOCH: String = "1970-01-01T00:00:00Z"
+private const val TEN_TO: String = "2026-10-19T11:50:00Z"
 
 /** A thread row with only what upstream requires. Tests copy it with the fields they care about. */
 private val BASE_THREAD: Thread = T3Json.decodeFromString(

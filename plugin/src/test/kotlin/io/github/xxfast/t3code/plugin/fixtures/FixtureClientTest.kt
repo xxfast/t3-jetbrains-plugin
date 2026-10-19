@@ -81,8 +81,9 @@ class FixtureClientTest {
   fun `default carries the list and every demo thread, connected`() {
     val parts: List<Scenario> = jsonFiles(default).map { Scenario.decode(it.readText()) }
     val scenario: Scenario = Scenario.merge(parts)
-    assertIs<ConnectionState.Connected>(scenario.connection)
-    assertEquals(19, scenario.threads.size)
+    val connected: ConnectionState.Connected = assertIs(scenario.connection)
+    assertTrue(connected.session.has("orchestration:operate"), "Thread actions work in default")
+    assertEquals(23, scenario.threads.size)
     val demos: Set<String> = scenario.threads
       .filter { it.title.startsWith("Demo: ") }
       .map { it.id }

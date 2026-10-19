@@ -48,8 +48,9 @@ How it fits together:
   it's what makes screenshot tests possible later.
 - A scenario is a folder in `harness/scenarios/`; the fixture client merges every `*.json` in it.
   `default/` is the thread list plus one demo thread per thread-level state (running, waiting on
-  approval, unknown item types, a few hundred items). `disconnected/`, `pairing/`, `auth-error/`
-  and `empty-server/` cover connection-level states. Shapes are the same `:protocol` types the
+  approval, unknown item types, a few hundred items, unread rows) on a session that can operate.
+  `disconnected/`, `pairing/`, `auth-error/`, `read-only/` and `empty-server/` cover
+  connection-level states. Shapes are the same `:protocol` types the
   real client decodes, so scenarios double as test fixtures.
 - Items may carry an `after` delay in milliseconds. The fixture client replays them in order so a
   "running" thread visibly grows, which is the only way to design streaming.

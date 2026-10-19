@@ -18,7 +18,9 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
+import io.github.xxfast.t3code.plugin.actions.threadActions
 import io.github.xxfast.t3code.plugin.ide.T3Opener
+import io.github.xxfast.t3code.plugin.ide.ThreadVisits
 import io.github.xxfast.t3code.plugin.ui.ChatView
 import io.github.xxfast.t3code.plugin.ui.ComposerState
 import io.github.xxfast.t3code.plugin.ui.Hint
@@ -52,6 +54,9 @@ class ChatViewToolWindowFactory : ToolWindowFactory, DumbAware {
     }
     val content: Content = ContentFactory.getInstance().createContent(panel, null, false)
     toolWindow.contentManager.addContent(content)
+    // Thread actions act on the selection, which is what this window shows
+    toolWindow.setTitleActions(listOf(threadActions()))
+    ThreadVisits.getInstance(project).follow(toolWindow)
   }
 }
 

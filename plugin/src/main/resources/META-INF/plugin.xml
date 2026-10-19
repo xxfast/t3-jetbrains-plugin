@@ -36,4 +36,41 @@
       implementation="io.github.xxfast.t3code.plugin.ide.T3FileNotificationProvider"/>
     <notificationGroup id="T3 Code" displayType="BALLOON"/>
   </extensions>
+
+  <actions>
+    <!-- Thread lifecycle: the thread view's toolbar, T3 Chat View's title, Sidebar rows -->
+    <group id="T3Code.ThreadActions" text="T3 Code Thread" popup="false">
+      <action
+        id="T3Code.InterruptRun"
+        class="io.github.xxfast.t3code.plugin.actions.InterruptRunAction"
+        text="Interrupt"
+        description="Interrupt the run in flight, holding the queue"
+        icon="AllIcons.Actions.Suspend"/>
+      <action
+        id="T3Code.StopThread"
+        class="io.github.xxfast.t3code.plugin.actions.StopThreadAction"
+        text="Stop session"
+        description="Detach the thread's provider sessions"
+        icon="AllIcons.Debugger.KillProcess"/>
+      <separator/>
+      <action
+        id="T3Code.TogglePin"
+        class="io.github.xxfast.t3code.plugin.actions.PinThreadAction"
+        text="Pin thread"
+        description="Pin or unpin the thread"
+        icon="AllIcons.General.Pin"/>
+      <action
+        id="T3Code.MarkUnread"
+        class="io.github.xxfast.t3code.plugin.actions.MarkUnreadAction"
+        text="Mark unread"
+        description="Show the thread's latest run as unseen"
+        icon="AllIcons.Toolwindows.NotificationsNew"/>
+      <action
+        id="T3Code.ToggleArchive"
+        class="io.github.xxfast.t3code.plugin.actions.ArchiveThreadAction"
+        text="Archive thread"
+        description="Archive or unarchive the thread"
+        icon="AllIcons.FileTypes.Archive"/>
+    </group>
+  </actions>
 </idea-plugin>

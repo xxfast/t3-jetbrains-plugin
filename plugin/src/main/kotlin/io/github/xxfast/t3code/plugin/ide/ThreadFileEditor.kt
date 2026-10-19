@@ -13,6 +13,7 @@ import io.github.xxfast.t3code.plugin.ChatContent
 import io.github.xxfast.t3code.plugin.T3
 import io.github.xxfast.t3code.plugin.ThreadLoad
 import io.github.xxfast.t3code.plugin.ThreadSelection
+import io.github.xxfast.t3code.plugin.actions.ThreadPanel
 import io.github.xxfast.t3code.plugin.threadLoad
 import java.beans.PropertyChangeListener
 import javax.swing.JComponent
@@ -53,6 +54,9 @@ class ThreadFileEditor(
     ChatContent(project, file.threadId, current, onRetry = { attempt.update { it + 1 } })
   }
 
+  // The thread actions on top, acting on this tab's thread
+  private val root: JComponent = ThreadPanel(panel, file.threadId, view = { load.value.view })
+
   init {
     scope.launch {
       load.mapNotNull { it.view?.thread?.title }.distinctUntilChanged().collect { title ->
@@ -66,7 +70,7 @@ class ThreadFileEditor(
     }
   }
 
-  override fun getComponent(): JComponent = panel
+  override fun getComponent(): JComponent = root
 
   override fun getPreferredFocusedComponent(): JComponent = panel
 
@@ -83,6 +87,11 @@ class ThreadFileEditor(
   // Switching tabs moves the selection in T3 Sidebar along with it
   override fun selectNotify() {
     ThreadSelection.getInstance(project).select(file.threadId)
+    ThreadVisits.getInstance(project).opened(file.threadId)
+  }
+
+  override fun deselectNotify() {
+    ThreadVisits.getInstance(project).closed(file.threadId)
   }
 
   override fun addPropertyChangeListener(listener: PropertyChangeListener) = Unit
@@ -90,6 +99,7 @@ class ThreadFileEditor(
   override fun removePropertyChangeListener(listener: PropertyChangeListener) = Unit
 
   override fun dispose() {
+    ThreadVisits.getInstance(project).closed(file.threadId)
     scope.cancel()
   }
 }

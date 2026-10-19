@@ -1,0 +1,12 @@
+package io.github.xxfast.t3code.plugin.actions
+
+import com.intellij.openapi.actionSystem.DataKey
+import io.github.xxfast.t3code.protocol.ThreadView
+
+/** What thread actions act on. Without one they fall back to the selected thread. */
+object T3DataKeys {
+  val THREAD_ID: DataKey<String> = DataKey.create("T3Code.ThreadId")
+
+  /** The live view of [THREAD_ID] where a host holds one, so actions needn't subscribe again. */
+  val THREAD_VIEW: DataKey<ThreadView> = DataKey.create("T3Code.ThreadView")
+}

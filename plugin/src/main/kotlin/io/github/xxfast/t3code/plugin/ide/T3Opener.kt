@@ -6,7 +6,6 @@ import com.intellij.diff.DiffManager
 import com.intellij.diff.chains.SimpleDiffRequestChain
 import com.intellij.diff.contents.DiffContent
 import com.intellij.diff.requests.SimpleDiffRequest
-import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.readAction
@@ -204,27 +203,12 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
   }
 
   private fun launchSafely(failure: String, block: suspend CoroutineScope.() -> Unit) {
-    scope.launch {
-      try {
-        block()
-      } catch (e: CancellationException) {
-        throw e
-      } catch (e: Exception) {
-        LOG.info(failure, e)
-        notify("$failure: ${e.message ?: e.javaClass.simpleName}", NotificationType.ERROR)
-      }
-    }
+    scope.launchReporting(project, failure, block)
   }
 
-  private fun notify(message: String, type: NotificationType) {
-    NotificationGroupManager.getInstance()
-      .getNotificationGroup(NOTIFICATION_GROUP)
-      .createNotification(message, type)
-      .notify(project)
-  }
+  private fun notify(message: String, type: NotificationType) = notify(project, message, type)
 
   companion object {
-    const val NOTIFICATION_GROUP: String = "T3 Code"
     const val CHAT_TOOL_WINDOW: String = "T3 Chat View"
 
     private val LOG: Logger = Logger.getInstance(T3Opener::class.java)

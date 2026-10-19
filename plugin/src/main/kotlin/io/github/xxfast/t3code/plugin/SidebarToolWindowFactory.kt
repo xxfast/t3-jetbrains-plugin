@@ -10,6 +10,7 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
+import io.github.xxfast.t3code.plugin.actions.showThreadMenu
 import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ui.ConnectionBanner
 import io.github.xxfast.t3code.plugin.ui.Sidebar
@@ -51,6 +52,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         onOpenThread = opener::openThread,
         favicons = favicons,
         header = header,
+        onContextMenu = { threadId, x, y -> showThreadMenu(project, threadId, x, y) },
       )
     }
     val content: Content = ContentFactory.getInstance().createContent(panel, null, false)

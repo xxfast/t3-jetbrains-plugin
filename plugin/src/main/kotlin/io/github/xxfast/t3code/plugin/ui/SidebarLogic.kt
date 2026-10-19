@@ -150,9 +150,80 @@ fun relativeTime(then: Instant, now: Instant): String {
   }
 }
 
-fun String.toInstant(): Instant =
+fun String.toInstant(): Instant = toInstantOrNull() ?: Instant.EPOCH
+
+/** `null` where upstream's `Date.parse` gives `NaN`. */
+fun String.toInstantOrNull(): Instant? =
   try {
     Instant.parse(this)
   } catch (_: DateTimeParseException) {
-    Instant.EPOCH
+    null
+  }
+
+/**
+ * A run finished since the last visit: upstream's `hasUnseenCompletion`,
+ * apps/web/src/components/Sidebar.logic.ts:718. No visit on record reads as seen, a visit that
+ * doesn't parse reads as unseen.
+ */
+val Thread.unread: Boolean
+  get() {
+    val completedAt: Instant = latestRunCompletedAt?.toInstantOrNull() ?: return false
+    val visited: String = lastVisitedAt?.takeIf { it.isNotEmpty() } ?: return false
+    val visitedAt: Instant = visited.toInstantOrNull() ?: return true
+    return completedAt.isAfter(visitedAt)
+  }
+
+/**
+ * A card's top status after working and waiting on you, ahead of unread. Upstream's
+ * `resolveSidebarThreadStatus` (apps/web/src/components/Sidebar.logic.ts:912) and the card's
+ * precedence (apps/web/src/components/Sidebar.tsx:1705 to 1724). Woke isn't ported: the shell row
+ * carries no snooze wake time.
+ */
+enum class CardStatus { Failed, Limited, Done }
+
+fun Thread.cardStatus(): CardStatus? = when {
+  status == "failed" && lastErrorClass == "usage_limit" -> CardStatus.Limited
+  status == "failed" -> CardStatus.Failed
+  unread -> CardStatus.Done
+  else -> null
+}
+
+// Visits mirror `ThreadVisitWatermark`, apps/web/src/components/ChatView.tsx:8667 to 8725.
+
+/** `VISIT_DISPATCH_THROTTLE_MS`, ChatView.tsx:566. */
+val VISIT_THROTTLE: Duration = Duration.ofSeconds(10)
+
+/** One visit per watermark: upstream's `${threadKey}:${updatedAt}` dispatch key. */
+val Thread.visitKey: String get() = "$id:$updatedAt"
+
+/**
+ * Whether looking at [row] should send a `thread.visit` at its `updatedAt`: the last visit is
+ * missing, unparsable or behind the row, and this watermark isn't [lastDispatched] already. The
+ * shell's `lastVisitedAt` is `NullOr` and always sent, so upstream's `!== undefined` gate always
+ * passes; a never-visited thread gets a visit. The dedupe is also what keeps a mark-unread on the
+ * open thread sticky: the rewind leaves `updatedAt` alone.
+ */
+fun shouldVisit(row: Thread, lastDispatched: String?): Boolean {
+  val updatedAt: Instant = row.updatedAt.toInstantOrNull() ?: return false
+  val visitedAt: Instant? = row.lastVisitedAt?.toInstantOrNull()
+  if (visitedAt != null && !visitedAt.isBefore(updatedAt)) return false
+  return row.visitKey != lastDispatched
+}
+
+/**
+ * The watermark's own `hasUnseenCompletion`, ChatView.tsx:8700 to 8703. Unlike the Sidebar's
+ * [unread], a missing or unparsable visit counts as unseen.
+ */
+fun unseenCompletion(row: Thread): Boolean {
+  val completedAt: Instant = row.latestRunCompletedAt?.toInstantOrNull() ?: return false
+  val visitedAt: Instant = row.lastVisitedAt?.toInstantOrNull() ?: return true
+  return completedAt.isAfter(visitedAt)
+}
+
+/** How long to hold a due visit: none for an unseen completion, else the rest of the throttle. */
+fun visitDelay(row: Thread, sinceLastVisit: Duration): Duration =
+  if (unseenCompletion(row) || sinceLastVisit >= VISIT_THROTTLE) {
+    Duration.ZERO
+  } else {
+    VISIT_THROTTLE - sinceLastVisit
   }
