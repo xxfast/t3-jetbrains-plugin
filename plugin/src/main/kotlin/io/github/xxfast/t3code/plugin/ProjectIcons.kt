@@ -78,8 +78,10 @@ class ProjectIcons(private val scope: CoroutineScope) {
       val root: SVGSVG = dom.root ?: return null
       Surface.makeRasterN32Premul(side, side).use { surface ->
         val natural: Pair<Float, Float>? = naturalSize(root)
-        if (root.viewBox == null && natural != null) {
-          // Without a viewBox the container size doesn't rescale the drawing, so scale the canvas
+        if (natural != null) {
+          // An absolute width and height on the root is the viewport skia draws into, viewBox or
+          // not, and the container size doesn't rescale it. So scale the canvas instead. An
+          // `800px` icon otherwise lands outside a 64px raster and decodes to a blank bitmap.
           val scale: Float = RASTER_SIZE / maxOf(natural.first, natural.second)
           surface.canvas.scale(scale, scale)
           dom.setContainerSize(natural.first, natural.second)
