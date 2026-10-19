@@ -191,8 +191,8 @@ fun rollbackBlockReason(operateReason: String?, view: ThreadView): String? =
   operateReason ?: INTERRUPT_FIRST.takeIf { activeRun(view.runs) != null }
 
 /**
- * What "Roll back" on [run]'s line says it does. Turn N's checkpoint is the state after turn N:
- * rolling back keeps N and undoes what came after.
+ * What the revert on the prompt after [run] says it does. Turn N's checkpoint is the state
+ * after turn N: rolling back keeps N and undoes what came after.
  */
 fun rollbackTooltip(run: Run, reason: String?): String =
   reason ?: "Roll back to the state after turn ${run.ordinal}"

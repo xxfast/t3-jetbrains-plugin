@@ -1,10 +1,8 @@
 package io.github.xxfast.t3code.plugin.ui
 
-import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.generated.FileChangeDetail
 import io.github.xxfast.t3code.protocol.generated.TurnItem
-import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -13,75 +11,6 @@ import kotlinx.serialization.json.jsonObject
 import org.junit.jupiter.api.Test
 
 class ChatViewLogicTest {
-  @Test
-  fun `no runs is just the items`() {
-    val rows: List<ThreadRow> = threadRows(emptyList(), listOf(notice("a"), notice("b")))
-    assertEquals(listOf("item:a", "item:b"), rows.map { it.key })
-  }
-
-  @Test
-  fun `items land under the last run requested before them`() {
-    val runs: List<Run> = listOf(run("r2", 2, "10:05"), run("r1", 1, "10:00"))
-    val items: List<TurnItem> = listOf(
-      notice("a", "10:00"),
-      notice("b", "10:03"),
-      notice("c", "10:05"),
-      notice("d", "10:09"),
-    )
-    assertEquals(
-      listOf("run:r1", "item:a", "item:b", "run:r2", "item:c", "item:d"),
-      threadRows(runs, items).map { it.key },
-    )
-  }
-
-  @Test
-  fun `items before the first run and without a time stay put`() {
-    val runs: List<Run> = listOf(run("r1", 1, "10:00"), run("r2", 2, "10:05"))
-    val items: List<TurnItem> = listOf(
-      notice("early", "09:59"),
-      notice("late", "10:06"),
-      notice("untimed", updatedAt = ""),
-      notice("stale", "10:01"),
-    )
-    assertEquals(
-      listOf("run:r1", "item:early", "run:r2", "item:late", "item:untimed", "item:stale"),
-      threadRows(runs, items).map { it.key },
-    )
-  }
-
-  @Test
-  fun `a run with no items still gets a line`() {
-    val runs: List<Run> = listOf(run("r1", 1, "10:00"), run("r2", 2, "10:05"))
-    val keys: List<String> = threadRows(runs, listOf(notice("a", "10:01"))).map { it.key }
-    assertEquals(listOf("run:r1", "item:a", "run:r2"), keys)
-  }
-
-  @Test
-  fun `the run line follows the user message that opened the run`() {
-    val runs: List<Run> = listOf(run("r1", 1, "10:00"))
-    val items: List<TurnItem> = listOf(user("u", "10:00"), notice("a", "10:01"))
-    assertEquals(
-      listOf("item:u", "run:r1", "item:a"),
-      threadRows(runs, items).map { it.key },
-    )
-  }
-
-  @Test
-  fun `run labels`() {
-    val now: Instant = Instant.parse(at("10:10"))
-    val done: Run = run("r", 1, "10:00").copy(startedAt = at("10:00"), completedAt = at("10:01"))
-    assertEquals("Worked for 1m", runLabel(done, now))
-    val running: Run = done.copy(status = "running", completedAt = null)
-    assertEquals("Working for 10m", runLabel(running, now))
-    assertEquals("Interrupted", runLabel(running.copy(status = "interrupted"), now))
-  }
-
-  @Test
-  fun `blank and repeated ids get positional keys`() {
-    val items: List<TurnItem> = listOf(notice("a"), notice(""), notice("a"))
-    assertEquals(listOf("item:a", "at:1", "at:2"), threadRows(emptyList(), items).map { it.key })
-  }
-
   @Test
   fun `pretty json is indented and round trips`() {
     val raw: JsonObject =
@@ -109,36 +38,6 @@ class ChatViewLogicTest {
     val moved: TurnItem.FileChange =
       change.copy(changes = listOf(FileChangeDetail(operation = "update", path = "src/A.kt")))
     assertEquals("src/A.kt", moved.openPath())
-  }
-
-  private fun at(time: String): String = "2026-10-19T$time:00Z"
-
-  private fun run(id: String, ordinal: Long, requested: String): Run = T3Json.decodeFromString(
-    Run.serializer(),
-    """
-      {
-        "id": "$id", "threadId": "t", "ordinal": $ordinal, "status": "completed",
-        "providerInstanceId": "codex", "modelSelection": { "model": "gpt-5" },
-        "userMessageId": "m", "requestedAt": "${at(requested)}"
-      }
-    """,
-  )
-
-  private fun notice(id: String, time: String? = null, updatedAt: String? = null): TurnItem {
-    val notice: TurnItem.SystemNotice = item("""{"type":"system_notice","message":"$id"}""")
-    return notice.copy(id = id, updatedAt = updatedAt ?: time?.let(::at) ?: "")
-  }
-
-  private fun user(id: String, time: String): TurnItem {
-    val message: TurnItem.UserMessage = item(
-      """
-        {
-          "type": "user_message", "text": "hi", "messageId": "m", "createdBy": "user",
-          "creationSource": "web", "inputIntent": "turn_start", "attachments": []
-        }
-      """,
-    )
-    return message.copy(id = id, updatedAt = at(time))
   }
 
   /** A turn item from [json] plus the fields every item requires. */

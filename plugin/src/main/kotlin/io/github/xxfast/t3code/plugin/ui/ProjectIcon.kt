@@ -97,11 +97,11 @@ fun Monogram(text: String, color: Color, size: Dp = 16.dp) {
 
 /** One of the lucide glyphs in `resources/icons/lucide`, tinted. */
 @Composable
-fun Glyph(name: String, tint: Color, size: Dp = 14.dp) {
+fun Glyph(name: String, tint: Color, size: Dp = 14.dp, modifier: Modifier = Modifier) {
   Icon(
     key = PathIconKey("icons/lucide/$name.svg", ProjectIconMarker::class.java),
     contentDescription = null,
-    modifier = Modifier.size(size),
+    modifier = modifier.size(size),
     iconClass = ProjectIconMarker::class.java,
     colorFilter = ColorFilter.tint(tint),
   )

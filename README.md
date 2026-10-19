@@ -30,7 +30,9 @@ Not released. What works today:
 - Attach files and images: drop them on the composer, paste them, or pick them with "+". A
   selection in the editor goes along as context through "Add to T3 thread".
 - Review a diff in the IDE's viewer and leave comments on its lines; they go with the next
-  message. "Roll back" on a turn, behind a confirmation.
+  message. Revert to before a prompt from its hover row, behind a confirmation.
+- A thread timeline laid out like the desktop's: finished turns fold behind "Worked for", tool
+  calls group into one line, and a turn's changed files sit under its last reply.
 
 See the roadmap for what's next.
 
