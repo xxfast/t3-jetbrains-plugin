@@ -1,0 +1,1 @@
+{"authenticated":false,"auth":{"policy":"desktop-managed-local","bootstrapMethods":["desktop-bootstrap"],"sessionMethods":["browser-session-cookie","bearer-access-token","dpop-access-token"],"sessionCookieName":"t3_session_3773"}}

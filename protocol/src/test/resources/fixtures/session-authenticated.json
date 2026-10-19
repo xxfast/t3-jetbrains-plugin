@@ -1,0 +1,13 @@
+{
+  "authenticated": true,
+  "auth": {
+    "policy": "desktop-managed-local",
+    "bootstrapMethods": ["desktop-bootstrap"],
+    "sessionMethods": ["browser-session-cookie", "bearer-access-token", "dpop-access-token"],
+    "sessionCookieName": "t3_session_3773"
+  },
+  "scopes": ["orchestration:read"],
+  "permissions": ["orchestration:read", "filesystem:read"],
+  "sessionMethod": "bearer-access-token",
+  "expiresAt": "2026-11-18T06:49:35.000Z"
+}

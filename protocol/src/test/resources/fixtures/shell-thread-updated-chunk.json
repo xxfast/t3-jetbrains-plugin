@@ -1,0 +1,57 @@
+{
+  "_tag": "Chunk",
+  "requestId": "0",
+  "values": [
+    {
+      "kind": "thread.updated",
+      "sequence": 43,
+      "location": "active",
+      "thread": {
+        "createdBy": "user",
+        "creationSource": "web",
+        "id": "thread-1",
+        "projectId": "project-1",
+        "title": "Write the real client",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "runtimeMode": "approval-required",
+        "interactionMode": "default",
+        "branch": "main",
+        "worktreePath": null,
+        "lineage": {
+          "parentThreadId": null,
+          "relationshipToParent": null,
+          "rootThreadId": "thread-1"
+        },
+        "forkedFrom": null,
+        "activeProviderThreadId": null,
+        "latestRunId": "run-1",
+        "activeRunId": null,
+        "status": "completed",
+        "pendingRuntimeRequest": null,
+        "latestVisibleMessage": {
+          "id": "msg-2",
+          "role": "assistant",
+          "text": "Done.",
+          "updatedAt": "2026-10-19T06:00:05.000Z"
+        },
+        "latestUserMessageAt": "2026-10-19T06:00:00.000Z",
+        "hasActionableProposedPlan": false,
+        "itemCount": 3,
+        "visibleItemCount": 3,
+        "createdAt": "2026-10-19T05:59:00.000Z",
+        "updatedAt": "2026-10-19T06:01:00.000Z",
+        "archivedAt": null,
+        "settledOverride": null,
+        "settledAt": null,
+        "deletedAt": null,
+        "pinnedAt": "2026-10-19T06:00:00.000Z",
+        "pendingBackgroundTasks": [],
+        "providerInstanceHistory": []
+      }
+    }
+  ]
+}

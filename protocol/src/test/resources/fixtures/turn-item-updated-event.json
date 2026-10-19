@@ -1,0 +1,37 @@
+{
+  "_tag": "Chunk",
+  "requestId": "0",
+  "values": [
+    {
+      "kind": "event",
+      "sequence": 101,
+      "event": {
+        "id": "event-101",
+        "threadId": "thread-1",
+        "runId": "run-1",
+        "occurredAt": "2026-10-19T06:00:05.000Z",
+        "type": "turn-item.updated",
+        "payload": {
+          "id": "item-4",
+          "threadId": "thread-1",
+          "runId": "run-1",
+          "nodeId": "node-1",
+          "providerThreadId": null,
+          "providerTurnId": null,
+          "nativeItemRef": null,
+          "parentItemId": null,
+          "ordinal": 4,
+          "status": "completed",
+          "title": null,
+          "startedAt": "2026-10-19T06:00:00.000Z",
+          "completedAt": "2026-10-19T06:00:05.000Z",
+          "updatedAt": "2026-10-19T06:00:05.000Z",
+          "type": "assistant_message",
+          "messageId": "msg-2",
+          "text": "Working on it. Done.",
+          "streaming": false
+        }
+      }
+    }
+  ]
+}

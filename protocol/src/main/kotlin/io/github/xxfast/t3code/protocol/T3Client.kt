@@ -1,0 +1,83 @@
+package io.github.xxfast.t3code.protocol
+
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
+
+/** Where the client is with the server. The tool window header renders this. */
+public sealed interface ConnectionState {
+  /** Not trying. Initial state, and after [T3Client.disconnect]. */
+  public data object Disconnected : ConnectionState
+
+  /** No credential for this server yet. The UI shows the pairing flow. */
+  public data object Unpaired : ConnectionState
+
+  public data object Connecting : ConnectionState
+
+  public data class Connected(val session: ServerSession) : ConnectionState
+
+  /** The server rejected the credential. Pair again. */
+  public data class AuthError(val message: String) : ConnectionState
+
+  /** Transport trouble. The client retries on its own; [message] is for the header. */
+  public data class Error(val message: String) : ConnectionState
+}
+
+/**
+ * A client of one T3 server. The plugin container holds exactly one, picked at startup: the real
+ * one over the WebSocket, or a fixture client that replays JSON from disk. Composables never see
+ * this type; they take the state it exposes.
+ *
+ * State is a mirror of what the server projects. Nothing here reimplements T3 logic.
+ */
+public interface T3Client {
+  public val connection: StateFlow<ConnectionState>
+
+  /** Projects from the shell snapshot, in server order. */
+  public val projects: StateFlow<List<Project>>
+
+  /** Active and archived threads, in server order. Filter and sort in the UI. */
+  public val threads: StateFlow<List<Thread>>
+
+  /**
+   * One thread, live. Subscribes on collect, unsubscribes when the collector goes away. The
+   * first emission is the snapshot; later ones are the same view with items upserted by id.
+   */
+  public fun thread(id: String): Flow<ThreadView>
+
+  /** `projects.readFile`. [path] is workspace-relative or absolute. */
+  public suspend fun readFile(cwd: String, path: String): FileContents
+
+  /** `orchestration.getTurnDiff`: a unified patch for runs [fromTurn] to [toTurn], exclusive. */
+  public suspend fun turnDiff(threadId: String, fromTurn: Int, toTurn: Int): String
+
+  /** `orchestration.getFullThreadDiff`: everything up to run [toTurn] as a unified patch. */
+  public suspend fun fullThreadDiff(threadId: String, toTurn: Int): String
+
+  /** Start, or start over. Safe to call in any state. */
+  public fun connect()
+
+  public fun disconnect()
+}
+
+/** Failures the client surfaces to callers of the suspend functions. */
+public sealed class T3Exception(message: String) : Exception(message) {
+  /** `EnvironmentAuthInvalidError`: the credential is missing or no longer valid. */
+  public class AuthInvalid(message: String, public val reason: String?) : T3Exception(message)
+
+  /** `EnvironmentAuthorizationError` or the HTTP 403: scope missing on the token. */
+  public class ScopeRequired(
+    message: String,
+    public val requiredScope: String?,
+    public val requiredPermission: String?,
+  ) : T3Exception(message)
+
+  /** A typed `Fail` from an RPC. [tag] is upstream's `_tag`. */
+  public class Rpc(public val tag: String, message: String) : T3Exception(message)
+
+  /** Transport, decoding, or the socket closing under a request. */
+  public class Transport(message: String, cause: Throwable? = null) : T3Exception(message) {
+    init {
+      if (cause != null) initCause(cause)
+    }
+  }
+}

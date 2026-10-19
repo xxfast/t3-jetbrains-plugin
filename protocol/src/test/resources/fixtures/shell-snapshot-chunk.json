@@ -1,0 +1,170 @@
+{
+  "_tag": "Chunk",
+  "requestId": "0",
+  "values": [
+    {
+      "kind": "snapshot",
+      "snapshot": {
+        "schemaVersion": 1,
+        "snapshotSequence": 42,
+        "threads": [
+          {
+            "createdBy": "user",
+            "creationSource": "web",
+            "id": "thread-1",
+            "projectId": "project-1",
+            "title": "Write the client",
+            "providerInstanceId": "codex",
+            "modelSelection": {
+              "instanceId": "codex",
+              "model": "gpt-5"
+            },
+            "runtimeMode": "approval-required",
+            "interactionMode": "default",
+            "branch": "main",
+            "worktreePath": null,
+            "lineage": {
+              "parentThreadId": null,
+              "relationshipToParent": null,
+              "rootThreadId": "thread-1"
+            },
+            "forkedFrom": null,
+            "activeProviderThreadId": null,
+            "latestRunId": "run-1",
+            "activeRunId": null,
+            "status": "running",
+            "pendingRuntimeRequest": null,
+            "latestVisibleMessage": {
+              "id": "msg-2",
+              "role": "assistant",
+              "text": "Done.",
+              "updatedAt": "2026-10-19T06:00:05.000Z"
+            },
+            "latestUserMessageAt": "2026-10-19T06:00:00.000Z",
+            "hasActionableProposedPlan": false,
+            "itemCount": 3,
+            "visibleItemCount": 3,
+            "createdAt": "2026-10-19T05:59:00.000Z",
+            "updatedAt": "2026-10-19T06:00:05.000Z",
+            "archivedAt": null,
+            "settledOverride": null,
+            "settledAt": null,
+            "deletedAt": null,
+            "pinnedAt": "2026-10-19T06:00:00.000Z",
+            "pendingBackgroundTasks": [],
+            "providerInstanceHistory": []
+          },
+          {
+            "createdBy": "user",
+            "creationSource": "web",
+            "id": "thread-2",
+            "projectId": "project-1",
+            "title": "Fix the build",
+            "providerInstanceId": "codex",
+            "modelSelection": {
+              "instanceId": "codex",
+              "model": "gpt-5"
+            },
+            "runtimeMode": "approval-required",
+            "interactionMode": "default",
+            "branch": "main",
+            "worktreePath": null,
+            "lineage": {
+              "parentThreadId": null,
+              "relationshipToParent": null,
+              "rootThreadId": "thread-2"
+            },
+            "forkedFrom": null,
+            "activeProviderThreadId": null,
+            "latestRunId": "run-1",
+            "activeRunId": null,
+            "status": "idle",
+            "pendingRuntimeRequest": null,
+            "latestVisibleMessage": {
+              "id": "msg-2",
+              "role": "assistant",
+              "text": "Done.",
+              "updatedAt": "2026-10-19T06:00:05.000Z"
+            },
+            "latestUserMessageAt": "2026-10-19T06:00:00.000Z",
+            "hasActionableProposedPlan": false,
+            "itemCount": 3,
+            "visibleItemCount": 3,
+            "createdAt": "2026-10-19T05:59:00.000Z",
+            "updatedAt": "2026-10-19T06:00:05.000Z",
+            "archivedAt": null,
+            "settledOverride": null,
+            "settledAt": null,
+            "deletedAt": null,
+            "pinnedAt": null,
+            "pendingBackgroundTasks": [],
+            "providerInstanceHistory": []
+          }
+        ],
+        "archivedThreads": [
+          {
+            "createdBy": "user",
+            "creationSource": "web",
+            "id": "thread-3",
+            "projectId": "project-1",
+            "title": "Old spike",
+            "providerInstanceId": "codex",
+            "modelSelection": {
+              "instanceId": "codex",
+              "model": "gpt-5"
+            },
+            "runtimeMode": "approval-required",
+            "interactionMode": "default",
+            "branch": "main",
+            "worktreePath": null,
+            "lineage": {
+              "parentThreadId": null,
+              "relationshipToParent": null,
+              "rootThreadId": "thread-3"
+            },
+            "forkedFrom": null,
+            "activeProviderThreadId": null,
+            "latestRunId": "run-1",
+            "activeRunId": null,
+            "status": "idle",
+            "pendingRuntimeRequest": null,
+            "latestVisibleMessage": {
+              "id": "msg-2",
+              "role": "assistant",
+              "text": "Done.",
+              "updatedAt": "2026-10-19T06:00:05.000Z"
+            },
+            "latestUserMessageAt": "2026-10-19T06:00:00.000Z",
+            "hasActionableProposedPlan": false,
+            "itemCount": 3,
+            "visibleItemCount": 3,
+            "createdAt": "2026-10-19T05:59:00.000Z",
+            "updatedAt": "2026-10-19T06:00:05.000Z",
+            "archivedAt": "2026-10-10T00:00:00.000Z",
+            "settledOverride": null,
+            "settledAt": null,
+            "deletedAt": null,
+            "pinnedAt": null,
+            "pendingBackgroundTasks": [],
+            "providerInstanceHistory": []
+          }
+        ],
+        "projects": [
+          {
+            "id": "project-1",
+            "title": "t3-jetbrains-plugin",
+            "workspaceRoot": "/Users/me/t3-jetbrains-plugin",
+            "repositoryIdentity": null,
+            "defaultModelSelection": {
+              "instanceId": "codex",
+              "model": "gpt-5"
+            },
+            "scripts": [],
+            "createdAt": "2026-10-01T00:00:00.000Z",
+            "updatedAt": "2026-10-19T06:00:05.000Z"
+          }
+        ]
+      }
+    }
+  ]
+}

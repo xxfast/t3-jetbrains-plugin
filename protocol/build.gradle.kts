@@ -16,7 +16,9 @@ dependencies {
   testImplementation(libs.kotlin.stdlib)
   testImplementation(libs.kotlinx.coroutines.core)
   testImplementation(libs.kotlinx.serialization.json)
+  testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.kotlin.test)
+  testImplementation(libs.java.websocket)
   testImplementation(libs.junit.jupiter)
   testRuntimeOnly(libs.junit.platform.launcher)
 }

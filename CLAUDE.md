@@ -106,6 +106,42 @@ Hard-won, so recorded here rather than rediscovered.
   in `intellij.platform.jewel.ideLafBridge.jar`, and `com.intellij.platform.compose.JBComposePanel`
   in `intellij.platform.compose.jar`. The tool window content is one of those.
 - `gradle` isn't installed globally on these machines. Commit the wrapper.
+- Wire facts from upstream at `v0.1.1-preview.20261019.3339` (full notes were extracted into
+  `docs/wire-notes.md` on 2026-10-19):
+  - Transport is Effect's RPC envelope over `GET /ws?orchestrationProtocol=2`, one JSON object
+    per text frame. Not JSON-RPC, not ndjson. Request: `{"_tag":"Request","id":"0","tag":...,
+    "payload":...,"headers":[]}`. Replies: `Chunk`, `Exit`, `Defect`, `Pong`. The client must
+    send `{"_tag":"Ack","requestId":...}` after every `Chunk` or the stream stalls. Ping every 5 s.
+  - `Authorization: Bearer` on the upgrade request works; the `wsTicket` dance is for browsers.
+  - `bootstrapMethods` is advertised, not enforced. A one-time pairing code works on a
+    `desktop-managed-local` server. Codes are 12 chars, last 5 minutes, minted by
+    `POST /api/auth/pairing-token` (needs `access:write`) or the desktop app's Settings >
+    Connections. Links are `<base>/pair#token=CODE`. `/oauth/token` is form-encoded token
+    exchange; the answer has no refresh token and no `permissions`, tokens last 30 days.
+  - `projects.list` is a constant upstream but not a registered RPC. Projects and the thread
+    list both come from the `orchestration.subscribeShell` snapshot. One thread comes from
+    `orchestration.subscribeThread`; render `projection.visibleTurnItems[].item`.
+  - No delta events. Streaming text is repeated `turn-item.updated` events carrying the whole
+    item with `streaming: true`; upsert by id. A "turn" is a `Run`; `getTurnDiff` counts run
+    ordinals.
+  - Dates are ISO strings. Branded ids are plain strings. Optional means absent, `NullOr` means
+    present and null.
+- Dev loop (full notes in `docs/platform-notes.md`): the Gradle plugin auto-reloads a dynamic
+  plugin into a running sandbox after `buildPlugin`, but not under the debugger, and it wants
+  `buildSearchableOptions = false`. `runHarness` has its own `prepareSandbox_runHarness`. Sandbox
+  log is `plugin/build/harness-sandbox/log/idea.log` for the harness; `runIde` prints its own
+  `IDE logs:` line. Under the debugger, "Reload Changed Classes" works and JBR 25 allows more
+  than method-body swaps; changed composables redraw only when state changes. Compose Hot Reload
+  can't run inside the IDE. Installing the zip from disk into a running IDE needs no restart
+  while the plugin stays dynamic (no components, only `toolWindow` EP, light services).
+- Building against the local 263 can link 263-only APIs (Jewel `MenuComboBox`, `Icon(iconDescriptor=)`,
+  `AnActionEvent.coroutineScope`) that don't exist on 253. CI compiling against `intellijIdea("2025.3")`
+  plus `verifyPlugin` with a `pluginVerification { ides { } }` block is the guard.
+- Testing tiers: plain JUnit for everything IDE-free (most of it); `com.intellij.testFramework.junit5`
+  (`@TestApplication`, `projectFixture()`) for services and `PersistentStateComponent`, which needs
+  `opentest4j` and `junit:junit:4.13.2` on the test runtime; Starter + Driver (`testIdeUi`) is a
+  full IDE launch, minutes per run, can't click inside a Compose panel, so a smoke test asserts on
+  service state via `@Remote` stubs, Linux with `xvfb-run`, nightly at most.
 - Claude Design was tried for this project and dropped. It only produces HTML and CSS, doesn't
   know Int UI or Jewel, and the standalone site closes 14 December 2026 (folded into claude.ai
   artifacts). Don't bring it back; the harness replaces it.
