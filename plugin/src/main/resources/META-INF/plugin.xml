@@ -1,0 +1,26 @@
+<idea-plugin>
+  <id>io.github.xxfast.t3code</id>
+  <name>T3 Code</name>
+  <vendor>xxfast</vendor>
+
+  <dependencies>
+    <plugin id="com.intellij.modules.platform"/>
+    <module name="intellij.platform.jewel.foundation"/>
+    <module name="intellij.platform.jewel.ui"/>
+    <module name="intellij.platform.jewel.ideLafBridge"/>
+    <module name="intellij.platform.jewel.markdown.core"/>
+    <module name="intellij.platform.jewel.markdown.ideLafBridgeStyling"/>
+    <module name="intellij.libraries.compose.foundation.desktop"/>
+    <module name="intellij.libraries.compose.runtime.desktop"/>
+    <module name="intellij.libraries.skiko"/>
+    <module name="intellij.libraries.kotlinx.coroutines.core"/>
+    <module name="intellij.libraries.kotlinx.serialization.json"/>
+  </dependencies>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <toolWindow
+      id="T3 Code"
+      anchor="right"
+      factoryClass="io.github.xxfast.t3code.plugin.T3ToolWindowFactory"/>
+  </extensions>
+</idea-plugin>
