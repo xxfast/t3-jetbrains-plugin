@@ -27,8 +27,8 @@ Open the tool window, pair with the local desktop server, see your threads, clic
 land in the editor. Nothing else.
 
 1. #1 Gradle scaffold with `:protocol` and `:plugin`
-2. Design harness: fixture client, `harness/scenarios`, scenario picker, `runHarness` task. Issue
-   not filed yet. Every UI item below is designed in it first, so it comes before them.
+2. #23 Design harness: fixture client, `harness/scenarios`, scenario picker, `runHarness` task.
+   Every UI item below is designed in it first, so it comes before them.
 3. #2 Hand-written `:protocol` client: handshake, auth, WebSocket. Can run in parallel with the
    harness; they meet at the client interface.
 4. #3 Pairing flow in the IDE
