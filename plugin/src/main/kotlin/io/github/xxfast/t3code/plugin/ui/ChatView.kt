@@ -40,9 +40,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Run
+import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.time.Instant
+import kotlinx.serialization.json.JsonObject
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.intui.markdown.bridge.ProvideMarkdownStyling
 import org.jetbrains.jewel.markdown.Markdown
@@ -69,6 +71,8 @@ fun ChatView(
   favicon: ImageBitmap?, // the project's, when ProjectIcons has it
   composer: ComposerState,
   draft: TextFieldState, // what's typed in the composer
+  pending: PendingRequest?, // an approval or question that takes over the composer
+  pendingActions: PendingActions,
   onSend: (text: String, mode: ComposerDispatchMode) -> Unit,
   onQueueChange: (Boolean) -> Unit,
   onRetry: () -> Unit, // resubscribe after an error
@@ -99,6 +103,8 @@ fun ChatView(
         Composer(
           state = composer,
           draft = draft,
+          pending = pending,
+          pendingActions = pendingActions,
           onSend = onSend,
           onQueueChange = onQueueChange,
           modifier = Modifier
@@ -178,6 +184,8 @@ private fun Items(
   val period: Long = if (view.runs.any { it.running }) 1_000 else 30_000
   val now: Instant by rememberNow(period)
   val rows: List<ThreadRow> = remember(view.runs, view.items) { threadRows(view.runs, view.items) }
+  val requests: Map<String, RuntimeRequest> =
+    remember(view.runtimeRequests) { view.runtimeRequests.associateBy { it.id } }
   // Disclosure state survives items scrolling out of the lazy column
   val expanded: SnapshotStateMap<String, Boolean> = remember(view.thread.id) { mutableStateMapOf() }
   val state: LazyListState = rememberLazyListState()
@@ -199,6 +207,7 @@ private fun Items(
               ItemRow(
                 item = row.item,
                 now = now,
+                requests = requests,
                 processor = processor,
                 expanded = isExpanded,
                 onToggle = { expanded[row.key] = !isExpanded },
@@ -242,6 +251,7 @@ private fun RunLine(run: Run, now: Instant, onDiff: () -> Unit) {
 private fun ItemRow(
   item: TurnItem,
   now: Instant,
+  requests: Map<String, RuntimeRequest>, // by id, for the state of approvals and questions
   processor: MarkdownProcessor,
   expanded: Boolean,
   onToggle: () -> Unit,
@@ -298,11 +308,26 @@ private fun ItemRow(
       item.changes.orEmpty().forEach { change -> Caption("${change.operation} ${change.path}") }
     }
 
-    is TurnItem.ApprovalRequest -> Card(item, now, label = "Approval: ${item.requestKind}") {
+    // Answered in the composer; the card keeps the record
+    is TurnItem.ApprovalRequest -> Card(item, now, label = approvalLabel(item.requestKind)) {
+      item.appName?.let { Caption(it) }
       item.prompt?.let { Text(it) }
-      val options: List<String> = item.options.orEmpty().map { it.label }
-      if (options.isNotEmpty()) Caption(options.joinToString(" · "))
-      Caption("Respond in T3 Code")
+      if (awaitingResponse(item.requestId, item.status, requests)) {
+        Text("Waiting on you", style = small(), color = JewelTheme.globalColors.text.warning)
+      } else {
+        Caption(decisionLabel(requests[item.requestId]?.decision, item.options))
+      }
+    }
+
+    is TurnItem.UserInputRequest -> Card(item, now, label = "Question") {
+      item.questions.forEach { question -> Text(question.question) }
+      if (awaitingResponse(item.requestId, item.status, requests)) {
+        Text("Waiting on you", style = small(), color = JewelTheme.globalColors.text.warning)
+      } else {
+        val answers: JsonObject? =
+          requests[item.requestId]?.answers ?: item.questionAnswer?.answers
+        answerLines(item.questions, answers).forEach { line -> Caption(line) }
+      }
     }
 
     is TurnItem.Error -> Card(item, now, label = "Error") {
@@ -454,6 +479,3 @@ private fun Mono(text: String) {
 private fun Caption(text: String) {
   Text(text, style = small(), color = JewelTheme.globalColors.text.info)
 }
-
-@Composable
-private fun small(): TextStyle = JewelTheme.typography.small

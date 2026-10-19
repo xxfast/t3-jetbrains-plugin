@@ -1,0 +1,136 @@
+{
+  "threads": [
+    {
+      "id": "thr_01JC4D7Q2KQUESTION",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Demo: waiting on a question",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "claude",
+      "modelSelection": {
+        "instanceId": "claude",
+        "model": "opus"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC4D7Q2KQUESTION"
+      },
+      "status": "waiting",
+      "latestRunId": "run_01JC4D7Q3MQ1",
+      "activeRunId": "run_01JC4D7Q3MQ1",
+      "pendingRuntimeRequest": {
+        "id": "req_01JC4D7R0QA1",
+        "kind": "user_input",
+        "createdAt": "2026-10-19T09:10:12.000Z"
+      },
+      "itemCount": 3,
+      "visibleItemCount": 3,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-19T09:08:40.000Z",
+      "updatedAt": "2026-10-19T09:10:12.000Z"
+    }
+  ],
+  "runs": {
+    "thr_01JC4D7Q2KQUESTION": [
+      {
+        "id": "run_01JC4D7Q3MQ1",
+        "threadId": "thr_01JC4D7Q2KQUESTION",
+        "ordinal": 1,
+        "status": "waiting",
+        "providerInstanceId": "claude",
+        "modelSelection": {
+          "instanceId": "claude",
+          "model": "opus"
+        },
+        "userMessageId": "msg_01JC4D7Q2M00",
+        "requestedAt": "2026-10-19T09:08:40.000Z",
+        "startedAt": "2026-10-19T09:08:41.000Z"
+      }
+    ]
+  },
+  "items": {
+    "thr_01JC4D7Q2KQUESTION": [
+      {
+        "type": "user_message",
+        "id": "q-u1",
+        "threadId": "thr_01JC4D7Q2KQUESTION",
+        "runId": "run_01JC4D7Q3MQ1",
+        "ordinal": 1,
+        "status": "completed",
+        "messageId": "msg_01JC4D7Q2M00",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "Add a sample for nested navigation with predictive back.",
+        "updatedAt": "2026-10-19T09:08:40.000Z"
+      },
+      {
+        "type": "assistant_message",
+        "id": "q-a1",
+        "threadId": "thr_01JC4D7Q2KQUESTION",
+        "runId": "run_01JC4D7Q3MQ1",
+        "ordinal": 2,
+        "status": "completed",
+        "messageId": "msg_01JC4D7Q9A11",
+        "streaming": false,
+        "text": "Before I write it, two things I'd rather not guess.",
+        "updatedAt": "2026-10-19T09:10:10.000Z"
+      },
+      {
+        "type": "user_input_request",
+        "id": "q-r1",
+        "threadId": "thr_01JC4D7Q2KQUESTION",
+        "runId": "run_01JC4D7Q3MQ1",
+        "ordinal": 3,
+        "status": "waiting",
+        "title": "Two questions",
+        "requestId": "req_01JC4D7R0QA1",
+        "questions": [
+          {
+            "id": "targets",
+            "header": "Targets",
+            "question": "Which targets should the sample run on?",
+            "multiSelect": true,
+            "options": [
+              {
+                "label": "Android",
+                "description": "Uses the system back gesture through OnBackPressedDispatcher.",
+                "value": "android"
+              },
+              {
+                "label": "iOS",
+                "description": "Swipe from the edge, through the UIKit interop.",
+                "value": "ios"
+              },
+              {
+                "label": "Desktop",
+                "description": "No gesture, so the sample only gets the back button."
+              }
+            ]
+          },
+          {
+            "id": "name",
+            "header": "Module name",
+            "question": "What should the sample module be called?",
+            "allowCustomAnswer": true,
+            "initialAnswer": "sample-nested",
+            "options": [
+              {
+                "label": "app-nested",
+                "description": "Next to the existing app sample."
+              },
+              {
+                "label": "samples/nested",
+                "description": "Under a new samples folder."
+              }
+            ]
+          }
+        ],
+        "startedAt": "2026-10-19T09:10:12.000Z",
+        "updatedAt": "2026-10-19T09:10:12.000Z"
+      }
+    ]
+  }
+}

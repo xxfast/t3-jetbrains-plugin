@@ -97,6 +97,11 @@
           {
             "decision": "decline",
             "label": "Don't run"
+          },
+          {
+            "decision": "acceptForSession",
+            "label": "Always allow this session",
+            "warning": "Every Gradle command in this session runs without asking."
           }
         ],
         "startedAt": "2026-10-19T08:22:40.000Z",

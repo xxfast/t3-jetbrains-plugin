@@ -9,6 +9,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import java.time.Instant
@@ -41,3 +42,7 @@ fun subtle(alpha: Float): Color = JewelTheme.globalColors.text.normal.copy(alpha
 /** The accent: the focus outline, since the bridge theme's focused border is transparent. */
 @Composable
 fun accent(): Color = JewelTheme.globalColors.outlines.focused
+
+/** Int UI's small text, for captions and secondary lines. */
+@Composable
+fun small(): TextStyle = JewelTheme.typography.small

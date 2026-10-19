@@ -1,6 +1,7 @@
 package io.github.xxfast.t3code.plugin.fixtures
 
 import io.github.xxfast.t3code.protocol.ConversationMessage
+import io.github.xxfast.t3code.protocol.ProviderSession
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.Thread
@@ -52,11 +53,12 @@ data class Overlay(
     val items: List<TurnItem> = base.items.upsertAll(items[id].orEmpty(), TurnItem::id)
     val listed: List<RuntimeRequest> =
       base.runtimeRequests.upsertAll(runtimeRequests[id].orEmpty(), RuntimeRequest::id)
+    val standIns: List<RuntimeRequest> = requestsOf(items, sessionOf(base.providerSessions))
     return base.copy(
       thread = threads[id] ?: base.thread,
       runs = base.runs.upsertAll(runs[id].orEmpty(), Run::id),
       items = items,
-      runtimeRequests = listed + requestsOf(items).filter { request ->
+      runtimeRequests = listed + standIns.filter { request ->
         listed.none { it.id == request.id }
       },
       providerSessions = base.providerSessions.filterNot { it.id in detachedSessions },
@@ -66,16 +68,28 @@ data class Overlay(
   }
 }
 
+/** The thread's provider session, which a live approval answers through. */
+internal fun sessionOf(sessions: List<ProviderSession>): String =
+  sessions.firstOrNull()?.id ?: "psn_fixture"
+
 /**
  * Scenarios rarely list runtime requests, so every approval or question item stands for one,
- * pending until the item completes.
+ * pending until the item completes. Approvals are live, answered through [sessionId]; only a live
+ * approval is resumable, like upstream's `derivePendingThreadRequests`. Questions are message
+ * mode, so they can be dismissed.
  */
-private fun requestsOf(items: List<TurnItem>): List<RuntimeRequest> = items.mapNotNull { item ->
+internal fun requestsOf(
+  items: List<TurnItem>,
+  sessionId: String,
+): List<RuntimeRequest> = items.mapNotNull { item ->
   val (requestId: String, kind: String) = when (item) {
     is TurnItem.ApprovalRequest -> item.requestId to item.requestKind
     is TurnItem.UserInputRequest -> item.requestId to "user_input"
     else -> return@mapNotNull null
   }
+  val capability: ResponseCapability =
+    if (item is TurnItem.ApprovalRequest) ResponseCapability.Live(providerSessionId = sessionId)
+    else ResponseCapability.Message()
   val resolved: Boolean = item.status == "completed"
   return@mapNotNull RuntimeRequest(
     id = requestId,
@@ -84,7 +98,7 @@ private fun requestsOf(items: List<TurnItem>): List<RuntimeRequest> = items.mapN
     nativeRequestRef = null,
     kind = kind,
     status = if (resolved) "resolved" else "pending",
-    responseCapability = ResponseCapability.Message(),
+    responseCapability = capability,
     createdAt = item.startedAt ?: item.updatedAt,
     resolvedAt = if (resolved) item.completedAt ?: item.updatedAt else null,
   )

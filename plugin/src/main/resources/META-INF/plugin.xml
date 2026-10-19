@@ -19,6 +19,7 @@
     <toolWindow
       id="T3 Sidebar"
       anchor="left"
+      icon="/icons/t3Sidebar.svg"
       factoryClass="io.github.xxfast.t3code.plugin.SidebarToolWindowFactory"/>
     <toolWindow
       id="T3 Chat View"

@@ -6,6 +6,7 @@ import io.github.xxfast.t3code.protocol.ConversationMessage
 import io.github.xxfast.t3code.protocol.FileContents
 import io.github.xxfast.t3code.protocol.OrchestrationV2Command
 import io.github.xxfast.t3code.protocol.Project
+import io.github.xxfast.t3code.protocol.ProviderSession
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ServerInfo
@@ -169,6 +170,16 @@ class FixtureClient(
       is Command.MessageDispatch -> send(command, now, at)
 
       is Command.RuntimeRequestRespond -> respond(command, now)
+
+      // Resolves like an answer with none: the card says it was dismissed
+      is Command.ThreadUserInputDismiss -> respond(
+        Command.RuntimeRequestRespond(
+          commandId = command.commandId,
+          threadId = command.threadId,
+          requestId = command.requestId,
+        ),
+        now,
+      )
 
       is Command.RunInterrupt -> {
         replies.remove(command.threadId)?.cancel()
@@ -470,7 +481,14 @@ class FixtureClient(
       }
       val listed: List<RuntimeRequest> = loaded.value?.runtimeRequests?.get(threadId).orEmpty() +
         overlay.runtimeRequests[threadId].orEmpty()
-      val request: RuntimeRequest? = listed.lastOrNull { it.id == command.requestId }?.copy(
+      // Scenarios rarely list requests; then it's the one the overlay stands in for the item
+      val listedOrItem: RuntimeRequest? = listed.lastOrNull { it.id == command.requestId }
+        ?: itemOf(overlay, command)?.let { item ->
+          val sessions: List<ProviderSession> =
+            loaded.value?.providerSessions?.get(threadId).orEmpty()
+          requestsOf(listOf(item), sessionOf(sessions)).firstOrNull()
+        }
+      val request: RuntimeRequest? = listedOrItem?.copy(
         status = "resolved",
         resolvedAt = now,
         decision = command.decision,

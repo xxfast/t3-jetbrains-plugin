@@ -21,6 +21,11 @@ import org.jetbrains.jewel.bridge.JewelComposePanel
 
 /** "T3 Sidebar": T3's sidebar. Opening a thread is [T3Opener.openThread]'s business. */
 class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
+  // Runs when the tool window registers, before it's ever opened
+  override fun init(toolWindow: ToolWindow) {
+    WaitingWatcher.getInstance(toolWindow.project).attach(toolWindow)
+  }
+
   override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
     val t3: T3 = T3.get()
     val client: T3Client = t3.client

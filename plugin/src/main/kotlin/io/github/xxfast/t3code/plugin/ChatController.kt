@@ -13,6 +13,7 @@ import io.github.xxfast.t3code.plugin.ui.activeCapabilities
 import io.github.xxfast.t3code.plugin.ui.activeRun
 import io.github.xxfast.t3code.plugin.ui.messageDispatch
 import io.github.xxfast.t3code.plugin.ui.optimisticMessage
+import io.github.xxfast.t3code.protocol.OrchestrationV2Command
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.T3Client
@@ -32,8 +33,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Sends messages for this project's chat views. Owns each thread's draft and its outbox of
- * optimistic messages; the views render both, nothing in `ui` sees the client.
+ * Sends messages and answers for this project's chat views. Owns each thread's draft and its
+ * outbox of optimistic messages and answers in flight; the views render both, nothing in `ui`
+ * sees the client.
  */
 @Service(Service.Level.PROJECT)
 class ChatController(private val scope: CoroutineScope) {
@@ -54,10 +56,41 @@ class ChatController(private val scope: CoroutineScope) {
   fun draft(threadId: String): TextFieldState =
     drafts.computeIfAbsent(threadId) { TextFieldState() }
 
-  /** Retires the pending messages [view] acknowledges, or that it dropped after taking them. */
-  fun reconcile(view: ThreadView) {
+  /**
+   * Retires the pending messages [view] acknowledges, or that it dropped after taking them, and
+   * the answers to requests no longer in [waiting], the ids `derivePendingThreadRequests` found.
+   */
+  fun reconcile(view: ThreadView, waiting: Set<String>) {
     update(view.thread.id) { pending ->
-      pending.reconciled(view.items, view.messages, view.sequence)
+      pending.reconciled(view.items, view.messages, view.sequence, waiting)
+    }
+  }
+
+  /**
+   * Answers an approval or a question on [view]'s thread: `runtime-request.respond` or
+   * `thread.user-input.dismiss`. The panel shows it responding until the server resolves the
+   * request; a refusal says why under the composer, like a failed send.
+   */
+  fun respond(view: ThreadView, command: OrchestrationV2Command) {
+    val threadId: String = view.thread.id
+    val requestId: String = when (command) {
+      is Command.RuntimeRequestRespond -> command.requestId
+      is Command.ThreadUserInputDismiss -> command.requestId
+      else -> throw IllegalArgumentException("Not a response: ${command.type}")
+    }
+    update(threadId) { pending -> pending.respondingTo(requestId) }
+    scope.launch {
+      try {
+        client.dispatch(command)
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        LOG.info("Couldn't respond to $requestId on $threadId", e)
+        val reason: String = e.message ?: e.javaClass.simpleName
+        update(threadId) { pending ->
+          pending.respondFailed(requestId, "Couldn't respond: $reason")
+        }
+      }
     }
   }
 

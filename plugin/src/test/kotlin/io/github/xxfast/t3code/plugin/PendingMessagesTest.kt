@@ -79,6 +79,42 @@ class PendingMessagesTest {
   }
 
   @Test
+  fun `an answer responds until its request stops being pending`() {
+    val responding: PendingMessages = PendingMessages(error = "old").respondingTo("r1")
+    assertEquals(setOf("r1"), responding.responding)
+    assertNull(responding.error)
+
+    val still: PendingMessages =
+      responding.reconciled(emptyList(), emptyList(), sequence = 0, pendingRequests = setOf("r1"))
+    assertSame(responding, still)
+
+    val resolved: PendingMessages =
+      responding.reconciled(emptyList(), emptyList(), sequence = 0, pendingRequests = setOf("r2"))
+    assertEquals(emptySet(), resolved.responding)
+  }
+
+  @Test
+  fun `a refused answer stops responding and says why`() {
+    val failed: PendingMessages = PendingMessages()
+      .respondingTo("r1")
+      .respondingTo("r2")
+      .respondFailed("r1", "Couldn't respond: nope")
+    assertEquals(setOf("r2"), failed.responding)
+    assertEquals("Couldn't respond: nope", failed.error)
+  }
+
+  @Test
+  fun `pruning answers still reconciles messages`() {
+    val pending: PendingMessages = PendingMessages()
+      .sent(message("m1"))
+      .delivered("m1", sequence = 5)
+      .respondingTo("r1")
+    val reconciled: PendingMessages = pending.reconciled(emptyList(), emptyList(), sequence = 5)
+    assertEquals(emptyList(), reconciled.messages)
+    assertEquals(emptySet(), reconciled.responding)
+  }
+
+  @Test
   fun `a refused send leaves and says why`() {
     val failed: PendingMessages = PendingMessages()
       .sent(message("m1"))

@@ -1,6 +1,17 @@
 package io.github.xxfast.t3code.plugin.fixtures
 
+import io.github.xxfast.t3code.plugin.ui.PendingUserInputDraftAnswer
+import io.github.xxfast.t3code.plugin.ui.PendingApproval
+import io.github.xxfast.t3code.plugin.ui.PendingThreadRequests
+import io.github.xxfast.t3code.plugin.ui.PendingUserInput
+import io.github.xxfast.t3code.plugin.ui.answerLines
+import io.github.xxfast.t3code.plugin.ui.answersResponse
+import io.github.xxfast.t3code.plugin.ui.derivePendingThreadRequests
+import io.github.xxfast.t3code.plugin.ui.dismissal
+import io.github.xxfast.t3code.plugin.ui.seedUserInputDraftAnswers
+import io.github.xxfast.t3code.plugin.ui.buildPendingUserInputAnswers
 import io.github.xxfast.t3code.protocol.ConnectionState
+import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ServerSession
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
@@ -9,6 +20,7 @@ import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TurnItem
+import io.github.xxfast.t3code.protocol.generated.UserInputQuestion
 import io.github.xxfast.t3code.protocol.has
 import io.github.xxfast.t3code.protocol.pinned
 import java.nio.file.Files
@@ -26,6 +38,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
@@ -83,12 +96,12 @@ class FixtureClientTest {
     val scenario: Scenario = Scenario.merge(parts)
     val connected: ConnectionState.Connected = assertIs(scenario.connection)
     assertTrue(connected.session.has("orchestration:operate"), "Thread actions work in default")
-    assertEquals(23, scenario.threads.size)
+    assertEquals(24, scenario.threads.size)
     val demos: Set<String> = scenario.threads
       .filter { it.title.startsWith("Demo: ") }
       .map { it.id }
       .toSet()
-    assertEquals(setOf(THREAD, WAITING, UNKNOWN, MANY), demos)
+    assertEquals(setOf(THREAD, WAITING, QUESTION, UNKNOWN, MANY), demos)
   }
 
   @Test
@@ -306,6 +319,9 @@ class FixtureClientTest {
     client.threads.first { threads -> threads.any { it.id == WAITING } }
     val before: ThreadView = client.thread(WAITING).first()
     assertEquals("pending", before.runtimeRequests.single { it.id == REQUEST }.status)
+    val pendingApproval: PendingApproval =
+      derivePendingThreadRequests(before.runtimeRequests, before.items).approvals.single()
+    assertTrue(pendingApproval.resumable, "Fixture approvals are live, so they can be answered")
 
     val respond = Command.RuntimeRequestRespond(
       commandId = "cmd_respond",
@@ -322,6 +338,53 @@ class FixtureClientTest {
     assertEquals("resolved", after.runtimeRequests.single { it.id == REQUEST }.status)
     assertEquals("running", after.thread.status)
     assertNull(after.thread.pendingRuntimeRequest)
+  }
+
+  @Test
+  fun `the question is pending, then answering resolves it with the answers`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == QUESTION } }
+    val before: ThreadView = client.thread(QUESTION).first()
+    val pending: PendingThreadRequests =
+      derivePendingThreadRequests(before.runtimeRequests, before.items)
+    val input: PendingUserInput = pending.userInputs.single()
+    assertEquals(listOf("targets", "name"), input.item.questions.map { it.id })
+    assertTrue(input.dismissible, "The fixture's requests are message mode")
+    assertEquals(emptyList(), pending.approvals)
+
+    val questions: List<UserInputQuestion> = input.item.questions
+    val picked = PendingUserInputDraftAnswer(selected = listOf("android", "Desktop"))
+    val drafts: Map<String, PendingUserInputDraftAnswer> =
+      seedUserInputDraftAnswers(questions) + ("targets" to picked)
+    val answers: JsonObject = assertNotNull(buildPendingUserInputAnswers(questions, drafts))
+    client.dispatch(answersResponse(QUESTION, QUESTION_REQUEST, answers, "cmd_answer"))
+
+    val after: ThreadView = client.thread(QUESTION).first()
+    val request: RuntimeRequest = after.runtimeRequests.single { it.id == QUESTION_REQUEST }
+    assertEquals("resolved", request.status)
+    assertEquals(
+      listOf("Targets: Android, Desktop", "Module name: sample-nested"),
+      answerLines(input.item.questions, request.answers),
+    )
+    assertEquals("running", after.thread.status)
+  }
+
+  @Test
+  fun `dismissing a question resolves it without answers`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == QUESTION } }
+
+    client.dispatch(dismissal(QUESTION, QUESTION_REQUEST, "cmd_dismiss"))
+
+    val after: ThreadView = client.thread(QUESTION).first()
+    val item: TurnItem.UserInputRequest =
+      assertIs(after.items.single { it is TurnItem.UserInputRequest })
+    assertEquals("completed", item.status)
+    val pending: PendingThreadRequests =
+      derivePendingThreadRequests(after.runtimeRequests, after.items)
+    assertEquals(emptySet(), pending.requestIds)
+    val answers: JsonObject? = after.runtimeRequests.single().answers
+    assertEquals(listOf("Dismissed"), answerLines(item.questions, answers))
   }
 
   @Test
@@ -424,5 +487,7 @@ class FixtureClientTest {
     const val SETTLED = "thr_01JC1A2B3CSETTLE01"
     const val RUN = "run_fixture_m1"
     const val REQUEST = "req_01JC49ZM7TQ2"
+    const val QUESTION = "thr_01JC4D7Q2KQUESTION"
+    const val QUESTION_REQUEST = "req_01JC4D7R0QA1"
   }
 }
