@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -27,7 +28,6 @@ import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.awtEventOrNull
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.PointerEvent
@@ -296,46 +297,55 @@ private fun Sections(
   val more: Int = moreCount(sections.settled.size, shown)
   val scroll: ScrollState = rememberScrollState()
   // Upstream's settled header has mt-auto: it sits at the bottom until the list overflows, then
-  // scrolls with everything else. A min-height column with a weighted spacer is the same thing.
+  // scrolls with everything else. A min-height column with a filling gap is the same thing.
   BoxWithConstraints(Modifier.fillMaxSize()) {
     val viewport: Dp = maxHeight
     VerticallyScrollableContainer(scrollState = scroll, modifier = Modifier.fillMaxSize()) {
+      val items: List<MotionItem> = buildList {
+        for (thread in sections.inbox) {
+          add(
+            MotionItem("inbox:${thread.id}") {
+              InboxCard(
+                thread = thread,
+                project = byId[thread.projectId],
+                favicon = favicons[thread.projectId],
+                providers = providers,
+                now = now,
+                selected = thread.id == selectedThreadId,
+                onClick = { onOpenThread(thread.id) },
+                onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
+              )
+            },
+          )
+        }
+        if (sections.settled.isEmpty()) return@buildList
+        add(MotionItem("settled-gap", fill = true))
+        add(
+          MotionItem("settled-header") {
+            SettledHeader(open = settledOpen, onToggle = { settledOpen = !settledOpen })
+          },
+        )
+        if (!settledOpen) return@buildList
+        for (thread in sections.settled.take(shown)) {
+          add(
+            MotionItem("settled:${thread.id}") {
+              SettledRow(
+                thread = thread,
+                project = byId[thread.projectId],
+                favicon = favicons[thread.projectId],
+                now = now,
+                selected = thread.id == selectedThreadId,
+                onClick = { onOpenThread(thread.id) },
+                onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
+              )
+            },
+          )
+        }
+        if (more > 0) add(MotionItem("settled-more") { MoreRow(more, onClick = { shown += more }) })
+      }
       // The container scrolls its content itself; a second verticalScroll here nests two
       // scrollables and the inner one gets infinite height
-      Column(Modifier.fillMaxWidth().heightIn(min = viewport)) {
-        for (thread in sections.inbox) {
-          key("inbox:${thread.id}") {
-            InboxCard(
-              thread = thread,
-              project = byId[thread.projectId],
-              favicon = favicons[thread.projectId],
-              providers = providers,
-              now = now,
-              selected = thread.id == selectedThreadId,
-              onClick = { onOpenThread(thread.id) },
-              onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
-            )
-          }
-        }
-        if (sections.settled.isEmpty()) return@Column
-        Spacer(Modifier.weight(1f))
-        SettledHeader(open = settledOpen, onToggle = { settledOpen = !settledOpen })
-        if (!settledOpen) return@Column
-        for (thread in sections.settled.take(shown)) {
-          key("settled:${thread.id}") {
-            SettledRow(
-              thread = thread,
-              project = byId[thread.projectId],
-              favicon = favicons[thread.projectId],
-              now = now,
-              selected = thread.id == selectedThreadId,
-              onClick = { onOpenThread(thread.id) },
-              onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
-            )
-          }
-        }
-        if (more > 0) MoreRow(more, onClick = { shown += more })
-      }
+      MotionColumn(items, Modifier.fillMaxWidth().heightIn(min = viewport))
     }
   }
 }
@@ -374,10 +384,9 @@ private fun InboxCard(
     onClick = onClick,
     onContextMenu = onContextMenu,
     rest = subtle(0.05f),
-    // The list item's `py-0.5`; a receding working card sits at 70%
-    modifier = Modifier
-      .padding(vertical = 2.dp)
-      .alpha(if (recede && status == ThreadStatus.Working) 0.7f else 1f),
+    // A receding working card sits at 70% until hovered
+    restAlpha = if (recede && status == ThreadStatus.Working) 0.7f else 1f,
+    modifier = Modifier.padding(vertical = 2.dp), // the list item's `py-0.5`
   ) { _ ->
     Column(Modifier.height(CARD_HEIGHT).padding(horizontal = 10.dp, vertical = 8.dp)) {
       Row(
@@ -518,8 +527,12 @@ private fun SettledHeader(open: Boolean, onToggle: () -> Unit) {
     )
     Divider(Orientation.Horizontal, Modifier.weight(1f))
     // Upstream's ChevronDownIcon, rotated 180 degrees while collapsed
-    val chevron = if (open) AllIconsKeys.General.ChevronDown else AllIconsKeys.General.ChevronUp
-    Icon(chevron, contentDescription = if (open) "Collapse" else "Expand", Modifier.size(12.dp))
+    val rotation: Float by animateFloatAsState(if (open) 0f else 180f, Transition)
+    Icon(
+      key = AllIconsKeys.General.ChevronDown,
+      contentDescription = if (open) "Collapse" else "Expand",
+      modifier = Modifier.size(12.dp).rotate(rotation),
+    )
   }
 }
 
@@ -540,12 +553,13 @@ private fun SettledRow(
 ) {
   Selectable(selected, onClick, onContextMenu) { hovered ->
     val lit: Boolean = selected || hovered
+    val iconAlpha: Float by animateFloatAsState(if (lit) 1f else 0.4f, Transition)
     Row(
       modifier = Modifier.height(36.dp).fillMaxWidth().padding(horizontal = 10.dp),
       horizontalArrangement = Arrangement.spacedBy(10.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      Box(Modifier.alpha(if (lit) 1f else 0.4f)) {
+      Box(Modifier.alpha(iconAlpha)) {
         if (project != null) {
           ProjectIcon(project, favicon, muted = !lit)
         } else {
@@ -605,6 +619,7 @@ private fun Selectable(
   onClick: () -> Unit,
   onContextMenu: (x: Int, y: Int) -> Unit = { _, _ -> },
   rest: Color = Color.Transparent,
+  restAlpha: Float = 1f, // faded to fully opaque on hover
   modifier: Modifier = Modifier,
   content: @Composable (hovered: Boolean) -> Unit,
 ) {
@@ -616,10 +631,12 @@ private fun Selectable(
     hovered -> subtle(0.08f)
     else -> rest
   }
+  val alpha: Float by animateFloatAsState(if (hovered) 1f else restAlpha, Transition)
   Column(
     modifier = modifier
       .fillMaxWidth()
       .padding(horizontal = 8.dp)
+      .alpha(alpha)
       .clip(RoundedCornerShape(6.dp))
       .background(fill)
       // Ahead of clickable, so a menu gesture never also opens the thread. The platform says
