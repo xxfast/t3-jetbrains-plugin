@@ -135,12 +135,14 @@ class FakeRpcServer : WebSocketServer(InetSocketAddress("127.0.0.1", 0)), AutoCl
           "thread-snapshot-chunk.json",
         )
 
-        "terminal.attach" ->
+        "terminal.attach", "terminal.observe" ->
           replay(conn, id, "terminal-snapshot-chunk.json", "terminal-output-chunk.json")
 
         "subscribeVcsStatus" -> replay(conn, id, "vcs-status-snapshot-chunk.json")
 
         "orchestration.dispatchCommand" -> conn.send(exit(id, """{"sequence":42}"""))
+
+        "terminal.close" -> conn.send(exit(id, "null"))
 
         "server.getConfig" -> conn.send(exit(id, fixture("server-config.json")))
 

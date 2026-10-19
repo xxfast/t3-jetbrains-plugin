@@ -75,6 +75,18 @@ public interface T3Client {
    */
   public fun terminal(input: TerminalAttachInput): Flow<TerminalAttachStreamEvent>
 
+  /**
+   * `terminal.observe`: the same events as [terminal], for a session that can only read. Needs
+   * `terminal:read` where attach needs `terminal:operate`, and never starts a terminal.
+   */
+  public fun terminalObserve(threadId: String, terminalId: String): Flow<TerminalAttachStreamEvent>
+
+  /**
+   * `terminal.close`: ends the server's terminal, and with [deleteHistory] forgets its output, so
+   * the next attach starts a fresh shell. Detaching is cancelling [terminal], not this.
+   */
+  public suspend fun terminalClose(threadId: String, terminalId: String, deleteHistory: Boolean)
+
   /** `terminal.write`. */
   public suspend fun terminalWrite(threadId: String, terminalId: String, data: String)
 

@@ -64,6 +64,8 @@ dependencies {
   intellijPlatform {
     if (localIde != null) local(localIde) else intellijIdea("2025.3")
     bundledModules.forEach { module -> bundledModule(module) }
+    // Optional at runtime, see t3code-terminal.xml
+    bundledPlugin("org.jetbrains.plugins.terminal")
     pluginVerifier()
     zipSigner()
     testFramework(TestFrameworkType.Platform)

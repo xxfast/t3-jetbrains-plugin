@@ -15,6 +15,8 @@
     <module name="intellij.libraries.skiko"/>
   </dependencies>
 
+  <depends optional="true" config-file="t3code-terminal.xml">org.jetbrains.plugins.terminal</depends>
+
   <extensions defaultExtensionNs="com.intellij">
     <toolWindow
       id="T3 Sidebar"

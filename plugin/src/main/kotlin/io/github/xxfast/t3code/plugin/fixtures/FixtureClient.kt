@@ -555,6 +555,19 @@ class FixtureClient(
     emitAll(echoes(input.threadId, input.terminalId))
   }
 
+  // The same shell, watched: an observer sees what other sessions type, and can't type itself
+  override fun terminalObserve(
+    threadId: String,
+    terminalId: String,
+  ): Flow<TerminalAttachStreamEvent> =
+    terminal(TerminalAttachInput(threadId = threadId, terminalId = terminalId))
+
+  // What the server tells attached clients when their terminal goes away
+  override suspend fun terminalClose(threadId: String, terminalId: String, deleteHistory: Boolean) {
+    val closed = TerminalAttachStreamEvent.Closed(threadId = threadId, terminalId = terminalId)
+    echoes(threadId, terminalId).emit(closed)
+  }
+
   override suspend fun terminalWrite(threadId: String, terminalId: String, data: String) {
     // What a shell would do: echo the keys, and prompt again after Enter
     val output = TerminalAttachStreamEvent.Output(

@@ -419,6 +419,24 @@ class FixtureClientTest {
   }
 
   @Test
+  fun `closing the terminal tells the attached and the observers`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val attached: MutableList<TerminalAttachStreamEvent> = mutableListOf()
+    val observed: MutableList<TerminalAttachStreamEvent> = mutableListOf()
+    backgroundScope.launch {
+      client.terminal(TerminalAttachInput(threadId = IDLE, terminalId = "t1")).toList(attached)
+    }
+    backgroundScope.launch { client.terminalObserve(IDLE, "t1").toList(observed) }
+    runCurrent()
+
+    client.terminalClose(IDLE, "t1", deleteHistory = true)
+    runCurrent()
+
+    assertIs<TerminalAttachStreamEvent.Closed>(attached.last())
+    assertIs<TerminalAttachStreamEvent.Closed>(observed.last())
+  }
+
+  @Test
   fun `reloading the directory drops what was dispatched`(@TempDir directory: Path) = runTest {
     val list: Path = directory.resolve("list.json")
     list.writeText(default.resolve("list.json").readText())

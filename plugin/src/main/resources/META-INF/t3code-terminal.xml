@@ -1,0 +1,13 @@
+<!-- Loaded only when the terminal plugin is there, see the optional depends in plugin.xml -->
+<idea-plugin>
+  <actions>
+    <action
+      id="T3Code.OpenTerminal"
+      class="io.github.xxfast.t3code.plugin.terminal.OpenTerminalAction"
+      text="Open terminal"
+      description="Open the thread's terminal in the Terminal tool window"
+      icon="AllIcons.Nodes.Console">
+      <add-to-group group-id="T3Code.ThreadActions" anchor="last"/>
+    </action>
+  </actions>
+</idea-plugin>

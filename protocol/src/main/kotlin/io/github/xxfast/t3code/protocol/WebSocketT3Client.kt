@@ -139,6 +139,26 @@ public class WebSocketT3Client internal constructor(
     return resubscribing("terminal.attach", payload, TerminalAttachStreamEvent.serializer())
   }
 
+  override fun terminalObserve(
+    threadId: String,
+    terminalId: String,
+  ): Flow<TerminalAttachStreamEvent> {
+    val payload: JsonObject = buildJsonObject {
+      put("threadId", threadId)
+      put("terminalId", terminalId)
+    }
+    return resubscribing("terminal.observe", payload, TerminalAttachStreamEvent.serializer())
+  }
+
+  override suspend fun terminalClose(threadId: String, terminalId: String, deleteHistory: Boolean) {
+    val payload: JsonObject = buildJsonObject {
+      put("threadId", threadId)
+      put("terminalId", terminalId)
+      put("deleteHistory", deleteHistory)
+    }
+    call("terminal.close", payload)
+  }
+
   override suspend fun terminalWrite(threadId: String, terminalId: String, data: String) {
     // Upstream rejects empty writes and caps one at 65,536 chars, so split, never mid-surrogate
     var start = 0

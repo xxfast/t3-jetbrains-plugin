@@ -183,6 +183,42 @@ class WebSocketT3ClientTest {
   }
 
   @Test
+  fun terminalObserveYieldsTheSameEventsWithoutAttaching() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+
+    val events: List<TerminalAttachStreamEvent> =
+      client.terminalObserve("thread-1", "default").take(3).toList()
+
+    val snapshot: TerminalAttachStreamEvent.Snapshot = assertIs(events[0])
+    assertEquals("$ ", snapshot.snapshot.history)
+    val output: TerminalAttachStreamEvent.Output = assertIs(events[2])
+    assertEquals("ls\r\nREADME.md\r\n$ ", output.data)
+    val payload: JsonObject =
+      rpc.requests("terminal.observe").single().getValue("payload").jsonObject
+    assertEquals(setOf("threadId", "terminalId"), payload.keys)
+    assertEquals("thread-1", payload.string("threadId"))
+    assertEquals("default", payload.string("terminalId"))
+    assertTrue(rpc.requests("terminal.attach").isEmpty(), "Observing never attaches")
+  }
+
+  @Test
+  fun terminalCloseSendsTheThreadTerminalAndHistoryChoice() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+    client.connection.first { it is ConnectionState.Connected }
+
+    client.terminalClose("thread-1", "term-1", deleteHistory = true)
+
+    val payload: JsonObject =
+      rpc.requests("terminal.close").single().getValue("payload").jsonObject
+    assertEquals(setOf("threadId", "terminalId", "deleteHistory"), payload.keys)
+    assertEquals("thread-1", payload.string("threadId"))
+    assertEquals("term-1", payload.string("terminalId"))
+    assertEquals("true", payload.string("deleteHistory"))
+  }
+
+  @Test
   fun vcsStatusDecodesTheSnapshot() = realTimeTest {
     val client: WebSocketT3Client = client()
     client.connect()
