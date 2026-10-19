@@ -1,27 +1,29 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Thread
@@ -105,35 +108,45 @@ private fun Sections(
   var settledOpen: Boolean by remember { mutableStateOf(true) }
   var shown: Int by remember { mutableIntStateOf(FIRST_PAGE) }
   val more: Int = moreCount(sections.settled.size, shown)
-  val state: LazyListState = rememberLazyListState()
-  VerticallyScrollableContainer(scrollState = state, modifier = Modifier.fillMaxSize()) {
-    LazyColumn(state = state, modifier = Modifier.fillMaxSize()) {
-      items(sections.inbox, key = { "inbox:${it.id}" }) { thread ->
-        InboxCard(
-          thread = thread,
-          project = byId[thread.projectId],
-          favicon = favicons[thread.projectId],
-          now = now,
-          selected = thread.id == selectedThreadId,
-          onClick = { onOpenThread(thread.id) },
-        )
-      }
-      if (sections.settled.isEmpty()) return@LazyColumn
-      item(key = "settled") {
+  val scroll: ScrollState = rememberScrollState()
+  // Upstream's settled header has mt-auto: it sits at the bottom until the list overflows, then
+  // scrolls with everything else. A min-height column with a weighted spacer is the same thing.
+  BoxWithConstraints(Modifier.fillMaxSize()) {
+    val viewport: Dp = maxHeight
+    VerticallyScrollableContainer(scrollState = scroll, modifier = Modifier.fillMaxSize()) {
+      // The container scrolls its content itself; a second verticalScroll here nests two
+      // scrollables and the inner one gets infinite height
+      Column(Modifier.fillMaxWidth().heightIn(min = viewport)) {
+        for (thread in sections.inbox) {
+          key("inbox:${thread.id}") {
+            InboxCard(
+              thread = thread,
+              project = byId[thread.projectId],
+              favicon = favicons[thread.projectId],
+              now = now,
+              selected = thread.id == selectedThreadId,
+              onClick = { onOpenThread(thread.id) },
+            )
+          }
+        }
+        if (sections.settled.isEmpty()) return@Column
+        Spacer(Modifier.weight(1f))
         SettledHeader(open = settledOpen, onToggle = { settledOpen = !settledOpen })
+        if (!settledOpen) return@Column
+        for (thread in sections.settled.take(shown)) {
+          key("settled:${thread.id}") {
+            SettledRow(
+              thread = thread,
+              project = byId[thread.projectId],
+              favicon = favicons[thread.projectId],
+              now = now,
+              selected = thread.id == selectedThreadId,
+              onClick = { onOpenThread(thread.id) },
+            )
+          }
+        }
+        if (more > 0) MoreRow(more, onClick = { shown += more })
       }
-      if (!settledOpen) return@LazyColumn
-      items(sections.settled.take(shown), key = { "settled:${it.id}" }) { thread ->
-        SettledRow(
-          thread = thread,
-          project = byId[thread.projectId],
-          favicon = favicons[thread.projectId],
-          now = now,
-          selected = thread.id == selectedThreadId,
-          onClick = { onOpenThread(thread.id) },
-        )
-      }
-      if (more > 0) item(key = "more") { MoreRow(more, onClick = { shown += more }) }
     }
   }
 }
