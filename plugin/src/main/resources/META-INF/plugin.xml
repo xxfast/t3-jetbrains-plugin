@@ -25,5 +25,8 @@
       instance="io.github.xxfast.t3code.plugin.settings.T3Configurable"
       id="io.github.xxfast.t3code.settings"
       displayName="T3 Code"/>
+    <editorNotificationProvider
+      implementation="io.github.xxfast.t3code.plugin.ide.T3FileNotificationProvider"/>
+    <notificationGroup id="T3 Code" displayType="BALLOON"/>
   </extensions>
 </idea-plugin>
