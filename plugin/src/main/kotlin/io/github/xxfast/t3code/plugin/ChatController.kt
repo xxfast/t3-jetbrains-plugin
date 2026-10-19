@@ -8,6 +8,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
+import io.github.xxfast.t3code.plugin.ide.launchReporting
 import io.github.xxfast.t3code.plugin.ui.AttachmentClass
 import io.github.xxfast.t3code.plugin.ui.ComposerDispatchMode
 import io.github.xxfast.t3code.plugin.ui.DraftAttachment
@@ -31,8 +32,12 @@ import java.nio.file.Files
 import java.nio.file.Path
 import io.github.xxfast.t3code.plugin.ui.activeCapabilities
 import io.github.xxfast.t3code.plugin.ui.activeRun
+import io.github.xxfast.t3code.plugin.ui.contextId
+import io.github.xxfast.t3code.plugin.ui.messageContext
 import io.github.xxfast.t3code.plugin.ui.messageDispatch
 import io.github.xxfast.t3code.plugin.ui.optimisticMessage
+import io.github.xxfast.t3code.plugin.ui.toRecord
+import io.github.xxfast.t3code.protocol.Checkpoint
 import io.github.xxfast.t3code.protocol.OrchestrationV2Command
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.ServerInfo
@@ -63,7 +68,7 @@ import kotlinx.coroutines.withContext
  * sees the client.
  */
 @Service(Service.Level.PROJECT)
-class ChatController(private val scope: CoroutineScope) {
+class ChatController(private val project: Project, private val scope: CoroutineScope) {
   private val client: T3Client get() = T3.get().client
 
   private val _outboxes: MutableStateFlow<Map<String, PendingMessages>> =
@@ -76,6 +81,22 @@ class ChatController(private val scope: CoroutineScope) {
   val outboxes: StateFlow<Map<String, PendingMessages>> = _outboxes
 
   private val drafts: ConcurrentHashMap<String, TextFieldState> = ConcurrentHashMap()
+
+  /**
+   * Rolls [view]'s thread back to [checkpoint], `checkpoint.rollback` the way
+   * `revertThreadCheckpoint` sends it (`commands.ts:873`): scope and checkpoint, and no
+   * `restoreFiles`, like the desktop's per-checkpoint "Roll back". The thread stream shows the
+   * `checkpoint.rollback-requested` that follows; a refusal is a balloon.
+   */
+  fun rollback(view: ThreadView, checkpoint: Checkpoint) {
+    val command = Command.CheckpointRollback(
+      commandId = UUID.randomUUID().toString(),
+      threadId = view.thread.id,
+      scopeId = checkpoint.scopeId,
+      checkpointId = checkpoint.id,
+    )
+    scope.launchReporting(project, "Couldn't roll back") { client.dispatch(command) }
+  }
 
   private val _catalog: MutableStateFlow<ServerInfo?> = MutableStateFlow(null)
 
@@ -102,7 +123,7 @@ class ChatController(private val scope: CoroutineScope) {
 
   private val transfers: ConcurrentHashMap<String, Transfer> = ConcurrentHashMap()
 
-  /** Adds [comment], a selection from the editor, to [threadId]'s draft. */
+  /** Adds [comment], an editor selection or a diff review comment, to [threadId]'s draft. */
   fun addContext(threadId: String, comment: ReviewCommentContext) {
     updateExtras(threadId) { extras -> extras.withComment(comment) }
   }

@@ -165,6 +165,24 @@
       }
     ]
   },
+  "checkpoints": {
+    "thr_01JC4A1F0QWMIGRATE": [
+      {
+        "id": "chk_01JC4A1G0RUN1",
+        "threadId": "thr_01JC4A1F0QWMIGRATE",
+        "scopeId": "scope_01JC4A1F0ROOT",
+        "runId": "run_01JC4A1F9ZA3",
+        "nodeId": "node_01JC4A1F9ZA3",
+        "parentCheckpointId": null,
+        "ordinalWithinScope": 1,
+        "appRunOrdinal": 1,
+        "ref": "refs/t3/checkpoints/chk_01JC4A1G0RUN1",
+        "status": "ready",
+        "files": [],
+        "capturedAt": "2026-10-19T08:41:02.000Z"
+      }
+    ]
+  },
   "items": {
     "thr_01JC4A1F0QWMIGRATE": [
       {

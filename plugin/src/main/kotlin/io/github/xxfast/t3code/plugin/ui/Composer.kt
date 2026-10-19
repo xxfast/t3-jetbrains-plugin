@@ -34,6 +34,7 @@ import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.CheckboxRow
 import org.jetbrains.jewel.ui.component.CircularProgressIndicator
 import org.jetbrains.jewel.ui.component.IconActionButton
+import org.jetbrains.jewel.ui.component.Link
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.TextArea
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
@@ -58,6 +59,7 @@ fun Composer(
   footerActions: ComposerFooterActions = ComposerFooterActions(),
   extras: DraftExtras = DraftExtras(),
   attachmentActions: AttachmentActions = AttachmentActions(),
+  onClearReview: () -> Unit = {},
 ) {
   val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
   val focused: Boolean by interactions.collectIsFocusedAsState()
@@ -78,6 +80,7 @@ fun Composer(
   }
 
   Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    if (state.reviewComments > 0) ReviewBanner(state.reviewComments, onClearReview)
     Column(
       modifier = Modifier
         .fillMaxWidth()
@@ -213,4 +216,23 @@ fun Modifier.composerKeys(
     ComposerKey.IGNORE -> return@onPreviewKeyEvent false
   }
   return@onPreviewKeyEvent true
+}
+
+/** The review comments going with the next message, and a way to drop them all. */
+@Composable
+private fun ReviewBanner(count: Int, onClear: () -> Unit) {
+  Row(
+    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+    horizontalArrangement = Arrangement.spacedBy(8.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    val comments: String = if (count == 1) "1 review comment" else "$count review comments"
+    Text(
+      text = "$comments will go with this message",
+      style = small(),
+      color = JewelTheme.globalColors.text.info,
+      modifier = Modifier.weight(1f),
+    )
+    Link("Clear", onClick = onClear, textStyle = small())
+  }
 }

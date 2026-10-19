@@ -224,17 +224,20 @@ fun reviewCommentReference(comment: ReviewCommentContext): String =
   contextReference(REVIEW_COMMENT_KIND, comment.contextId, comment.label)
 
 /**
- * [text] citing [references] at its end, the way `inlineContextReferenceReplacement` in
- * apps/web/src/lib/composerContextReferences.ts inserts them: a space before unless the text
- * already ends in whitespace, one between, one after. Upstream inserts at the caret when the
- * comment is added; the plugin's plain text field can't show the link as a chip, so it goes in
- * at send time instead. The provider only sees records the text cites
+ * [text] citing each of [references] it doesn't cite yet, at its end:
+ * `ensureInlineContextReferences` (apps/web/src/lib/composerContextReferences.ts:104), which
+ * `addComposerDraftReviewComment` (ChatComposer.tsx:2981) relies on, with
+ * `inlineContextReferenceReplacement`'s spacing: a space before unless the text already ends in
+ * whitespace, one between, one after. Upstream appends
+ * when the comment is added; the plugin's plain text field can't show the link as a chip, so it
+ * goes in at send time instead. The provider only sees records the text cites
  * (`projectComposerContextForProvider`).
  */
 fun withContextReferences(text: String, references: List<String>): String {
-  if (references.isEmpty()) return text
+  val missing: List<String> = references.distinct().filterNot { text.contains(it) }
+  if (missing.isEmpty()) return text
   val boundary: Boolean = text.isEmpty() || text.last() in " \n\t\r"
-  return "$text${if (boundary) "" else " "}${references.joinToString(" ")} "
+  return "$text${if (boundary) "" else " "}${missing.joinToString(" ")} "
 }
 
 /** [text] without its context links, for showing a sent message. Upstream draws them as chips. */

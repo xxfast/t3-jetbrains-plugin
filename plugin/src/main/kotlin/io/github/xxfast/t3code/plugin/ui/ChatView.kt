@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,6 +39,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.github.xxfast.t3code.plugin.review.checkpointForRun
+import io.github.xxfast.t3code.plugin.review.rollbackBlockReason
+import io.github.xxfast.t3code.plugin.review.rollbackTooltip
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
@@ -55,6 +59,7 @@ import org.jetbrains.jewel.ui.component.Divider
 import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.Link
 import org.jetbrains.jewel.ui.component.Text
+import org.jetbrains.jewel.ui.component.Tooltip
 import org.jetbrains.jewel.ui.component.VerticallyScrollableContainer
 import org.jetbrains.jewel.ui.icon.IconKey
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
@@ -75,6 +80,8 @@ fun ChatView(
   pendingActions: PendingActions,
   footer: ComposerFooterState?, // the thread's model and modes, null until the catalog loads
   footerActions: ComposerFooterActions,
+  onClearReview: () -> Unit, // drop the review comments going with the next message
+  onRollback: (Run) -> Unit, // "Roll back" on a run's line, when it has a ready checkpoint
   onSend: (text: String, mode: ComposerDispatchMode) -> Unit,
   onQueueChange: (Boolean) -> Unit,
   onRetry: () -> Unit, // resubscribe after an error
@@ -98,7 +105,15 @@ fun ChatView(
         else -> {
           val processor: MarkdownProcessor = remember { MarkdownProcessor() }
           ProvideMarkdownStyling(markdownProcessor = processor) {
-            Items(view, processor, onOpenFile, onDiffFile, onDiffRun)
+            Items(
+              view = view,
+              processor = processor,
+              onOpenFile = onOpenFile,
+              onDiffFile = onDiffFile,
+              onDiffRun = onDiffRun,
+              operateReason = composer.disabledReason,
+              onRollback = onRollback,
+            )
           }
         }
       }
@@ -112,6 +127,7 @@ fun ChatView(
           pendingActions = pendingActions,
           footer = footer,
           footerActions = footerActions,
+          onClearReview = onClearReview,
           onSend = onSend,
           onQueueChange = onQueueChange,
           extras = extras,
@@ -205,7 +221,10 @@ private fun Items(
   onOpenFile: (String) -> Unit,
   onDiffFile: (TurnItem.FileChange) -> Unit,
   onDiffRun: (Run) -> Unit,
+  operateReason: String?, // why nothing can change the thread, when it can't
+  onRollback: (Run) -> Unit,
 ) {
+  val rollbackReason: String? = rollbackBlockReason(operateReason, view)
   val period: Long = if (view.runs.any { it.running }) 1_000 else 30_000
   val now: Instant by rememberNow(period)
   val rows: List<ThreadRow> = remember(view.runs, view.items) { threadRows(view.runs, view.items) }
@@ -226,7 +245,14 @@ private fun Items(
       items(rows, key = { it.key }) { row ->
         Box(Modifier.widthIn(max = MAX_CONTENT_WIDTH).fillMaxWidth().padding(horizontal = 16.dp)) {
           when (row) {
-            is ThreadRow.RunLine -> RunLine(row.run, now, onDiff = { onDiffRun(row.run) })
+            is ThreadRow.RunLine -> RunLine(
+              run = row.run,
+              now = now,
+              onDiff = { onDiffRun(row.run) },
+              // Only a turn with a ready checkpoint can go back to it
+              onRollback = checkpointForRun(view, row.run)?.let { { onRollback(row.run) } },
+              rollbackReason = rollbackReason,
+            )
             is ThreadRow.Item -> {
               val isExpanded: Boolean = expanded[row.key] ?: false
               ItemRow(
@@ -259,8 +285,15 @@ private fun FollowTail(state: LazyListState, rows: List<ThreadRow>, last: TurnIt
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip
 @Composable
-private fun RunLine(run: Run, now: Instant, onDiff: () -> Unit) {
+private fun RunLine(
+  run: Run,
+  now: Instant,
+  onDiff: () -> Unit,
+  onRollback: (() -> Unit)?,
+  rollbackReason: String?,
+) {
   Row(
     modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -269,6 +302,12 @@ private fun RunLine(run: Run, now: Instant, onDiff: () -> Unit) {
     Text(runLabel(run, now), color = JewelTheme.globalColors.text.info, style = small())
     Divider(Orientation.Horizontal, Modifier.weight(1f))
     Link("Diff", onClick = onDiff, textStyle = small())
+    // The desktop's per-checkpoint "Roll back" (`V2ItemInspector.tsx:407`)
+    onRollback?.let { rollback ->
+      Tooltip(tooltip = { Text(rollbackTooltip(run, rollbackReason)) }) {
+        Link("Roll back", onClick = rollback, enabled = rollbackReason == null, textStyle = small())
+      }
+    }
   }
 }
 

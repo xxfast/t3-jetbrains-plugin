@@ -139,6 +139,9 @@ class ComposerContextLogicTest {
     assertEquals("fix this $reference ", withContextReferences("fix this", listOf(reference)))
     assertEquals("fix this\n$reference ", withContextReferences("fix this\n", listOf(reference)))
     assertEquals("$reference ", withContextReferences("", listOf(reference)))
+    // ensureInlineContextReferences: a reference the text already cites isn't added again
+    assertEquals("see $reference ", withContextReferences("see $reference ", listOf(reference)))
+    assertEquals("$reference ", withContextReferences("", listOf(reference, reference)))
     assertEquals("fix", withContextReferences("fix", emptyList()))
 
     assertEquals("fix this", stripContextReferences("fix this $reference "))

@@ -16,7 +16,10 @@ import io.github.xxfast.t3code.plugin.ui.updateThreadModelSelection
 import io.github.xxfast.t3code.plugin.ui.seedUserInputDraftAnswers
 import io.github.xxfast.t3code.plugin.ui.slug
 import io.github.xxfast.t3code.plugin.ui.buildPendingUserInputAnswers
+import io.github.xxfast.t3code.plugin.review.checkpointForRun
+import io.github.xxfast.t3code.protocol.Checkpoint
 import io.github.xxfast.t3code.protocol.ConnectionState
+import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ServerSession
 import io.github.xxfast.t3code.protocol.T3Json
@@ -509,6 +512,30 @@ class FixtureClientTest {
     val after: ThreadView = client.thread(IDLE).first()
     assertEquals("claude", after.thread.providerInstanceId)
     assertEquals("opus", after.thread.modelSelection.slug)
+  }
+
+  @Test
+  fun `the running demo's first turn can roll back, and the rollback lands`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == THREAD } }
+    val view: ThreadView = client.thread(THREAD).first()
+    val first: Run = view.runs.single { it.ordinal == 1L }
+    val checkpoint: Checkpoint = assertNotNull(checkpointForRun(view, first))
+    assertNull(checkpointForRun(view, view.runs.single { it.ordinal == 2L }))
+
+    client.dispatch(
+      Command.CheckpointRollback(
+        commandId = "cmd_rollback",
+        threadId = THREAD,
+        scopeId = checkpoint.scopeId,
+        checkpointId = checkpoint.id,
+      ),
+    )
+
+    val after: ThreadView = client.thread(THREAD)
+      .first { it.items.any { item -> item is TurnItem.SystemNotice } }
+    val notice: TurnItem.SystemNotice = assertIs(after.items.last { it is TurnItem.SystemNotice })
+    assertEquals("Rolled back to checkpoint ${checkpoint.id}", notice.message)
   }
 
   @Test

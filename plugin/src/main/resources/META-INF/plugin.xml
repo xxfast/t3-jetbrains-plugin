@@ -91,5 +91,17 @@
       description="Add the selection, with its path and lines, to the selected T3 thread's message">
       <add-to-group group-id="EditorPopupMenu" anchor="last"/>
     </action>
+
+    <!-- A review comment on a T3 diff: the diff viewer's popups, its toolbar (set per request), a key -->
+    <action
+      id="T3Code.AddReviewComment"
+      class="io.github.xxfast.t3code.plugin.review.AddReviewCommentAction"
+      text="Add T3 review comment"
+      description="Comment on the selected lines; the comment goes with the thread's next message"
+      icon="AllIcons.General.Balloon">
+      <add-to-group group-id="Diff.EditorPopupMenu" anchor="first"/>
+      <add-to-group group-id="Diff.EditorGutterPopupMenu" anchor="first"/>
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift C"/>
+    </action>
   </actions>
 </idea-plugin>

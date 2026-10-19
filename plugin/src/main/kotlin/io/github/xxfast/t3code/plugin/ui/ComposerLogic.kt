@@ -9,6 +9,7 @@ import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.has
 import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.Command.MessageDispatch.DispatchMode
+import io.github.xxfast.t3code.protocol.generated.MessageContext
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.ProviderApprovalOption
 import io.github.xxfast.t3code.protocol.generated.ProviderCapabilities
@@ -33,6 +34,8 @@ data class ComposerState(
   val showQueueToggle: Boolean,
   /** The follow-up behaviour: queue when on, steer when off. */
   val queue: Boolean,
+  /** Review comments going with the next message. */
+  val reviewComments: Int = 0,
 )
 
 const val NOT_CONNECTED: String = "Not connected"
@@ -42,6 +45,17 @@ const val READ_ONLY: String =
 
 /** `AuthOrchestrationOperateScope` in upstream's `packages/contracts/src/auth.ts`. */
 const val OPERATE_SCOPE: String = "orchestration:operate"
+
+/**
+ * Why nothing that changes a thread can happen over [connection]: not connected, or a pairing
+ * without `orchestration:operate`. Null when it can. The composer, review comments and roll back
+ * share it.
+ */
+fun operateBlockReason(connection: ConnectionState): String? = when {
+  connection !is ConnectionState.Connected -> NOT_CONNECTED
+  !connection.session.has(OPERATE_SCOPE) -> READ_ONLY
+  else -> null
+}
 
 /**
  * Upstream doesn't stop a message to an archived thread: `ChatComposer.tsx` has no archived
@@ -54,12 +68,9 @@ fun composerState(
   sending: Boolean,
   error: String?,
   queue: Boolean,
+  reviewComments: Int = 0,
 ): ComposerState {
-  val reason: String? = when {
-    connection !is ConnectionState.Connected -> NOT_CONNECTED
-    !connection.session.has(OPERATE_SCOPE) -> READ_ONLY
-    else -> null
-  }
+  val reason: String? = operateBlockReason(connection)
   val enabled: Boolean = reason == null
   return ComposerState(
     enabled = enabled,
@@ -69,6 +80,7 @@ fun composerState(
     running = running,
     showQueueToggle = enabled && running,
     queue = queue,
+    reviewComments = reviewComments,
   )
 }
 
@@ -191,6 +203,7 @@ fun messageDispatch(
   activeRun: Run?,
   capabilities: ProviderCapabilities?,
   modelSelection: ModelSelection? = null,
+  context: MessageContext? = null,
 ): Command.MessageDispatch = Command.MessageDispatch(
   createdBy = "user",
   creationSource = "web",
@@ -198,6 +211,7 @@ fun messageDispatch(
   threadId = threadId,
   messageId = messageId,
   text = text,
+  context = context,
   attachments = emptyList(),
   deliveryIntent = deliveryIntent(serverResolved, requested),
   modelSelection = modelSelection,

@@ -16,7 +16,13 @@ data class FilePatch(val oldPath: String?, val newPath: String?, val hunks: List
 }
 
 /** Before and after text for one file, ready for a diff viewer. `null` means the side is absent. */
-data class Sides(val before: String?, val after: String?, val afterIsBase: Boolean = false)
+data class Sides(
+  val before: String?,
+  val after: String?,
+  val afterIsBase: Boolean = false,
+  /** Hunks or a fragment, not whole files: line numbers aren't the file's. */
+  val excerpt: Boolean = false,
+)
 
 private val HUNK_HEADER: Regex = Regex("""^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@.*""")
 private val GIT_HEADER: Regex = Regex("""^diff --git a/(.+) b/(.+)$""")
@@ -129,10 +135,10 @@ fun FilePatch.newExcerpt(): String = excerpt(hunks.map { it.newLines })
 fun FilePatch.sides(current: String?): Sides = when {
   added -> Sides(before = null, after = newExcerpt())
   deleted -> Sides(before = oldExcerpt(), after = null)
-  current == null -> Sides(oldExcerpt(), newExcerpt())
+  current == null -> Sides(oldExcerpt(), newExcerpt(), excerpt = true)
   else -> revertFrom(current)?.let { before -> Sides(before, current, afterIsBase = true) }
     ?: applyTo(current)?.let { after -> Sides(current, after) }
-    ?: Sides(oldExcerpt(), newExcerpt())
+    ?: Sides(oldExcerpt(), newExcerpt(), excerpt = true)
 }
 
 /**

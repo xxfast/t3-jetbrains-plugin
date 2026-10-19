@@ -14,8 +14,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.Content
@@ -27,6 +29,9 @@ import io.github.xxfast.t3code.plugin.ide.ThreadVisits
 import io.github.xxfast.t3code.plugin.ui.Advance
 import io.github.xxfast.t3code.plugin.ide.VcsStatuses
 import io.github.xxfast.t3code.plugin.ide.threadCwd
+import io.github.xxfast.t3code.plugin.ide.notify
+import io.github.xxfast.t3code.plugin.review.INTERRUPT_FIRST
+import io.github.xxfast.t3code.plugin.review.checkpointForRun
 import io.github.xxfast.t3code.plugin.ui.ChatView
 import io.github.xxfast.t3code.plugin.ui.ComposerFooterActions
 import io.github.xxfast.t3code.plugin.ui.ComposerFooterState
@@ -38,19 +43,23 @@ import io.github.xxfast.t3code.plugin.ui.Hint
 import io.github.xxfast.t3code.plugin.ui.PendingActions
 import io.github.xxfast.t3code.plugin.ui.PendingRequest
 import io.github.xxfast.t3code.plugin.ui.PendingThreadRequests
+import io.github.xxfast.t3code.plugin.ui.ReviewCommentContext
 import io.github.xxfast.t3code.plugin.ui.VcsSummary
 import io.github.xxfast.t3code.plugin.ui.activeRun
 import io.github.xxfast.t3code.plugin.ui.advance
 import io.github.xxfast.t3code.plugin.ui.answersResponse
 import io.github.xxfast.t3code.plugin.ui.approvalResponse
 import io.github.xxfast.t3code.plugin.ui.composerFooter
+import io.github.xxfast.t3code.plugin.ui.active
 import io.github.xxfast.t3code.plugin.ui.composerState
+import io.github.xxfast.t3code.plugin.ui.contextId
 import io.github.xxfast.t3code.plugin.ui.setPendingUserInputCustomAnswer
 import io.github.xxfast.t3code.plugin.ui.derivePendingThreadRequests
 import io.github.xxfast.t3code.plugin.ui.dismissal
 import io.github.xxfast.t3code.plugin.ui.getStartedThreadModelChangeBlockReason
 import io.github.xxfast.t3code.plugin.ui.instance
 import io.github.xxfast.t3code.plugin.ui.mergeOptimistic
+import io.github.xxfast.t3code.plugin.ui.operateBlockReason
 import io.github.xxfast.t3code.plugin.ui.nextModelSelection
 import io.github.xxfast.t3code.plugin.ui.pendingRequest
 import io.github.xxfast.t3code.plugin.ui.seedUserInputDraftAnswers
@@ -61,8 +70,10 @@ import io.github.xxfast.t3code.plugin.ui.threadSupportsProviderHandoff
 import io.github.xxfast.t3code.plugin.ui.togglePendingUserInputOptionSelection
 import io.github.xxfast.t3code.plugin.ui.toggledInteractionMode
 import io.github.xxfast.t3code.plugin.ui.updateThreadModelSelection
+import io.github.xxfast.t3code.protocol.Checkpoint
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.Project as T3Project
+import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.Thread
@@ -113,6 +124,7 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
   val connection: ConnectionState by client.connection.collectAsState()
   val outboxes: Map<String, PendingMessages> by controller.outboxes.collectAsState()
   val extras: Map<String, DraftExtras> by controller.extras.collectAsState()
+  val comments: List<ReviewCommentContext> = extras[threadId]?.comments.orEmpty()
   val pending: PendingMessages = outboxes[threadId] ?: PendingMessages()
   var queue: Boolean by remember(threadId) { mutableStateOf(false) }
   val draft: TextFieldState = remember(threadId) { controller.draft(threadId) }
@@ -137,6 +149,7 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
     sending = pending.sending,
     error = pending.error,
     queue = queue,
+    reviewComments = comments.size,
   )
   val (request: PendingRequest?, actions: PendingActions) =
     rememberPendingRequest(view, requests, pending.responding, controller)
@@ -158,6 +171,10 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
     pendingActions = actions,
     footer = footer,
     footerActions = footerActions,
+    onClearReview = { comments.forEach { controller.removeContext(threadId, it.contextId) } },
+    onRollback = { run ->
+      view?.let { current -> confirmRollback(project, controller, current, run) }
+    },
     onSend = { text, mode -> view?.let { controller.send(it, text, mode) } },
     onQueueChange = { queue = it },
     onRetry = onRetry,
@@ -327,3 +344,37 @@ private fun rememberComposerFooter(
 }
 
 private val LOG: Logger = Logger.getInstance(ChatViewToolWindowFactory::class.java)
+
+/**
+ * Rolls [view]'s thread back to [run]'s checkpoint once you say so, with the desktop's copy for
+ * its per-checkpoint "Roll back" (`ChatView.tsx:5808`). A turn can start while the dialog is up,
+ * so the latest row is checked again before anything goes out.
+ */
+private fun confirmRollback(
+  project: Project,
+  controller: ChatController,
+  view: ThreadView,
+  run: Run,
+) {
+  val checkpoint: Checkpoint = checkpointForRun(view, run) ?: return
+  val answer: Int = Messages.showYesNoDialog(
+    project,
+    "Roll back this thread to the selected checkpoint?\nThis action cannot be undone.",
+    "T3 Code",
+    "Roll back",
+    "Cancel",
+    Messages.getWarningIcon(),
+  )
+  if (answer != Messages.YES) return
+
+  val client: T3Client = T3.get().client
+  val row: Thread? = client.threads.value.find { it.id == view.thread.id }
+  val reason: String? = operateBlockReason(client.connection.value)
+    ?: INTERRUPT_FIRST.takeIf { row?.active == true }
+  if (reason != null) {
+    notify(project, reason, NotificationType.WARNING)
+    return
+  }
+
+  controller.rollback(view, checkpoint)
+}

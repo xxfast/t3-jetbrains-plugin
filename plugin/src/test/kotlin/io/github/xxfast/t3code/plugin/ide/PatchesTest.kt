@@ -91,7 +91,8 @@ class PatchesTest {
   @Test
   fun `sides fall back to excerpts`() {
     val sides: Sides = parsePatch(gitPatch).first().sides(null)
-    assertEquals(Sides("b\nc\nd\ne", "b\nC\nd\ne\nf"), sides)
+    // Hunks, not whole files: review comments refuse these
+    assertEquals(Sides("b\nc\nd\ne", "b\nC\nd\ne\nf", excerpt = true), sides)
   }
 
   @Test

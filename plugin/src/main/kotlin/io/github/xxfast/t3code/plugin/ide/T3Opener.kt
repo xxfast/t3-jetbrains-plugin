@@ -6,7 +6,9 @@ import com.intellij.diff.DiffManager
 import com.intellij.diff.chains.SimpleDiffRequestChain
 import com.intellij.diff.contents.DiffContent
 import com.intellij.diff.requests.SimpleDiffRequest
+import com.intellij.diff.util.DiffUserDataKeys
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.Service
@@ -24,6 +26,9 @@ import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.testFramework.LightVirtualFile
 import io.github.xxfast.t3code.plugin.T3
 import io.github.xxfast.t3code.plugin.ThreadSelection
+import io.github.xxfast.t3code.plugin.review.ADD_REVIEW_COMMENT
+import io.github.xxfast.t3code.plugin.review.T3DiffSource
+import io.github.xxfast.t3code.plugin.review.T3_DIFF_SOURCE
 import io.github.xxfast.t3code.plugin.settings.T3Settings
 import io.github.xxfast.t3code.plugin.settings.ThreadHost
 import io.github.xxfast.t3code.protocol.FileContents
@@ -88,6 +93,7 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
   /** Before and after of one `file_change`. */
   fun showDiff(view: ThreadView, change: TurnItem.FileChange) {
     launchSafely("Couldn't show the diff for ${change.fileName}") {
+      val run: Run? = view.runs.find { it.id == change.runId }
       val where: Where = where(view, change.fileName)
       val local: VirtualFile? = where.local?.let(::findLocal)
       val oldStr: String? = change.oldStr
@@ -100,13 +106,13 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
           val sides: Sides = if (before != null) {
             Sides(before.takeIf { oldStr != null }, current, afterIsBase = true)
           } else {
-            Sides(oldStr, newStr)
+            Sides(oldStr, newStr, excerpt = true)
           }
-          val request: SimpleDiffRequest = request(change.fileName, sides, local)
+          val request: SimpleDiffRequest = request(view, change.fileName, sides, local, run)
           withContext(Dispatchers.EDT) { DiffManager.getInstance().showDiff(project, request) }
         }
 
-        !diffStr.isNullOrBlank() -> showPatch(view, diffStr, change.fileName, change.fileName)
+        !diffStr.isNullOrBlank() -> showPatch(view, diffStr, change.fileName, change.fileName, run)
         else -> notify("No diff for ${change.fileName}", NotificationType.INFORMATION)
       }
     }
@@ -116,7 +122,7 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
   fun showRunDiff(view: ThreadView, run: Run) {
     launchSafely("Couldn't show the diff for run ${run.ordinal}") {
       val patch: String = client.turnDiff(view.thread.id, run.ordinal - 1, run.ordinal)
-      showPatch(view, patch, fallbackPath = null, label = "run ${run.ordinal}")
+      showPatch(view, patch, fallbackPath = null, label = "run ${run.ordinal}", run = run)
     }
   }
 
@@ -125,6 +131,7 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
     patch: String,
     fallbackPath: String?,
     label: String,
+    run: Run?,
   ) {
     val files: List<FilePatch> = parsePatch(patch, fallbackPath)
     if (files.isEmpty()) {
@@ -139,7 +146,7 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
         local != null -> text(local)
         else -> serverText(where.cwd, file.path)
       }
-      request(file.path, file.sides(current), local)
+      request(view, file.path, file.sides(current), local, run)
     }
     withContext(Dispatchers.EDT) {
       val manager: DiffManager = DiffManager.getInstance()
@@ -151,7 +158,17 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
     }
   }
 
-  private fun request(path: String, sides: Sides, local: VirtualFile?): SimpleDiffRequest {
+  /**
+   * One file's before and after, marked with where it came from so review comments can be left
+   * on it, and with the review action in the viewer's toolbar.
+   */
+  private fun request(
+    view: ThreadView,
+    path: String,
+    sides: Sides,
+    local: VirtualFile?,
+    run: Run?,
+  ): SimpleDiffRequest {
     val factory: DiffContentFactory = DiffContentFactory.getInstance()
     val type: FileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName(path))
     fun content(text: String?): DiffContent =
@@ -161,7 +178,13 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
     } else {
       content(sides.after)
     }
-    return SimpleDiffRequest(path, content(sides.before), right, "Before", "After")
+    val request = SimpleDiffRequest(path, content(sides.before), right, "Before", "After")
+    val source = T3DiffSource(view.thread.id, path, run?.id, run?.ordinal, sides.excerpt)
+    request.putUserData(T3_DIFF_SOURCE, source)
+    ActionManager.getInstance().getAction(ADD_REVIEW_COMMENT)?.let { action ->
+      request.putUserData(DiffUserDataKeys.CONTEXT_ACTIONS, listOf(action))
+    }
+    return request
   }
 
   /**
