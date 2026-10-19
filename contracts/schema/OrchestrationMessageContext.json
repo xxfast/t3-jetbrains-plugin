@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "OrchestrationMessageContext",
+  "title": "OrchestrationMessageContext",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "number",
+      "enum": [
+        1
+      ]
+    },
+    "records": {
+      "type": "array",
+      "maxItems": 200
+    }
+  },
+  "required": [
+    "version",
+    "records"
+  ],
+  "additionalProperties": true
+}

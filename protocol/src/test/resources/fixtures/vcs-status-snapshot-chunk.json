@@ -1,0 +1,30 @@
+{
+  "_tag": "Chunk",
+  "requestId": "0",
+  "values": [
+    {
+      "_tag": "snapshot",
+      "local": {
+        "isRepo": true,
+        "hasPrimaryRemote": true,
+        "isDefaultRef": false,
+        "refName": "feature/phase-2",
+        "hasWorkingTreeChanges": true,
+        "workingTree": {
+          "files": [
+            { "path": "src/App.kt", "insertions": 3, "deletions": 1 },
+            { "path": "README.md", "insertions": 1, "deletions": 0 }
+          ],
+          "insertions": 4,
+          "deletions": 1
+        }
+      },
+      "remote": {
+        "hasUpstream": true,
+        "aheadCount": 2,
+        "behindCount": 1,
+        "pr": null
+      }
+    }
+  ]
+}

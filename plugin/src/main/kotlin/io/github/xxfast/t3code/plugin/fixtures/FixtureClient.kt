@@ -3,13 +3,39 @@ package io.github.xxfast.t3code.plugin.fixtures
 import com.intellij.openapi.diagnostic.Logger
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.FileContents
+import io.github.xxfast.t3code.protocol.OrchestrationV2Command
 import io.github.xxfast.t3code.protocol.Project
+import io.github.xxfast.t3code.protocol.Run
+import io.github.xxfast.t3code.protocol.RuntimeRequest
+import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.T3Client
+import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
+import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
+import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
+import io.github.xxfast.t3code.protocol.generated.ChatFileAttachment
+import io.github.xxfast.t3code.protocol.generated.ChatImageAttachment
+import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.LatestVisibleMessageSummary
+import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
+import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
+import io.github.xxfast.t3code.protocol.generated.ServerProvider
+import io.github.xxfast.t3code.protocol.generated.ServerProviderAuth
+import io.github.xxfast.t3code.protocol.generated.ServerProviderModel
+import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
+import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
+import io.github.xxfast.t3code.protocol.generated.TerminalSessionSnapshot
 import io.github.xxfast.t3code.protocol.generated.TurnItem
+import io.github.xxfast.t3code.protocol.generated.UserInputAttachmentAnswerPayload
+import io.github.xxfast.t3code.protocol.generated.VcsStatusLocalResult
+import io.github.xxfast.t3code.protocol.generated.VcsStatusRemoteResult
+import io.github.xxfast.t3code.protocol.generated.VcsStatusStreamEvent
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.io.path.extension
 import kotlin.io.path.getLastModifiedTime
 import kotlin.io.path.isRegularFile
@@ -20,37 +46,59 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 
 /**
  * A [T3Client] that replays one scenario instead of talking to a server: every `*.json` in
  * [directory], merged by [Scenario.merge] in filename order. Polls the directory, so editing,
  * adding or removing a file updates whoever is collecting.
+ *
+ * [dispatch] never touches the files. It changes an in-memory [Overlay] that every flow reads
+ * through, so the harness shows what a command does; the overlay resets when the directory
+ * reloads.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class FixtureClient(
   private val directory: Path,
-  scope: CoroutineScope,
+  private val scope: CoroutineScope,
   private val pollInterval: Duration = 1.seconds,
 ) : T3Client {
   private val log: Logger = Logger.getInstance(FixtureClient::class.java)
 
   private val loaded: MutableStateFlow<Scenario?> = MutableStateFlow(null)
+  private val overlay: MutableStateFlow<Overlay> = MutableStateFlow(Overlay())
   private val online: MutableStateFlow<Boolean> = MutableStateFlow(true)
   private var loadedStamp: List<Pair<String, Long>>? = null
+  private val sequence: AtomicLong = AtomicLong(0)
+
+  /** The fake assistant replies in flight, by thread id, so an interrupt can stop one. */
+  private val replies: ConcurrentHashMap<String, Job> = ConcurrentHashMap()
+
+  /** What [terminalWrite] echoes, by `threadId/terminalId`. */
+  private val terminals: ConcurrentHashMap<String, MutableSharedFlow<TerminalAttachStreamEvent>> =
+    ConcurrentHashMap()
 
   override val connection: StateFlow<ConnectionState> = combine(loaded, online) { scenario, on ->
     if (!on) ConnectionState.Disconnected else scenario?.connection ?: ConnectionState.Connecting
@@ -60,9 +108,9 @@ class FixtureClient(
     .map { scenario -> scenario?.projects.orEmpty() }
     .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
-  override val threads: StateFlow<List<Thread>> = loaded
-    .map { scenario -> scenario?.threads.orEmpty() }
-    .stateIn(scope, SharingStarted.Eagerly, emptyList())
+  override val threads: StateFlow<List<Thread>> = combine(loaded, overlay) { scenario, overlay ->
+    scenario?.threads.orEmpty().map(overlay::row)
+  }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
   init {
     scope.launch(Dispatchers.IO) {
@@ -77,7 +125,8 @@ class FixtureClient(
     .filterNotNull()
     .flatMapLatest { scenario ->
       val thread: Thread? = scenario.threads.find { it.id == id }
-      if (thread == null) emptyFlow() else replay(thread, scenario)
+      if (thread == null) emptyFlow()
+      else combine(replay(thread, scenario), overlay) { base, overlay -> overlay.over(base) }
     }
 
   private fun replay(thread: Thread, scenario: Scenario): Flow<ThreadView> = flow {
@@ -85,7 +134,14 @@ class FixtureClient(
     val snapshot: Int = entries.indexOfFirst { it.after > 0 }.takeIf { it >= 0 } ?: entries.size
     val items: LinkedHashMap<String, TurnItem> = LinkedHashMap()
     entries.take(snapshot).forEach { items[it.item.id] = it.item }
-    fun view() = ThreadView(thread, scenario.runs[thread.id].orEmpty(), items.values.toList())
+    fun view() = ThreadView(
+      thread = thread,
+      runs = scenario.runs[thread.id].orEmpty(),
+      items = items.values.toList(),
+      runtimeRequests = scenario.runtimeRequests[thread.id].orEmpty(),
+      providerSessions = scenario.providerSessions[thread.id].orEmpty(),
+      checkpoints = scenario.checkpoints[thread.id].orEmpty(),
+    )
     emit(view())
     entries.drop(snapshot).forEach { entry ->
       delay(entry.after)
@@ -104,6 +160,438 @@ class FixtureClient(
   override suspend fun turnDiff(threadId: String, fromTurn: Long, toTurn: Long): String = PATCH
 
   override suspend fun fullThreadDiff(threadId: String, toTurn: Long): String = PATCH
+
+  override suspend fun dispatch(command: OrchestrationV2Command): Long {
+    val now: String = Instant.now().toString()
+    when (command) {
+      is Command.MessageDispatch -> send(command, now)
+
+      is Command.RuntimeRequestRespond -> respond(command, now)
+
+      is Command.RunInterrupt -> {
+        replies.remove(command.threadId)?.cancel()
+        overlay.update { overlay ->
+          val run: Run = runsOf(overlay, command.threadId).find { it.id == command.runId }
+            ?: return@update overlay
+          // What the run left in flight is cancelled, as upstream's ProviderEventIngestor.ts
+          // (around line 384) does; streaming stops too, or the reply would keep its caret
+          val cancelled: List<TurnItem> = itemsOf(overlay, command.threadId)
+            .filter { item -> item.runId == run.id && item.status in IN_FLIGHT }
+            .map { item -> cancelled(item, now) }
+          return@update cancelled
+            .fold(overlay) { next, item -> next.upsertItem(command.threadId, item) }
+            .upsertRun(command.threadId, run.copy(status = "interrupted", completedAt = now))
+            .withRow(command.threadId) { row ->
+              row.copy(status = "idle", activeRunId = null, latestRunCompletedAt = now)
+            }
+        }
+      }
+
+      is Command.ProviderSessionDetach -> overlay.update { overlay ->
+        overlay
+          .copy(detachedSessions = overlay.detachedSessions + command.providerSessionId)
+          .withRow(command.threadId) { row -> row.copy(status = "idle") }
+      }
+
+      // The thread.* rows below port apps/server/src/orchestration-v2/Orchestrator.ts at the
+      // pinned tag, line for line. The shell row has no lastSnoozeWakeAt, so pin can't set it.
+
+      // Orchestrator.ts:2829
+      is Command.ThreadArchive -> updateRow(command.threadId) { row ->
+        row.copy(
+          archivedAt = now,
+          titleRegeneration = null,
+          pullRequests = row.pullRequests?.map { link -> link.copy(watch = null) },
+          updatedAt = now,
+        )
+      }
+
+      // Orchestrator.ts:2837
+      is Command.ThreadUnarchive -> updateRow(command.threadId) { row ->
+        row.copy(archivedAt = null, updatedAt = now)
+      }
+
+      // Orchestrator.ts:2897
+      is Command.ThreadPin -> updateRow(command.threadId) { row ->
+        val alreadyPinned: Boolean = row.pinnedAt != null
+        val promotes: Boolean = row.settledOverride == "settled" || row.snoozedUntil != null
+        val settled: Boolean = row.settledOverride == "settled"
+        row.copy(
+          pinnedAt = if (alreadyPinned) row.pinnedAt else now,
+          pinOrderKey = if (alreadyPinned || command.orderKey == null) row.pinOrderKey
+          else command.orderKey,
+          settledOverride = if (settled) "active" else row.settledOverride,
+          settledAt = if (settled) null else row.settledAt,
+          snoozedUntil = null,
+          snoozedAt = null,
+          updatedAt = if (alreadyPinned && !promotes) row.updatedAt else now,
+        )
+      }
+
+      // Orchestrator.ts:2915
+      is Command.ThreadUnpin -> updateRow(command.threadId) { row ->
+        val alreadyUnpinned: Boolean = row.pinnedAt == null
+        row.copy(
+          pinnedAt = null,
+          pinOrderKey = null,
+          updatedAt = if (alreadyUnpinned) row.updatedAt else now,
+        )
+      }
+
+      // Orchestrator.ts:2814 and 2939
+      is Command.ThreadMarkUnread -> overlay.update { overlay ->
+        // The last visit goes just before the latest run completed
+        val completedAt: String? = runsOf(overlay, command.threadId).lastOrNull()?.completedAt
+        if (completedAt == null) {
+          log.info("Fixture: ${command.threadId} has no completed run to mark unread")
+          return@update overlay
+        }
+        val visitedAt: String = Instant.parse(completedAt).minusMillis(1).toString()
+        return@update overlay.withRow(command.threadId) { row ->
+          row.copy(lastVisitedAt = visitedAt)
+        }
+      }
+
+      // Orchestrator.ts:2321, dispatchThreadVisit: a visit only ever moves forward
+      is Command.ThreadVisit -> updateRow(command.threadId) { row ->
+        val last: String? = row.lastVisitedAt
+        val movesForward: Boolean =
+          last == null || Instant.parse(command.visitedAt).isAfter(Instant.parse(last))
+        if (movesForward) row.copy(lastVisitedAt = command.visitedAt) else row
+      }
+
+      is Command.ThreadRuntimeModeSet -> updateRow(command.threadId) { row ->
+        row.copy(runtimeMode = command.runtimeMode, updatedAt = now)
+      }
+
+      is Command.ThreadInteractionModeSet -> updateRow(command.threadId) { row ->
+        row.copy(interactionMode = command.interactionMode, updatedAt = now)
+      }
+
+      is Command.ThreadModelSelectionSet -> updateRow(command.threadId) { row ->
+        row.copy(modelSelection = command.modelSelection, updatedAt = now)
+      }
+
+      is Command.CheckpointRollback -> overlay.update { overlay ->
+        val notice = TurnItem.SystemNotice(
+          id = "item_fixture_rollback_${command.commandId}",
+          threadId = command.threadId,
+          runId = null,
+          nodeId = null,
+          providerThreadId = null,
+          providerTurnId = null,
+          nativeItemRef = null,
+          parentItemId = null,
+          ordinal = nextOrdinal(overlay, command.threadId),
+          status = "completed",
+          title = null,
+          startedAt = now,
+          completedAt = now,
+          updatedAt = now,
+          message = "Rolled back to checkpoint ${command.checkpointId}",
+        )
+        overlay.upsertItem(command.threadId, notice)
+      }
+
+      else -> log.info("Fixture ignores ${command.type}")
+    }
+    return sequence.incrementAndGet()
+  }
+
+  /** The user's message now, a streaming reply after 600 ms, done 600 ms after that. */
+  private fun send(command: Command.MessageDispatch, now: String) {
+    val threadId: String = command.threadId
+    val runId = "run_fixture_${command.messageId}"
+    val replyId = "msg_fixture_reply_${command.messageId}"
+    val text = "Fixture reply to: ${command.text}"
+
+    // Built inside the update from the overlay it's given, so concurrent dispatches can't share
+    // an ordinal. The lambda may run more than once; the last run is the one that stuck.
+    var sent: Run? = null
+    overlay.update { overlay ->
+      sent = null
+      val row: Thread = rowOf(overlay, threadId) ?: return@update overlay
+      val run = Run(
+        id = runId,
+        threadId = threadId,
+        ordinal = runsOf(overlay, threadId).size + 1L,
+        providerInstanceId = row.providerInstanceId,
+        modelSelection = command.modelSelection ?: row.modelSelection,
+        providerThreadId = null,
+        userMessageId = command.messageId,
+        rootNodeId = null,
+        activeAttemptId = null,
+        status = "running",
+        requestedAt = now,
+        startedAt = now,
+        completedAt = null,
+        checkpointId = null,
+        contextHandoffId = null,
+      )
+      val message = TurnItem.UserMessage(
+        id = "item_${command.messageId}",
+        threadId = threadId,
+        runId = runId,
+        nodeId = null,
+        providerThreadId = null,
+        providerTurnId = null,
+        nativeItemRef = null,
+        parentItemId = null,
+        ordinal = nextOrdinal(overlay, threadId),
+        status = "completed",
+        title = null,
+        startedAt = now,
+        completedAt = now,
+        updatedAt = now,
+        createdBy = command.createdBy,
+        creationSource = command.creationSource,
+        messageId = command.messageId,
+        inputIntent = "turn_start",
+        text = command.text,
+        context = command.context,
+        attachments = command.attachments,
+      )
+      sent = run
+      return@update overlay
+        .upsertRun(threadId, run)
+        .upsertItem(threadId, message)
+        .withRow(threadId) { thread ->
+          thread.copy(
+            status = "running",
+            activeRunId = runId,
+            latestRunId = runId,
+            latestRunRequestedAt = now,
+            latestRunStartedAt = now,
+            latestUserMessageAt = now,
+            latestVisibleMessage =
+              LatestVisibleMessageSummary(command.messageId, "user", command.text, now),
+            itemCount = thread.itemCount + 1,
+            visibleItemCount = thread.visibleItemCount + 1,
+            updatedAt = now,
+          )
+        }
+    }
+    val run: Run = sent ?: return
+
+    fun reply(text: String, streaming: Boolean, at: String, ordinal: Long) =
+      TurnItem.AssistantMessage(
+        id = "item_$replyId",
+        threadId = threadId,
+        runId = runId,
+        nodeId = null,
+        providerThreadId = null,
+        providerTurnId = null,
+        nativeItemRef = null,
+        parentItemId = null,
+        ordinal = ordinal,
+        status = if (streaming) "running" else "completed",
+        title = null,
+        startedAt = at,
+        completedAt = if (streaming) null else at,
+        updatedAt = at,
+        messageId = replyId,
+        text = text,
+        streaming = streaming,
+      )
+
+    replies.remove(threadId)?.cancel()
+    replies[threadId] = scope.launch {
+      delay(REPLY_STEP_MILLIS)
+      val started: String = Instant.now().toString()
+      var ordinal = 0L
+      overlay.update { overlay ->
+        ordinal = nextOrdinal(overlay, threadId)
+        overlay.upsertItem(threadId, reply(text.take(text.length / 2), true, started, ordinal))
+      }
+
+      delay(REPLY_STEP_MILLIS)
+      val done: String = Instant.now().toString()
+      overlay.update { overlay ->
+        overlay
+          .upsertItem(threadId, reply(text, false, done, ordinal))
+          .upsertRun(threadId, run.copy(status = "completed", completedAt = done))
+          .withRow(threadId) { thread ->
+            thread.copy(
+              status = "idle",
+              activeRunId = null,
+              latestRunCompletedAt = done,
+              latestVisibleMessage = LatestVisibleMessageSummary(replyId, "assistant", text, done),
+              itemCount = thread.itemCount + 1,
+              visibleItemCount = thread.visibleItemCount + 1,
+              updatedAt = done,
+            )
+          }
+      }
+    }
+  }
+
+  /** The request's item completes; the thread stops waiting and runs on. */
+  private fun respond(command: Command.RuntimeRequestRespond, now: String) {
+    val threadId: String = command.threadId
+    overlay.update { overlay ->
+      val resolved: TurnItem? = when (val item: TurnItem? = itemOf(overlay, command)) {
+        is TurnItem.ApprovalRequest ->
+          item.copy(status = "completed", completedAt = now, updatedAt = now)
+
+        is TurnItem.UserInputRequest -> item.copy(
+          status = "completed",
+          completedAt = now,
+          updatedAt = now,
+          questionAnswer = UserInputAttachmentAnswerPayload(
+            requestId = command.requestId,
+            answers = command.answers ?: JsonObject(emptyMap()),
+            attachmentsByQuestionId = command.attachmentsByQuestionId.orEmpty()
+              .mapValues { (_, attachments) -> attachments.map(::answerAttachment) },
+          ),
+        )
+
+        else -> null
+      }
+      val listed: List<RuntimeRequest> = loaded.value?.runtimeRequests?.get(threadId).orEmpty() +
+        overlay.runtimeRequests[threadId].orEmpty()
+      val request: RuntimeRequest? = listed.lastOrNull { it.id == command.requestId }?.copy(
+        status = "resolved",
+        resolvedAt = now,
+        decision = command.decision,
+        answers = command.answers,
+      )
+      var next: Overlay = overlay
+      if (resolved != null) next = next.upsertItem(threadId, resolved)
+      if (request != null) next = next.upsertRequest(threadId, request)
+      return@update next.withRow(threadId) { row ->
+        row.copy(pendingRuntimeRequest = null, status = "running", updatedAt = now)
+      }
+    }
+  }
+
+  private fun itemOf(overlay: Overlay, command: Command.RuntimeRequestRespond): TurnItem? =
+    itemsOf(overlay, command.threadId).find { item ->
+      when (item) {
+        is TurnItem.ApprovalRequest -> item.requestId == command.requestId
+        is TurnItem.UserInputRequest -> item.requestId == command.requestId
+        else -> false
+      }
+    }
+
+  private fun updateRow(threadId: String, change: (Thread) -> Thread) =
+    overlay.update { overlay -> overlay.withRow(threadId, change) }
+
+  private fun Overlay.withRow(threadId: String, change: (Thread) -> Thread): Overlay {
+    val row: Thread = rowOf(this, threadId) ?: return this
+    return copy(threads = threads + (threadId to change(row)))
+  }
+
+  private fun rowOf(overlay: Overlay, threadId: String): Thread? =
+    overlay.threads[threadId] ?: loaded.value?.threads?.find { it.id == threadId }
+
+  private fun runsOf(overlay: Overlay, threadId: String): List<Run> = loaded.value?.runs
+    ?.get(threadId)
+    .orEmpty()
+    .upsertAll(overlay.runs[threadId].orEmpty(), Run::id)
+
+  private fun itemsOf(overlay: Overlay, threadId: String): List<TurnItem> = loaded.value?.items
+    ?.get(threadId)
+    .orEmpty()
+    .map { it.item }
+    .upsertAll(overlay.items[threadId].orEmpty(), TurnItem::id)
+
+  private fun nextOrdinal(overlay: Overlay, threadId: String): Long =
+    (itemsOf(overlay, threadId).maxOfOrNull { it.ordinal } ?: 0) + 1
+
+  override fun terminal(input: TerminalAttachInput): Flow<TerminalAttachStreamEvent> = flow {
+    val snapshot = TerminalSessionSnapshot(
+      threadId = input.threadId,
+      terminalId = input.terminalId,
+      cwd = input.cwd ?: input.worktreePath ?: directory.toString(),
+      worktreePath = input.worktreePath,
+      status = "running",
+      pid = null,
+      history = "fixture shell\r\n$ ",
+      exitCode = null,
+      exitSignal = null,
+      label = "fixture",
+      updatedAt = Instant.now().toString(),
+    )
+    emit(TerminalAttachStreamEvent.Snapshot(snapshot = snapshot))
+    emitAll(echoes(input.threadId, input.terminalId))
+  }
+
+  override suspend fun terminalWrite(threadId: String, terminalId: String, data: String) {
+    // What a shell would do: echo the keys, and prompt again after Enter
+    val output = TerminalAttachStreamEvent.Output(
+      threadId = threadId,
+      terminalId = terminalId,
+      data = data.replace("\r", "\r\n$ "),
+    )
+    echoes(threadId, terminalId).emit(output)
+  }
+
+  override suspend fun terminalResize(threadId: String, terminalId: String, cols: Int, rows: Int) =
+    Unit
+
+  private fun echoes(
+    threadId: String,
+    terminalId: String,
+  ): MutableSharedFlow<TerminalAttachStreamEvent> = terminals
+    .getOrPut("$threadId/$terminalId") { MutableSharedFlow(extraBufferCapacity = 64) }
+
+  override fun vcsStatus(cwd: String): Flow<VcsStatusStreamEvent> = flow {
+    val local = VcsStatusLocalResult(
+      isRepo = true,
+      hasPrimaryRemote = true,
+      isDefaultRef = false,
+      refName = "fixture/phase-2",
+      hasWorkingTreeChanges = true,
+      workingTree = VcsStatusLocalResult.WorkingTree(
+        files = listOf(
+          VcsStatusLocalResult.WorkingTree.File("src/main/kotlin/App.kt", 3, 1),
+          VcsStatusLocalResult.WorkingTree.File("README.md", 1, 0),
+        ),
+        insertions = 4,
+        deletions = 1,
+      ),
+    )
+    val remote =
+      VcsStatusRemoteResult(hasUpstream = true, aheadCount = 2, behindCount = 1, pr = null)
+    emit(VcsStatusStreamEvent.Snapshot(local = local, remote = remote))
+    // A live subscription stays open
+    awaitCancellation()
+  }
+
+  override suspend fun createUploadUrl(
+    input: AttachmentCreateUploadUrlInput,
+  ): AttachmentCreateUploadUrlResult {
+    val id: Long = sequence.incrementAndGet()
+    return AttachmentCreateUploadUrlResult(
+      attachmentId = "att_fixture_$id",
+      relativeUrl = "/api/attachments/fixture/$id",
+      expiresAt = (System.currentTimeMillis() + UPLOAD_URL_TTL_MILLIS).toDouble(),
+    )
+  }
+
+  override suspend fun upload(relativeUrl: String, mimeType: String, bytes: ByteArray) = Unit
+
+  override suspend fun persistAttachments(
+    input: PersistChatAttachmentsInput,
+  ): PersistChatAttachmentsResult {
+    val attachments: List<ChatImageAttachment> = input.attachments.map { upload ->
+      ChatImageAttachment(
+        id = upload.id ?: "att_fixture_${sequence.incrementAndGet()}",
+        name = upload.name,
+        mimeType = upload.mimeType,
+        sizeBytes = upload.sizeBytes,
+      )
+    }
+    return PersistChatAttachmentsResult(attachments)
+  }
+
+  override suspend fun serverInfo(): ServerInfo = ServerInfo(
+    providers = listOf(
+      provider("codex", "Codex", "gpt-5" to "GPT-5", "gpt-5-mini" to "GPT-5 mini"),
+      provider("claude", "Claude", "opus" to "Opus", "sonnet" to "Sonnet"),
+    ),
+    serverResolvedCommandContext = true,
+  )
 
   override fun connect() {
     online.value = true
@@ -127,6 +615,9 @@ class FixtureClient(
     }
     if (stamp == loadedStamp) return
     loadedStamp = stamp
+    replies.values.forEach { it.cancel() }
+    replies.clear()
+    overlay.value = Overlay()
     loaded.value = load(files)
   }
 
@@ -142,6 +633,66 @@ class FixtureClient(
     return Scenario.merge(parts)
   }
 }
+
+private const val REPLY_STEP_MILLIS: Long = 600
+
+/** Item statuses that are still going; an interrupt cancels them. */
+private val IN_FLIGHT: Set<String> = setOf("pending", "running", "waiting")
+
+/** [item], whatever its type, closed as cancelled at [now], through its JSON to stay generic. */
+private fun cancelled(item: TurnItem, now: String): TurnItem {
+  val json: JsonObject = T3Json.encodeToJsonElement(TurnItem.serializer(), item).jsonObject
+  val closed: Map<String, JsonElement> = buildMap {
+    putAll(json)
+    put("status", JsonPrimitive("cancelled"))
+    put("completedAt", JsonPrimitive(now))
+    put("updatedAt", JsonPrimitive(now))
+    if ("streaming" in json) put("streaming", JsonPrimitive(false))
+  }
+  return T3Json.decodeFromJsonElement(TurnItem.serializer(), JsonObject(closed))
+}
+
+/**
+ * The command's answer attachment as the item's. The known ones are the same classes, both
+ * interfaces on `ChatImageAttachment` and `ChatFileAttachment`; only Unknown needs a copy.
+ */
+private fun answerAttachment(
+  attachment: Command.RuntimeRequestRespond.AttachmentsByQuestionIdItem,
+): UserInputAttachmentAnswerPayload.AttachmentsByQuestionIdItem = when (attachment) {
+  is ChatImageAttachment -> attachment
+  is ChatFileAttachment -> attachment
+  is Command.RuntimeRequestRespond.AttachmentsByQuestionIdItem.Unknown ->
+    UserInputAttachmentAnswerPayload.AttachmentsByQuestionIdItem.Unknown(
+      type = attachment.type,
+      id = attachment.id,
+      name = attachment.name,
+      mimeType = attachment.mimeType,
+      sizeBytes = attachment.sizeBytes,
+      raw = attachment.raw,
+    )
+}
+
+// Upstream's ATTACHMENT_UPLOAD_URL_TTL_MS, contracts/src/assets.ts
+private const val UPLOAD_URL_TTL_MILLIS: Long = 10 * 60_000
+
+private fun provider(
+  instanceId: String,
+  displayName: String,
+  vararg models: Pair<String, String>,
+): ServerProvider = ServerProvider(
+  instanceId = instanceId,
+  driver = instanceId,
+  displayName = displayName,
+  enabled = true,
+  installed = true,
+  version = "fixture",
+  status = "ready",
+  auth = ServerProviderAuth(status = "authenticated"),
+  checkedAt = "2026-10-19T06:00:00.000Z",
+  models = models.map { (slug, name) ->
+    ServerProviderModel(slug = slug, name = name, isCustom = false, capabilities = null)
+  },
+)
 
 private val PATCH: String = """
   diff --git a/src/main/kotlin/App.kt b/src/main/kotlin/App.kt

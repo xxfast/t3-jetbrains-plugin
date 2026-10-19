@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "AttachmentCreateUploadUrlInput",
+  "title": "AttachmentCreateUploadUrlInput",
+  "anyOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "image"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "mimeType": {
+          "type": "string",
+          "enum": [
+            "image/gif",
+            "image/jpeg",
+            "image/png",
+            "image/webp"
+          ]
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10485760
+        }
+      },
+      "required": [
+        "name",
+        "mimeType",
+        "sizeBytes"
+      ],
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "file"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "mimeType": {
+          "type": "string"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 52428800
+        }
+      },
+      "required": [
+        "type",
+        "name",
+        "mimeType",
+        "sizeBytes"
+      ],
+      "additionalProperties": true
+    }
+  ]
+}

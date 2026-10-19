@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "TerminalResizeInput",
+  "title": "TerminalResizeInput",
+  "type": "object",
+  "properties": {
+    "threadId": {
+      "type": "string"
+    },
+    "terminalId": {
+      "type": "string"
+    },
+    "cols": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "rows": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 500
+    }
+  },
+  "required": [
+    "threadId",
+    "terminalId",
+    "cols",
+    "rows"
+  ],
+  "additionalProperties": true
+}

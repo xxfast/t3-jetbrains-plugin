@@ -47,8 +47,18 @@ class T3AuthTest {
     assertEquals("urn:ietf:params:oauth:grant-type:token-exchange", form["grant_type"])
     assertEquals("urn:t3:params:oauth:token-type:environment-bootstrap", form["subject_token_type"])
     assertEquals("ABCD2345EFGH", form["subject_token"])
-    assertEquals("orchestration:read filesystem:read", form["scope"])
+    assertEquals(
+      "orchestration:read orchestration:operate terminal:read terminal:operate filesystem:read",
+      form["scope"],
+    )
     assertEquals("JetBrains", form["client_label"])
+  }
+
+  @Test
+  fun pairWithNoScopesLeavesTheFieldOut() = runTest {
+    auth.pair("ABCD2345EFGH", scopes = emptyList())
+    val (_, body: String) = server.tokenRequests.single()
+    assertFalse(body.split("&").any { it.startsWith("scope=") }, body)
   }
 
   @Test

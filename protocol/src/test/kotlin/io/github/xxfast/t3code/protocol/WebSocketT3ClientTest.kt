@@ -1,12 +1,18 @@
 package io.github.xxfast.t3code.protocol
 
+import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
+import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TurnItem
+import io.github.xxfast.t3code.protocol.generated.VcsStatusStreamEvent
 import java.net.URI
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +21,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 
 class WebSocketT3ClientTest {
   private val http: FakeHttpServer = FakeHttpServer()
@@ -82,6 +90,100 @@ class WebSocketT3ClientTest {
     val message: TurnItem.AssistantMessage = assertIs(updated.items[3])
     assertEquals("Working on it. Done.", message.text)
     assertEquals(false, message.streaming)
+  }
+
+  @Test
+  fun threadFlowAppliesRuntimeRequestUpdates() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+    val views: List<ThreadView> = client.thread("thread-1").take(3).toList()
+
+    assertEquals(emptyList(), views.first().runtimeRequests)
+    val request: RuntimeRequest = views.last().runtimeRequests.single()
+    assertEquals("request-1", request.id)
+    assertEquals("pending", request.status)
+    assertEquals(views[1].items, views.last().items)
+  }
+
+  @Test
+  fun aDieOnALiveSocketFailsTheFlowInsteadOfHanging() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+
+    val vcs: T3Exception.Transport = assertFailsWith { client.vcsStatus("/die").first() }
+    assertTrue("boom" in vcs.message.orEmpty(), vcs.message)
+    assertFailsWith<T3Exception.Transport> { client.thread("thread-die").first() }
+    assertIs<ConnectionState.Connected>(client.connection.value, "The socket stays up")
+  }
+
+  @Test
+  fun dispatchSendsTheCommandWithItsType() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+    // No wait for the socket itself: Connected means it's already live
+    client.connection.first { it is ConnectionState.Connected }
+
+    val pin = Command.ThreadPin(commandId = "cmd-1", threadId = "thread-1")
+    val sequence: Long = client.dispatch(pin)
+
+    assertEquals(42, sequence)
+    val payload: JsonObject =
+      rpc.requests("orchestration.dispatchCommand").single().getValue("payload").jsonObject
+    assertTrue(""""type":"thread.pin"""" in payload.toString(), "$payload")
+    assertEquals("thread-1", payload.string("threadId"))
+    assertEquals("cmd-1", payload.string("commandId"))
+    assertFalse("orderKey" in payload, "Nulls are dropped")
+  }
+
+  @Test
+  fun terminalYieldsTheSnapshotThenOutput() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+    val input = TerminalAttachInput(threadId = "thread-1", terminalId = "default", cwd = "/repo")
+
+    val events: List<TerminalAttachStreamEvent> = client.terminal(input).take(3).toList()
+
+    val snapshot: TerminalAttachStreamEvent.Snapshot = assertIs(events[0])
+    assertEquals("$ ", snapshot.snapshot.history)
+    val unknown: TerminalAttachStreamEvent.Unknown = assertIs(events[1])
+    assertEquals("some-future-event", unknown.type)
+    val output: TerminalAttachStreamEvent.Output = assertIs(events[2])
+    assertEquals("ls\r\nREADME.md\r\n$ ", output.data)
+    val payload: JsonObject =
+      rpc.requests("terminal.attach").single().getValue("payload").jsonObject
+    assertEquals(setOf("threadId", "terminalId", "cwd"), payload.keys)
+  }
+
+  @Test
+  fun vcsStatusDecodesTheSnapshot() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+
+    val snapshot: VcsStatusStreamEvent.Snapshot = assertIs(client.vcsStatus("/repo").first())
+
+    val paths: List<String> = snapshot.local.workingTree.files.map { it.path }
+    assertEquals(listOf("src/App.kt", "README.md"), paths)
+    assertEquals(2, snapshot.remote?.aheadCount)
+    assertEquals(1, snapshot.remote?.behindCount)
+    val payload: JsonObject =
+      rpc.requests("subscribeVcsStatus").single().getValue("payload").jsonObject
+    assertEquals("/repo", payload.string("cwd"))
+    assertEquals("true", payload.string("includeRemote"))
+  }
+
+  @Test
+  fun serverInfoDecodesProvidersAndIsCached() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+    client.connection.first { it is ConnectionState.Connected }
+
+    val info: ServerInfo = client.serverInfo()
+
+    assertTrue(info.serverResolvedCommandContext)
+    assertEquals(listOf("codex"), info.providers.map { it.instanceId }, "Bad provider dropped")
+    assertEquals(listOf("gpt-5", "gpt-5-mini"), info.providers.single().models.map { it.slug })
+    assertSame(info, client.serverInfo())
+    assertEquals(1, rpc.requests("server.getConfig").size)
   }
 
   @Test

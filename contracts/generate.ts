@@ -126,7 +126,8 @@ interface DataClass extends Scope {
 interface UnionDecl extends Scope {
   readonly kind: "union";
   readonly discriminator: string;
-  readonly branches: Array<{ values: string[]; target: DataClass }>;
+  /** [absent] marks the one branch an object without the discriminator key decodes as. */
+  readonly branches: Array<{ values: string[]; target: DataClass; absent: boolean }>;
   readonly topLevel: boolean;
 }
 
@@ -345,7 +346,7 @@ class Generator {
       warn(`${where}: ${why}`);
       return opaque(why);
     }
-    const { key: discriminator, kept: members } = found;
+    const { key: discriminator, kept: members, absent } = found;
     const decl: UnionDecl = {
       kind: "union",
       path: [...parentPath, name],
@@ -371,7 +372,7 @@ class Generator {
         decl.nested.push(target);
       }
       if (!target.supers.includes(decl)) target.supers.push(decl);
-      decl.branches.push({ values, target });
+      decl.branches.push({ values, target, absent: member === absent });
     }
     return decl;
   }
@@ -379,9 +380,11 @@ class Generator {
   /**
    * The discriminator key and the members that get a branch. Upstream's catch-all members (a
    * trailing member whose discriminator isn't a literal, or a later member repeating values a
-   * known one already claims) don't: the Unknown branch is what they are for.
+   * known one already claims) don't: the Unknown branch is what they are for. One member may
+   * have the literal as an optional key (`type: optionalKey(Literal("image"))`); an object
+   * without the key is that member.
    */
-  discriminator(members: Json[]): { key: string; kept: Json[] } | undefined {
+  discriminator(members: Json[]): { key: string; kept: Json[]; absent?: Json } | undefined {
     const resolved: JsonObject[] = members.map((m) => this.deref(m) as JsonObject);
     const candidates = new Set<string>();
     for (const member of resolved) {
@@ -395,6 +398,7 @@ class Generator {
     for (const key of ordered) {
       const seen = new Set<string>();
       const kept: Json[] = [];
+      let absent: Json | undefined;
       let ok = true;
       resolved.forEach((member, index) => {
         if (!ok) return;
@@ -404,19 +408,24 @@ class Generator {
           ok = index === resolved.length - 1 && isObject((member.properties as JsonObject)?.[key]);
           return;
         }
-        if (!required.includes(key)) {
-          ok = false;
-          return;
-        }
         if (values.every((v) => seen.has(v))) return;
         if (values.some((v) => seen.has(v))) {
           ok = false;
           return;
         }
+        if (!required.includes(key)) {
+          if (absent !== undefined) {
+            ok = false;
+            return;
+          }
+          absent = members[index];
+        }
         for (const value of values) seen.add(value);
         kept.push(members[index]);
       });
-      if (ok && kept.length > 0) return { key, kept };
+      if (ok && kept.length > 0 && kept.length > (absent === undefined ? 0 : 1)) {
+        return { key, kept, absent };
+      }
     }
     return undefined;
   }
@@ -634,6 +643,8 @@ class Writer {
 
 const IMPORTS: Record<string, string> = {
   DeserializationStrategy: "kotlinx.serialization.DeserializationStrategy",
+  EncodeDefault: "kotlinx.serialization.EncodeDefault",
+  ExperimentalSerializationApi: "kotlinx.serialization.ExperimentalSerializationApi",
   KSerializer: "kotlinx.serialization.KSerializer",
   SerialName: "kotlinx.serialization.SerialName",
   Serializable: "kotlinx.serialization.Serializable",
@@ -699,7 +710,10 @@ function writeField(out: Writer, indent: number, decl: DataClass, field: Field):
   let type: string = render(field.type);
   let value = "";
   const literal: string | undefined = discriminatorDefault(decl, field);
-  if (literal !== undefined && !field.type.nullable) {
+  // A discriminator is a default, so a Json with encodeDefaults = false would drop it. Always
+  // encode it: the server picks the branch by it.
+  const discriminator: boolean = literal !== undefined && !field.type.nullable;
+  if (discriminator) {
     value = ` = ${JSON.stringify(literal)}`;
   } else if (!field.required) {
     if (field.type.kind === "list" && !field.type.nullable) value = " = emptyList()";
@@ -715,6 +729,7 @@ function writeField(out: Writer, indent: number, decl: DataClass, field: Field):
     out.use("SerialName");
     annotation = `@SerialName(${JSON.stringify(field.json)}) `;
   }
+  if (discriminator) annotation += "@EncodeDefault(EncodeDefault.Mode.ALWAYS) ";
   const single = `${annotation}${head} ${type}${value},`;
   if (`${"  ".repeat(indent)}${single}`.length <= MAX_COLUMNS) {
     out.line(indent, single);
@@ -752,14 +767,19 @@ function writeDataClass(out: Writer, indent: number, decl: DataClass): void {
   out.line(indent, "@Serializable");
   out.line(indent, `public data class ${decl.path.at(-1)}(`);
   for (const field of decl.fields) writeField(out, indent + 1, decl, field);
-  const supers: string = decl.supers.length > 0
-    ? ` : ${decl.supers.map((s) => s.path.join(".")).join(", ")}`
-    : "";
-  if (decl.nested.length === 0) {
-    out.line(indent, `)${supers}`);
-    return;
+  const names: string[] = decl.supers.map((s) => s.path.join("."));
+  const open: string = decl.nested.length === 0 ? "" : " {";
+  if (names.length === 0) {
+    out.line(indent, `)${open}`);
+  } else {
+    // A branch shared by several unions can list more supertypes than fit, one per line then.
+    const wrapped: Array<[number, string]> = names.map((name, index) => [
+      index === 0 ? 0 : 1,
+      `${index === 0 ? ") : " : ""}${name}${index < names.length - 1 ? "," : open}`,
+    ]);
+    out.pick(indent, [[[0, `) : ${names.join(", ")}${open}`]], wrapped]);
   }
-  out.line(indent, `)${supers} {`);
+  if (decl.nested.length === 0) return;
   decl.nested.forEach((nested, index) => {
     if (index > 0) out.line(0, "");
     writeDecl(out, indent + 1, nested);
@@ -867,16 +887,20 @@ function writeSerializers(
   const key: string = JSON.stringify(union.discriminator);
   out.line(indent + 2, `when (element[${key}]?.jsonPrimitive?.contentOrNull) {`);
   for (const branch of union.branches) {
-    const condition: string = branch.values.map((v) => JSON.stringify(v)).join(", ");
+    const condition: string = [
+      ...branch.values.map((v) => JSON.stringify(v)),
+      ...(branch.absent ? ["null"] : []),
+    ].join(", ");
     const target = `${local(union, branch.target.path)}.serializer()`;
     const single = `${condition} -> ${target}`;
     if (`${"  ".repeat(indent + 3)}${single}`.length <= MAX_COLUMNS) {
       out.line(indent + 3, single);
       continue;
     }
-    branch.values.forEach((value, index) => {
-      const last: boolean = index === branch.values.length - 1;
-      out.line(indent + 3, `${JSON.stringify(value)}${last ? " ->" : ","}`);
+    const conditions: string[] = condition.split(", ");
+    conditions.forEach((value, index) => {
+      const last: boolean = index === conditions.length - 1;
+      out.line(indent + 3, `${value}${last ? " ->" : ","}`);
     });
     out.line(indent + 4, target);
   }
@@ -999,7 +1023,11 @@ function writeFile(path: string, tag: string, decls: Decl[]): { longLines: numbe
     if (index > 0) out.line(0, "");
     writeDecl(out, 0, decl);
   });
-  const code: string = out.lines.join("\n");
+  // EncodeDefault is still @ExperimentalSerializationApi as of kotlinx-serialization 1.9.0
+  const optIn: string[] = out.lines.some((line) => line.includes("@EncodeDefault("))
+    ? ["@file:OptIn(ExperimentalSerializationApi::class)", ""]
+    : [];
+  const code: string = [...optIn, ...out.lines].join("\n");
   const imports: string[] = Object.entries(IMPORTS)
     .filter(([name]) => new RegExp(`\\b${name}\\b`).test(code))
     .map(([, path]) => path)
@@ -1007,6 +1035,7 @@ function writeFile(path: string, tag: string, decls: Decl[]): { longLines: numbe
   const text: string = [
     `// Generated from ${tag} by contracts/generate.ts, do not edit.`,
     "",
+    ...optIn,
     `package ${PACKAGE}`,
     "",
     ...imports.map((i) => `import ${i}`),

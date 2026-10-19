@@ -1,8 +1,12 @@
 // Generated from v0.1.1-preview.20261019.3339 by contracts/generate.ts, do not edit.
 
+@file:OptIn(ExperimentalSerializationApi::class)
+
 package io.github.xxfast.t3code.protocol.generated
 
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -20,10 +24,28 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
 @Serializable
+public data class AcpRegistryUrlAuthAction(
+  val elicitationId: String,
+  val url: String,
+  val message: String,
+  val createdAt: String? = null,
+  val expiresAt: String? = null,
+)
+
+@Serializable
 public data class AssetImageDimensions(
   val width: Long,
   val height: Long,
 )
+
+@Serializable
+public data class BooleanProviderOptionDescriptor(
+  override val id: String,
+  override val label: String,
+  override val description: String? = null,
+  @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "boolean",
+  val currentValue: Boolean? = null,
+) : ProviderOptionDescriptor
 
 @Serializable(with = ChatAttachmentSerializer::class)
 public sealed interface ChatAttachment {
@@ -98,23 +120,27 @@ public object UnknownChatAttachmentSerializer : KSerializer<ChatAttachment.Unkno
 
 @Serializable
 public data class ChatFileAttachment(
-  override val type: String = "file",
+  @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "file",
   override val id: String,
   override val name: String,
   override val mimeType: String,
   override val sizeBytes: Long,
   val source: PastedTextAttachmentSource? = null,
-) : ChatAttachment, UserInputAttachmentAnswerPayload.AttachmentsByQuestionIdItem
+) : ChatAttachment,
+  Command.RuntimeRequestRespond.AttachmentsByQuestionIdItem,
+  UserInputAttachmentAnswerPayload.AttachmentsByQuestionIdItem
 
 @Serializable
 public data class ChatImageAttachment(
-  override val type: String = "image",
+  @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "image",
   override val id: String,
   override val name: String,
   override val mimeType: String,
   override val sizeBytes: Long,
   val source: SnapShotSource? = null,
-) : ChatAttachment, UserInputAttachmentAnswerPayload.AttachmentsByQuestionIdItem
+) : ChatAttachment,
+  Command.RuntimeRequestRespond.AttachmentsByQuestionIdItem,
+  UserInputAttachmentAnswerPayload.AttachmentsByQuestionIdItem
 
 @Serializable
 public data class ChatUnknownAttachment(
@@ -123,6 +149,11 @@ public data class ChatUnknownAttachment(
   val name: String,
   val mimeType: String,
   val sizeBytes: Long,
+)
+
+@Serializable
+public data class ModelCapabilities(
+  val optionDescriptors: List<ProviderOptionDescriptor>? = null,
 )
 
 @Serializable
@@ -135,13 +166,6 @@ public data class ModelSelection(
   val model: JsonElement,
   // TODO(contracts): unconstrained upstream (Schema.Unknown or an opaque type)
   val options: JsonElement? = null,
-)
-
-@Serializable
-public data class MessageContext(
-  val version: Long,
-  // TODO(contracts): array without an item schema
-  val records: List<JsonElement>,
 )
 
 @Serializable
@@ -192,20 +216,20 @@ public data class AppThread(
 
     @Serializable
     public data class ForkedFromRun(
-      override val type: String = "run",
+      @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "run",
       val threadId: String,
       val runId: String,
     ) : AppThread.ForkedFrom
 
     @Serializable
     public data class Node(
-      override val type: String = "node",
+      @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "node",
       val nodeId: String,
     ) : AppThread.ForkedFrom
 
     @Serializable
     public data class ForkedFromProviderThread(
-      override val type: String = "provider_thread",
+      @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "provider_thread",
       val providerThreadId: String,
       val providerTurnId: String? = null,
     ) : AppThread.ForkedFrom
@@ -439,31 +463,31 @@ public sealed interface ContextTransferResolution {
 
   @Serializable
   public data class NativeFork(
-    override val strategy: String = "native_fork",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val strategy: String = "native_fork",
     val providerThreadRef: ProviderRef,
   ) : ContextTransferResolution
 
   @Serializable
   public data class PortableContext(
-    override val strategy: String = "portable_context",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val strategy: String = "portable_context",
     val contextHandoffId: String,
   ) : ContextTransferResolution
 
   @Serializable
   public data class DeltaContext(
-    override val strategy: String = "delta_context",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val strategy: String = "delta_context",
     val contextHandoffId: String,
   ) : ContextTransferResolution
 
   @Serializable
   public data class ForkDeltaContext(
-    override val strategy: String = "fork_delta_context",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val strategy: String = "fork_delta_context",
     val contextHandoffId: String,
   ) : ContextTransferResolution
 
   @Serializable
   public data class CheckpointContext(
-    override val strategy: String = "checkpoint_context",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val strategy: String = "checkpoint_context",
     val contextHandoffId: String,
   ) : ContextTransferResolution
 
@@ -664,6 +688,14 @@ public data class LimitRecovery(
 )
 
 @Serializable
+public data class LimitRecoveryUpdate(
+  val runId: String,
+  val resetAt: String,
+  val autoResume: Boolean? = null,
+  val snooze: Boolean? = null,
+)
+
+@Serializable
 public data class LinkOrigin(
   val sessionId: String,
   val label: String,
@@ -683,42 +715,42 @@ public sealed interface NotificationSource {
 
   @Serializable
   public data class DelegatedTask(
-    override val kind: String = "delegated_task",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "delegated_task",
     val taskIds: List<String>,
     val childThreadId: String? = null,
   ) : NotificationSource
 
   @Serializable
   public data class BackgroundTask(
-    override val kind: String = "background_task",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "background_task",
     val work: String,
     val childThreadId: String? = null,
   ) : NotificationSource
 
   @Serializable
   public data class BackgroundCommand(
-    override val kind: String = "background_command",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "background_command",
   ) : NotificationSource
 
   @Serializable
   public data class NotificationSourceSubagent(
-    override val kind: String = "subagent",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "subagent",
     val childThreadId: String? = null,
   ) : NotificationSource
 
   @Serializable
-  public data class Command(
-    override val kind: String = "command",
+  public data class NotificationSourceCommand(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "command",
   ) : NotificationSource
 
   @Serializable
   public data class Monitor(
-    override val kind: String = "monitor",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "monitor",
   ) : NotificationSource
 
   @Serializable
   public data class System(
-    override val kind: String = "system",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "system",
   ) : NotificationSource
 
   /** A variant this build doesn't know. [raw] is the whole object as received. */
@@ -738,7 +770,7 @@ public object NotificationSourceSerializer : KSerializer<NotificationSource> {
       "background_task" -> NotificationSource.BackgroundTask.serializer()
       "background_command" -> NotificationSource.BackgroundCommand.serializer()
       "subagent" -> NotificationSource.NotificationSourceSubagent.serializer()
-      "command" -> NotificationSource.Command.serializer()
+      "command" -> NotificationSource.NotificationSourceCommand.serializer()
       "monitor" -> NotificationSource.Monitor.serializer()
       "system" -> NotificationSource.System.serializer()
       else -> NotificationSource.Unknown.serializer()
@@ -764,8 +796,8 @@ public object NotificationSourceSerializer : KSerializer<NotificationSource> {
         NotificationSource.BackgroundCommand.serializer().serialize(encoder, value)
       is NotificationSource.NotificationSourceSubagent ->
         NotificationSource.NotificationSourceSubagent.serializer().serialize(encoder, value)
-      is NotificationSource.Command ->
-        NotificationSource.Command.serializer().serialize(encoder, value)
+      is NotificationSource.NotificationSourceCommand ->
+        NotificationSource.NotificationSourceCommand.serializer().serialize(encoder, value)
       is NotificationSource.Monitor ->
         NotificationSource.Monitor.serializer().serialize(encoder, value)
       is NotificationSource.System ->
@@ -805,17 +837,17 @@ public sealed interface PendingBackgroundTask {
     override val taskId: String,
     override val description: String? = null,
     override val parentTaskId: String? = null,
-    override val kind: String = "subagent",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "subagent",
     val providerInstanceId: String? = null,
     val childThreadId: String? = null,
   ) : PendingBackgroundTask
 
   @Serializable
-  public data class Command(
+  public data class PendingBackgroundTaskCommand(
     override val taskId: String,
     override val description: String? = null,
     override val parentTaskId: String? = null,
-    override val kind: String = "command",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "command",
   ) : PendingBackgroundTask
 
   @Serializable
@@ -823,7 +855,7 @@ public sealed interface PendingBackgroundTask {
     override val taskId: String,
     override val description: String? = null,
     override val parentTaskId: String? = null,
-    override val kind: String = "monitor",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "monitor",
   ) : PendingBackgroundTask
 
   @Serializable
@@ -831,7 +863,7 @@ public sealed interface PendingBackgroundTask {
     override val taskId: String,
     override val description: String? = null,
     override val parentTaskId: String? = null,
-    override val kind: String = "background_task",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "background_task",
   ) : PendingBackgroundTask
 
   /** A variant this build doesn't know. [raw] is the whole object as received. */
@@ -851,7 +883,7 @@ public object PendingBackgroundTaskSerializer : KSerializer<PendingBackgroundTas
   private fun select(element: JsonObject): DeserializationStrategy<PendingBackgroundTask> =
     when (element["kind"]?.jsonPrimitive?.contentOrNull) {
       "subagent" -> PendingBackgroundTask.PendingBackgroundTaskSubagent.serializer()
-      "command" -> PendingBackgroundTask.Command.serializer()
+      "command" -> PendingBackgroundTask.PendingBackgroundTaskCommand.serializer()
       "monitor" -> PendingBackgroundTask.Monitor.serializer()
       "background_task" -> PendingBackgroundTask.BackgroundTask.serializer()
       else -> PendingBackgroundTask.Unknown.serializer()
@@ -871,8 +903,8 @@ public object PendingBackgroundTaskSerializer : KSerializer<PendingBackgroundTas
     when (value) {
       is PendingBackgroundTask.PendingBackgroundTaskSubagent ->
         PendingBackgroundTask.PendingBackgroundTaskSubagent.serializer().serialize(encoder, value)
-      is PendingBackgroundTask.Command ->
-        PendingBackgroundTask.Command.serializer().serialize(encoder, value)
+      is PendingBackgroundTask.PendingBackgroundTaskCommand ->
+        PendingBackgroundTask.PendingBackgroundTaskCommand.serializer().serialize(encoder, value)
       is PendingBackgroundTask.Monitor ->
         PendingBackgroundTask.Monitor.serializer().serialize(encoder, value)
       is PendingBackgroundTask.BackgroundTask ->
@@ -928,7 +960,7 @@ public sealed interface PlanArtifact {
     override val nodeId: String,
     override val status: String,
     override val detailInTurnItem: Boolean? = null,
-    override val kind: String = "proposed_plan",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "proposed_plan",
     val markdown: String,
   ) : PlanArtifact
 
@@ -940,7 +972,7 @@ public sealed interface PlanArtifact {
     override val nodeId: String,
     override val status: String,
     override val detailInTurnItem: Boolean? = null,
-    override val kind: String = "todo_list",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "todo_list",
     val steps: List<PlanStep>,
     val explanation: String? = null,
   ) : PlanArtifact
@@ -1301,6 +1333,87 @@ public data class ThreadCapabilities(
   val exposesNativeThreadId: Boolean,
 )
 
+@Serializable(with = ThreadForkSourcePointSerializer::class)
+public sealed interface ThreadForkSourcePoint {
+  public val type: String
+
+  @Serializable
+  public data class LatestStable(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "latest_stable",
+  ) : ThreadForkSourcePoint
+
+  @Serializable
+  public data class ThreadForkSourcePointRun(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "run",
+    val runId: String,
+  ) : ThreadForkSourcePoint
+
+  @Serializable
+  public data class ThreadForkSourcePointCheckpoint(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "checkpoint",
+    val checkpointId: String,
+  ) : ThreadForkSourcePoint
+
+  /** A variant this build doesn't know. [raw] is the whole object as received. */
+  @Serializable(with = UnknownThreadForkSourcePointSerializer::class)
+  public data class Unknown(
+    override val type: String,
+    val raw: JsonObject,
+  ) : ThreadForkSourcePoint
+}
+
+public object ThreadForkSourcePointSerializer : KSerializer<ThreadForkSourcePoint> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<ThreadForkSourcePoint> =
+    when (element["type"]?.jsonPrimitive?.contentOrNull) {
+      "latest_stable" -> ThreadForkSourcePoint.LatestStable.serializer()
+      "run" -> ThreadForkSourcePoint.ThreadForkSourcePointRun.serializer()
+      "checkpoint" -> ThreadForkSourcePoint.ThreadForkSourcePointCheckpoint.serializer()
+      else -> ThreadForkSourcePoint.Unknown.serializer()
+    }
+
+  override fun deserialize(decoder: Decoder): ThreadForkSourcePoint {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(ThreadForkSourcePoint.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: ThreadForkSourcePoint) {
+    when (value) {
+      is ThreadForkSourcePoint.LatestStable ->
+        ThreadForkSourcePoint.LatestStable.serializer().serialize(encoder, value)
+      is ThreadForkSourcePoint.ThreadForkSourcePointRun ->
+        ThreadForkSourcePoint.ThreadForkSourcePointRun.serializer().serialize(encoder, value)
+      is ThreadForkSourcePoint.ThreadForkSourcePointCheckpoint ->
+        ThreadForkSourcePoint.ThreadForkSourcePointCheckpoint.serializer().serialize(encoder, value)
+      is ThreadForkSourcePoint.Unknown ->
+        ThreadForkSourcePoint.Unknown.serializer().serialize(encoder, value)
+    }
+  }
+}
+
+public object UnknownThreadForkSourcePointSerializer : KSerializer<ThreadForkSourcePoint.Unknown> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  override fun deserialize(decoder: Decoder): ThreadForkSourcePoint.Unknown {
+    val raw: JsonObject = (decoder as JsonDecoder).decodeJsonElement().jsonObject
+    fun string(key: String): String? = raw[key]?.jsonPrimitive?.contentOrNull
+    return ThreadForkSourcePoint.Unknown(
+      type = string("type") ?: "unknown",
+      raw = raw,
+    )
+  }
+
+  override fun serialize(encoder: Encoder, value: ThreadForkSourcePoint.Unknown) {
+    (encoder as JsonEncoder).encodeJsonElement(value.raw)
+  }
+}
+
 @Serializable(with = ThreadLaunchWorkspaceStrategySerializer::class)
 public sealed interface ThreadLaunchWorkspaceStrategy {
   public val type: String
@@ -1308,20 +1421,20 @@ public sealed interface ThreadLaunchWorkspaceStrategy {
 
   @Serializable
   public data class Root(
-    override val type: String = "root",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "root",
     override val branch: String? = null,
   ) : ThreadLaunchWorkspaceStrategy
 
   @Serializable
   public data class ExistingWorktree(
-    override val type: String = "existing_worktree",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "existing_worktree",
     val worktreePath: String,
     override val branch: String? = null,
   ) : ThreadLaunchWorkspaceStrategy
 
   @Serializable
   public data class Worktree(
-    override val type: String = "worktree",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "worktree",
     val baseRef: String,
     override val branch: String? = null,
     val startFromOrigin: Boolean? = null,
@@ -1492,6 +1605,85 @@ public data class ProviderApprovalOption(
 )
 
 @Serializable
+public data class ProviderOptionChoice(
+  val id: String,
+  val label: String,
+  val description: String? = null,
+  val isDefault: Boolean? = null,
+)
+
+@Serializable(with = ProviderOptionDescriptorSerializer::class)
+public sealed interface ProviderOptionDescriptor {
+  public val id: String
+  public val label: String
+  public val description: String?
+  public val type: String
+
+  /** A variant this build doesn't know. [raw] is the whole object as received. */
+  @Serializable(with = UnknownProviderOptionDescriptorSerializer::class)
+  public data class Unknown(
+    override val id: String,
+    override val label: String,
+    override val description: String?,
+    override val type: String,
+    val raw: JsonObject,
+  ) : ProviderOptionDescriptor
+}
+
+public object ProviderOptionDescriptorSerializer : KSerializer<ProviderOptionDescriptor> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<ProviderOptionDescriptor> =
+    when (element["type"]?.jsonPrimitive?.contentOrNull) {
+      "select" -> SelectProviderOptionDescriptor.serializer()
+      "boolean" -> BooleanProviderOptionDescriptor.serializer()
+      else -> ProviderOptionDescriptor.Unknown.serializer()
+    }
+
+  override fun deserialize(decoder: Decoder): ProviderOptionDescriptor {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(ProviderOptionDescriptor.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: ProviderOptionDescriptor) {
+    when (value) {
+      is SelectProviderOptionDescriptor ->
+        SelectProviderOptionDescriptor.serializer().serialize(encoder, value)
+      is BooleanProviderOptionDescriptor ->
+        BooleanProviderOptionDescriptor.serializer().serialize(encoder, value)
+      is ProviderOptionDescriptor.Unknown ->
+        ProviderOptionDescriptor.Unknown.serializer().serialize(encoder, value)
+    }
+  }
+}
+
+public object UnknownProviderOptionDescriptorSerializer :
+  KSerializer<ProviderOptionDescriptor.Unknown> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  override fun deserialize(decoder: Decoder): ProviderOptionDescriptor.Unknown {
+    val raw: JsonObject = (decoder as JsonDecoder).decodeJsonElement().jsonObject
+    fun string(key: String): String? = raw[key]?.jsonPrimitive?.contentOrNull
+    return ProviderOptionDescriptor.Unknown(
+      id = string("id") ?: "",
+      label = string("label") ?: "",
+      description = string("description"),
+      type = string("type") ?: "unknown",
+      raw = raw,
+    )
+  }
+
+  override fun serialize(encoder: Encoder, value: ProviderOptionDescriptor.Unknown) {
+    (encoder as JsonEncoder).encodeJsonElement(value.raw)
+  }
+}
+
+@Serializable
 public data class PullRequestActor(
   val isBot: Boolean? = null,
   val login: String,
@@ -1526,12 +1718,166 @@ public data class RepositoryOrigin(
 )
 
 @Serializable
+public data class SelectProviderOptionDescriptor(
+  override val id: String,
+  override val label: String,
+  override val description: String? = null,
+  @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "select",
+  val options: List<ProviderOptionChoice>,
+  val currentValue: String? = null,
+  val promptInjectedValues: List<String>? = null,
+) : ProviderOptionDescriptor
+
+@Serializable
 public data class ServerAuthDescriptor(
   val policy: String,
   val bootstrapMethods: List<String>,
   val sessionMethods: List<String>,
   val sessionCookieName: String,
   val serverUpdateScope: String? = null,
+)
+
+@Serializable
+public data class ServerProviderAuth(
+  val status: String,
+  val type: String? = null,
+  val label: String? = null,
+  val email: String? = null,
+  val action: AcpRegistryUrlAuthAction? = null,
+  val canLogout: Boolean? = null,
+  val subscriptionSharing: Boolean? = null,
+  val profileId: String? = null,
+  val workspaceId: String? = null,
+)
+
+@Serializable
+public data class ServerProviderCompatibilityAdvisory(
+  val status: String,
+  val latestVersionStatus: String? = null,
+  val message: String?,
+  val recommendedVersion: String?,
+  val recommendedRange: String?,
+)
+
+@Serializable
+public data class ServerProviderContinuation(
+  val groupKey: String,
+)
+
+@Serializable
+public data class ServerProviderModel(
+  val slug: String,
+  val name: String,
+  val shortName: String? = null,
+  val subProvider: String? = null,
+  val aliases: List<String>? = null,
+  val badge: String? = null,
+  val isCustom: Boolean,
+  val isDefault: Boolean? = null,
+  val isLegacy: Boolean? = null,
+  val capabilities: ModelCapabilities?,
+)
+
+@Serializable
+public data class ServerProviderResetCredits(
+  val availableCount: Long,
+  val nextExpiresAt: String? = null,
+  val nextCreditId: String? = null,
+)
+
+@Serializable
+public data class ServerProviderSkill(
+  val name: String,
+  val description: String? = null,
+  val path: String,
+  val scope: String? = null,
+  val enabled: Boolean,
+  val displayName: String? = null,
+  val shortDescription: String? = null,
+  val userInvocationOnly: Boolean? = null,
+  val userInvocable: Boolean? = null,
+)
+
+@Serializable
+public data class ServerProviderSlashCommand(
+  val name: String,
+  val description: String? = null,
+  val input: ServerProviderSlashCommandInput? = null,
+)
+
+@Serializable
+public data class ServerProviderSlashCommandInput(
+  val hint: String,
+)
+
+@Serializable
+public data class ServerProviderUpdateRequiredModel(
+  val slug: String,
+  val name: String,
+  val badge: String? = null,
+  val minVersion: String,
+)
+
+@Serializable
+public data class ServerProviderUpdateState(
+  val status: String,
+  val startedAt: String?,
+  val finishedAt: String?,
+  val message: String?,
+  val output: String?,
+)
+
+@Serializable
+public data class ServerProviderUsageLimits(
+  val checkedAt: String,
+  val windows: List<ServerProviderUsageWindow?>,
+  val credentialFingerprint: String? = null,
+  val resetCredits: ServerProviderResetCredits? = null,
+  val externalUsage: ServerProviderUsageLimits.ExternalUsage? = null,
+  val unavailable: ServerProviderUsageLimits.Unavailable? = null,
+) {
+  @Serializable
+  public data class ExternalUsage(
+    val label: String,
+    val url: String,
+  )
+
+  @Serializable
+  public data class Unavailable(
+    val reason: String,
+    val message: String? = null,
+  )
+}
+
+@Serializable
+public data class ServerProviderUsageWindow(
+  val id: String,
+  val kind: String,
+  val label: String,
+  val usedPercent: Double,
+  val resetsAt: String? = null,
+  val windowDurationMins: Long? = null,
+)
+
+@Serializable
+public data class ServerProviderVersionAdvisory(
+  val status: String,
+  val currentVersion: String?,
+  val latestVersion: String?,
+  val updateCommand: String?,
+  val canUpdate: Boolean? = null,
+  val canInstallVersion: Boolean? = null,
+  val checkedAt: String?,
+  val message: String?,
+)
+
+@Serializable
+public data class ServerProviderWorkspaceSnapshot(
+  val cwd: String,
+  val checkedAt: String,
+  val slashCommands: List<ServerProviderSlashCommand>,
+  val slashCommandsPending: Boolean? = null,
+  val skills: List<ServerProviderSkill>,
 )
 
 @Serializable(with = SnapShotAccessibilitySerializer::class)
@@ -1541,14 +1887,14 @@ public sealed interface SnapShotAccessibility {
 
   @Serializable
   public data class FlatText(
-    override val format: String = "flat-text",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val format: String = "flat-text",
     val text: String,
     override val truncated: Boolean,
   ) : SnapShotAccessibility
 
   @Serializable
   public data class ElementTree(
-    override val format: String = "element-tree",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val format: String = "element-tree",
     val coordinateSpace: String,
     val imageSize: AssetImageDimensions,
     override val truncated: Boolean,
@@ -1660,13 +2006,20 @@ public data class SnapShotSource(
   val appIconDataUrl: String? = null,
 )
 
+@Serializable
+public data class SourceControlProviderInfo(
+  val kind: String,
+  val name: String,
+  val baseUrl: String,
+)
+
 @Serializable(with = StoredProjectIconSerializer::class)
 public sealed interface StoredProjectIcon {
   public val kind: String
 
   @Serializable
   public data class Lucide(
-    override val kind: String = "lucide",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "lucide",
     val name: String,
     val color: String,
     val monogramText: String? = null,
@@ -1675,13 +2028,13 @@ public sealed interface StoredProjectIcon {
 
   @Serializable
   public data class Emoji(
-    override val kind: String = "emoji",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "emoji",
     val emoji: String,
   ) : StoredProjectIcon
 
   @Serializable
   public data class Monogram(
-    override val kind: String = "monogram",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "monogram",
     val text: String,
     val color: String,
   ) : StoredProjectIcon
@@ -1868,7 +2221,8 @@ public sealed interface ToolActivityIcon {
 
   @Serializable
   public data class Website(
-    @SerialName("_tag") override val tag: String = "website",
+    @SerialName("_tag") @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    override val tag: String = "website",
     val pageUrl: String,
     val faviconUrl: String? = null,
     val faviconUrlDark: String? = null,
@@ -1876,13 +2230,15 @@ public sealed interface ToolActivityIcon {
 
   @Serializable
   public data class NativeApp(
-    @SerialName("_tag") override val tag: String = "native-app",
+    @SerialName("_tag") @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    override val tag: String = "native-app",
     val app: ToolActivityNativeAppReference,
   ) : ToolActivityIcon
 
   @Serializable
   public data class ThemedLogo(
-    @SerialName("_tag") override val tag: String = "themed-logo",
+    @SerialName("_tag") @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    override val tag: String = "themed-logo",
     val logoUrl: String,
     val logoUrlDark: String? = null,
   ) : ToolActivityIcon
@@ -1951,13 +2307,15 @@ public sealed interface ToolActivityNativeAppReference {
 
   @Serializable
   public data class AppId(
-    @SerialName("_tag") override val tag: String = "app-id",
+    @SerialName("_tag") @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    override val tag: String = "app-id",
     val appId: String,
   ) : ToolActivityNativeAppReference
 
   @Serializable
   public data class DisplayName(
-    @SerialName("_tag") override val tag: String = "display-name",
+    @SerialName("_tag") @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    override val tag: String = "display-name",
     val displayName: String,
   ) : ToolActivityNativeAppReference
 
@@ -2041,7 +2399,7 @@ public sealed interface TurnTokenUsage {
 
   @Serializable
   public data class MainAgent(
-    override val usageScope: String = "main_agent",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val usageScope: String = "main_agent",
     override val cachedInputTokens: Long? = null,
     override val cacheCreationTokens: Long? = null,
     override val reasoningTokens: Long? = null,
@@ -2118,6 +2476,17 @@ public object UnknownTurnTokenUsageSerializer : KSerializer<TurnTokenUsage.Unkno
     (encoder as JsonEncoder).encodeJsonElement(value.raw)
   }
 }
+
+@Serializable
+public data class UploadChatImageAttachment(
+  val id: String? = null,
+  val type: String,
+  val name: String,
+  val mimeType: String,
+  val sizeBytes: Long,
+  val dataUrl: String,
+  val source: SnapShotSource? = null,
+)
 
 @Serializable
 public data class UserInputAttachmentAnswerPayload(
@@ -2207,4 +2576,58 @@ public data class UserInputAttachmentAnswerPayload(
       }
     }
   }
+}
+
+@Serializable
+public data class VcsStatusLocalResult(
+  val isRepo: Boolean,
+  val sourceControlProvider: SourceControlProviderInfo? = null,
+  val hasPrimaryRemote: Boolean,
+  val isDefaultRef: Boolean,
+  val refName: String?,
+  val hasWorkingTreeChanges: Boolean,
+  val workingTree: VcsStatusLocalResult.WorkingTree,
+  val branchChanges: VcsStatusLocalResult.BranchChanges? = null,
+) {
+  @Serializable
+  public data class WorkingTree(
+    val files: List<VcsStatusLocalResult.WorkingTree.File>,
+    val insertions: Long,
+    val deletions: Long,
+  ) {
+    @Serializable
+    public data class File(
+      val path: String,
+      val insertions: Long,
+      val deletions: Long,
+    )
+  }
+
+  @Serializable
+  public data class BranchChanges(
+    val baseRef: String?,
+    val insertions: Long,
+    val deletions: Long,
+  )
+}
+
+@Serializable
+public data class VcsStatusRemoteResult(
+  val hasUpstream: Boolean,
+  val aheadCount: Long,
+  val behindCount: Long,
+  val aheadOfDefaultCount: Long? = null,
+  val pr: VcsStatusRemoteResult.Pr?,
+) {
+  @Serializable
+  public data class Pr(
+    val number: Long,
+    val title: String,
+    val url: String,
+    val baseRef: String,
+    val headRef: String,
+    val state: String,
+    val isDraft: Boolean? = null,
+    val updatedAt: String? = null,
+  )
 }

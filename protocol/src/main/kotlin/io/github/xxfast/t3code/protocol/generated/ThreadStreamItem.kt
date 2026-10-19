@@ -1,8 +1,12 @@
 // Generated from v0.1.1-preview.20261019.3339 by contracts/generate.ts, do not edit.
 
+@file:OptIn(ExperimentalSerializationApi::class)
+
 package io.github.xxfast.t3code.protocol.generated
 
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -21,12 +25,12 @@ public sealed interface ThreadStreamItem {
 
   @Serializable
   public data class Synchronized(
-    override val kind: String = "synchronized",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "synchronized",
   ) : ThreadStreamItem
 
   @Serializable
   public data class Snapshot(
-    override val kind: String = "snapshot",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "snapshot",
     val snapshotSequence: Long,
     val projection: ThreadProjection,
     val historyCursor: String? = null,
@@ -38,7 +42,7 @@ public sealed interface ThreadStreamItem {
 
   @Serializable
   public data class Event(
-    override val kind: String = "event",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "event",
     val sequence: Long,
     val event: DomainEvent,
   ) : ThreadStreamItem

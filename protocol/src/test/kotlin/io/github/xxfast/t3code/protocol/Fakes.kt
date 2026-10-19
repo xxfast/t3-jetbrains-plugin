@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import kotlin.time.Duration.Companion.seconds
@@ -70,10 +71,11 @@ class FakeHttpServer : AutoCloseable {
   }
 }
 
-/** The socket half: replays the recorded chunks, holding each second chunk until the Ack. */
+/** The socket half: replays the recorded chunks, holding each next chunk until the Ack. */
 class FakeRpcServer : WebSocketServer(InetSocketAddress("127.0.0.1", 0)), AutoCloseable {
   private val started: CountDownLatch = CountDownLatch(1)
-  private val streams: ConcurrentHashMap<String, String> = ConcurrentHashMap()
+  private val streams: ConcurrentHashMap<String, ConcurrentLinkedQueue<String>> =
+    ConcurrentHashMap()
   val received: CopyOnWriteArrayList<JsonObject> = CopyOnWriteArrayList()
   val events: CopyOnWriteArrayList<String> = CopyOnWriteArrayList()
 
@@ -105,18 +107,39 @@ class FakeRpcServer : WebSocketServer(InetSocketAddress("127.0.0.1", 0)), AutoCl
     val frame: JsonObject = T3Json.parseToJsonElement(message).jsonObject
     received += frame
     val id: String = frame.string("id") ?: frame.string("requestId") ?: ""
+    // A server-side defect on a live socket: the request dies, the connection stays up
+    val payload: JsonObject? = frame["payload"] as? JsonObject
+    val dies: Boolean =
+      payload?.string("threadId") == "thread-die" || payload?.string("cwd") == "/die"
+    if (frame.string("_tag") == "Request" && dies) {
+      conn.send(
+        """{"_tag":"Exit","requestId":"$id","exit":{"_tag":"Failure","cause":""" +
+          """[{"_tag":"Die","defect":{"message":"boom"}}]}}""",
+      )
+      return
+    }
     when (frame.string("_tag")) {
       "Ping" -> conn.send("""{"_tag":"Pong"}""")
       "Request" -> when (frame.string("tag")) {
-        "orchestration.subscribeShell" -> {
-          streams[id] = "shell-thread-updated-chunk.json"
-          conn.send(chunk("shell-snapshot-chunk.json", id))
-        }
+        "orchestration.subscribeShell" ->
+          replay(conn, id, "shell-snapshot-chunk.json", "shell-thread-updated-chunk.json")
 
-        "orchestration.subscribeThread" -> {
-          streams[id] = "turn-item-updated-event.json"
-          conn.send(chunk("thread-snapshot-chunk.json", id))
-        }
+        "orchestration.subscribeThread" -> replay(
+          conn,
+          id,
+          "thread-snapshot-chunk.json",
+          "turn-item-updated-event.json",
+          "runtime-request-updated-event.json",
+        )
+
+        "terminal.attach" ->
+          replay(conn, id, "terminal-snapshot-chunk.json", "terminal-output-chunk.json")
+
+        "subscribeVcsStatus" -> replay(conn, id, "vcs-status-snapshot-chunk.json")
+
+        "orchestration.dispatchCommand" -> conn.send(exit(id, """{"sequence":42}"""))
+
+        "server.getConfig" -> conn.send(exit(id, fixture("server-config.json")))
 
         "projects.readFile" -> conn.send(
           """{"_tag":"Exit","requestId":"$id","exit":{"_tag":"Success","value":""" +
@@ -133,13 +156,25 @@ class FakeRpcServer : WebSocketServer(InetSocketAddress("127.0.0.1", 0)), AutoCl
 
       "Ack" -> {
         events += "ack:$id"
-        streams.remove(id)?.let { next ->
+        streams[id]?.poll()?.let { next ->
           events += "second:$id"
           conn.send(chunk(next, id))
         }
       }
     }
   }
+
+  /** Requests whose tag is [tag], as received. */
+  fun requests(tag: String): List<JsonObject> = received.filter { it.string("tag") == tag }
+
+  /** Sends [first] now and each of [rest] after the Ack of the one before. */
+  private fun replay(conn: WebSocket, id: String, first: String, vararg rest: String) {
+    streams[id] = ConcurrentLinkedQueue(rest.toList())
+    conn.send(chunk(first, id))
+  }
+
+  private fun exit(requestId: String, value: String): String =
+    """{"_tag":"Exit","requestId":"$requestId","exit":{"_tag":"Success","value":$value}}"""
 
   override fun onClose(conn: WebSocket, code: Int, reason: String, remote: Boolean) = Unit
 

@@ -1,0 +1,347 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "VcsStatusStreamEvent",
+  "title": "VcsStatusStreamEvent",
+  "anyOf": [
+    {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": [
+            "snapshot"
+          ]
+        },
+        "local": {
+          "$ref": "#/$defs/VcsStatusLocalResult"
+        },
+        "remote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VcsStatusRemoteResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "_tag",
+        "local",
+        "remote"
+      ],
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": [
+            "localUpdated"
+          ]
+        },
+        "local": {
+          "$ref": "#/$defs/VcsStatusLocalResult"
+        }
+      },
+      "required": [
+        "_tag",
+        "local"
+      ],
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "properties": {
+        "_tag": {
+          "type": "string",
+          "enum": [
+            "remoteUpdated"
+          ]
+        },
+        "remote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VcsStatusRemoteResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "_tag",
+        "remote"
+      ],
+      "additionalProperties": true
+    }
+  ],
+  "$defs": {
+    "SourceControlProviderInfo": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "baseUrl": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "baseUrl"
+      ],
+      "additionalProperties": true
+    },
+    "VcsStatusLocalResult": {
+      "type": "object",
+      "properties": {
+        "isRepo": {
+          "type": "boolean"
+        },
+        "sourceControlProvider": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceControlProviderInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hasPrimaryRemote": {
+          "type": "boolean"
+        },
+        "isDefaultRef": {
+          "type": "boolean"
+        },
+        "refName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hasWorkingTreeChanges": {
+          "type": "boolean"
+        },
+        "workingTree": {
+          "type": "object",
+          "properties": {
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "insertions": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "deletions": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "path",
+                  "insertions",
+                  "deletions"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "insertions": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "deletions": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "files",
+            "insertions",
+            "deletions"
+          ],
+          "additionalProperties": true
+        },
+        "branchChanges": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "baseRef": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "insertions": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "deletions": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "baseRef",
+                "insertions",
+                "deletions"
+              ],
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "isRepo",
+        "hasPrimaryRemote",
+        "isDefaultRef",
+        "refName",
+        "hasWorkingTreeChanges",
+        "workingTree"
+      ],
+      "additionalProperties": true
+    },
+    "VcsStatusRemoteResult": {
+      "type": "object",
+      "properties": {
+        "hasUpstream": {
+          "type": "boolean"
+        },
+        "aheadCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "behindCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "aheadOfDefaultCount": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pr": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "number": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                "title": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "baseRef": {
+                  "type": "string"
+                },
+                "headRef": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "open",
+                    "closed",
+                    "merged"
+                  ]
+                },
+                "isDraft": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "updatedAt": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "number",
+                "title",
+                "url",
+                "baseRef",
+                "headRef",
+                "state"
+              ],
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "hasUpstream",
+        "aheadCount",
+        "behindCount",
+        "pr"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

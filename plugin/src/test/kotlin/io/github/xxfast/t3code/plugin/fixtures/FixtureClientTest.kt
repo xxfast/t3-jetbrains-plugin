@@ -2,23 +2,41 @@ package io.github.xxfast.t3code.plugin.fixtures
 
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.T3Json
+import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
+import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
+import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TurnItem
+import io.github.xxfast.t3code.protocol.pinned
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.FileTime
 import kotlin.io.path.extension
+import kotlin.io.path.getLastModifiedTime
 import kotlin.io.path.isDirectory
 import kotlin.io.path.name
 import kotlin.io.path.readBytes
 import kotlin.io.path.readText
+import kotlin.io.path.setLastModifiedTime
 import kotlin.io.path.writeText
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.transformWhile
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -180,6 +198,159 @@ class FixtureClientTest {
   }
 
   @Test
+  fun `message dispatch appends the user message, then streams a reply`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == IDLE } }
+
+    client.dispatch(message(IDLE, messageId = "m1", text = "hello"))
+
+    val sent: ThreadView = client.thread(IDLE).first { view -> view.items.isNotEmpty() }
+    val user: TurnItem.UserMessage = assertIs(sent.items.single())
+    assertEquals("hello", user.text)
+    assertEquals("m1", user.messageId)
+    assertEquals("running", sent.thread.status)
+    assertEquals("running", sent.runs.single().status)
+
+    val streaming: TurnItem.AssistantMessage = client.thread(IDLE)
+      .first { view -> view.items.size == 2 }
+      .items[1] as TurnItem.AssistantMessage
+    assertTrue(streaming.streaming)
+
+    val done: ThreadView = client.thread(IDLE).first { view -> view.thread.status == "idle" }
+    val reply: TurnItem.AssistantMessage = assertIs(done.items.last())
+    assertEquals("Fixture reply to: hello", reply.text)
+    assertFalse(reply.streaming)
+    assertEquals("completed", done.runs.single().status)
+    client.threads.first { row(it).status == "idle" }
+  }
+
+  @Test
+  fun `interrupting cancels the reply in flight`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == IDLE } }
+    client.dispatch(message(IDLE, messageId = "m1", text = "hello"))
+    client.thread(IDLE).first { view -> view.items.size == 2 }
+
+    client.dispatch(Command.RunInterrupt(commandId = "cmd_stop", threadId = IDLE, runId = RUN))
+    delay(2_000)
+
+    val view: ThreadView = client.thread(IDLE).first()
+    val reply: TurnItem.AssistantMessage = assertIs(view.items[1])
+    assertEquals("cancelled", reply.status)
+    assertFalse(reply.streaming)
+    assertEquals("Fixture rep", reply.text, "The second half never arrives")
+    assertEquals("interrupted", view.runs.single().status)
+    assertEquals("idle", view.thread.status)
+  }
+
+  @Test
+  fun `concurrent dispatches get their own ordinals`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == IDLE } }
+
+    withContext(Dispatchers.Default) {
+      (1..20)
+        .map { index -> async { client.dispatch(message(IDLE, "m$index", "hi $index")) } }
+        .awaitAll()
+    }
+
+    val view: ThreadView = client.thread(IDLE).first()
+    val users: List<TurnItem> = view.items.filterIsInstance<TurnItem.UserMessage>()
+    assertEquals(20, users.size)
+    assertEquals(20, users.map { it.ordinal }.toSet().size)
+    assertEquals(20, view.runs.map { it.ordinal }.toSet().size)
+  }
+
+  @Test
+  fun `pin follows upstream's rules`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val before: List<Thread> = client.threads.first { threads -> threads.any { it.id == IDLE } }
+    val pinned: Thread = before.single { it.id == PINNED }
+    val settled: Thread = before.single { it.id == SETTLED }
+
+    client.dispatch(Command.ThreadPin(commandId = "cmd_pin_again", threadId = PINNED))
+    client.dispatch(Command.ThreadPin(commandId = "cmd_pin_settled", threadId = SETTLED))
+
+    val after: List<Thread> = client.threads.first { threads ->
+      threads.single { it.id == SETTLED }.pinned
+    }
+    assertEquals(pinned, after.single { it.id == PINNED }, "Already pinned, nothing to promote")
+    val promoted: Thread = after.single { it.id == SETTLED }
+    assertEquals("active", promoted.settledOverride)
+    assertNull(promoted.settledAt)
+    assertTrue(promoted.updatedAt > settled.updatedAt)
+  }
+
+  @Test
+  fun `responding resolves the request and the thread runs on`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == WAITING } }
+    val before: ThreadView = client.thread(WAITING).first()
+    assertEquals("pending", before.runtimeRequests.single { it.id == REQUEST }.status)
+
+    val respond = Command.RuntimeRequestRespond(
+      commandId = "cmd_respond",
+      threadId = WAITING,
+      requestId = REQUEST,
+      decision = "accept",
+    )
+    client.dispatch(respond)
+
+    val after: ThreadView = client.thread(WAITING).first()
+    val approval: TurnItem.ApprovalRequest =
+      assertIs(after.items.single { it is TurnItem.ApprovalRequest })
+    assertEquals("completed", approval.status)
+    assertEquals("resolved", after.runtimeRequests.single { it.id == REQUEST }.status)
+    assertEquals("running", after.thread.status)
+    assertNull(after.thread.pendingRuntimeRequest)
+  }
+
+  @Test
+  fun `pin and unpin flip the row`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == IDLE } }
+    assertFalse(row(client.threads.value).pinned)
+
+    client.dispatch(Command.ThreadPin(commandId = "cmd_pin", threadId = IDLE))
+    client.threads.first { row(it).pinned }
+
+    client.dispatch(Command.ThreadUnpin(commandId = "cmd_unpin", threadId = IDLE))
+    client.threads.first { !row(it).pinned }
+  }
+
+  @Test
+  fun `the terminal echoes what's written`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val events: MutableList<TerminalAttachStreamEvent> = mutableListOf()
+    backgroundScope.launch {
+      client.terminal(TerminalAttachInput(threadId = IDLE, terminalId = "t1")).toList(events)
+    }
+    runCurrent()
+
+    client.terminalWrite(IDLE, "t1", "ls\r")
+    runCurrent()
+
+    val snapshot: TerminalAttachStreamEvent.Snapshot = assertIs(events[0])
+    assertEquals("fixture shell\r\n$ ", snapshot.snapshot.history)
+    val output: TerminalAttachStreamEvent.Output = assertIs(events[1])
+    assertEquals("ls\r\n$ ", output.data)
+  }
+
+  @Test
+  fun `reloading the directory drops what was dispatched`(@TempDir directory: Path) = runTest {
+    val list: Path = directory.resolve("list.json")
+    list.writeText(default.resolve("list.json").readText())
+    val client = FixtureClient(directory, backgroundScope, pollInterval = 20.milliseconds)
+    client.threads.first { threads -> threads.any { it.id == IDLE } }
+
+    client.dispatch(Command.ThreadPin(commandId = "cmd_pin", threadId = IDLE))
+    client.threads.first { row(it).pinned }
+    list.setLastModifiedTime(FileTime.fromMillis(list.getLastModifiedTime().toMillis() + 5_000))
+
+    client.threads.first { !row(it).pinned }
+  }
+
+  @Test
   fun `bad file surfaces as an error state`() {
     val scenario: Scenario = try {
       Scenario.decode("""{ "connection": { "state": "sideways" } }""")
@@ -188,6 +359,20 @@ class FixtureClientTest {
     }
     assertIs<ConnectionState.Error>(scenario.connection)
   }
+
+  private fun row(threads: List<Thread>): Thread = threads.single { it.id == IDLE }
+
+  private fun message(threadId: String, messageId: String, text: String) =
+    Command.MessageDispatch(
+      createdBy = "user",
+      creationSource = "web",
+      commandId = "cmd_$messageId",
+      threadId = threadId,
+      messageId = messageId,
+      text = text,
+      attachments = emptyList(),
+      dispatchMode = Command.MessageDispatch.DispatchMode.StartImmediately(),
+    )
 
   private fun list(directory: Path): List<Path> =
     Files.list(directory).use { stream -> stream.toList().sortedBy { it.name } }
@@ -215,5 +400,10 @@ class FixtureClientTest {
     const val WAITING = "thr_01JC49ZK2HWAITING"
     const val UNKNOWN = "thr_01JC4C0X1UNKNOWN"
     const val MANY = "thr_01JC5D0M4NYITEMS"
+    const val IDLE = "thr_01JC3QX81VIDLE001"
+    const val PINNED = "thr_01JC4B2W5RROUTER1"
+    const val SETTLED = "thr_01JC1A2B3CSETTLE01"
+    const val RUN = "run_fixture_m1"
+    const val REQUEST = "req_01JC49ZM7TQ2"
   }
 }

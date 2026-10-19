@@ -1,8 +1,12 @@
 // Generated from v0.1.1-preview.20261019.3339 by contracts/generate.ts, do not edit.
 
+@file:OptIn(ExperimentalSerializationApi::class)
+
 package io.github.xxfast.t3code.protocol.generated
 
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -56,7 +60,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "notification",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "notification",
     val source: NotificationSource,
     val outcome: String,
     val summary: String,
@@ -85,7 +89,7 @@ public sealed interface TurnItem {
     override val updatedAt: String,
     val createdBy: String,
     val creationSource: String,
-    override val type: String = "user_message",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "user_message",
     val messageId: String,
     val scheduledTaskId: String? = null,
     val senderThreadId: String? = null,
@@ -115,7 +119,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "assistant_message",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "assistant_message",
     val messageId: String,
     val text: String,
     val attachments: List<ChatAttachment>? = null,
@@ -142,7 +146,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "reasoning",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "reasoning",
     val text: String,
     val streaming: Boolean,
   ) : TurnItem
@@ -167,7 +171,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "proposed_plan",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "proposed_plan",
     val planId: String,
     val markdown: String,
     val streaming: Boolean,
@@ -193,7 +197,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "todo_list",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "todo_list",
     val planId: String,
     val steps: List<PlanStep>,
     val explanation: String? = null,
@@ -219,7 +223,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "user_input_request",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "user_input_request",
     val requestId: String,
     val questions: List<UserInputQuestion>,
     val questionAnswer: UserInputAttachmentAnswerPayload? = null,
@@ -246,7 +250,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "file_change",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "file_change",
     val fileName: String,
     val additions: Long? = null,
     val deletions: Long? = null,
@@ -276,7 +280,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "command_execution",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "command_execution",
     val input: String,
     val output: String? = null,
     val outputOmitted: Boolean? = null,
@@ -304,7 +308,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "file_search",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "file_search",
     val pattern: String? = null,
     val results: List<FileSearchResult>? = null,
   ) : TurnItem
@@ -329,7 +333,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "web_search",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "web_search",
     val patterns: List<String>? = null,
     val results: List<WebSearchResult>? = null,
   ) : TurnItem
@@ -354,7 +358,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "approval_request",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "approval_request",
     val requestId: String,
     val requestKind: String,
     val prompt: String? = null,
@@ -382,7 +386,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "checkpoint",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "checkpoint",
     val checkpointId: String,
     val scopeId: String,
     val files: List<CheckpointFileSummary>,
@@ -408,7 +412,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "run_interrupt_request",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "run_interrupt_request",
     val message: String,
   ) : TurnItem
 
@@ -432,7 +436,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "run_interrupt_result",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "run_interrupt_result",
     val message: String,
   ) : TurnItem
 
@@ -456,7 +460,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "system_notice",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "system_notice",
     val message: String,
   ) : TurnItem
 
@@ -480,7 +484,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "error",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "error",
     val failure: ProviderFailure,
     val retry: ProviderRetry? = null,
   ) : TurnItem
@@ -505,7 +509,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "compaction",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "compaction",
     val driver: String?,
     val summary: String? = null,
     val beforeTokenCount: Long? = null,
@@ -532,7 +536,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "handoff",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "handoff",
     val contextHandoffId: String,
     val fromProviderThreadIds: List<String>,
     val toProviderThreadId: String,
@@ -564,7 +568,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "fork",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "fork",
     val source: TurnItem.Fork.Source,
     val targetThreadId: String,
   ) : TurnItem {
@@ -574,20 +578,20 @@ public sealed interface TurnItem {
 
       @Serializable
       public data class SourceRun(
-        override val type: String = "run",
+        @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "run",
         val threadId: String,
         val runId: String,
       ) : TurnItem.Fork.Source
 
       @Serializable
       public data class Node(
-        override val type: String = "node",
+        @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "node",
         val nodeId: String,
       ) : TurnItem.Fork.Source
 
       @Serializable
       public data class SourceProviderThread(
-        override val type: String = "provider_thread",
+        @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "provider_thread",
         val providerThreadId: String,
         val providerTurnId: String? = null,
       ) : TurnItem.Fork.Source
@@ -670,7 +674,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "thread_created",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "thread_created",
     val targetThreadId: String,
     val targetRunId: String?,
     val targetProviderInstanceId: String,
@@ -697,7 +701,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "secret_request",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "secret_request",
     val label: String,
     val reason: String,
     val placeholder: String? = null,
@@ -724,7 +728,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "link_request",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "link_request",
     val url: String? = null,
     val reason: String,
     val environmentId: String? = null,
@@ -758,7 +762,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "subagent",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "subagent",
     val subagentId: String,
     val origin: String,
     val driver: String,
@@ -790,7 +794,7 @@ public sealed interface TurnItem {
     override val startedAt: String?,
     override val completedAt: String?,
     override val updatedAt: String,
-    override val type: String = "dynamic_tool",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "dynamic_tool",
     val toolName: String?,
     val viewedImagePath: String? = null,
     // TODO(contracts): unconstrained upstream (Schema.Unknown or an opaque type)

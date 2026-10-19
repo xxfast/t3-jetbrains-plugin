@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "VcsStatusSubscriptionInput",
+  "title": "VcsStatusSubscriptionInput",
+  "type": "object",
+  "properties": {
+    "cwd": {
+      "type": "string"
+    },
+    "includeRemote": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "cwd"
+  ],
+  "additionalProperties": true
+}

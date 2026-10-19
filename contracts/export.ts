@@ -38,6 +38,22 @@ export const CURATED: ReadonlyArray<readonly [name: string, module: string]> = [
   ["OrchestrationGetFullThreadDiffResult", "checkpointDiff.ts"],
   ["ProjectReadFileInput", "project.ts"],
   ["ProjectReadFileResult", "project.ts"],
+  ["OrchestrationV2Command", "orchestrationV2.ts"],
+  ["OrchestrationV2DispatchCommandResult", "orchestrationV2.ts"],
+  ["TerminalAttachInput", "terminal.ts"],
+  ["TerminalWriteInput", "terminal.ts"],
+  ["TerminalResizeInput", "terminal.ts"],
+  ["TerminalCloseInput", "terminal.ts"],
+  ["TerminalSessionSnapshot", "terminal.ts"],
+  ["TerminalAttachStreamEvent", "terminal.ts"],
+  ["VcsStatusSubscriptionInput", "git.ts"],
+  ["VcsStatusStreamEvent", "git.ts"],
+  ["AttachmentCreateUploadUrlInput", "assets.ts"],
+  ["AttachmentCreateUploadUrlResult", "assets.ts"],
+  ["PersistChatAttachmentsInput", "chatAttachment.ts"],
+  ["PersistChatAttachmentsResult", "chatAttachment.ts"],
+  ["ServerProvider", "server.ts"],
+  ["OrchestrationMessageContext", "composerContext.ts"],
 ];
 
 const UPSTREAM_REPO = "https://github.com/pingdotgg/t3code.git";

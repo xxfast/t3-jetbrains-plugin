@@ -3,6 +3,7 @@ package io.github.xxfast.t3code.protocol
 import io.github.xxfast.t3code.protocol.generated.AuthSessionState
 import io.github.xxfast.t3code.protocol.generated.ProjectReadFileResult
 import io.github.xxfast.t3code.protocol.generated.ProjectShell
+import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.ThreadShell
 import kotlinx.serialization.Serializable
 
@@ -23,12 +24,32 @@ public typealias Run = io.github.xxfast.t3code.protocol.generated.Run
 
 public typealias TurnItem = io.github.xxfast.t3code.protocol.generated.TurnItem
 
+/**
+ * What `orchestration.dispatchCommand` takes. Typealiases don't reach nested classes, so code
+ * that builds a branch (`Command.ThreadPin`) imports `generated.Command` directly.
+ */
+public typealias OrchestrationV2Command = io.github.xxfast.t3code.protocol.generated.Command
+
+/** An approval or question the provider is waiting on. */
+public typealias RuntimeRequest = io.github.xxfast.t3code.protocol.generated.RuntimeRequest
+
+public typealias ProviderSession = io.github.xxfast.t3code.protocol.generated.ProviderSession
+
+public typealias Checkpoint = io.github.xxfast.t3code.protocol.generated.Checkpoint
+
 /** What `projects.readFile` answers. */
 public typealias FileContents = ProjectReadFileResult
 
 public val Thread.archived: Boolean get() = archivedAt != null
 
 public val Thread.pinned: Boolean get() = pinnedAt != null
+
+/**
+ * Whether the session grants [scope]. `permissions` is the exact grant and wins when present;
+ * older servers send only the legacy `scopes`.
+ */
+public fun ServerSession.has(scope: String): Boolean =
+  if (permissions.isNotEmpty()) scope in permissions else scope in scopes
 
 /** A bearer session minted by `POST /oauth/token`. Stored by the plugin in PasswordSafe. */
 @Serializable
@@ -39,9 +60,25 @@ public data class Credential(
   val expiresInSeconds: Long? = null,
 )
 
-/** One open thread: the row, its runs and the items to render, in order. */
+/**
+ * One open thread: the row, its runs and the items to render, in order, plus the projection's
+ * pending requests, attached provider sessions and captured checkpoints.
+ */
 public data class ThreadView(
   val thread: Thread,
   val runs: List<Run>,
   val items: List<TurnItem>,
+  val runtimeRequests: List<RuntimeRequest> = emptyList(),
+  val providerSessions: List<ProviderSession> = emptyList(),
+  val checkpoints: List<Checkpoint> = emptyList(),
+)
+
+/** `server.getConfig`, the parts the plugin uses. */
+public data class ServerInfo(
+  val providers: List<ServerProvider>,
+  /**
+   * `environment.capabilities.serverResolvedCommandContext`: the server picks queue vs steer
+   * itself.
+   */
+  val serverResolvedCommandContext: Boolean,
 )

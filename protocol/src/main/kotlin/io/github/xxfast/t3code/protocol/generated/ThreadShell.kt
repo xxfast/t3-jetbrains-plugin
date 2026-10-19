@@ -1,8 +1,12 @@
 // Generated from v0.1.1-preview.20261019.3339 by contracts/generate.ts, do not edit.
 
+@file:OptIn(ExperimentalSerializationApi::class)
+
 package io.github.xxfast.t3code.protocol.generated
 
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -81,20 +85,20 @@ public data class ThreadShell(
 
     @Serializable
     public data class ForkedFromRun(
-      override val type: String = "run",
+      @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "run",
       val threadId: String,
       val runId: String,
     ) : ThreadShell.ForkedFrom
 
     @Serializable
     public data class Node(
-      override val type: String = "node",
+      @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "node",
       val nodeId: String,
     ) : ThreadShell.ForkedFrom
 
     @Serializable
     public data class ForkedFromProviderThread(
-      override val type: String = "provider_thread",
+      @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "provider_thread",
       val providerThreadId: String,
       val providerTurnId: String? = null,
     ) : ThreadShell.ForkedFrom

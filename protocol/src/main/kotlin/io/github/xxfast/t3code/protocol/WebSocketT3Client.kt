@@ -1,5 +1,14 @@
 package io.github.xxfast.t3code.protocol
 
+import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
+import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
+import io.github.xxfast.t3code.protocol.generated.DispatchCommandResult
+import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
+import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
+import io.github.xxfast.t3code.protocol.generated.ServerProvider
+import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
+import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
+import io.github.xxfast.t3code.protocol.generated.VcsStatusStreamEvent
 import java.io.IOException
 import java.net.URI
 import java.net.http.HttpRequest
@@ -24,6 +33,8 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
@@ -57,6 +68,9 @@ public class WebSocketT3Client internal constructor(
   private val active: MutableStateFlow<RpcConnection?> = MutableStateFlow(null)
   private var job: Job? = null
 
+  /** [serverInfo] for the connection it was fetched on. */
+  @Volatile private var info: Pair<RpcConnection, ServerInfo>? = null
+
   override val connection: StateFlow<ConnectionState> = _connection.asStateFlow()
   override val projects: StateFlow<List<Project>> = _projects.asStateFlow()
   override val threads: StateFlow<List<Thread>> = _threads.asStateFlow()
@@ -79,22 +93,14 @@ public class WebSocketT3Client internal constructor(
 
   override fun thread(id: String): Flow<ThreadView> = flow {
     val payload: JsonObject = buildJsonObject { put("threadId", id) }
-    while (true) {
-      val rpc: RpcConnection = active.filterNotNull().first()
-      try {
-        var view: ThreadView? = null
-        rpc.stream("orchestration.subscribeThread", payload).collect { item ->
-          val next: ThreadView? = (item as? JsonObject)?.let { reduce(view, id, it) }
-          if (next != null) {
-            view = next
-            emit(next)
-          }
-        }
-        return@flow
-      } catch (e: T3Exception.Transport) {
-        active.first { it !== rpc }
+    // A resubscription starts with a snapshot, and reduce() builds a fresh view from any snapshot
+    var view: ThreadView? = null
+    resubscribing("orchestration.subscribeThread", payload, JsonObject.serializer())
+      .collect { item ->
+        val next: ThreadView = reduce(view, id, item) ?: return@collect
+        view = next
+        emit(next)
       }
-    }
   }
 
   override suspend fun readFile(cwd: String, path: String): FileContents {
@@ -117,20 +123,97 @@ public class WebSocketT3Client internal constructor(
       (call("assets.createUrl", payload) as? JsonObject)?.string("relativeUrl") ?: return null
     // Upstream's marker for "this project has no favicon", see shared/projectFavicon.ts
     if (relative.substringAfterLast('/') == "project-favicon-missing") return null
-    val socket: URI = socketUri()
-    val scheme: String = if (socket.scheme == "wss") "https" else "http"
-    val base: String = URI(scheme, null, socket.host, socket.port, null, null, null).toString()
-    val request: HttpRequest.Builder = HttpRequest.newBuilder(URI(base + relative)).GET()
-    credential()?.let { request.header("Authorization", "Bearer ${it.accessToken}") }
-    val response: HttpResponse<ByteArray> = try {
-      http.sendAsync(request.build(), HttpResponse.BodyHandlers.ofByteArray()).await()
-    } catch (e: IOException) {
-      throw T3Exception.Transport("Can't fetch $relative: ${e.message}", e)
+    val request: HttpRequest = asset(relative).GET().build()
+    return send(request, relative).takeIf { it.isNotEmpty() }
+  }
+
+  override suspend fun dispatch(command: OrchestrationV2Command): Long {
+    val payload: JsonElement =
+      T3Json.encodeToJsonElement(OrchestrationV2Command.serializer(), command)
+    val result: JsonElement = call("orchestration.dispatchCommand", payload)
+    return decode(DispatchCommandResult.serializer(), result).sequence
+  }
+
+  override fun terminal(input: TerminalAttachInput): Flow<TerminalAttachStreamEvent> {
+    val payload: JsonElement = T3Json.encodeToJsonElement(TerminalAttachInput.serializer(), input)
+    return resubscribing("terminal.attach", payload, TerminalAttachStreamEvent.serializer())
+  }
+
+  override suspend fun terminalWrite(threadId: String, terminalId: String, data: String) {
+    // Upstream rejects empty writes and caps one at 65,536 chars, so split, never mid-surrogate
+    var start = 0
+    while (start < data.length) {
+      var end: Int = minOf(start + TERMINAL_WRITE_MAX_CHARS, data.length)
+      if (end < data.length && data[end - 1].isHighSurrogate()) end--
+      val payload: JsonObject = buildJsonObject {
+        put("threadId", threadId)
+        put("terminalId", terminalId)
+        put("data", data.substring(start, end))
+      }
+      call("terminal.write", payload)
+      start = end
     }
-    if (response.statusCode() !in 200..299) {
-      throw T3Exception.Transport("HTTP ${response.statusCode()} from $relative")
+  }
+
+  override suspend fun terminalResize(threadId: String, terminalId: String, cols: Int, rows: Int) {
+    val payload: JsonObject = buildJsonObject {
+      put("threadId", threadId)
+      put("terminalId", terminalId)
+      put("cols", cols.coerceIn(1, TERMINAL_MAX_COLS))
+      put("rows", rows.coerceIn(1, TERMINAL_MAX_ROWS))
     }
-    return response.body().takeIf { it.isNotEmpty() }
+    call("terminal.resize", payload)
+  }
+
+  override fun vcsStatus(cwd: String): Flow<VcsStatusStreamEvent> {
+    val payload: JsonObject = buildJsonObject {
+      put("cwd", cwd)
+      put("includeRemote", true)
+    }
+    return resubscribing("subscribeVcsStatus", payload, VcsStatusStreamEvent.serializer())
+  }
+
+  override suspend fun createUploadUrl(
+    input: AttachmentCreateUploadUrlInput,
+  ): AttachmentCreateUploadUrlResult {
+    val payload: JsonElement =
+      T3Json.encodeToJsonElement(AttachmentCreateUploadUrlInput.serializer(), input)
+    val result: JsonElement = call("attachments.createUploadUrl", payload)
+    return decode(AttachmentCreateUploadUrlResult.serializer(), result)
+  }
+
+  override suspend fun upload(relativeUrl: String, mimeType: String, bytes: ByteArray) {
+    val request: HttpRequest = asset(relativeUrl)
+      .header("Content-Type", mimeType)
+      .POST(HttpRequest.BodyPublishers.ofByteArray(bytes))
+      .build()
+    send(request, relativeUrl)
+  }
+
+  override suspend fun persistAttachments(
+    input: PersistChatAttachmentsInput,
+  ): PersistChatAttachmentsResult {
+    val payload: JsonElement =
+      T3Json.encodeToJsonElement(PersistChatAttachmentsInput.serializer(), input)
+    val result: JsonElement = call("assets.persistChatAttachments", payload)
+    return decode(PersistChatAttachmentsResult.serializer(), result)
+  }
+
+  override suspend fun serverInfo(): ServerInfo {
+    val rpc: RpcConnection = active.value ?: throw T3Exception.Transport("Not connected")
+    info?.takeIf { (connection, _) -> connection === rpc }?.let { (_, cached) -> return cached }
+    val config: JsonObject = call("server.getConfig", JsonObject(emptyMap()), rpc) as? JsonObject
+      ?: throw T3Exception.Transport("No config from server.getConfig")
+    val capabilities: JsonObject? =
+      (config["environment"] as? JsonObject)?.get("capabilities") as? JsonObject
+    val resolved: Boolean? =
+      (capabilities?.get("serverResolvedCommandContext") as? JsonPrimitive)?.booleanOrNull
+    val fresh = ServerInfo(
+      providers = decodeEach(ServerProvider.serializer(), config["providers"]),
+      serverResolvedCommandContext = resolved ?: false,
+    )
+    info = rpc to fresh
+    return fresh
   }
 
   override suspend fun turnDiff(threadId: String, fromTurn: Long, toTurn: Long): String {
@@ -162,9 +245,13 @@ public class WebSocketT3Client internal constructor(
         val rpc: RpcConnection =
           RpcConnection.open(http, socketUri(), credential.accessToken, scope)
         try {
-          _connection.value = ConnectionState.Connected(auth.probe(credential))
+          val session: ServerSession = auth.probe(credential)
+          // The socket goes live before Connected does, so a caller that waits for Connected
+          // can dispatch straight away
+          info = null
           active.value = rpc
           attempt = 0
+          _connection.value = ConnectionState.Connected(session)
           rpc.stream("orchestration.subscribeShell", JsonObject(emptyMap())).collect(::applyShell)
           throw T3Exception.Transport("The server ended the shell subscription")
         } finally {
@@ -230,6 +317,10 @@ public class WebSocketT3Client internal constructor(
         items = visible.mapNotNull { entry ->
           decodeOrNull(TurnItem.serializer(), (entry as? JsonObject)?.get("item"))
         },
+        runtimeRequests = decodeEach(RuntimeRequest.serializer(), projection["runtimeRequests"]),
+        providerSessions =
+          decodeEach(ProviderSession.serializer(), projection["providerSessions"]),
+        checkpoints = decodeEach(Checkpoint.serializer(), projection["checkpoints"]),
       )
     }
     if (view == null || item.string("kind") != "event") return null
@@ -243,6 +334,27 @@ public class WebSocketT3Client internal constructor(
       type == "run.created" || type == "run.updated" -> decodeOrNull(Run.serializer(), payload)
         ?.let { run -> view.copy(runs = view.runs.upsert(run, Run::id)) }
 
+      // Mirrors client-runtime/src/state/orchestrationV2Projection.ts
+      type == "runtime-request.updated" -> decodeOrNull(RuntimeRequest.serializer(), payload)
+        ?.let { request ->
+          view.copy(runtimeRequests = view.runtimeRequests.upsert(request, RuntimeRequest::id))
+        }
+
+      type == "provider-session.attached" || type == "provider-session.updated" ->
+        decodeOrNull(ProviderSession.serializer(), payload)?.let { session ->
+          view.copy(providerSessions = view.providerSessions.upsert(session, ProviderSession::id))
+        }
+
+      type == "provider-session.detached" -> (payload as? JsonObject)?.string("providerSessionId")
+        ?.let { id ->
+          view.copy(providerSessions = view.providerSessions.filterNot { it.id == id })
+        }
+
+      type == "checkpoint.captured" -> decodeOrNull(Checkpoint.serializer(), payload)
+        ?.let { checkpoint ->
+          view.copy(checkpoints = view.checkpoints.upsert(checkpoint, Checkpoint::id))
+        }
+
       type.startsWith("thread.") -> shellOf(payload, view.thread)
         ?.let { thread -> view.copy(thread = thread) }
 
@@ -250,8 +362,57 @@ public class WebSocketT3Client internal constructor(
     }
   }
 
-  private suspend fun call(tag: String, payload: JsonObject): JsonElement {
-    val rpc: RpcConnection = active.value ?: throw T3Exception.Transport("Not connected")
+  /**
+   * [tag]'s stream, decoded with [serializer], undecodable values dropped. When the socket dies
+   * under it, it waits for the next connection and subscribes again, so the server replays. Any
+   * other failure, a `Die` or an interrupted exit on a live socket, ends the flow with it.
+   */
+  private fun <T> resubscribing(
+    tag: String,
+    payload: JsonElement,
+    serializer: KSerializer<T>,
+  ): Flow<T> = flow {
+    while (true) {
+      val rpc: RpcConnection = active.filterNotNull().first()
+      try {
+        rpc.stream(tag, payload).collect { value ->
+          decodeOrNull(serializer, value)?.let { emit(it) }
+        }
+        return@flow
+      } catch (e: T3Exception.Transport) {
+        if (!rpc.closed.isCompleted) throw e
+        active.first { it !== rpc }
+      }
+    }
+  }
+
+  /** A request for one of the server's signed asset URLs, on the socket's host, with the bearer. */
+  private suspend fun asset(relativeUrl: String): HttpRequest.Builder {
+    val socket: URI = socketUri()
+    val scheme: String = if (socket.scheme == "wss") "https" else "http"
+    val base: String = URI(scheme, null, socket.host, socket.port, null, null, null).toString()
+    val request: HttpRequest.Builder = HttpRequest.newBuilder(URI(base + relativeUrl))
+    credential()?.let { request.header("Authorization", "Bearer ${it.accessToken}") }
+    return request
+  }
+
+  private suspend fun send(request: HttpRequest, relativeUrl: String): ByteArray {
+    val response: HttpResponse<ByteArray> = try {
+      http.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray()).await()
+    } catch (e: IOException) {
+      throw T3Exception.Transport("Can't reach $relativeUrl: ${e.message}", e)
+    }
+    if (response.statusCode() !in 200..299) {
+      throw T3Exception.Transport("HTTP ${response.statusCode()} from $relativeUrl")
+    }
+    return response.body()
+  }
+
+  private suspend fun call(
+    tag: String,
+    payload: JsonElement,
+    rpc: RpcConnection = active.value ?: throw T3Exception.Transport("Not connected"),
+  ): JsonElement {
     try {
       return rpc.call(tag, payload)
     } catch (e: T3Exception.AuthInvalid) {
@@ -270,6 +431,11 @@ public class WebSocketT3Client internal constructor(
   private companion object {
     const val MAX_BACKOFF_MILLIS: Long = 30_000
     const val SOCKET_PATH: String = "/ws?orchestrationProtocol=2"
+
+    // Upstream's bounds, contracts/src/terminal.ts
+    const val TERMINAL_WRITE_MAX_CHARS: Int = 65_536
+    const val TERMINAL_MAX_COLS: Int = 1_000
+    const val TERMINAL_MAX_ROWS: Int = 500
   }
 }
 

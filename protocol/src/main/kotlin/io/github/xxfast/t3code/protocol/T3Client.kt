@@ -1,5 +1,12 @@
 package io.github.xxfast.t3code.protocol
 
+import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
+import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
+import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
+import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
+import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
+import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
+import io.github.xxfast.t3code.protocol.generated.VcsStatusStreamEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -58,6 +65,46 @@ public interface T3Client {
 
   /** `orchestration.getFullThreadDiff`: everything up to run [toTurn] as a unified patch. */
   public suspend fun fullThreadDiff(threadId: String, toTurn: Long): String
+
+  /** `orchestration.dispatchCommand`. Returns the server's sequence. */
+  public suspend fun dispatch(command: OrchestrationV2Command): Long
+
+  /**
+   * `terminal.attach`: a snapshot first (replay its `history`), then live events. Cancelling
+   * detaches; it never kills the server's terminal.
+   */
+  public fun terminal(input: TerminalAttachInput): Flow<TerminalAttachStreamEvent>
+
+  /** `terminal.write`. */
+  public suspend fun terminalWrite(threadId: String, terminalId: String, data: String)
+
+  /** `terminal.resize`. */
+  public suspend fun terminalResize(threadId: String, terminalId: String, cols: Int, rows: Int)
+
+  /** `subscribeVcsStatus` for [cwd]. */
+  public fun vcsStatus(cwd: String): Flow<VcsStatusStreamEvent>
+
+  /**
+   * `attachments.createUploadUrl`. Then [upload] the bytes to the signed `relativeUrl`, then
+   * [persistAttachments]. Three calls so the UI can show progress and failures per step.
+   */
+  public suspend fun createUploadUrl(
+    input: AttachmentCreateUploadUrlInput,
+  ): AttachmentCreateUploadUrlResult
+
+  /**
+   * An HTTP POST of [bytes] to [relativeUrl] with `Content-Type: mimeType`, what the web app's
+   * `uploadBytes` in `apps/web/src/lib/attachmentUploadQueue.ts` does.
+   */
+  public suspend fun upload(relativeUrl: String, mimeType: String, bytes: ByteArray)
+
+  /** `assets.persistChatAttachments`. */
+  public suspend fun persistAttachments(
+    input: PersistChatAttachmentsInput,
+  ): PersistChatAttachmentsResult
+
+  /** `server.getConfig`, the parts the plugin uses. Cached per connection. */
+  public suspend fun serverInfo(): ServerInfo
 
   /** Start, or start over. Safe to call in any state. */
   public fun connect()

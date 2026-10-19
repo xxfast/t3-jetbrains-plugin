@@ -1,0 +1,28 @@
+{
+  "_tag": "Chunk",
+  "requestId": "0",
+  "values": [
+    {
+      "kind": "event",
+      "sequence": 102,
+      "event": {
+        "id": "event-102",
+        "threadId": "thread-1",
+        "runId": "run-1",
+        "occurredAt": "2026-10-19T06:00:06.000Z",
+        "type": "runtime-request.updated",
+        "payload": {
+          "id": "request-1",
+          "nodeId": "node-1",
+          "providerTurnId": null,
+          "nativeRequestRef": null,
+          "kind": "command",
+          "status": "pending",
+          "responseCapability": { "type": "live", "providerSessionId": "session-1" },
+          "createdAt": "2026-10-19T06:00:06.000Z",
+          "resolvedAt": null
+        }
+      }
+    }
+  ]
+}

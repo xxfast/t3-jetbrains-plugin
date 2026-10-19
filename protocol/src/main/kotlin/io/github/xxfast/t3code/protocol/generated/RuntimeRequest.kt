@@ -1,8 +1,12 @@
 // Generated from v0.1.1-preview.20261019.3339 by contracts/generate.ts, do not edit.
 
+@file:OptIn(ExperimentalSerializationApi::class)
+
 package io.github.xxfast.t3code.protocol.generated
 
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -36,18 +40,18 @@ public data class RuntimeRequest(
 
     @Serializable
     public data class Live(
-      override val type: String = "live",
+      @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "live",
       val providerSessionId: String,
     ) : RuntimeRequest.ResponseCapability
 
     @Serializable
     public data class Message(
-      override val type: String = "message",
+      @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "message",
     ) : RuntimeRequest.ResponseCapability
 
     @Serializable
     public data class NotResumable(
-      override val type: String = "not_resumable",
+      @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "not_resumable",
       val reason: String,
     ) : RuntimeRequest.ResponseCapability
 

@@ -174,8 +174,9 @@ internal class RpcConnection private constructor(
   private fun shutdown(error: T3Exception) {
     if (failure != null) return
     failure = error
-    failPending(error)
+    // Before failing the requests, so a caller woken by the failure already sees it closed
     closed.complete(Unit)
+    failPending(error)
     scope.cancel()
   }
 

@@ -1,0 +1,1394 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ServerProvider",
+  "title": "ServerProvider",
+  "type": "object",
+  "properties": {
+    "instanceId": {
+      "type": "string"
+    },
+    "driver": {
+      "type": "string"
+    },
+    "displayName": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "accentColor": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "iconUrl": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "badgeLabel": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "continuation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ServerProviderContinuation"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "showInteractionModeToggle": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "reportsContextWindow": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "supportedRuntimeModes": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "approval-required",
+                  "auto-accept-edits",
+                  "auto",
+                  "full-access"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "requiresNewThreadForModelChange": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "supportsConversationRollback": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "supportsTextGeneration": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "setup": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "canAuthenticate": {
+              "type": "boolean"
+            },
+            "canInstall": {
+              "type": "boolean"
+            },
+            "documentationUrl": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "canAuthenticate",
+            "canInstall"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nativeSessions": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "canList": {
+              "type": "boolean"
+            },
+            "canLoad": {
+              "type": "boolean"
+            },
+            "canResume": {
+              "type": "boolean"
+            },
+            "canDelete": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "canList",
+            "canLoad",
+            "canResume"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "configurableProviders": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "runtimePaths": {
+      "type": "object",
+      "properties": {
+        "homePath": {
+          "type": "string"
+        },
+        "shadowHomePath": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "homePath",
+        "shadowHomePath"
+      ],
+      "additionalProperties": true
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "installed": {
+      "type": "boolean"
+    },
+    "version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ready",
+        "warning",
+        "error",
+        "disabled"
+      ]
+    },
+    "auth": {
+      "$ref": "#/$defs/ServerProviderAuth"
+    },
+    "checkedAt": {
+      "type": "string"
+    },
+    "message": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "availability": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "available",
+            "unavailable"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "unavailableReason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ServerProviderModel"
+      }
+    },
+    "updateRequiredModels": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ServerProviderUpdateRequiredModel"
+      }
+    },
+    "slashCommands": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ServerProviderSlashCommand"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "skills": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ServerProviderSkill"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "workspaceSnapshots": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ServerProviderWorkspaceSnapshot"
+      }
+    },
+    "usageLimits": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ServerProviderUsageLimits"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "versionAdvisory": {
+      "$ref": "#/$defs/ServerProviderVersionAdvisory"
+    },
+    "compatibilityAdvisory": {
+      "$ref": "#/$defs/ServerProviderCompatibilityAdvisory"
+    },
+    "updateState": {
+      "$ref": "#/$defs/ServerProviderUpdateState"
+    }
+  },
+  "required": [
+    "instanceId",
+    "driver",
+    "enabled",
+    "installed",
+    "version",
+    "status",
+    "auth",
+    "checkedAt",
+    "models"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "AcpRegistryUrlAuthAction": {
+      "type": "object",
+      "properties": {
+        "elicitationId": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "createdAt": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "expiresAt": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "elicitationId",
+        "url",
+        "message"
+      ],
+      "additionalProperties": true
+    },
+    "BooleanProviderOptionDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "boolean"
+          ]
+        },
+        "currentValue": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "type"
+      ],
+      "additionalProperties": true
+    },
+    "ModelCapabilities": {
+      "type": "object",
+      "properties": {
+        "optionDescriptors": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ProviderOptionDescriptor"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "ProviderOptionChoice": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "isDefault": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "label"
+      ],
+      "additionalProperties": true
+    },
+    "ProviderOptionDescriptor": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SelectProviderOptionDescriptor"
+        },
+        {
+          "$ref": "#/$defs/BooleanProviderOptionDescriptor"
+        }
+      ]
+    },
+    "SelectProviderOptionDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "select"
+          ]
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ProviderOptionChoice"
+          }
+        },
+        "currentValue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "promptInjectedValues": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "type",
+        "options"
+      ],
+      "additionalProperties": true
+    },
+    "ServerProviderAuth": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "authenticated",
+            "unauthenticated",
+            "unknown"
+          ]
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "email": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AcpRegistryUrlAuthAction"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "canLogout": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subscriptionSharing": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profileId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workspaceId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "additionalProperties": true
+    },
+    "ServerProviderCompatibilityAdvisory": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "supported",
+            "graceful",
+            "unsupported",
+            "broken"
+          ]
+        },
+        "latestVersionStatus": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "supported",
+            "graceful",
+            "unsupported",
+            "broken"
+          ]
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recommendedVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recommendedRange": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "recommendedVersion",
+        "recommendedRange"
+      ],
+      "additionalProperties": true
+    },
+    "ServerProviderContinuation": {
+      "type": "object",
+      "properties": {
+        "groupKey": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "groupKey"
+      ],
+      "additionalProperties": true
+    },
+    "ServerProviderModel": {
+      "type": "object",
+      "properties": {
+        "slug": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "shortName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subProvider": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "aliases": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "badge": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "new"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "isCustom": {
+          "type": "boolean"
+        },
+        "isDefault": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "isLegacy": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "capabilities": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelCapabilities"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "slug",
+        "name",
+        "isCustom",
+        "capabilities"
+      ],
+      "additionalProperties": true
+    },
+    "ServerProviderResetCredits": {
+      "type": "object",
+      "properties": {
+        "availableCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "nextExpiresAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nextCreditId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "availableCount"
+      ],
+      "additionalProperties": true
+    },
+    "ServerProviderSkill": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "displayName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "shortDescription": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "userInvocationOnly": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "userInvocable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "path",
+        "enabled"
+      ],
+      "additionalProperties": true
+    },
+    "ServerProviderSlashCommand": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ServerProviderSlashCommandInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": true
+    },
+    "ServerProviderSlashCommandInput": {
+      "type": "object",
+      "properties": {
+        "hint": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "hint"
+      ],
+      "additionalProperties": true
+    },
+    "ServerProviderUpdateRequiredModel": {
+      "type": "object",
+      "properties": {
+        "slug": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "badge": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "new"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "minVersion": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "slug",
+        "name",
+        "minVersion"
+      ],
+      "additionalProperties": true
+    },
+    "ServerProviderUpdateState": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "idle",
+            "queued",
+            "running",
+            "succeeded",
+            "failed",
+            "unchanged"
+          ]
+        },
+        "startedAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finishedAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 10000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "startedAt",
+        "finishedAt",
+        "message",
+        "output"
+      ],
+      "additionalProperties": true
+    },
+    "ServerProviderUsageLimits": {
+      "type": "object",
+      "properties": {
+        "checkedAt": {
+          "type": "string"
+        },
+        "windows": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ServerProviderUsageWindow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "credentialFingerprint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resetCredits": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ServerProviderResetCredits"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "externalUsage": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "label",
+                "url"
+              ],
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unavailable": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "unsupported",
+                    "probeFailed"
+                  ]
+                },
+                "message": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "reason"
+              ],
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "checkedAt",
+        "windows"
+      ],
+      "additionalProperties": true
+    },
+    "ServerProviderUsageWindow": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "session",
+            "weekly",
+            "monthly",
+            "other"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "usedPercent": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "Infinity",
+                "-Infinity",
+                "NaN"
+              ]
+            }
+          ]
+        },
+        "resetsAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "windowDurationMins": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "label",
+        "usedPercent"
+      ],
+      "additionalProperties": true
+    },
+    "ServerProviderVersionAdvisory": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "current",
+            "behind_latest"
+          ]
+        },
+        "currentVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latestVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updateCommand": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "canUpdate": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "canInstallVersion": {
+          "type": "boolean"
+        },
+        "checkedAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "currentVersion",
+        "latestVersion",
+        "updateCommand",
+        "checkedAt",
+        "message"
+      ],
+      "additionalProperties": true
+    },
+    "ServerProviderWorkspaceSnapshot": {
+      "type": "object",
+      "properties": {
+        "cwd": {
+          "type": "string"
+        },
+        "checkedAt": {
+          "type": "string"
+        },
+        "slashCommands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ServerProviderSlashCommand"
+          }
+        },
+        "slashCommandsPending": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "skills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ServerProviderSkill"
+          }
+        }
+      },
+      "required": [
+        "cwd",
+        "checkedAt",
+        "slashCommands",
+        "skills"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

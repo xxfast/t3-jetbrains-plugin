@@ -30,21 +30,29 @@ public class T3Auth(
     return send(request.build(), ServerSession.serializer())
   }
 
-  /** Exchange a one-time pairing code, or a pairing link carrying one, for a bearer token. */
+  /**
+   * Exchange a one-time pairing code, or a pairing link carrying one, for a bearer token.
+   *
+   * The server grants [scopes] intersected with the code's own and only refuses when that's
+   * empty (`exchangeBootstrapCredentialForAccessToken` in `EnvironmentAuth.ts`). So a read-only
+   * code still pairs, it just yields a read-only token, and the UI gates writes on
+   * [ServerSession.has]. An empty [scopes] leaves the `scope` field out, and the token gets
+   * everything the code carries.
+   */
   public suspend fun pair(
     codeOrLink: String,
     label: String = "JetBrains",
-    scopes: List<String> = listOf("orchestration:read", "filesystem:read"),
+    scopes: List<String> = PLUGIN_SCOPES,
   ): Credential {
-    val form: Map<String, String> = mapOf(
-      "grant_type" to "urn:ietf:params:oauth:grant-type:token-exchange",
-      "subject_token" to pairingCode(codeOrLink),
-      "subject_token_type" to "urn:t3:params:oauth:token-type:environment-bootstrap",
-      "requested_token_type" to "urn:ietf:params:oauth:token-type:access_token",
-      "scope" to scopes.joinToString(" "),
-      "client_label" to label,
-      "client_device_type" to "desktop",
-    )
+    val form: Map<String, String> = buildMap {
+      put("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange")
+      put("subject_token", pairingCode(codeOrLink))
+      put("subject_token_type", "urn:t3:params:oauth:token-type:environment-bootstrap")
+      put("requested_token_type", "urn:ietf:params:oauth:token-type:access_token")
+      if (scopes.isNotEmpty()) put("scope", scopes.joinToString(" "))
+      put("client_label", label)
+      put("client_device_type", "desktop")
+    }
     val body: String = form.entries.joinToString("&") { (key, value) ->
       "$key=${URLEncoder.encode(value, Charsets.UTF_8).replace("+", "%20")}"
     }
@@ -58,6 +66,17 @@ public class T3Auth(
       tokenType = token.tokenType,
       scopes = token.scope.split(" ").filter { it.isNotBlank() },
       expiresInSeconds = token.expiresIn.toLong(),
+    )
+  }
+
+  public companion object {
+    /** What the plugin uses, and so all it asks for: least privilege. */
+    public val PLUGIN_SCOPES: List<String> = listOf(
+      "orchestration:read",
+      "orchestration:operate",
+      "terminal:read",
+      "terminal:operate",
+      "filesystem:read",
     )
   }
 

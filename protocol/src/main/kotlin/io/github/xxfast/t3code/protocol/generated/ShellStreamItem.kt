@@ -1,8 +1,12 @@
 // Generated from v0.1.1-preview.20261019.3339 by contracts/generate.ts, do not edit.
 
+@file:OptIn(ExperimentalSerializationApi::class)
+
 package io.github.xxfast.t3code.protocol.generated
 
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -21,33 +25,33 @@ public sealed interface ShellStreamItem {
 
   @Serializable
   public data class Synchronized(
-    override val kind: String = "synchronized",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "synchronized",
   ) : ShellStreamItem
 
   @Serializable
   public data class Snapshot(
-    override val kind: String = "snapshot",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "snapshot",
     val snapshot: ShellSnapshot,
     val resolvedRepositoryIdentityRoots: List<String> = emptyList(),
   ) : ShellStreamItem
 
   @Serializable
   public data class ProjectUpdated(
-    override val kind: String = "project.updated",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "project.updated",
     val sequence: Long,
     val project: ProjectShell,
   ) : ShellStreamItem
 
   @Serializable
   public data class ProjectRemoved(
-    override val kind: String = "project.removed",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "project.removed",
     val sequence: Long,
     val projectId: String,
   ) : ShellStreamItem
 
   @Serializable
   public data class ThreadUpdated(
-    override val kind: String = "thread.updated",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "thread.updated",
     val sequence: Long,
     val location: String,
     val thread: ThreadShell,
@@ -55,7 +59,7 @@ public sealed interface ShellStreamItem {
 
   @Serializable
   public data class ThreadRemoved(
-    override val kind: String = "thread.removed",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "thread.removed",
     val sequence: Long,
     val location: String,
     val threadId: String,

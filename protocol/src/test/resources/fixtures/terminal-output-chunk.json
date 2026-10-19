@@ -1,0 +1,14 @@
+{
+  "_tag": "Chunk",
+  "requestId": "0",
+  "values": [
+    { "type": "some-future-event", "threadId": "thread-1", "terminalId": "default" },
+    {
+      "threadId": "thread-1",
+      "terminalId": "default",
+      "sequence": 2,
+      "type": "output",
+      "data": "ls\r\nREADME.md\r\n$ "
+    }
+  ]
+}

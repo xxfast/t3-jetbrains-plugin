@@ -1,0 +1,23 @@
+{
+  "_tag": "Chunk",
+  "requestId": "0",
+  "values": [
+    {
+      "type": "snapshot",
+      "snapshot": {
+        "threadId": "thread-1",
+        "terminalId": "default",
+        "cwd": "/repo",
+        "worktreePath": null,
+        "status": "running",
+        "pid": 4242,
+        "history": "$ ",
+        "exitCode": null,
+        "exitSignal": null,
+        "label": "zsh",
+        "updatedAt": "2026-10-19T06:00:00.000Z",
+        "sequence": 1
+      }
+    }
+  ]
+}

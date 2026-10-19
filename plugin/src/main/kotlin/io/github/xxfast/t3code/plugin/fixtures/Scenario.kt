@@ -1,8 +1,11 @@
 package io.github.xxfast.t3code.plugin.fixtures
 
+import io.github.xxfast.t3code.protocol.Checkpoint
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.Project
+import io.github.xxfast.t3code.protocol.ProviderSession
 import io.github.xxfast.t3code.protocol.Run
+import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ServerSession
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
@@ -21,6 +24,9 @@ class ScenarioFile(
   val threads: List<Thread> = emptyList(),
   val runs: Map<String, List<Run>> = emptyMap(),
   val items: Map<String, List<JsonObject>> = emptyMap(),
+  val runtimeRequests: Map<String, List<RuntimeRequest>> = emptyMap(),
+  val providerSessions: Map<String, List<ProviderSession>> = emptyMap(),
+  val checkpoints: Map<String, List<Checkpoint>> = emptyMap(),
 )
 
 @Serializable
@@ -43,6 +49,9 @@ class Scenario(
   val threads: List<Thread>,
   val runs: Map<String, List<Run>>,
   val items: Map<String, List<FixtureItem>>,
+  val runtimeRequests: Map<String, List<RuntimeRequest>> = emptyMap(),
+  val providerSessions: Map<String, List<ProviderSession>> = emptyMap(),
+  val checkpoints: Map<String, List<Checkpoint>> = emptyMap(),
 ) {
   companion object {
     fun decode(text: String): Scenario {
@@ -53,13 +62,16 @@ class Scenario(
         threads = file.threads,
         runs = file.runs,
         items = file.items.mapValues { (_, entries) -> entries.map(::fixtureItem) },
+        runtimeRequests = file.runtimeRequests,
+        providerSessions = file.providerSessions,
+        checkpoints = file.checkpoints,
       )
     }
 
     /**
      * One scenario out of a directory's files, in order. Projects and threads dedupe by id, first
-     * wins. Runs and items append per thread. The last file that sets a connection wins, and a
-     * directory that sets none is connected.
+     * wins. Runs, items, requests, sessions and checkpoints append per thread. The last file that
+     * sets a connection wins, and a directory that sets none is connected.
      */
     fun merge(parts: List<Scenario>): Scenario = Scenario(
       connection = parts.lastOrNull { it.connection != null }?.connection
@@ -68,6 +80,9 @@ class Scenario(
       threads = parts.flatMap { it.threads }.distinctBy { it.id },
       runs = parts.map { it.runs }.fold(emptyMap(), ::append),
       items = parts.map { it.items }.fold(emptyMap(), ::append),
+      runtimeRequests = parts.map { it.runtimeRequests }.fold(emptyMap(), ::append),
+      providerSessions = parts.map { it.providerSessions }.fold(emptyMap(), ::append),
+      checkpoints = parts.map { it.checkpoints }.fold(emptyMap(), ::append),
     )
 
     fun failed(name: String, message: String): Scenario = Scenario(

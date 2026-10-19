@@ -1,8 +1,12 @@
 // Generated from v0.1.1-preview.20261019.3339 by contracts/generate.ts, do not edit.
 
+@file:OptIn(ExperimentalSerializationApi::class)
+
 package io.github.xxfast.t3code.protocol.generated
 
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -37,7 +41,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
-    override val type: String = "thread.created",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "thread.created",
     val payload: AppThread,
   ) : DomainEvent
 
@@ -65,6 +69,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     override val type: String = "thread.pull-request-link-updated",
     val payload: ThreadPullRequestLink,
   ) : DomainEvent
@@ -79,7 +84,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
-    override val type: String = "run.created",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "run.created",
     val payload: Run,
   ) : DomainEvent
 
@@ -93,7 +98,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
-    override val type: String = "run.updated",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "run.updated",
     val payload: Run,
   ) : DomainEvent
 
@@ -107,6 +112,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     override val type: String = "run.background-work-cancelled",
     val payload: RunBackgroundWorkCancelled,
   ) : DomainEvent
@@ -121,7 +127,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
-    override val type: String = "run-attempt.created",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "run-attempt.created",
     val payload: RunAttempt,
   ) : DomainEvent
 
@@ -135,7 +141,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
-    override val type: String = "run-attempt.updated",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "run-attempt.updated",
     val payload: RunAttempt,
   ) : DomainEvent
 
@@ -149,7 +155,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
-    override val type: String = "node.updated",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "node.updated",
     val payload: ExecutionNode,
   ) : DomainEvent
 
@@ -163,7 +169,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
-    override val type: String = "subagent.updated",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "subagent.updated",
     val payload: Subagent,
   ) : DomainEvent
 
@@ -191,6 +197,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     override val type: String = "provider-session.detached",
     val payload: ProviderSessionDetached,
   ) : DomainEvent
@@ -205,7 +212,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
-    override val type: String = "provider-thread.updated",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "provider-thread.updated",
     val payload: ProviderThread,
   ) : DomainEvent
 
@@ -219,7 +226,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
-    override val type: String = "provider-turn.updated",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "provider-turn.updated",
     val payload: ProviderTurn,
   ) : DomainEvent
 
@@ -233,7 +240,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
-    override val type: String = "runtime-request.updated",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "runtime-request.updated",
     val payload: RuntimeRequest,
   ) : DomainEvent
 
@@ -247,7 +254,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
-    override val type: String = "message.updated",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "message.updated",
     val payload: ConversationMessage,
   ) : DomainEvent
 
@@ -261,7 +268,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
-    override val type: String = "turn-item.updated",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "turn-item.updated",
     val payload: TurnItem,
   ) : DomainEvent
 
@@ -275,7 +282,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
-    override val type: String = "plan.updated",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "plan.updated",
     val payload: PlanArtifact,
   ) : DomainEvent
 
@@ -289,6 +296,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     override val type: String = "checkpoint-scope.created",
     val payload: CheckpointScope,
   ) : DomainEvent
@@ -303,7 +311,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
-    override val type: String = "checkpoint.captured",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "checkpoint.captured",
     val payload: Checkpoint,
   ) : DomainEvent
 
@@ -317,6 +325,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     override val type: String = "checkpoint.rollback-requested",
     val payload: CheckpointRollbackRequest,
   ) : DomainEvent
@@ -331,7 +340,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
-    override val type: String = "context-handoff.updated",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "context-handoff.updated",
     val payload: ContextHandoff,
   ) : DomainEvent
 
@@ -345,6 +354,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     override val type: String = "context-transfer.created",
     val payload: ContextTransfer,
   ) : DomainEvent
@@ -359,6 +369,7 @@ public sealed interface DomainEvent {
     override val providerInstanceId: String? = null,
     override val rawEventId: String? = null,
     override val occurredAt: String,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     override val type: String = "context-transfer.updated",
     val payload: ContextTransfer,
   ) : DomainEvent

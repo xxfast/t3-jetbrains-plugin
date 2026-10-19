@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "TerminalCloseInput",
+  "title": "TerminalCloseInput",
+  "type": "object",
+  "properties": {
+    "threadId": {
+      "type": "string"
+    },
+    "terminalId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "deleteHistory": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "threadId"
+  ],
+  "additionalProperties": true
+}
