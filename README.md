@@ -23,6 +23,8 @@ client is a supported shape, not a hack.
   newer server. Custom renderers only for things worth looking at every day.
 - **The IDE does the IDE things.** Diff viewer, editor, terminal, git, run configs. We only open them.
 - **JCEF is the escape hatch.** Anything not worth owning is a web view onto the server.
+- **Design in the harness.** Int UI is the design system, so we prototype in it: the plugin runs in a
+  sandbox IDE against JSON fixtures in `harness/`. No mockups, nothing built twice.
 
 ## Planned layout
 
@@ -31,6 +33,7 @@ client is a supported shape, not a hack.
 | `:protocol` | Plain Kotlin client for the T3 server. No IDE dependency. Reusable for a CLI or anything else. |
 | `:plugin` | The JetBrains plugin. Jewel UI on top of `:protocol`. |
 | `contracts/` | Pinned upstream version and the schema generator. |
+| `harness/` | Fixture scenarios for the design harness. `./gradlew runHarness` opens a sandbox IDE on them. |
 
 Targets IntelliJ Platform 2025.3 and later, so IDEA, Android Studio, WebStorm, Rider and friends.
 
