@@ -13,8 +13,24 @@ Unofficial, built for my own use. Will publish if it turns out useful to others.
 
 ## Status
 
-Not released. Pair with a T3 server, browse its threads, read a thread as it runs, and open the
-files and diffs it touches in the IDE. Nothing else yet, see the roadmap.
+Not released. What works today:
+
+- Pair with a T3 server, browse its threads in the Sidebar, read a thread live as it runs.
+- Open the files and diffs a thread touches, in the IDE's own editor and diff viewer.
+- Send messages, steer or queue while a run is going.
+- Answer approvals and questions from the composer. A balloon and a Sidebar badge say when a
+  thread is waiting on you.
+- Interrupt, stop session, pin, mark unread and archive. On the thread's toolbar, the
+  "T3 Chat View" title and the Sidebar's right-click menu, all in Find Action and keymaps.
+- The thread's terminal as a tab in the IDE's Terminal tool window.
+- A project picker that defaults to whatever this IDE window has open, worktrees included.
+  "Open worktree in new window" when it isn't.
+- A git line on the thread header: branch, changed files, ahead and behind.
+- Model, mode and plan controls in the composer footer.
+- Attachments: TODO(#14), one line when it lands.
+- #15: TODO, one line when it lands.
+
+See the roadmap for what's next.
 
 ## Install
 

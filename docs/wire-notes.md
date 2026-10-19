@@ -369,3 +369,26 @@ Discriminated on `type`:
 9. Do not put long-lived tokens in the socket URL. Use `wsTicket` or the `Authorization` header on the upgrade.
 10. `/api/orchestration/*` HTTP fails without `x-t3-orchestration-protocol: 2`.
 11. The desktop server may be older than this tag. Gate on `/.well-known/t3/environment` (`{environmentId, label, platform, serverVersion, orchestrationProtocolVersion?, capabilities}`, `environment.ts:167-174`) and on `subscribeServerConfig` capabilities.
+
+---
+
+## 8. Phase 2 additions
+
+What the plugin calls since phase 2, each with what it took to get right. Learned against `v0.1.1-preview.20261019.3339`, checked live with `LiveServerTest` on 2026-10-20.
+
+- **`orchestration.dispatchCommand`**, scope `orchestration:operate` for every command (`RpcAuthorization.ts:42`). Answers the server's sequence. Types the plugin sends: `message.dispatch`, `runtime-request.respond`, `thread.user-input.dismiss`, `run.interrupt`, `provider-session.detach`, `thread.archive`, `thread.unarchive`, `thread.pin`, `thread.unpin`, `thread.mark-unread`, `thread.visit`, `thread.runtime-mode.set`, `thread.interaction-mode.set`, `thread.model-selection.set` (idle threads; mid-run the pick rides on the next `message.dispatch` as `modelSelection`) and `provider.switch` (a change of instance when the server does not resolve command context).
+  - Every command needs its `type` on the wire; the generated discriminators are `@EncodeDefault(ALWAYS)` because `T3Json` drops defaults.
+  - A sent message is reconciled by sequence: the optimistic row goes when its `messageId` shows up, or when the thread's sequence passes the one the dispatch answered.
+  - `thread.stop` is internal and rejected from a client. Stop is one `provider-session.detach` per attached session, `reason: "client-requested"`, command id `<base>:detach:<sessionId>` (`stopThreadSession`).
+  - `run.interrupt` goes to the newest run that's preparing, starting, running or waiting, with `holdQueue: true` (`interruptThreadTurn`).
+  - `thread.mark-unread` fails unless the latest run completed (`Orchestrator.ts:2815`). Archive is refused while a run is attached.
+  - `thread.visit` with `visitedAt` = the row's `updatedAt`, deduped per watermark, throttled to one per 10 s unless a completion is unseen (`ThreadVisitWatermark`).
+- **`runtime-request.respond`** only works on a request whose `responseCapability.type` is `live`; a user-input request answers unless it's `not_resumable`. Message-mode prompts are dismissed with `thread.user-input.dismiss` instead.
+- **`terminal.attach`** (`terminal:operate`): a snapshot first, then events. A snapshot or restart resets the screen and replays `history`; resend the size after every snapshot, the way upstream's `resendSize` does. Terminal id `term-1`, cwd is the worktree else the project root. Cancelling detaches, it never kills.
+- **`terminal.observe`** (`terminal:read`): the same events for a read-only session, never starts a terminal. Used when attach is refused.
+- **`terminal.write`** and **`terminal.resize`**: writes go out in order. **`terminal.close`** once the shell has exited, like the desktop, or the next attach gets the dead one back.
+- **`subscribeVcsStatus`** `{cwd, includeRemote: true}`: `snapshot`, then `localUpdated` and `remoteUpdated` that each replace their half (`applyGitStatusStreamEvent`, `packages/shared/src/git.ts:351`). Each subscription polls, so share one per cwd.
+- **`attachments.createUploadUrl`**, then an HTTP `POST` of the bytes to the signed `relativeUrl` with `Content-Type` set (the web app's `uploadBytes`), then the minted `attachmentId` goes straight into `message.dispatch.attachments`. The desktop never calls `assets.persistChatAttachments` after an upload; that RPC takes data-URL images and the plugin only keeps it for completeness.
+- **`server.getConfig`**: the provider catalog for the model picker, and `environment.capabilities.serverResolvedCommandContext` (the server picks queue or steer itself). Cached per connection.
+- **Pairing scopes**: `/oauth/token` grants the requested scopes intersected with the code's grant and only fails when that's empty. The plugin asks for `orchestration:read`, `orchestration:operate`, `terminal:read`, `terminal:operate`, `filesystem:read`.
+- **Stream ends**: a stream waits for a reconnect only when the socket really closed. A server `Die` or `Fail` ends the flow.

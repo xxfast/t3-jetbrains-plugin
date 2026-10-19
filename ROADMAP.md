@@ -11,6 +11,7 @@ see `Later`.
   **Done when** is the acceptance test. The agent should be able to finish from the issue,
   `README.md`, `CLAUDE.md` and `contracts/README.md` alone.
 - Do items in the order listed here unless the issue says otherwise. One issue, one PR.
+- Issues close as they land, with the commit in the close comment. Nothing gets ticked here.
 - Issues name upstream RPC methods (`orchestration.subscribeThread`) and HTTP routes
   (`/api/auth/session`). Those come from `packages/contracts/src/rpc.ts` and `environmentHttp.ts`
   at the tag in `contracts/T3CODE_VERSION`. Verify against that tag, not `main`.

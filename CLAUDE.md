@@ -47,11 +47,13 @@ How it fits together:
 - Composables take state, not the client. That's what makes fixture and real interchangeable, and
   it's what makes screenshot tests possible later.
 - A scenario is a folder in `harness/scenarios/`; the fixture client merges every `*.json` in it.
-  `default/` is the thread list plus one demo thread per thread-level state (running, waiting on
-  approval, unknown item types, a few hundred items, unread rows) on a session that can operate.
-  `disconnected/`, `pairing/`, `auth-error/`, `read-only/` and `empty-server/` cover
-  connection-level states. Shapes are the same `:protocol` types the
-  real client decodes, so scenarios double as test fixtures.
+  `default/` is the thread list plus one demo thread per thread-level state (`running.json`,
+  `waiting-approval.json`, `waiting-question.json`, `unknown-items.json`, `many-items.json`,
+  `unread.json`), and its `connection.json` grants the operate and terminal scopes so every
+  action is live. `disconnected/`, `pairing/`, `auth-error/`, `read-only/` (no operate) and
+  `empty-server/` cover connection-level states; the ones with threads carry a byte-for-byte copy
+  of `default/list.json`. Shapes are the same `:protocol` types the real client decodes, so
+  scenarios double as test fixtures.
 - Items may carry an `after` delay in milliseconds. The fixture client replays them in order so a
   "running" thread visibly grows, which is the only way to design streaming.
 - The fixture client watches its directory. Edit a JSON file, the tool window updates. No rebuild
@@ -189,6 +191,27 @@ Hard-won, so recorded here rather than rediscovered.
 - Claude Design was tried for this project and dropped. It only produces HTML and CSS, doesn't
   know Int UI or Jewel, and the standalone site closes 14 December 2026 (folded into claude.ai
   artifacts). Don't bring it back; the harness replaces it.
+- Run `runHarness` from a worktree, not the main checkout (2026-10-20). The main checkout has the
+  gitignored `contracts/.upstream` clone, and the sandbox indexes it for 25+ minutes. Worktrees
+  need `local.properties` copied in.
+- The Compose tool window takes a few seconds to first render in the sandbox. A screenshot right
+  after activating it shows nothing. Not a bug.
+- `git worktree remove` fails on long paths once a sandbox has run inside the worktree. Use
+  `cmd /c rd /s /q <path>`, then `git worktree prune`.
+- Pairing grants the requested scopes intersected with the code's grant, and only fails when
+  that's empty. `T3Auth.PLUGIN_SCOPES` is what the plugin asks for, so a read-only code still
+  pairs. The "IntelliJ IDEA" client under the desktop's Settings > Connections shows how many
+  scopes it got.
+- Generated union discriminators carry `@EncodeDefault(ALWAYS)` because `T3Json` drops defaults,
+  and the server rejects a command without `type`.
+- `thread.stop` is in upstream's internal command union. Clients detach provider sessions
+  instead, upstream's `stopThreadSession`.
+- Streams only wait for a reconnect when `RpcConnection.closed` is complete. A server `Die` or
+  `Fail` ends the flow, so the UI hosts wrap `thread()` in `threadLoad()` to show it with Retry.
+- Upstream's model pick is a composer draft applied on the next turn. Mid-run the plugin keeps it
+  as a draft too and sends it with the next message.
+- `LiveServerTest` (skipped unless `T3_LIVE_TOKEN` and `T3_LIVE_THREAD` are set) is how wire
+  changes get checked against the real server. Last passed 2026-10-20 against the local desktop.
 
 ## Style
 
