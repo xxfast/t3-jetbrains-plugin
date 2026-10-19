@@ -24,15 +24,9 @@ import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.isMetaPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import com.intellij.openapi.ide.CopyPasteManager
+import io.github.xxfast.t3code.plugin.actions.T3DataKeys
 import java.awt.Image
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.Transferable
@@ -44,6 +38,7 @@ import java.io.IOException
 import java.nio.file.Path
 import javax.imageio.ImageIO
 import javax.swing.ImageIcon
+import org.jetbrains.jewel.foundation.actionSystem.provideData
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.CircularProgressIndicator
 import org.jetbrains.jewel.ui.component.IconActionButton
@@ -203,36 +198,35 @@ fun Modifier.fileDropTarget(
 }
 
 /**
- * Ctrl or Cmd+V with an image or files on the clipboard attaches them instead of pasting text;
- * anything else is the text field's paste. Through [CopyPasteManager], which already copes with a
- * clipboard another app holds or a transferable gone stale.
+ * Offers [actions] to the IDE's action system while the text field has focus, so a paste
+ * shortcut with files or an image on the clipboard reaches `PasteAttachmentAction`. Jewel's
+ * `provideData` only answers for a focused node, which is what keeps the action off other text
+ * fields.
  */
-fun Modifier.pasteAttachments(enabled: Boolean, actions: AttachmentActions): Modifier =
-  onPreviewKeyEvent { event ->
-    val paste: Boolean = event.type == KeyEventType.KeyDown &&
-      event.key == Key.V &&
-      (event.isCtrlPressed || event.isMetaPressed)
-    if (!paste || !enabled) return@onPreviewKeyEvent false
-    val clipboard: CopyPasteManager = CopyPasteManager.getInstance()
-    try {
-      if (clipboard.areDataFlavorsAvailable(DataFlavor.javaFileListFlavor)) {
-        val files: List<Path> = clipboard.getContents<Any>(DataFlavor.javaFileListFlavor)
-          ?.let(::pathsOf)
-          ?: return@onPreviewKeyEvent false
-        actions.onFiles(files)
-        return@onPreviewKeyEvent true
-      }
-      if (!clipboard.areDataFlavorsAvailable(DataFlavor.imageFlavor)) {
-        return@onPreviewKeyEvent false
-      }
-      val image: Image = clipboard.getContents<Image>(DataFlavor.imageFlavor)
-        ?: return@onPreviewKeyEvent false
-      actions.onPasteImage(image)
-    } catch (_: Exception) {
-      actions.onRefused("The clipboard could not be read.")
+fun Modifier.attachmentTarget(enabled: Boolean, actions: AttachmentActions): Modifier =
+  provideData { if (enabled) set(T3DataKeys.ATTACHMENTS.name, actions) }
+
+/**
+ * Files or an image on the clipboard, as [AttachmentActions.onFiles] or
+ * [AttachmentActions.onPasteImage]; files win when both are there. Through [CopyPasteManager],
+ * which already copes with a clipboard another app holds or a transferable gone stale.
+ */
+fun attachFromClipboard(clipboard: CopyPasteManager, actions: AttachmentActions) {
+  try {
+    if (clipboard.areDataFlavorsAvailable(DataFlavor.javaFileListFlavor)) {
+      val files: List<Path> = clipboard.getContents<Any>(DataFlavor.javaFileListFlavor)
+        ?.let(::pathsOf)
+        ?: return
+      actions.onFiles(files)
+      return
     }
-    return@onPreviewKeyEvent true
+    if (!clipboard.areDataFlavorsAvailable(DataFlavor.imageFlavor)) return
+    val image: Image = clipboard.getContents<Image>(DataFlavor.imageFlavor) ?: return
+    actions.onPasteImage(image)
+  } catch (_: Exception) {
+    actions.onRefused("The clipboard could not be read.")
   }
+}
 
 private const val UNREADABLE_DROP: String = "The dropped files could not be read."
 

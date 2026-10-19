@@ -121,6 +121,14 @@ Hard-won, so recorded here rather than rediscovered.
 - The IDE bundles Jewel's Swing bridge as `org.jetbrains.jewel.bridge.JewelComposePanelWrapper`
   in `intellij.platform.jewel.ideLafBridge.jar`, and `com.intellij.platform.compose.JBComposePanel`
   in `intellij.platform.compose.jar`. The tool window content is one of those.
+- Ctrl+V never reaches a Compose key handler inside the IDE. The IDE's `$Paste` action takes
+  it first: Jewel's `RootDataProviderNode` sets `PASTE_PROVIDER` to its `ComposePasteProvider`
+  for every Compose text field, and a `DataSink` keeps the first value for a key, so a node's
+  `provideData` can't offer another provider. Seen in the harness on 2026-10-20: an
+  `onPreviewKeyEvent` for Ctrl+V was never called while the text field pasted text fine. The
+  way in is an action with `use-shortcut-of="$Paste"` plus an `actionPromoter` that puts it
+  first when the composer's data key is in the context (`PasteAttachmentAction`). Expect the
+  same for any other shortcut the IDE keymap owns.
 - `gradle` isn't installed globally on these machines. Commit the wrapper.
 - Upstream is cloned at `~/Developer/XXFAST/TS/T3Code`, checked out at the tag in
   `contracts/T3CODE_VERSION`. When a question is "how does T3 decide X", read the source there

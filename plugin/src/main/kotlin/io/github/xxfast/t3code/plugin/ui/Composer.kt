@@ -143,7 +143,7 @@ private fun MessageInput(
       state = draft,
       modifier = Modifier
         .fillMaxWidth()
-        .pasteAttachments(state.enabled, attachmentActions)
+        .attachmentTarget(state.enabled, attachmentActions)
         .composerKeys(draft, state.running, onSend),
       enabled = state.enabled,
       lineLimits = TextFieldLineLimits.MultiLine(minHeightInLines = 2, maxHeightInLines = 12),

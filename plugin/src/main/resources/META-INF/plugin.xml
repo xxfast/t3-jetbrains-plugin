@@ -38,6 +38,8 @@
     <editorNotificationProvider
       implementation="io.github.xxfast.t3code.plugin.ide.T3FileNotificationProvider"/>
     <notificationGroup id="T3 Code" displayType="BALLOON"/>
+    <!-- Puts T3Code.PasteAttachment ahead of $Paste while the composer has focus -->
+    <actionPromoter implementation="io.github.xxfast.t3code.plugin.actions.PasteAttachmentPromoter"/>
   </extensions>
 
   <actions>
@@ -82,6 +84,14 @@
         description="Open the thread's worktree as its own IDE window"
         icon="AllIcons.Actions.MenuOpen"/>
     </group>
+
+    <!-- Paste over the composer with files or an image on the clipboard attaches them -->
+    <action
+      id="T3Code.PasteAttachment"
+      class="io.github.xxfast.t3code.plugin.actions.PasteAttachmentAction"
+      text="Paste as T3 attachment"
+      description="Attach the files or image on the clipboard to the message"
+      use-shortcut-of="$Paste"/>
 
     <!-- The editor selection as context on the selected thread's draft -->
     <action
