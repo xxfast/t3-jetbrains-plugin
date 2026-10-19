@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "AuthSessionState",
+  "title": "AuthSessionState",
+  "type": "object",
+  "properties": {
+    "authenticated": {
+      "type": "boolean"
+    },
+    "auth": {
+      "$ref": "#/$defs/ServerAuthDescriptor"
+    },
+    "scopes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "orchestration:read",
+          "orchestration:operate",
+          "settings:write",
+          "providers:manage",
+          "environment:maintain",
+          "preview:operate",
+          "diagnostics:read",
+          "terminal:read",
+          "terminal:operate",
+          "filesystem:read",
+          "filesystem:write",
+          "review:write",
+          "source-control:write",
+          "access:read",
+          "access:write",
+          "relay:read",
+          "relay:write"
+        ]
+      }
+    },
+    "permissions": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "orchestration:read",
+              "orchestration:operate",
+              "settings:write",
+              "providers:manage",
+              "environment:maintain",
+              "preview:operate",
+              "diagnostics:read",
+              "terminal:read",
+              "terminal:operate",
+              "filesystem:read",
+              "filesystem:write",
+              "review:write",
+              "source-control:write",
+              "access:read",
+              "access:write",
+              "relay:read",
+              "relay:write"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "sessionMethod": {
+      "type": "string",
+      "enum": [
+        "browser-session-cookie",
+        "bearer-access-token",
+        "dpop-access-token"
+      ]
+    },
+    "expiresAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "authenticated",
+    "auth"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "ServerAuthDescriptor": {
+      "type": "object",
+      "properties": {
+        "policy": {
+          "type": "string",
+          "enum": [
+            "desktop-managed-local",
+            "loopback-browser",
+            "remote-reachable",
+            "unsafe-no-auth"
+          ]
+        },
+        "bootstrapMethods": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "desktop-bootstrap",
+              "one-time-token"
+            ]
+          }
+        },
+        "sessionMethods": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "browser-session-cookie",
+              "bearer-access-token",
+              "dpop-access-token"
+            ]
+          }
+        },
+        "sessionCookieName": {
+          "type": "string"
+        },
+        "serverUpdateScope": {
+          "type": "string",
+          "enum": [
+            "environment:maintain"
+          ]
+        }
+      },
+      "required": [
+        "policy",
+        "bootstrapMethods",
+        "sessionMethods",
+        "sessionCookieName"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

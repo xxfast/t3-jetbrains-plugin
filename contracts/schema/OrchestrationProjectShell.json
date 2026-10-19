@@ -1,0 +1,447 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "OrchestrationProjectShell",
+  "title": "OrchestrationProjectShell",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "workspaceRoot": {
+      "type": "string"
+    },
+    "repositoryIdentity": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RepositoryIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "defaultModelSelection": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ModelSelection"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "defaultThreadEnvMode": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "local",
+                "worktree"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "autoPull": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "faviconPath": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "projectIcon": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StoredProjectIcon"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "scripts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ProjectScript"
+      }
+    },
+    "createdAt": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "workspaceRoot",
+    "defaultModelSelection",
+    "scripts",
+    "createdAt",
+    "updatedAt"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "ModelSelection": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "instanceId": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {},
+        "options": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "additionalProperties": true
+    },
+    "ProjectScript": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string",
+          "enum": [
+            "play",
+            "test",
+            "lint",
+            "configure",
+            "build",
+            "debug"
+          ]
+        },
+        "runOnWorktreeCreate": {
+          "type": "boolean"
+        },
+        "runOnSettle": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "async": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "previewUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "autoOpenPreview": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "command",
+        "icon",
+        "runOnWorktreeCreate"
+      ],
+      "additionalProperties": true
+    },
+    "RepositoryIdentity": {
+      "type": "object",
+      "properties": {
+        "canonicalKey": {
+          "type": "string"
+        },
+        "locator": {
+          "$ref": "#/$defs/RepositoryIdentityLocator"
+        },
+        "webUrl": {
+          "type": "string"
+        },
+        "rootPath": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "origin": {
+          "$ref": "#/$defs/RepositoryOrigin"
+        }
+      },
+      "required": [
+        "canonicalKey",
+        "locator"
+      ],
+      "additionalProperties": true
+    },
+    "RepositoryIdentityLocator": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "git-remote"
+          ]
+        },
+        "remoteName": {
+          "type": "string"
+        },
+        "remoteUrl": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "remoteName",
+        "remoteUrl"
+      ],
+      "additionalProperties": true
+    },
+    "RepositoryOrigin": {
+      "type": "object",
+      "properties": {
+        "canonicalKey": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "canonicalKey"
+      ],
+      "additionalProperties": true
+    },
+    "StoredProjectIcon": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "lucide"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "color": {
+              "type": "string",
+              "enum": [
+                "gray",
+                "red",
+                "orange",
+                "amber",
+                "yellow",
+                "lime",
+                "green",
+                "emerald",
+                "teal",
+                "cyan",
+                "sky",
+                "blue",
+                "indigo",
+                "violet",
+                "purple",
+                "fuchsia",
+                "pink",
+                "rose"
+              ]
+            },
+            "monogramText": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "monogram": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "name",
+            "color"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "emoji"
+              ]
+            },
+            "emoji": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "emoji"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "monogram"
+              ]
+            },
+            "text": {
+              "type": "string"
+            },
+            "color": {
+              "type": "string",
+              "enum": [
+                "gray",
+                "red",
+                "orange",
+                "amber",
+                "yellow",
+                "lime",
+                "green",
+                "emerald",
+                "teal",
+                "cyan",
+                "sky",
+                "blue",
+                "indigo",
+                "violet",
+                "purple",
+                "fuchsia",
+                "pink",
+                "rose"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "text",
+            "color"
+          ],
+          "additionalProperties": true
+        }
+      ]
+    }
+  }
+}

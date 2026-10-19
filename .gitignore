@@ -14,3 +14,7 @@ local.properties
 !.idea/codeStyles/
 !.idea/icon.svg
 !.idea/.name
+
+# contracts/ tooling: npm deps and the upstream checkout export.ts clones
+contracts/node_modules/
+contracts/.upstream/

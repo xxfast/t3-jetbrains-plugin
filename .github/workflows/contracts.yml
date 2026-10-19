@@ -1,0 +1,148 @@
+name: Contracts
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Generated schemas and Kotlin are checked in. They must match what the pinned tag produces.
+  check:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: contracts/package-lock.json
+
+      - name: Install
+        working-directory: contracts
+        run: npm ci
+
+      - name: Export at the pinned tag
+        run: node contracts/export.ts
+
+      - name: Generate
+        run: node contracts/generate.ts
+
+      - name: Fail if out of sync
+        run: |
+          changes="$(git status --porcelain contracts/schema protocol/src/main/kotlin/io/github/xxfast/t3code/protocol/generated)"
+          if [ -n "$changes" ]; then
+            echo "Generated contracts are out of sync with contracts/T3CODE_VERSION:"
+            echo "$changes"
+            echo "Run: node contracts/export.ts && node contracts/generate.ts, then commit."
+            git diff --stat
+            exit 1
+          fi
+
+  # Exports the newest upstream preview and keeps one issue open while it differs from ours.
+  nightly:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TITLE: Upstream contracts drifted
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: contracts/package-lock.json
+
+      - name: Install
+        working-directory: contracts
+        run: npm ci
+
+      - name: Resolve the newest upstream preview tag
+        id: tag
+        run: |
+          latest="$(git ls-remote --tags --refs --sort=v:refname \
+            https://github.com/pingdotgg/t3code.git 'v*-preview.*' | tail -n 1 | sed 's|.*refs/tags/||')"
+          if [ -z "$latest" ]; then
+            echo "No upstream tag matches v*-preview.*"
+            exit 1
+          fi
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "pinned=$(cat contracts/T3CODE_VERSION)" >> "$GITHUB_OUTPUT"
+
+      - name: Export the newest tag
+        run: |
+          node contracts/export.ts --tag "${{ steps.tag.outputs.latest }}" \
+            --upstream "$RUNNER_TEMP/t3code" --out "$RUNNER_TEMP/schema"
+
+      - name: Diff against the pinned export
+        id: diff
+        run: |
+          set +e
+          diff -ru contracts/schema "$RUNNER_TEMP/schema" > "$RUNNER_TEMP/schema.diff"
+          status=$?
+          set -e
+          if [ "$status" -gt 1 ]; then exit "$status"; fi
+          if [ "$status" -eq 0 ]; then
+            echo "drifted=false" >> "$GITHUB_OUTPUT"
+            echo "No drift between ${{ steps.tag.outputs.pinned }} and ${{ steps.tag.outputs.latest }}."
+            exit 0
+          fi
+          echo "drifted=true" >> "$GITHUB_OUTPUT"
+          echo "hash=$(sha256sum "$RUNNER_TEMP/schema.diff" | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          diff -rq contracts/schema "$RUNNER_TEMP/schema" \
+            | sed -e "s|$RUNNER_TEMP/schema|upstream|g" > "$RUNNER_TEMP/files.txt" || true
+
+      - name: Open or update the drift issue
+        if: steps.diff.outputs.drifted == 'true'
+        run: |
+          marker="<!-- contracts-drift:${{ steps.diff.outputs.hash }} -->"
+          {
+            echo "$marker"
+            echo "\`contracts/schema\` at \`${{ steps.tag.outputs.pinned }}\` differs from upstream \`${{ steps.tag.outputs.latest }}\`."
+            echo
+            echo "Files:"
+            echo '```'
+            cat "$RUNNER_TEMP/files.txt"
+            echo '```'
+            echo
+            echo "<details><summary>Diff (first 300 lines)</summary>"
+            echo
+            echo '```diff'
+            head -n 300 "$RUNNER_TEMP/schema.diff"
+            echo '```'
+            echo
+            echo "</details>"
+            echo
+            echo "To catch up: set \`contracts/T3CODE_VERSION\` to \`${{ steps.tag.outputs.latest }}\`, run \`node contracts/export.ts\` and \`node contracts/generate.ts\`, fix what broke."
+          } > "$RUNNER_TEMP/body.md"
+
+          gh label create contracts --color 5319e7 \
+            --description "Upstream contract changes" 2>/dev/null || true
+
+          issue="$(gh issue list --label contracts --state open --search "in:title \"$TITLE\"" \
+            --json number --jq '.[0].number // empty')"
+          if [ -z "$issue" ]; then
+            gh issue create --title "$TITLE" --label contracts --body-file "$RUNNER_TEMP/body.md"
+            exit 0
+          fi
+
+          # Same drift as last time: nothing new to say.
+          seen="$(gh issue view "$issue" --json body,comments \
+            --jq '[.body] + [.comments[].body] | map(select(contains("'"$marker"'"))) | length')"
+          if [ "$seen" != "0" ]; then
+            echo "Issue #$issue already reports this drift."
+            exit 0
+          fi
+          gh issue comment "$issue" --body-file "$RUNNER_TEMP/body.md"

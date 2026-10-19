@@ -171,6 +171,11 @@
       {
         "type": "user_message",
         "id": "u2",
+        "messageId": "msg_u2",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
         "threadId": "thr_01JC4A1F0QWMIGRATE",
         "runId": "run_01JC4A2K7QB8",
         "ordinal": 6,

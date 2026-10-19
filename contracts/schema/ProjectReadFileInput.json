@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ProjectReadFileInput",
+  "title": "ProjectReadFileInput",
+  "type": "object",
+  "properties": {
+    "cwd": {
+      "type": "string"
+    },
+    "relativePath": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "cwd",
+    "relativePath"
+  ],
+  "additionalProperties": true
+}

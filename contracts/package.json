@@ -1,0 +1,12 @@
+{
+  "name": "t3code-jetbrains-contracts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "export": "node export.ts",
+    "generate": "node generate.ts"
+  },
+  "dependencies": {
+    "effect": "4.0.5"
+  }
+}

@@ -26,6 +26,11 @@
       {
         "type": "user_message",
         "id": "u1",
+        "messageId": "msg_u1",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
         "threadId": "thr_01JC4C0X1UNKNOWN",
         "ordinal": 1,
         "status": "completed",
@@ -57,9 +62,9 @@
         "status": "completed",
         "planId": "plan_01JC4C1A0B2C",
         "steps": [
-          { "text": "Read NavDisplay's back handling", "status": "completed" },
-          { "text": "Diff against RouterContent", "status": "completed" },
-          { "text": "Write up the comparison", "status": "pending" }
+          { "id": "s1", "text": "Read NavDisplay's back handling", "status": "completed" },
+          { "id": "s2", "text": "Diff against RouterContent", "status": "completed" },
+          { "id": "s3", "text": "Write up the comparison", "status": "pending" }
         ],
         "explanation": "Keeping this to the back gesture, not transitions.",
         "updatedAt": "2026-10-19T09:05:00.000Z"
@@ -76,6 +81,8 @@
       {
         "type": "assistant_message",
         "id": "a1",
+        "messageId": "msg_a1",
+        "streaming": false,
         "threadId": "thr_01JC4C0X1UNKNOWN",
         "ordinal": 5,
         "status": "completed",

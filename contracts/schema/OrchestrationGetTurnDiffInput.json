@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "OrchestrationGetTurnDiffInput",
+  "title": "OrchestrationGetTurnDiffInput",
+  "type": "object",
+  "properties": {
+    "fromTurnCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "toTurnCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "threadId": {
+      "type": "string"
+    },
+    "ignoreWhitespace": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "fromTurnCount",
+    "toTurnCount",
+    "threadId"
+  ],
+  "additionalProperties": true
+}
