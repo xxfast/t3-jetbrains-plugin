@@ -132,7 +132,7 @@ Hard-won, so recorded here rather than rediscovered.
 - Dev loop (full notes in `docs/platform-notes.md`): the Gradle plugin auto-reloads a dynamic
   plugin into a running sandbox after `buildPlugin`, but not under the debugger, and it wants
   `buildSearchableOptions = false`. `runHarness` has its own `prepareSandbox_runHarness`. Sandbox
-  log is `plugin/build/harness-sandbox/log/idea.log` for the harness; `runIde` prints its own
+  log is `plugin/build/harness-sandbox/log_runHarness/idea.log` for the harness; `runIde` prints its own
   `IDE logs:` line. Under the debugger, "Reload Changed Classes" works and JBR 25 allows more
   than method-body swaps; changed composables redraw only when state changes. Compose Hot Reload
   can't run inside the IDE. Installing the zip from disk into a running IDE needs no restart
