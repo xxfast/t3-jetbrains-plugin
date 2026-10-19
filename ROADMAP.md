@@ -65,6 +65,24 @@ and anything administrative.
 5. #21 Scheduled tasks, read-only
 6. #22 JCEF escape hatch
 
+## Sidebar parity
+
+The Sidebar does everything upstream's `Sidebar.tsx` does, not just show threads. Most of the
+commands are already generated in `Command.kt`. Independent of phase 3 except where an issue says.
+
+1. #25 Settle and un-settle threads
+2. #26 Snooze and wake threads
+3. #27 Rename, regenerate title and delete threads
+4. #28 Thread context menu parity
+5. #31 Undo archive and delete
+6. #32 Sidebar row details: hover card, diff stat, indicators
+7. #29 Drag to reorder and move threads between sections
+8. #30 Multi-select and bulk actions
+9. #33 Sidebar search parity
+10. #34 Sidebar keyboard navigation
+11. #35 Drag files onto threads and threads into the composer
+12. #36 Sidebar empty state and project picker
+
 ## Later
 
 Not scheduled and not fleshed out. When one gets picked up it becomes an issue.
@@ -74,7 +92,6 @@ Not scheduled and not fleshed out. When one gets picked up it becomes an issue.
 - Android Studio and Rider specific testing. Same platform, different bundled modules, worth a
   pass before saying "supported".
 - Usage and cost summary from `server.getUsageSummary` on the thread header.
-- Thread search (`orchestration.searchThreads`) in the tool window with the IDE's speed search.
 - Device and preview panes (`device.*`, `preview.*`). Probably JCEF forever.
 - Notifications routed through the IDE's event log with per-thread mute.
 - A CLI that reuses `:protocol`. It's why `:protocol` has no IDE dependency.
