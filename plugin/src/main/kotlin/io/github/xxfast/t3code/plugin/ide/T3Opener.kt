@@ -14,14 +14,19 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.testFramework.LightVirtualFile
 import io.github.xxfast.t3code.plugin.T3
+import io.github.xxfast.t3code.plugin.ThreadSelection
+import io.github.xxfast.t3code.plugin.settings.T3Settings
+import io.github.xxfast.t3code.plugin.settings.ThreadHost
 import io.github.xxfast.t3code.protocol.FileContents
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.T3Client
@@ -59,6 +64,24 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
       withContext(Dispatchers.EDT) {
         val file: LightVirtualFile = readOnlyCopy(where, path, contents.contents)
         OpenFileDescriptor(project, file, editorLine(line), 0).navigate(true)
+      }
+    }
+  }
+
+  /** Selects [threadId] and shows it where the settings say: an editor tab or "T3 Chat". */
+  fun openThread(threadId: String) {
+    ThreadSelection.getInstance(project).select(threadId)
+    val title: String = client.threads.value.find { it.id == threadId }?.title ?: "T3 Chat"
+    scope.launch(Dispatchers.EDT) {
+      if (project.isDisposed) return@launch
+      when (T3Settings.get().openThreadsIn) {
+        ThreadHost.EDITOR -> {
+          val file: ThreadVirtualFile = ThreadSelection.getInstance(project).file(threadId, title)
+          FileEditorManager.getInstance(project).openFile(file, true)
+        }
+
+        ThreadHost.TOOL_WINDOW ->
+          ToolWindowManager.getInstance(project).getToolWindow(CHAT_TOOL_WINDOW)?.activate(null)
       }
     }
   }
@@ -202,6 +225,7 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
 
   companion object {
     const val NOTIFICATION_GROUP: String = "T3 Code"
+    const val CHAT_TOOL_WINDOW: String = "T3 Chat"
 
     private val LOG: Logger = Logger.getInstance(T3Opener::class.java)
 

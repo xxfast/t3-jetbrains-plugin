@@ -8,6 +8,12 @@ import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.components.service
 
+/** Where a thread opens: an editor tab, or the "T3 Chat" tool window. */
+enum class ThreadHost(val label: String) {
+  EDITOR("Editor tab"),
+  TOOL_WINDOW("T3 Chat tool window"),
+}
+
 /** Where the server is. Nothing secret lives here; the credential is in [T3Credentials]. */
 @Service(Service.Level.APP)
 @State(
@@ -17,12 +23,20 @@ import com.intellij.openapi.components.service
 class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
   class State : BaseState() {
     var serverUrl: String? by string(DEFAULT_SERVER_URL)
+    var openThreadsIn: String? by string(ThreadHost.EDITOR.name)
   }
 
   var serverUrl: String
     get() = state.serverUrl?.takeIf { it.isNotBlank() } ?: DEFAULT_SERVER_URL
     set(value) {
       state.serverUrl = value.trim().trimEnd('/').ifEmpty { DEFAULT_SERVER_URL }
+    }
+
+  // A string on disk, so an unknown or renamed value falls back instead of failing to load
+  var openThreadsIn: ThreadHost
+    get() = ThreadHost.entries.find { it.name == state.openThreadsIn } ?: ThreadHost.EDITOR
+    set(value) {
+      state.openThreadsIn = value.name
     }
 
   companion object {

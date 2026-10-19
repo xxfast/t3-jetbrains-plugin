@@ -4,6 +4,7 @@ import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.generated.FileChangeDetail
 import io.github.xxfast.t3code.protocol.generated.TurnItem
+import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -49,10 +50,30 @@ class ThreadScreenLogicTest {
   }
 
   @Test
-  fun `a run with no items still gets a header`() {
+  fun `a run with no items still gets a line`() {
     val runs: List<Run> = listOf(run("r1", 1, "10:00"), run("r2", 2, "10:05"))
     val keys: List<String> = threadRows(runs, listOf(notice("a", "10:01"))).map { it.key }
     assertEquals(listOf("run:r1", "item:a", "run:r2"), keys)
+  }
+
+  @Test
+  fun `the run line follows the user message that opened the run`() {
+    val runs: List<Run> = listOf(run("r1", 1, "10:00"))
+    val items: List<TurnItem> = listOf(user("u", "10:00"), notice("a", "10:01"))
+    assertEquals(
+      listOf("item:u", "run:r1", "item:a"),
+      threadRows(runs, items).map { it.key },
+    )
+  }
+
+  @Test
+  fun `run labels`() {
+    val now: Instant = Instant.parse(at("10:10"))
+    val done: Run = run("r", 1, "10:00").copy(startedAt = at("10:00"), completedAt = at("10:01"))
+    assertEquals("Worked for 1m", runLabel(done, now))
+    val running: Run = done.copy(status = "running", completedAt = null)
+    assertEquals("Working for 10m", runLabel(running, now))
+    assertEquals("Interrupted", runLabel(running.copy(status = "interrupted"), now))
   }
 
   @Test
@@ -106,6 +127,18 @@ class ThreadScreenLogicTest {
   private fun notice(id: String, time: String? = null, updatedAt: String? = null): TurnItem {
     val notice: TurnItem.SystemNotice = item("""{"type":"system_notice","message":"$id"}""")
     return notice.copy(id = id, updatedAt = updatedAt ?: time?.let(::at) ?: "")
+  }
+
+  private fun user(id: String, time: String): TurnItem {
+    val message: TurnItem.UserMessage = item(
+      """
+        {
+          "type": "user_message", "text": "hi", "messageId": "m", "createdBy": "user",
+          "creationSource": "web", "inputIntent": "turn_start", "attachments": []
+        }
+      """,
+    )
+    return message.copy(id = id, updatedAt = at(time))
   }
 
   /** A turn item from [json] plus the fields every item requires. */

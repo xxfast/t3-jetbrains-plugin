@@ -1,15 +1,20 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -18,55 +23,53 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableIntState
-import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.time.Instant
-import kotlinx.coroutines.delay
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.intui.markdown.bridge.ProvideMarkdownStyling
 import org.jetbrains.jewel.markdown.Markdown
 import org.jetbrains.jewel.markdown.MarkdownBlock
 import org.jetbrains.jewel.markdown.processing.MarkdownProcessor
+import org.jetbrains.jewel.ui.Orientation
 import org.jetbrains.jewel.ui.component.Divider
+import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.Link
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.VerticallyScrollableContainer
-import org.jetbrains.jewel.ui.Orientation
+import org.jetbrains.jewel.ui.icon.IconKey
+import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import org.jetbrains.jewel.ui.typography
+
+/** The conversation column is capped like T3's, centred when the host is wider. */
+private val MAX_CONTENT_WIDTH = 760.dp
 
 @Composable
 fun ThreadScreen(
   view: ThreadView?, // null until the first snapshot arrives
-  onBack: () -> Unit,
-  onOpenFile: (path: String) -> Unit, // "Open" on a file_change card
-  onDiffFile: (TurnItem.FileChange) -> Unit, // "Diff" on a file_change card
-  onDiffRun: (Run) -> Unit, // "Diff" on a run header
-  header: @Composable () -> Unit = {}, // the tool window's existing header slot
+  projectTitle: String?, // for the breadcrumb
+  onOpenFile: (path: String) -> Unit, // "Open" on a file_change row
+  onDiffFile: (TurnItem.FileChange) -> Unit, // "Diff" on a file_change row
+  onDiffRun: (Run) -> Unit, // "Diff" on a run's line
 ) {
   Column(Modifier.fillMaxSize()) {
-    header()
-    TopBar(view, onBack)
+    Breadcrumb(view, projectTitle)
     Divider(Orientation.Horizontal, Modifier.fillMaxWidth())
     if (view == null || view.items.isEmpty()) {
-      val hint: String = if (view == null) "Loading..." else "Nothing in this thread yet"
-      Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-        Text(hint, color = JewelTheme.globalColors.text.info, textAlign = TextAlign.Center)
-      }
+      Hint(if (view == null) "Loading..." else "Nothing in this thread yet")
     } else {
       val processor: MarkdownProcessor = remember { MarkdownProcessor() }
       ProvideMarkdownStyling(markdownProcessor = processor) {
@@ -77,20 +80,23 @@ fun ThreadScreen(
 }
 
 @Composable
-private fun TopBar(view: ThreadView?, onBack: () -> Unit) {
+private fun Breadcrumb(view: ThreadView?, projectTitle: String?) {
   Row(
-    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
-    horizontalArrangement = Arrangement.spacedBy(8.dp),
+    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+    horizontalArrangement = Arrangement.spacedBy(6.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    Link("Back", onClick = onBack)
+    if (projectTitle != null) {
+      ProjectBadge(projectTitle)
+      Text(projectTitle, color = JewelTheme.globalColors.text.info, maxLines = 1)
+      Text("/", color = JewelTheme.globalColors.text.info)
+    }
     Text(
       text = view?.thread?.title.orEmpty(),
       modifier = Modifier.weight(1f),
       maxLines = 1,
       overflow = TextOverflow.Ellipsis,
     )
-    if (view != null) StatusBadge(view.thread.badge())
   }
 }
 
@@ -102,7 +108,8 @@ private fun Items(
   onDiffFile: (TurnItem.FileChange) -> Unit,
   onDiffRun: (Run) -> Unit,
 ) {
-  val now: Instant by rememberNow()
+  val period: Long = if (view.runs.any { it.running }) 1_000 else 30_000
+  val now: Instant by rememberNow(period)
   val rows: List<ThreadRow> = remember(view.runs, view.items) { threadRows(view.runs, view.items) }
   // Disclosure state survives items scrolling out of the lazy column
   val expanded: SnapshotStateMap<String, Boolean> = remember(view.thread.id) { mutableStateMapOf() }
@@ -110,21 +117,28 @@ private fun Items(
   FollowTail(state, rows, view.items.lastOrNull())
 
   VerticallyScrollableContainer(scrollState = state, modifier = Modifier.fillMaxSize()) {
-    LazyColumn(state = state, modifier = Modifier.fillMaxSize()) {
+    LazyColumn(
+      state = state,
+      modifier = Modifier.fillMaxSize(),
+      contentPadding = PaddingValues(vertical = 12.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
       items(rows, key = { it.key }) { row ->
-        when (row) {
-          is ThreadRow.RunHeader -> RunHeader(row.run, onDiff = { onDiffRun(row.run) })
-          is ThreadRow.Item -> {
-            val isExpanded: Boolean = expanded[row.key] ?: false
-            ItemCard(
-              item = row.item,
-              now = now,
-              processor = processor,
-              expanded = isExpanded,
-              onToggle = { expanded[row.key] = !isExpanded },
-              onOpenFile = onOpenFile,
-              onDiffFile = onDiffFile,
-            )
+        Box(Modifier.widthIn(max = MAX_CONTENT_WIDTH).fillMaxWidth().padding(horizontal = 16.dp)) {
+          when (row) {
+            is ThreadRow.RunLine -> RunLine(row.run, now, onDiff = { onDiffRun(row.run) })
+            is ThreadRow.Item -> {
+              val isExpanded: Boolean = expanded[row.key] ?: false
+              ItemRow(
+                item = row.item,
+                now = now,
+                processor = processor,
+                expanded = isExpanded,
+                onToggle = { expanded[row.key] = !isExpanded },
+                onOpenFile = onOpenFile,
+                onDiffFile = onDiffFile,
+              )
+            }
           }
         }
       }
@@ -145,29 +159,20 @@ private fun FollowTail(state: LazyListState, rows: List<ThreadRow>, last: TurnIt
 }
 
 @Composable
-private fun RunHeader(run: Run, onDiff: () -> Unit) {
+private fun RunLine(run: Run, now: Instant, onDiff: () -> Unit) {
   Row(
-    modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 10.dp),
+    modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
     horizontalArrangement = Arrangement.spacedBy(8.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    Text(
-      text = "Run ${run.ordinal}",
-      color = JewelTheme.globalColors.text.info,
-      style = JewelTheme.typography.small,
-    )
-    Text(
-      text = run.status,
-      color = JewelTheme.globalColors.text.info,
-      style = JewelTheme.typography.small,
-      modifier = Modifier.weight(1f),
-    )
-    Link("Diff", onClick = onDiff, textStyle = JewelTheme.typography.small)
+    Text(runLabel(run, now), color = JewelTheme.globalColors.text.info, style = small())
+    Divider(Orientation.Horizontal, Modifier.weight(1f))
+    Link("Diff", onClick = onDiff, textStyle = small())
   }
 }
 
 @Composable
-private fun ItemCard(
+private fun ItemRow(
   item: TurnItem,
   now: Instant,
   processor: MarkdownProcessor,
@@ -177,32 +182,31 @@ private fun ItemCard(
   onDiffFile: (TurnItem.FileChange) -> Unit,
 ) {
   when (item) {
-    is TurnItem.UserMessage -> Card(item, now, label = "You") {
-      Text(item.text)
-    }
+    is TurnItem.UserMessage -> UserBubble(item.text)
 
-    is TurnItem.AssistantMessage -> Card(item, now, label = "Assistant") {
+    is TurnItem.AssistantMessage -> Box(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
       MarkdownText(item.text, processor)
     }
 
-    is TurnItem.Reasoning -> Card(
+    is TurnItem.Reasoning -> ToolRow(
+      icon = AllIconsKeys.Actions.IntentionBulbGrey,
+      summary = firstLine(item.text).ifEmpty { "Reasoning" },
       item = item,
-      now = now,
-      label = "Reasoning",
-      action = { Link(if (expanded) "Hide" else "Show", onClick = onToggle, textStyle = small()) },
+      expanded = expanded,
+      onToggle = onToggle,
     ) {
-      if (expanded) Text(item.text, color = JewelTheme.globalColors.text.info)
+      Text(item.text, color = JewelTheme.globalColors.text.info)
     }
 
-    is TurnItem.CommandExecution -> Card(item, now, label = item.title ?: "Command") {
+    is TurnItem.CommandExecution -> ToolRow(
+      icon = AllIconsKeys.Nodes.Console,
+      summary = item.title ?: firstLine(item.input),
+      item = item,
+      expanded = expanded,
+      onToggle = onToggle,
+    ) {
       Mono("$ ${item.input}")
-      val output: String? = item.output?.trimEnd()?.takeIf { it.isNotEmpty() }
-      if (output != null) {
-        Mono(output, maxLines = if (expanded) Int.MAX_VALUE else 12)
-        if (output.lines().size > 12) {
-          Link(if (expanded) "Less" else "More", onClick = onToggle, textStyle = small())
-        }
-      }
+      item.output?.trimEnd()?.takeIf { it.isNotEmpty() }?.let { Mono(it) }
       if (item.outputOmitted == true) Caption("Output omitted")
       item.exitCode?.let { code ->
         val tint: Color =
@@ -211,27 +215,20 @@ private fun ItemCard(
       }
     }
 
-    is TurnItem.FileChange -> Card(
+    is TurnItem.FileChange -> ToolRow(
+      icon = AllIconsKeys.Actions.Edit,
+      summary = item.fileName,
       item = item,
-      now = now,
-      label = "File change",
-      action = {
+      expanded = expanded,
+      onToggle = onToggle,
+      trailing = {
+        Caption(diffStat(item.additions, item.deletions))
         Link("Open", onClick = { onOpenFile(item.openPath()) }, textStyle = small())
         Link("Diff", onClick = { onDiffFile(item) }, textStyle = small())
       },
     ) {
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-          text = item.fileName,
-          modifier = Modifier.weight(1f, fill = false),
-          maxLines = 1,
-          overflow = TextOverflow.StartEllipsis,
-        )
-        Text(diffStat(item.additions, item.deletions), color = JewelTheme.globalColors.text.info)
-      }
-      item.changes.orEmpty().forEach { change ->
-        Caption("${change.operation} ${change.path}")
-      }
+      Text(item.fileName, maxLines = 1, overflow = TextOverflow.StartEllipsis)
+      item.changes.orEmpty().forEach { change -> Caption("${change.operation} ${change.path}") }
     }
 
     is TurnItem.ApprovalRequest -> Card(item, now, label = "Approval: ${item.requestKind}") {
@@ -250,28 +247,84 @@ private fun ItemCard(
       Text(item.message, color = JewelTheme.globalColors.text.info)
     }
 
-    else -> GenericCard(item, now, expanded, onToggle)
+    // The fallback for anything this build doesn't know: type, and the raw JSON on demand
+    else -> ToolRow(
+      icon = AllIconsKeys.Actions.Lightning,
+      summary = item.title ?: item.type,
+      item = item,
+      expanded = expanded,
+      onToggle = onToggle,
+    ) {
+      if (item.title != null) Caption(item.type)
+      val json: String = remember(item) { prettyJson(item.json()) }
+      Mono(json)
+    }
   }
 }
 
-/** The fallback for anything this build doesn't know: type, time, and the raw JSON on demand. */
 @Composable
-private fun GenericCard(
+private fun UserBubble(text: String) {
+  BoxWithConstraints(
+    modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+    contentAlignment = Alignment.CenterEnd,
+  ) {
+    Text(
+      text = text,
+      modifier = Modifier
+        .widthIn(max = maxWidth * 0.7f)
+        .background(subtle(0.07f), RoundedCornerShape(12.dp))
+        .padding(horizontal = 14.dp, vertical = 10.dp),
+    )
+  }
+}
+
+/** Tool activity as one dim line; the chevron opens the details underneath. */
+@Composable
+private fun ToolRow(
+  icon: IconKey,
+  summary: String,
   item: TurnItem,
-  now: Instant,
   expanded: Boolean,
   onToggle: () -> Unit,
+  trailing: @Composable RowScope.() -> Unit = {},
+  details: @Composable ColumnScope.() -> Unit,
 ) {
-  Card(
-    item = item,
-    now = now,
-    label = item.title ?: item.type,
-    action = { Link(if (expanded) "Hide JSON" else "JSON", onClick = onToggle, textStyle = small()) },
-  ) {
-    if (item.title != null) Caption(item.type)
+  Column(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .clip(RoundedCornerShape(4.dp))
+        .clickable(onClick = onToggle)
+        .padding(horizontal = 4.dp, vertical = 4.dp),
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Icon(icon, contentDescription = null)
+      Text(
+        text = summary,
+        color = JewelTheme.globalColors.text.info,
+        modifier = Modifier.weight(1f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+      if (item.status !in QUIET) {
+        Text(item.status, style = small(), color = JewelTheme.globalColors.text.warning)
+      }
+      trailing()
+      val chevron: IconKey =
+        if (expanded) AllIconsKeys.General.ChevronDown else AllIconsKeys.General.ChevronRight
+      Icon(chevron, contentDescription = if (expanded) "Collapse" else "Expand")
+    }
     if (expanded) {
-      val json: String = remember(item) { prettyJson(item.json()) }
-      Mono(json)
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(start = 24.dp, top = 2.dp, bottom = 6.dp)
+          .border(1.dp, JewelTheme.globalColors.borders.normal, RoundedCornerShape(6.dp))
+          .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        content = details,
+      )
     }
   }
 }
@@ -281,13 +334,12 @@ private fun Card(
   item: TurnItem,
   now: Instant,
   label: String,
-  action: @Composable () -> Unit = {},
   content: @Composable ColumnScope.() -> Unit,
 ) {
   Column(
     modifier = Modifier
       .fillMaxWidth()
-      .padding(horizontal = 8.dp, vertical = 4.dp)
+      .padding(vertical = 4.dp)
       .border(1.dp, JewelTheme.globalColors.borders.normal, RoundedCornerShape(6.dp))
       .padding(horizontal = 10.dp, vertical = 8.dp),
     verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -307,7 +359,6 @@ private fun Card(
       if (item.status !in QUIET) {
         Text(item.status, style = small(), color = JewelTheme.globalColors.text.warning)
       }
-      action()
       val at: Instant? = item.time()
       if (at != null) {
         Text(relativeTime(at, now), style = small(), color = JewelTheme.globalColors.text.info)
@@ -319,6 +370,8 @@ private fun Card(
 
 private val QUIET: Set<String> = setOf("completed", "")
 
+private fun firstLine(text: String): String = text.trim().lineSequence().firstOrNull().orEmpty()
+
 @Composable
 private fun MarkdownText(text: String, processor: MarkdownProcessor) {
   val blocks: List<MarkdownBlock> = remember(text) { processor.processMarkdownDocument(text) }
@@ -326,13 +379,8 @@ private fun MarkdownText(text: String, processor: MarkdownProcessor) {
 }
 
 @Composable
-private fun Mono(text: String, maxLines: Int = Int.MAX_VALUE) {
-  Text(
-    text = text,
-    style = JewelTheme.editorTextStyle,
-    maxLines = maxLines,
-    overflow = TextOverflow.Ellipsis,
-  )
+private fun Mono(text: String) {
+  Text(text = text, style = JewelTheme.editorTextStyle)
 }
 
 @Composable
@@ -342,11 +390,3 @@ private fun Caption(text: String) {
 
 @Composable
 private fun small(): TextStyle = JewelTheme.typography.small
-
-@Composable
-private fun rememberNow(): State<Instant> = produceState(Instant.now()) {
-  while (true) {
-    delay(30_000)
-    value = Instant.now()
-  }
-}

@@ -10,6 +10,14 @@
       "scripts": [],
       "createdAt": "2026-08-02T09:14:00.000Z",
       "updatedAt": "2026-10-19T08:41:02.000Z"
+    },
+    {
+      "id": "prj_01JB2K8M4R7DROUTER",
+      "title": "Decompose-Router",
+      "workspaceRoot": "/Users/xxfast/Developer/XXFAST/KMP/Decompose-Router",
+      "scripts": [],
+      "createdAt": "2026-07-21T11:02:00.000Z",
+      "updatedAt": "2026-10-19T08:05:43.000Z"
     }
   ],
   "threads": [
@@ -38,6 +46,407 @@
       "hasActionableProposedPlan": false,
       "createdAt": "2026-10-19T08:30:12.000Z",
       "updatedAt": "2026-10-19T08:43:30.000Z"
+    },
+    {
+      "id": "thr_01JC49ZK2HWAITING",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Run the wasmJs browser tests",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC49ZK2HWAITING"
+      },
+      "status": "waiting",
+      "latestRunId": "run_01JC49ZK3M1B",
+      "pendingRuntimeRequest": {
+        "id": "req_01JC49ZM7TQ2",
+        "kind": "command",
+        "createdAt": "2026-10-19T08:22:40.000Z"
+      },
+      "itemCount": 6,
+      "visibleItemCount": 6,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-19T08:20:01.000Z",
+      "updatedAt": "2026-10-19T08:22:40.000Z"
+    },
+    {
+      "id": "thr_01JC3QX81VIDLE001",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Why does `KStore.update` lock twice?",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC3QX81VIDLE001"
+      },
+      "status": "idle",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-18T22:40:11.000Z",
+      "updatedAt": "2026-10-18T22:40:11.000Z"
+    },
+    {
+      "id": "thr_01JC2N4B6CDONE001",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Add a versioned migration sample to the docs",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC2N4B6CDONE001"
+      },
+      "status": "completed",
+      "branch": "docs-migrations",
+      "latestRunId": "run_01JC2N4B7D2F",
+      "latestVisibleMessage": {
+        "id": "msg_01JC2N9QW8R4",
+        "role": "assistant",
+        "text": "Added `docs/migrations.md` with a v1 to v2 sample and linked it from the README.",
+        "updatedAt": "2026-10-18T14:12:09.000Z"
+      },
+      "itemCount": 23,
+      "visibleItemCount": 23,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-18T13:51:30.000Z",
+      "updatedAt": "2026-10-18T14:12:09.000Z"
+    },
+    {
+      "id": "thr_01JC3A0P7SPAUSED1",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Benchmark the IndexedDB codec against the old one on a 5 MB store",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC3A0P7SPAUSED1"
+      },
+      "status": "paused",
+      "latestRunId": "run_01JC3A0P8T1C",
+      "itemCount": 4,
+      "visibleItemCount": 4,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-15T09:02:00.000Z",
+      "updatedAt": "2026-10-15T09:40:26.000Z"
+    },
+    {
+      "id": "thr_01JC4B2W5RROUTER1",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Fix predictive back on iOS 26",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC4B2W5RROUTER1"
+      },
+      "status": "running",
+      "branch": "ios-26-back",
+      "latestRunId": "run_01JC4B2W6S8T",
+      "activeRunId": "run_01JC4B2W6S8T",
+      "activityRunStartedAt": "2026-10-19T08:04:10.000Z",
+      "itemCount": 31,
+      "visibleItemCount": 31,
+      "hasActionableProposedPlan": false,
+      "pinnedAt": "2026-10-17T19:00:00.000Z",
+      "createdAt": "2026-10-19T07:55:20.000Z",
+      "updatedAt": "2026-10-19T08:05:43.000Z"
+    },
+    {
+      "id": "thr_01JC3ZT0P9FAILED1",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Bump Decompose to 3.4.0 and rerun the sample app",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC3ZT0P9FAILED1"
+      },
+      "status": "failed",
+      "latestRunId": "run_01JC3ZT1A4HB",
+      "latestVisibleMessage": {
+        "id": "msg_01JC3ZV2K1MM",
+        "role": "assistant",
+        "text": "Gradle sync fails: `com.arkivanov.decompose:decompose:3.4.0` isn't on Maven Central yet.",
+        "updatedAt": "2026-10-18T21:03:17.000Z"
+      },
+      "itemCount": 9,
+      "visibleItemCount": 9,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-18T20:58:44.000Z",
+      "updatedAt": "2026-10-18T21:03:17.000Z"
+    },
+    {
+      "id": "thr_01JC1H7E3KINTERR1",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Explore a `rememberOnRoute` for ViewModels",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC1H7E3KINTERR1"
+      },
+      "status": "interrupted",
+      "latestRunId": "run_01JC1H7E4L5N",
+      "itemCount": 12,
+      "visibleItemCount": 12,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-17T10:20:00.000Z",
+      "updatedAt": "2026-10-17T10:44:31.000Z"
+    },
+    {
+      "id": "thr_01JC1A2B3CSETTLE01",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Release 0.10.0",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE01"
+      },
+      "status": "completed",
+      "branch": "release-0.10.0",
+      "itemCount": 5,
+      "visibleItemCount": 5,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-18T11:05:00.000Z",
+      "updatedAt": "2026-10-18T11:05:00.000Z"
+    },
+    {
+      "id": "thr_01JC1A2B3CSETTLE02",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Investigate CI issues on the wasmJs target",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE02"
+      },
+      "status": "completed",
+      "itemCount": 5,
+      "visibleItemCount": 5,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-17T16:20:00.000Z",
+      "updatedAt": "2026-10-17T16:20:00.000Z"
+    },
+    {
+      "id": "thr_01JC1A2B3CSETTLE03",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Multi-window support for desktop",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE03"
+      },
+      "status": "completed",
+      "branch": "multi-window",
+      "itemCount": 5,
+      "visibleItemCount": 5,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-16T09:45:00.000Z",
+      "updatedAt": "2026-10-16T09:45:00.000Z"
+    },
+    {
+      "id": "thr_01JC1A2B3CSETTLE04",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Product roadmap for 0.7",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE04"
+      },
+      "status": "idle",
+      "itemCount": 5,
+      "visibleItemCount": 5,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-15T14:00:00.000Z",
+      "updatedAt": "2026-10-15T14:00:00.000Z"
+    },
+    {
+      "id": "thr_01JC1A2B3CSETTLE05",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Skills purge",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE05"
+      },
+      "status": "completed",
+      "itemCount": 5,
+      "visibleItemCount": 5,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-14T10:30:00.000Z",
+      "updatedAt": "2026-10-14T10:30:00.000Z"
+    },
+    {
+      "id": "thr_01JC1A2B3CSETTLE06",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Release 0.14.0",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE06"
+      },
+      "status": "completed",
+      "branch": "release-0.14.0",
+      "itemCount": 5,
+      "visibleItemCount": 5,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-12T18:10:00.000Z",
+      "updatedAt": "2026-10-12T18:10:00.000Z"
+    },
+    {
+      "id": "thr_01JC1A2B3CSETTLE07",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Initial commit",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE07"
+      },
+      "status": "completed",
+      "itemCount": 5,
+      "visibleItemCount": 5,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-08T08:00:00.000Z",
+      "updatedAt": "2026-10-08T08:00:00.000Z"
+    },
+    {
+      "id": "thr_01JC1A2B3CSETTLE08",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Let's prepare for release 0.2.0",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE08"
+      },
+      "status": "completed",
+      "itemCount": 5,
+      "visibleItemCount": 5,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-09-30T12:00:00.000Z",
+      "updatedAt": "2026-09-30T12:00:00.000Z"
+    },
+    {
+      "id": "thr_01JBZQ2D8NARCHIVE",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Draft the 0.6 release notes",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JBZQ2D8NARCHIVE"
+      },
+      "status": "completed",
+      "latestRunId": "run_01JBZQ2D9P0Q",
+      "itemCount": 7,
+      "visibleItemCount": 7,
+      "hasActionableProposedPlan": false,
+      "archivedAt": "2026-10-10T16:00:00.000Z",
+      "createdAt": "2026-10-09T15:12:00.000Z",
+      "updatedAt": "2026-10-09T15:31:48.000Z"
     }
   ],
   "runs": {

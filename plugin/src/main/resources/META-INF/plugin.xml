@@ -17,9 +17,16 @@
 
   <extensions defaultExtensionNs="com.intellij">
     <toolWindow
-      id="T3 Code"
+      id="T3 Threads"
+      anchor="left"
+      factoryClass="io.github.xxfast.t3code.plugin.ThreadsToolWindowFactory"/>
+    <toolWindow
+      id="T3 Chat"
       anchor="right"
-      factoryClass="io.github.xxfast.t3code.plugin.T3ToolWindowFactory"/>
+      doNotActivateOnStart="true"
+      factoryClass="io.github.xxfast.t3code.plugin.ChatToolWindowFactory"/>
+    <fileEditorProvider
+      implementation="io.github.xxfast.t3code.plugin.ide.ThreadFileEditorProvider"/>
     <applicationConfigurable
       parentId="tools"
       instance="io.github.xxfast.t3code.plugin.settings.T3Configurable"
