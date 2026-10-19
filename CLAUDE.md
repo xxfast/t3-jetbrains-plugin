@@ -109,6 +109,10 @@ Hard-won, so recorded here rather than rediscovered.
   in `intellij.platform.jewel.ideLafBridge.jar`, and `com.intellij.platform.compose.JBComposePanel`
   in `intellij.platform.compose.jar`. The tool window content is one of those.
 - `gradle` isn't installed globally on these machines. Commit the wrapper.
+- Upstream is cloned at `~/Developer/XXFAST/TS/T3Code`, checked out at the tag in
+  `contracts/T3CODE_VERSION`. When a question is "how does T3 decide X", read the source there
+  (`apps/web` for the UI rules, `apps/server` for the wire) instead of inferring from screenshots
+  or snapshots. Mirror what it does.
 - Wire facts from upstream at `v0.1.1-preview.20261019.3339` (full notes were extracted into
   `docs/wire-notes.md` on 2026-10-19):
   - Transport is Effect's RPC envelope over `GET /ws?orchestrationProtocol=2`, one JSON object
@@ -127,6 +131,12 @@ Hard-won, so recorded here rather than rediscovered.
   - `subscribeShell` sends the full snapshot first, then partial snapshots (same sequence,
     `resolvedRepositoryIdentityRoots` set, projects only, zero threads). Upsert those; replacing
     state with them empties the thread list. Seen live on 2026-10-19 with `schemaVersion: 2`.
+  - Sidebar rules (`apps/web/src/components/Sidebar.tsx`, `client-runtime/state/threadShell.ts`,
+    `threadSort.ts`): settled is `settledOverride == "settled"`, not `settledAt`. Hidden rows are
+    `lineage.relationshipToParent == "subagent"` and delegated tasks whose `delegatedFrom.threadId`
+    is listed. Pinned sort by `pinOrderKey`; active by `activeOrderKey`, keyless first by
+    `max(createdAt, unsettledAt)`; settled by `settledAt` then last activity. Inbox row time is
+    `latestUserMessageAt ?: updatedAt`.
   - No delta events. Streaming text is repeated `turn-item.updated` events carrying the whole
     item with `streaming: true`; upsert by id. A "turn" is a `Run`; `getTurnDiff` counts run
     ordinals.

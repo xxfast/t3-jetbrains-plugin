@@ -2,10 +2,10 @@ package io.github.xxfast.t3code.plugin.ui
 
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
+import io.github.xxfast.t3code.protocol.generated.DelegatedFrom
 import io.github.xxfast.t3code.protocol.generated.PendingRuntimeRequestSummary
 import java.time.Duration
 import java.time.Instant
-import java.time.ZoneOffset
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -28,18 +28,29 @@ class ThreadsLogicTest {
   }
 
   @Test
-  fun `settled is the server stamp unless overridden`() {
+  fun `settled is the server's override, a settledAt stamp alone isn't`() {
     assertFalse(thread().settled, "An idle thread that just finished a turn stays in the inbox")
-    assertTrue(thread(settledAt = EPOCH).settled)
+    assertFalse(thread(settledAt = EPOCH).settled)
+    assertTrue(thread(settledAt = EPOCH, settledOverride = "settled").settled)
     assertFalse(thread(settledAt = EPOCH, settledOverride = "active").settled)
-    assertTrue(thread(settledOverride = "settled").settled)
+  }
+
+  @Test
+  fun `subagents and delegated children with a listed parent are hidden`() {
+    val threads: List<Thread> = listOf(
+      thread("parent"),
+      thread("sub", relationship = "subagent"),
+      thread("task", delegatedFrom = "parent"),
+      thread("orphan", delegatedFrom = "elsewhere"),
+    )
+    assertEquals(listOf("orphan", "parent"), sections(threads, "").inbox.map { it.id })
   }
 
   @Test
   fun `sections split settled from the inbox and drop archived`() {
     val threads: List<Thread> = listOf(
       thread("idle"),
-      thread("done", settledAt = EPOCH),
+      thread("done", settledOverride = "settled"),
       thread("running", status = "running"),
       thread("archived", archivedAt = "2026-10-19T00:00:00Z"),
       thread("busy", activeRunId = "r"),
@@ -50,29 +61,53 @@ class ThreadsLogicTest {
   }
 
   @Test
-  fun `inbox pinned first, then newest`() {
+  fun `inbox is pinned by order key, then active newest first`() {
     val threads: List<Thread> = listOf(
-      thread("old", status = "running", updatedAt = "2026-10-19T08:00:00Z"),
-      thread("new", updatedAt = "2026-10-19T09:00:00Z"),
-      thread("pinned", updatedAt = "2026-09-01T00:00:00Z", pinnedAt = "2026-09-01T00:00:00Z"),
+      thread("old", createdAt = "2026-10-19T08:00:00Z"),
+      thread("new", createdAt = "2026-10-19T09:00:00Z"),
+      thread("woken", createdAt = "2026-10-01T00:00:00Z", unsettledAt = "2026-10-19T10:00:00Z"),
+      thread("keyed", createdAt = "2026-10-19T11:00:00Z", activeOrderKey = "a"),
+      thread("pin-b", pinnedAt = EPOCH, pinOrderKey = "b"),
+      thread("pin-a", pinnedAt = EPOCH, pinOrderKey = "a"),
+      thread("pin-keyless", pinnedAt = EPOCH, createdAt = "2026-10-19T12:00:00Z"),
     )
-    assertEquals(listOf("pinned", "new", "old"), sections(threads, "").inbox.map { it.id })
+    assertEquals(
+      listOf("pin-a", "pin-b", "pin-keyless", "woken", "new", "old", "keyed"),
+      sections(threads, "").inbox.map { it.id },
+    )
   }
 
   @Test
-  fun `settled pinned first, then newest`() {
+  fun `settled newest settled first, falling back to last activity`() {
     val threads: List<Thread> = listOf(
-      thread("old", updatedAt = "2026-10-01T00:00:00Z", settledAt = EPOCH),
-      thread("new", updatedAt = "2026-10-18T00:00:00Z", settledAt = EPOCH),
-      thread("pinned", updatedAt = "2026-09-01T00:00:00Z", pinnedAt = EPOCH, settledAt = EPOCH),
+      thread("old", settledOverride = "settled", settledAt = "2026-10-01T00:00:00Z"),
+      thread("new", settledOverride = "settled", settledAt = "2026-10-18T00:00:00Z"),
+      thread(
+        "active-later", settledOverride = "settled", updatedAt = "2026-09-01T00:00:00Z",
+        latestUserMessageAt = "2026-10-19T00:00:00Z",
+      ),
     )
-    assertEquals(listOf("pinned", "new", "old"), sections(threads, "").settled.map { it.id })
+    assertEquals(
+      listOf("active-later", "new", "old"),
+      sections(threads, "").settled.map { it.id },
+    )
+  }
+
+  @Test
+  fun `row times`() {
+    val user: String = "2026-10-19T08:00:00Z"
+    val updated: String = "2026-10-19T09:00:00Z"
+    val spoke: Thread = thread(updatedAt = updated, latestUserMessageAt = user)
+    assertEquals(Instant.parse(user), spoke.inboxAt())
+    assertEquals(Instant.parse(updated), thread(updatedAt = updated).inboxAt())
+    assertEquals(Instant.parse(user), spoke.settledAt())
+    assertEquals(Instant.parse(EPOCH), thread(updatedAt = updated, settledAt = EPOCH).settledAt())
   }
 
   @Test
   fun `search matches title case-insensitively`() {
     val threads: List<Thread> = listOf(
-      thread("a", title = "Fix Predictive Back", settledAt = EPOCH),
+      thread("a", title = "Fix Predictive Back", settledOverride = "settled"),
       thread("b", title = "Release notes"),
       thread("c", title = "Back to basics", status = "running"),
     )
@@ -118,14 +153,13 @@ class ThreadsLogicTest {
   @Test
   fun `relative time`() {
     val now: Instant = Instant.parse("2026-10-19T12:00:00Z")
-    fun ago(at: String): String = relativeTime(Instant.parse(at), now, ZoneOffset.UTC)
+    fun ago(at: String): String = relativeTime(Instant.parse(at), now)
     assertEquals("just now", ago("2026-10-19T11:59:30Z"))
     assertEquals("just now", ago("2026-10-19T12:05:00Z"))
     assertEquals("5m", ago("2026-10-19T11:55:00Z"))
     assertEquals("3h", ago("2026-10-19T09:00:00Z"))
     assertEquals("2d", ago("2026-10-17T11:00:00Z"))
-    assertEquals("Oct 3", ago("2026-10-03T08:00:00Z"))
-    assertEquals("Dec 24, 2025", ago("2025-12-24T08:00:00Z"))
+    assertEquals("16d", ago("2026-10-03T08:00:00Z"))
   }
 
   private fun thread(
@@ -134,11 +168,18 @@ class ThreadsLogicTest {
     status: String = "idle",
     activeRunId: String? = null,
     runStartedAt: String? = null,
+    createdAt: String = EPOCH,
     updatedAt: String = EPOCH,
     archivedAt: String? = null,
     pinnedAt: String? = null,
+    pinOrderKey: String? = null,
+    activeOrderKey: String? = null,
+    unsettledAt: String? = null,
     settledAt: String? = null,
     settledOverride: String? = null,
+    latestUserMessageAt: String? = null,
+    relationship: String? = null,
+    delegatedFrom: String? = null,
     pending: Boolean = false,
   ): Thread = BASE_THREAD.copy(
     id = id,
@@ -148,8 +189,15 @@ class ThreadsLogicTest {
     activityRunStartedAt = runStartedAt,
     archivedAt = archivedAt,
     pinnedAt = pinnedAt,
+    pinOrderKey = pinOrderKey,
+    activeOrderKey = activeOrderKey,
+    unsettledAt = unsettledAt,
     settledAt = settledAt,
     settledOverride = settledOverride,
+    latestUserMessageAt = latestUserMessageAt,
+    lineage = BASE_THREAD.lineage.copy(relationshipToParent = relationship),
+    delegatedFrom = delegatedFrom?.let { DelegatedFrom("env", it, "parent") },
+    createdAt = createdAt,
     pendingRuntimeRequest =
       if (pending) PendingRuntimeRequestSummary("r", "command", EPOCH) else null,
     updatedAt = updatedAt,

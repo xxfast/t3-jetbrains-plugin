@@ -5,11 +5,7 @@ import io.github.xxfast.t3code.protocol.archived
 import io.github.xxfast.t3code.protocol.pinned
 import java.time.Duration
 import java.time.Instant
-import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
-import java.util.Locale
 
 /** Thread and run statuses that mean work is in flight. */
 val RUNNING: Set<String> = setOf("preparing", "queued", "starting", "running")
@@ -18,34 +14,69 @@ val RUNNING: Set<String> = setOf("preparing", "queued", "starting", "running")
 const val FIRST_PAGE: Int = 10
 const val NEXT_PAGE: Int = 25
 
-/** The two sections of the threads panel, archived threads left out. */
+/** The two sections of the threads panel: the inbox (pinned first) and settled. */
 data class ThreadSections(val inbox: List<Thread>, val settled: List<Thread>)
 
 val Thread.active: Boolean get() = activeRunId != null || status in RUNNING
 
 val Thread.waitingOnYou: Boolean get() = pendingRuntimeRequest != null || status == "waiting"
 
-/**
- * Settled the way the desktop app means it: the server stamped `settledAt` (merged PR, days of
- * inactivity, or the user settled it), unless the user overrode that either way. A thread that
- * merely finished its last turn stays in the inbox.
- */
-val Thread.settled: Boolean
-  get() = when (settledOverride) {
-    "settled" -> true
-    "active" -> false
-    else -> settledAt != null
-  }
+// Everything below mirrors upstream's sidebar, see apps/web/src/components/Sidebar.tsx and
+// packages/client-runtime/src/state/{threadShell,threadSort}.ts at the pinned tag.
 
-/** Splits [threads] matching [query] by title. Both sections pinned first, then newest. */
+/** Settled is the server's own verdict (`thread.settle`, auto-settle); `settledAt` alone isn't. */
+val Thread.settled: Boolean get() = settledOverride == "settled"
+
+/**
+ * Subagents and delegated tasks live under their parent, not in the list. A delegated task whose
+ * parent this client can't see stays listed, so its work is never out of reach.
+ */
+fun Thread.shownUnderParent(ids: Set<String>): Boolean =
+  lineage.relationshipToParent == "subagent" || delegatedFrom?.threadId?.let { it in ids } == true
+
+/** What an inbox row's time label shows. */
+fun Thread.inboxAt(): Instant = (latestUserMessageAt ?: updatedAt).toInstant()
+
+/** What a settled row shows and sorts by: when it settled, else its last activity. */
+fun Thread.settledAt(): Instant {
+  settledAt?.let { return it.toInstant() }
+  val activity: Instant? = listOfNotNull(
+    latestUserMessageAt, latestRunRequestedAt, latestRunStartedAt, latestRunCompletedAt,
+  ).map { it.toInstant() }.maxOrNull()
+  return activity ?: updatedAt.toInstant()
+}
+
+/** Where an active row anchors in time: created, or woken from settled, whichever is later. */
+private fun Thread.activeAnchor(): Instant =
+  maxOf(createdAt.toInstant(), (unsettledAt ?: createdAt).toInstant())
+
+/**
+ * Splits [threads] matching [query] by title. Inbox is pinned rows (by `pinOrderKey`, keyless
+ * ones newest first) then active rows (keyless ones newest by `createdAt`/`unsettledAt`, then by
+ * `activeOrderKey`). Settled is newest settled first. Archived and under-parent rows are dropped.
+ */
 fun sections(threads: List<Thread>, query: String): ThreadSections {
   val needle: String = query.trim()
-  val (settled: List<Thread>, inbox: List<Thread>) = threads
-    .filter { !it.archived && it.title.contains(needle, ignoreCase = true) }
-    .partition { it.settled }
-  val order: Comparator<Thread> = compareByDescending<Thread> { it.pinned }
-    .thenByDescending { it.updatedAt.toInstant() }
-  return ThreadSections(inbox = inbox.sortedWith(order), settled = settled.sortedWith(order))
+  val ids: Set<String> = threads.mapTo(HashSet()) { it.id }
+  val visible: List<Thread> = threads.filter {
+    !it.archived && !it.shownUnderParent(ids) && it.title.contains(needle, ignoreCase = true)
+  }
+  val (settled: List<Thread>, inbox: List<Thread>) = visible.partition { it.settled }
+  val (pinned: List<Thread>, active: List<Thread>) = inbox.partition { it.pinned }
+  val pinnedOrder: Comparator<Thread> = compareBy<Thread> { it.pinOrderKey == null }
+    .thenBy { it.pinOrderKey }
+    .thenByDescending { it.createdAt.toInstant() }
+    .thenBy { it.id }
+  val activeOrder: Comparator<Thread> = compareBy<Thread> { it.activeOrderKey != null }
+    .thenBy { it.activeOrderKey }
+    .thenByDescending { it.activeAnchor() }
+    .thenBy { it.id }
+  val settledOrder: Comparator<Thread> = compareByDescending<Thread> { it.settledAt() }
+    .thenBy { it.id }
+  return ThreadSections(
+    inbox = pinned.sortedWith(pinnedOrder) + active.sortedWith(activeOrder),
+    settled = settled.sortedWith(settledOrder),
+  )
 }
 
 /** How many rows "Show N more" reveals, `0` when all [total] are already [shown]. */
@@ -80,23 +111,14 @@ fun initials(title: String): String {
   return letters.uppercase()
 }
 
-private val SAME_YEAR: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d", Locale.ENGLISH)
-private val OTHER_YEAR: DateTimeFormatter =
-  DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
-
-fun relativeTime(then: Instant, now: Instant, zone: ZoneId = ZoneId.systemDefault()): String {
+/** `just now`, `5m`, `3h`, `12d`: upstream's `formatRelativeElapsed`, value only. */
+fun relativeTime(then: Instant, now: Instant): String {
   val elapsed: Duration = Duration.between(then, now)
   return when {
     elapsed < Duration.ofMinutes(1) -> "just now"
     elapsed < Duration.ofHours(1) -> "${elapsed.toMinutes()}m"
     elapsed < Duration.ofDays(1) -> "${elapsed.toHours()}h"
-    elapsed < Duration.ofDays(7) -> "${elapsed.toDays()}d"
-    else -> {
-      val date: ZonedDateTime = then.atZone(zone)
-      val format: DateTimeFormatter =
-        if (date.year == now.atZone(zone).year) SAME_YEAR else OTHER_YEAR
-      format.format(date)
-    }
+    else -> "${elapsed.toDays()}d"
   }
 }
 

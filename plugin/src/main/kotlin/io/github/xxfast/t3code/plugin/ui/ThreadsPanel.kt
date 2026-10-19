@@ -176,7 +176,7 @@ private fun InboxCard(
           }
 
           else -> Text(
-            text = relativeTime(thread.updatedAt.toInstant(), now),
+            text = relativeTime(thread.inboxAt(), now),
             style = JewelTheme.typography.small,
             color = JewelTheme.globalColors.text.info,
           )
@@ -230,7 +230,7 @@ private fun SettledRow(thread: Thread, now: Instant, selected: Boolean, onClick:
         overflow = TextOverflow.Ellipsis,
       )
       Text(
-        text = relativeTime(thread.updatedAt.toInstant(), now),
+        text = relativeTime(thread.settledAt(), now),
         style = JewelTheme.typography.small,
         color = JewelTheme.globalColors.text.info,
       )
