@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -58,8 +59,10 @@ import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.Orientation
 import org.jetbrains.jewel.ui.component.CircularProgressIndicator
 import org.jetbrains.jewel.ui.component.Divider
-import org.jetbrains.jewel.ui.component.ListComboBox
+import org.jetbrains.jewel.ui.component.IconActionButton
+import org.jetbrains.jewel.ui.component.IconButton
 import org.jetbrains.jewel.ui.component.Icon
+import org.jetbrains.jewel.ui.component.PopupMenu
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.TextField
 import org.jetbrains.jewel.ui.component.Tooltip
@@ -68,7 +71,12 @@ import org.jetbrains.jewel.ui.icon.IconKey
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import org.jetbrains.jewel.ui.typography
 
-/** T3's sidebar: search, active threads as cards, then the settled ones as a paged list. */
+/**
+ * T3's sidebar, as apps/web/src/components/Sidebar.tsx lays it out: the thread header (search,
+ * then the project scope, add project and new thread icon buttons), the active threads as cards,
+ * the settled ones as a paged list, and the utility footer. The brand row above and the update
+ * pills in the footer are the desktop app's chrome and have no place in a tool window.
+ */
 @Composable
 fun Sidebar(
   projects: List<Project>,
@@ -81,6 +89,9 @@ fun Sidebar(
   onContextMenu: (threadId: String, x: Int, y: Int) -> Unit = { _, _, _ -> },
   filter: ProjectFilter = ProjectFilter.All, // which projects' threads to list
   onFilterChange: (ProjectFilter) -> Unit = {},
+  onNewThread: (() -> Unit)? = null, // null disables the button, as upstream does with no project
+  onAddProject: (() -> Unit)? = null, // null hides the button: the desktop app owns projects
+  onOpenSettings: (() -> Unit)? = null, // null hides the footer
 ) {
   val search: TextFieldState = rememberTextFieldState()
   val query: String = search.text.toString()
@@ -88,8 +99,7 @@ fun Sidebar(
     remember(threads, query, filter) { sections(threads, query, filter) }
   Column(Modifier.fillMaxSize()) {
     header()
-    SearchField(search)
-    if (projects.size > 1) ProjectPicker(projects, filter, onFilterChange)
+    ThreadHeader(search, projects, favicons, filter, onFilterChange, onNewThread, onAddProject)
     Box(Modifier.weight(1f)) {
       when {
         sections.inbox.isNotEmpty() || sections.settled.isNotEmpty() ->
@@ -98,50 +108,165 @@ fun Sidebar(
         else -> Hint(emptyHint(projects.isEmpty(), query, filter))
       }
     }
+    if (onOpenSettings != null) UtilityFooter(onOpenSettings)
   }
 }
 
+/**
+ * Upstream's `SidebarThreadHeader` (sidebar/SidebarThreadHeader.tsx): one row, the search field
+ * taking the width, then a cluster of icon buttons. Project scope and add project only exist
+ * once there are projects; new thread is always there and disabled without one.
+ */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's tooltips sit on Compose's TooltipArea
 @Composable
-private fun SearchField(state: TextFieldState) {
+private fun ThreadHeader(
+  search: TextFieldState,
+  projects: List<Project>,
+  favicons: Map<String, ImageBitmap>,
+  filter: ProjectFilter,
+  onFilterChange: (ProjectFilter) -> Unit,
+  onNewThread: (() -> Unit)?,
+  onAddProject: (() -> Unit)?,
+) {
+  Row(
+    modifier = Modifier.fillMaxWidth().padding(8.dp),
+    horizontalArrangement = Arrangement.spacedBy(4.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    SearchField(search, Modifier.weight(1f))
+    if (projects.isNotEmpty()) {
+      ProjectScope(projects, favicons, filter, onFilterChange)
+      if (onAddProject != null) {
+        IconActionButton(
+          key = AllIconsKeys.Actions.NewFolder,
+          contentDescription = "Add project",
+          onClick = onAddProject,
+          tooltip = { Text("Add project") },
+        )
+      }
+    }
+    IconActionButton(
+      key = AllIconsKeys.Actions.Edit,
+      contentDescription = "New thread",
+      onClick = { onNewThread?.invoke() },
+      enabled = onNewThread != null && projects.isNotEmpty(),
+      tooltip = { Text("New thread") },
+    )
+  }
+}
+
+@OptIn(ExperimentalFoundationApi::class) // Jewel's tooltips sit on Compose's TooltipArea
+@Composable
+private fun SearchField(state: TextFieldState, modifier: Modifier = Modifier) {
   TextField(
     state = state,
-    modifier = Modifier.fillMaxWidth().padding(8.dp),
+    modifier = modifier,
     placeholder = { Text("Search") },
     leadingIcon = {
       Icon(AllIconsKeys.Actions.Search, contentDescription = null, Modifier.padding(end = 6.dp))
+    },
+    // Upstream's "Clear thread search" button, only while there is a query
+    trailingIcon = if (state.text.isEmpty()) null else {
+      {
+        IconActionButton(
+          key = AllIconsKeys.General.CloseSmall,
+          contentDescription = "Clear thread search",
+          onClick = { state.clearText() },
+        )
+      }
     },
   )
 }
 
 /**
- * Ours, not upstream's: the projects this window lists, defaulting to the ones it has open. A
- * match can pick several; it shows as "N projects", their names in the tooltip.
+ * Upstream's project scope: an icon button showing the filter glyph, or the scoped project's
+ * icon, that opens the list of projects with "All projects" first. The filter itself is ours
+ * (an IDE window defaults to the projects it has open), so a match of several projects is one
+ * more entry, "N projects", and the glyph with their names in the tooltip.
  */
 @OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip sits on Compose's TooltipArea
 @Composable
-private fun ProjectPicker(
+private fun ProjectScope(
   projects: List<Project>,
+  favicons: Map<String, ImageBitmap>,
   filter: ProjectFilter,
   onFilterChange: (ProjectFilter) -> Unit,
 ) {
   val choices: FilterChoices = remember(projects, filter) { filterChoices(projects, filter) }
-  // Both read fresh in the callback, whichever lambda the combo box kept
-  val latest: FilterChoices by rememberUpdatedState(choices)
-  val current: ProjectFilter by rememberUpdatedState(filter)
-  val tooltip: String = choices.names.joinToString("\n").ifEmpty { ALL_PROJECTS }
-  Tooltip(tooltip = { Text(tooltip) }) {
-    ListComboBox(
-      items = choices.labels,
-      selectedIndex = choices.selected,
-      // Only a real change: some Jewel versions call back for the programmatic index too, and
-      // persisting that would freeze the automatic match
-      onSelectedItemChange = { index ->
-        val picked: ProjectFilter? = latest.filters.getOrNull(index)
-        if (picked != null && picked != current) onFilterChange(picked)
-      },
-      modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
-      // Titles repeat (two checkouts of one repo, a project called "All projects"); keys mustn't
-      itemKeys = { index, _ -> index },
+  val byId: Map<String, Project> = remember(projects) { projects.associateBy { it.id } }
+  val scoped: Project? = filter.singleProject(byId)
+  val tooltip: String = when {
+    scoped != null -> "Filter threads by project: ${scoped.title}"
+    choices.names.isNotEmpty() -> choices.names.joinToString("\n")
+    else -> "Filter threads by project"
+  }
+  var open: Boolean by remember { mutableStateOf(false) }
+  Box {
+    Tooltip(tooltip = { Text(tooltip) }) {
+      IconButton(onClick = { open = !open }, modifier = Modifier.size(24.dp)) {
+        if (scoped != null) {
+          ProjectIcon(scoped, favicons[scoped.id])
+        } else {
+          Icon(AllIconsKeys.General.Filter, contentDescription = "Filter threads by project")
+        }
+      }
+    }
+    if (open) {
+      PopupMenu(
+        onDismissRequest = {
+          open = false
+          return@PopupMenu true
+        },
+        horizontalAlignment = Alignment.Start,
+      ) {
+        choices.filters.forEachIndexed { index, choice ->
+          val project: Project? = choice.singleProject(byId)
+          selectableItem(
+            selected = index == choices.selected,
+            onClick = {
+              open = false
+              if (choice != filter) onFilterChange(choice)
+            },
+          ) {
+            Row(
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              if (project != null) {
+                ProjectIcon(project, favicons[project.id])
+              } else {
+                Icon(AllIconsKeys.Nodes.Folder, contentDescription = null)
+              }
+              Text(choices.labels[index], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/** The one project a filter scopes to, if it's exactly one. */
+private fun ProjectFilter.singleProject(byId: Map<String, Project>): Project? =
+  (this as? ProjectFilter.Only)?.ids?.singleOrNull()?.let(byId::get)
+
+/**
+ * Upstream's `SidebarUtilityMenu` (sidebar/SidebarChrome.tsx): a row of icon buttons at the
+ * bottom. Settings is the one the plugin has; pull requests and usage are later phases.
+ */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's tooltips sit on Compose's TooltipArea
+@Composable
+private fun UtilityFooter(onOpenSettings: () -> Unit) {
+  Row(
+    modifier = Modifier.fillMaxWidth().padding(8.dp),
+    horizontalArrangement = Arrangement.spacedBy(4.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    IconActionButton(
+      key = AllIconsKeys.General.Settings,
+      contentDescription = "Settings",
+      onClick = onOpenSettings,
+      tooltip = { Text("Settings") },
     )
   }
 }
@@ -301,7 +426,8 @@ private fun SettledHeader(open: Boolean, onToggle: () -> Unit) {
   ) {
     Text("Settled", style = JewelTheme.typography.small, color = JewelTheme.globalColors.text.info)
     Divider(Orientation.Horizontal, Modifier.weight(1f))
-    val chevron = if (open) AllIconsKeys.General.ChevronDown else AllIconsKeys.General.ChevronRight
+    // Upstream's ChevronDownIcon, rotated 180 degrees while collapsed
+    val chevron = if (open) AllIconsKeys.General.ChevronDown else AllIconsKeys.General.ChevronUp
     Icon(chevron, contentDescription = if (open) "Collapse" else "Expand")
   }
 }

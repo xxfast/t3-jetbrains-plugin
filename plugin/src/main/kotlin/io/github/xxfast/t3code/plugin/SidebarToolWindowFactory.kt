@@ -64,6 +64,8 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         onContextMenu = { threadId, x, y -> showThreadMenu(project, threadId, x, y) },
         filter = filter,
         onFilterChange = awareness::choose,
+        onNewThread = null, // #17
+        onOpenSettings = { T3.openSettings(project) },
       )
     }
     val content: Content = ContentFactory.getInstance().createContent(panel, null, false)
