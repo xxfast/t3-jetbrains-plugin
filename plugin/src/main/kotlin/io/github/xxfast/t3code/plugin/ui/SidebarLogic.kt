@@ -3,6 +3,7 @@ package io.github.xxfast.t3code.plugin.ui
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.archived
+import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.ThreadLinkedPullRequest
 import io.github.xxfast.t3code.protocol.generated.ThreadPullRequestLink
 import io.github.xxfast.t3code.protocol.generated.ThreadPullRequestSnapshot
@@ -150,12 +151,103 @@ fun sections(
 /** How many rows "Show N more" reveals, `0` when all [total] are already [shown]. */
 fun moreCount(total: Int, shown: Int): Int = (total - shown).coerceIn(0, NEXT_PAGE)
 
+/** Run statuses `resolveSidebarThreadStatus` reads as working. */
+private val WORKING: Set<String> = setOf("preparing", "queued", "starting", "running", "waiting")
+
+/** Run statuses that ended: `terminalRunStatus`, packages/client-runtime/src/state/models.ts. */
+private val TERMINAL: Set<String> =
+  setOf("completed", "interrupted", "failed", "cancelled", "rolled_back")
+
 /**
- * Where the "Working" clock starts. The list row has no `Run`, so this is the shell's own copy of
- * the run start, falling back to `updatedAt` when the server didn't send one.
+ * The runtime's status as `shellRuntime` (packages/client-runtime/src/state/models.ts) derives
+ * it from the shell row: none without a run or provider thread, idle while background work that
+ * holds completion is pending, else the activity run's status, else the thread's.
  */
-fun Thread.runStartedAt(): Instant =
-  (activityRunStartedAt ?: latestRunStartedAt ?: latestRunRequestedAt ?: updatedAt).toInstant()
+fun Thread.runtimeStatus(): String? {
+  val parkAtIdle: Boolean =
+    pendingBackgroundTasks.orEmpty().any { it.kind != "command" } && status != "failed"
+  if (latestRunId == null && activeProviderThreadId == null && !parkAtIdle) return null
+  return if (parkAtIdle) "idle" else activityRunStatus ?: status
+}
+
+/** Upstream's `SidebarThreadStatus`, apps/web/src/components/Sidebar.logic.ts:883. */
+enum class ThreadStatus { Approval, Input, Working, Waiting, Failed, Limited, Ready }
+
+/**
+ * `resolveSidebarThreadStatus`, Sidebar.logic.ts:912, with `hasPendingApprovals` and
+ * `hasPendingUserInput` as `presentThreadShell` derives them from the pending request's kind.
+ * Requests on subagent rows are flagged on their parent upstream; the plugin hides those rows.
+ */
+fun Thread.sidebarStatus(): ThreadStatus {
+  val kind: String? = pendingRuntimeRequest?.kind
+  if (kind != null && kind != "user_input" && kind != "auth_refresh") return ThreadStatus.Approval
+  if (kind == "user_input") return ThreadStatus.Input
+  val runtime: String? = runtimeStatus()
+  return when {
+    runtime in WORKING -> ThreadStatus.Working
+    runtime == "idle" -> ThreadStatus.Waiting
+    runtime == "failed" ->
+      if (lastErrorClass == "usage_limit") ThreadStatus.Limited else ThreadStatus.Failed
+    else -> ThreadStatus.Ready
+  }
+}
+
+/** A card's top-right status, Sidebar.tsx:1705 to 1724. Woke isn't ported: no snooze yet. */
+enum class TopStatus { Working, Waiting, Approval, Input, Limited, Failed, Done }
+
+fun Thread.topStatus(): TopStatus? = when (sidebarStatus()) {
+  ThreadStatus.Working -> TopStatus.Working
+  ThreadStatus.Waiting -> TopStatus.Waiting
+  ThreadStatus.Approval -> TopStatus.Approval
+  ThreadStatus.Input -> TopStatus.Input
+  ThreadStatus.Limited -> TopStatus.Limited
+  ThreadStatus.Failed -> TopStatus.Failed
+  ThreadStatus.Ready -> if (unread) TopStatus.Done else null
+}
+
+/** The status label; a working thread with an active goal says "Goal". */
+fun Thread.topStatusLabel(top: TopStatus): String = when (top) {
+  TopStatus.Working -> if (goal?.status == "active") "Goal" else "Working"
+  else -> top.name
+}
+
+/**
+ * `shouldRecedeSidebarThread`, Sidebar.logic.ts:892. [open] is upstream's `isActive`, the thread
+ * the ChatView shows. Multi-select and woke aren't ported.
+ */
+fun Thread.recedes(open: Boolean): Boolean {
+  val status: ThreadStatus = sidebarStatus()
+  return when {
+    open || status == ThreadStatus.Input -> false
+    status == ThreadStatus.Working || status == ThreadStatus.Waiting -> true
+    status == ThreadStatus.Ready || status == ThreadStatus.Approval -> !unread
+    else -> false
+  }
+}
+
+/**
+ * Where the "Working" clock starts, `resolveThreadWorkingStartedAt` (models.ts:311): the
+ * activity run's start, else the active run's start or request time while it's unfinished.
+ * Null means no clock. Upstream stops at an explicit null activity start; the shell's optional
+ * and null collapse here, so that case falls through to the run.
+ */
+fun Thread.workingStartedAt(): Instant? {
+  activityRunStartedAt?.let { return it.toInstantOrNull() }
+  val active: Boolean =
+    latestRunId != null && latestRunCompletedAt == null && latestRunId == activeRunId
+  if (!active) return null
+  return (latestRunStartedAt ?: latestRunRequestedAt)?.toInstantOrNull()
+}
+
+/**
+ * Where the "Waiting" clock starts: `latestRun.completedAt` as `presentThreadShell` fills it,
+ * which is `updatedAt` when the run ended without a stamp.
+ */
+fun Thread.waitingSince(): Instant? {
+  if (latestRunId == null) return null
+  latestRunCompletedAt?.let { return it.toInstantOrNull() }
+  return if (status == "idle" || status in TERMINAL) updatedAt.toInstantOrNull() else null
+}
 
 /** `22s`, `1m 12s`, `2h 5m`. Zero trailing parts are dropped, negative durations are `0s`. */
 fun duration(elapsed: Duration): String {
@@ -167,6 +259,50 @@ fun duration(elapsed: Duration): String {
     seconds < 3_600 -> parts(seconds / 60, "m", seconds % 60, "s")
     else -> parts(seconds / 3_600, "h", seconds % 3_600 / 60, "m")
   }
+}
+
+/** The card's clock, `formatWorkingDurationLabel` (Sidebar.logic.ts:1080): `22s`, `3m`, `2h 5m`. */
+fun workingDuration(elapsed: Duration): String {
+  val seconds: Long = elapsed.seconds.coerceAtLeast(0)
+  if (seconds < 60) return "${seconds}s"
+  val minutes: Long = seconds / 60
+  if (minutes < 60) return "${minutes}m"
+  return "${minutes / 60}h ${minutes % 60}m"
+}
+
+/**
+ * `resolveThreadProviderStack`, models.ts:299: up to two earlier instances, then the current
+ * one. The runtime's instance is the row's own; without a runtime the model selection's.
+ */
+fun Thread.providerStack(): List<String> {
+  val current: String = when {
+    runtimeStatus() != null -> providerInstanceId
+    else -> modelSelection.instance ?: providerInstanceId
+  }
+  val previous: List<String> = providerInstanceHistory.orEmpty().filter { it != current }
+  return previous.takeLast(PROVIDER_STACK_LIMIT - 1) + current
+}
+
+private const val PROVIDER_STACK_LIMIT: Int = 3
+
+/** `providerInstanceInitials`, packages/client-runtime/src/state/providerInstanceDisplay.ts:29. */
+fun providerInitials(label: String): String {
+  val words: List<String> =
+    label.replace(Regex("[_-]+"), " ").split(Regex("\\s+")).filter { it.isNotEmpty() }
+  return when (words.size) {
+    0 -> ""
+    1 -> words[0].take(2).uppercase()
+    else -> words.take(2).joinToString("") { it.take(1).uppercase() }
+  }
+}
+
+/**
+ * `shouldShowInstanceBadge`, providerInstanceDisplay.ts:45: an instance with an accent colour,
+ * or one of several on the same driver, wears its initials.
+ */
+fun showInstanceBadge(entry: ServerProvider, entries: Collection<ServerProvider>): Boolean {
+  if (!entry.accentColor.isNullOrBlank()) return true
+  return entries.count { it.driver == entry.driver } > 1
 }
 
 /**
@@ -215,6 +351,10 @@ fun relativeTime(then: Instant, now: Instant): String {
   }
 }
 
+/** The sidebar's row time, `compactSidebarTimeLabel` (Sidebar.tsx:832): "now", "5m", "3h". */
+fun compactTime(then: Instant, now: Instant): String =
+  relativeTime(then, now).let { if (it == "just now") "now" else it }
+
 fun String.toInstant(): Instant = toInstantOrNull() ?: Instant.EPOCH
 
 /** `null` where upstream's `Date.parse` gives `NaN`. */
@@ -237,21 +377,6 @@ val Thread.unread: Boolean
     val visitedAt: Instant = visited.toInstantOrNull() ?: return true
     return completedAt.isAfter(visitedAt)
   }
-
-/**
- * A card's top status after working and waiting on you, ahead of unread. Upstream's
- * `resolveSidebarThreadStatus` (apps/web/src/components/Sidebar.logic.ts:912) and the card's
- * precedence (apps/web/src/components/Sidebar.tsx:1705 to 1724). Woke isn't ported: the shell row
- * carries no snooze wake time.
- */
-enum class CardStatus { Failed, Limited, Done }
-
-fun Thread.cardStatus(): CardStatus? = when {
-  status == "failed" && lastErrorClass == "usage_limit" -> CardStatus.Limited
-  status == "failed" -> CardStatus.Failed
-  unread -> CardStatus.Done
-  else -> null
-}
 
 // Visits mirror `ThreadVisitWatermark`, apps/web/src/components/ChatView.tsx:8667 to 8725.
 

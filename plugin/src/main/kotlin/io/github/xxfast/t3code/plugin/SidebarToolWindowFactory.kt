@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
@@ -17,6 +18,8 @@ import io.github.xxfast.t3code.plugin.ui.ConnectionBanner
 import io.github.xxfast.t3code.plugin.ui.ProjectFilter
 import io.github.xxfast.t3code.plugin.ui.Sidebar
 import io.github.xxfast.t3code.protocol.ConnectionState
+import io.github.xxfast.t3code.protocol.ServerInfo
+import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.T3Client
 import javax.swing.JComponent
 import org.jetbrains.jewel.bridge.JewelComposePanel
@@ -35,6 +38,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
     val opener: T3Opener = T3Opener.getInstance(project)
     val icons: ProjectIcons = ProjectIcons.get()
     val awareness: ProjectAwareness = ProjectAwareness.getInstance(project)
+    val controller: ChatController = ChatController.getInstance(project)
     val panel: JComponent = JewelComposePanel {
       val filter: ProjectFilter by awareness.filter.collectAsState()
       val connection by client.connection.collectAsState()
@@ -43,6 +47,14 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
       val selected: String? by selection.selected.collectAsState()
       val favicons by icons.favicons.collectAsState()
       LaunchedEffect(projects) { icons.ensure(projects) }
+      // The provider catalog, for the cards' provider stack; the ChatView fetches the same one
+      val connected: Boolean = connection is ConnectionState.Connected
+      LaunchedEffect(connected) {
+        if (connected) controller.loadCatalog() else controller.dropCatalog()
+      }
+      val catalog: ServerInfo? by controller.catalog.collectAsState()
+      val providers: Map<String, ServerProvider> =
+        remember(catalog) { catalog?.providers.orEmpty().associateBy { it.instanceId } }
       val header: @Composable () -> Unit = {
         // T3's sidebar has no connection line; ours only appears when something needs doing
         if (connection !is ConnectionState.Connected) {
@@ -60,6 +72,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         selectedThreadId = selected,
         onOpenThread = opener::openThread,
         favicons = favicons,
+        providers = providers,
         header = header,
         onContextMenu = { threadId, x, y -> showThreadMenu(project, threadId, x, y) },
         filter = filter,

@@ -129,11 +129,76 @@ class SidebarLogicTest {
   }
 
   @Test
-  fun `run start falls back to updatedAt`() {
+  fun `working clock starts at the activity run, else the unfinished active run`() {
     val started: String = "2026-10-19T08:00:00Z"
-    assertEquals(Instant.parse(started), thread(runStartedAt = started).runStartedAt())
+    assertEquals(Instant.parse(started), thread(runStartedAt = started).workingStartedAt())
+    val active: Thread = thread(activeRunId = "r", latestRunId = "r")
+      .copy(latestRunStartedAt = started)
+    assertEquals(Instant.parse(started), active.workingStartedAt())
+    assertEquals(null, active.copy(latestRunCompletedAt = started).workingStartedAt())
+    assertEquals(null, thread(updatedAt = started).workingStartedAt())
+  }
+
+  @Test
+  fun `waiting clock starts when the last run completed, else at updatedAt`() {
+    val done: String = "2026-10-19T08:00:00Z"
     val updated: String = "2026-10-19T09:00:00Z"
-    assertEquals(Instant.parse(updated), thread(updatedAt = updated).runStartedAt())
+    assertEquals(null, thread(updatedAt = updated).waitingSince())
+    val idle: Thread = thread(latestRunId = "r", updatedAt = updated)
+    assertEquals(Instant.parse(updated), idle.waitingSince())
+    assertEquals(Instant.parse(done), idle.copy(latestRunCompletedAt = done).waitingSince())
+  }
+
+  @Test
+  fun `card clock is seconds, then minutes, then hours and minutes`() {
+    assertEquals("0s", workingDuration(Duration.ofSeconds(-5)))
+    assertEquals("22s", workingDuration(Duration.ofSeconds(22)))
+    assertEquals("1m", workingDuration(Duration.ofSeconds(72)))
+    assertEquals("2h 5m", workingDuration(Duration.ofMinutes(125)))
+    assertEquals("3h 0m", workingDuration(Duration.ofHours(3).plusSeconds(20)))
+  }
+
+  @Test
+  fun `sidebar status mirrors upstream's precedence`() {
+    assertEquals(ThreadStatus.Ready, thread().sidebarStatus(), "no run, no runtime")
+    assertEquals(ThreadStatus.Approval, thread(status = "running", pending = true).sidebarStatus())
+    val input: Thread = thread().copy(
+      pendingRuntimeRequest = PendingRuntimeRequestSummary("r", "user_input", EPOCH),
+    )
+    assertEquals(ThreadStatus.Input, input.sidebarStatus())
+    val auth: Thread = thread().copy(
+      pendingRuntimeRequest = PendingRuntimeRequestSummary("r", "auth_refresh", EPOCH),
+    )
+    assertEquals(ThreadStatus.Ready, auth.sidebarStatus(), "auth refresh is the provider's own")
+    fun ran(status: String): Thread = thread(status = status, latestRunId = "r")
+    assertEquals(ThreadStatus.Working, ran("running").sidebarStatus())
+    assertEquals(ThreadStatus.Working, ran("waiting").sidebarStatus())
+    assertEquals(ThreadStatus.Waiting, ran("idle").sidebarStatus())
+    assertEquals(ThreadStatus.Ready, ran("completed").sidebarStatus())
+    assertEquals(ThreadStatus.Failed, ran("failed").sidebarStatus())
+    val limited: Thread = ran("failed").copy(lastErrorClass = "usage_limit")
+    assertEquals(ThreadStatus.Limited, limited.sidebarStatus())
+    assertEquals(ThreadStatus.Ready, thread(status = "failed").sidebarStatus(), "no runtime")
+  }
+
+  @Test
+  fun `rows recede unless open, asking, failed or unread`() {
+    assertFalse(thread().recedes(open = true))
+    assertTrue(thread().recedes(open = false), "a quiet ready row")
+    assertTrue(thread(status = "running", latestRunId = "r").recedes(open = false))
+    assertFalse(thread(status = "failed", latestRunId = "r").recedes(open = false))
+    val unread: Thread = thread(completedAt = "2026-10-19T12:00:00Z", visitedAt = TEN_TO)
+    assertFalse(unread.recedes(open = false))
+  }
+
+  @Test
+  fun `provider stack is the last two earlier instances then the current`() {
+    val hopped: Thread = thread().copy(providerInstanceHistory = listOf("a", "b", "codex", "c"))
+    assertEquals(listOf("b", "c", "codex"), hopped.providerStack())
+    assertEquals(listOf("codex"), thread().providerStack())
+    assertEquals("CL", providerInitials("Claude"))
+    assertEquals("CA", providerInitials("claude_agent"))
+    assertEquals("", providerInitials("  "))
   }
 
   @Test
@@ -174,6 +239,7 @@ class SidebarLogicTest {
     fun ago(at: String): String = relativeTime(Instant.parse(at), now)
     assertEquals("just now", ago("2026-10-19T11:59:30Z"))
     assertEquals("just now", ago("2026-10-19T12:05:00Z"))
+    assertEquals("now", compactTime(Instant.parse("2026-10-19T11:59:30Z"), now))
     assertEquals("5m", ago("2026-10-19T11:55:00Z"))
     assertEquals("3h", ago("2026-10-19T09:00:00Z"))
     assertEquals("2d", ago("2026-10-17T11:00:00Z"))
@@ -282,13 +348,19 @@ class SidebarLogicTest {
   }
 
   @Test
-  fun `card status puts limited and failed ahead of done`() {
-    val unread: Thread = thread(completedAt = "2026-10-19T12:00:00Z", visitedAt = TEN_TO)
-    assertEquals(CardStatus.Done, unread.cardStatus())
-    assertEquals(CardStatus.Failed, unread.copy(status = "failed").cardStatus())
+  fun `top status puts limited and failed ahead of done`() {
+    // Idle with a run reads as waiting upstream; done is a completed run nobody has looked at
+    val unread: Thread = thread(
+      completedAt = "2026-10-19T12:00:00Z", visitedAt = TEN_TO, latestRunId = "r",
+      status = "completed",
+    )
+    assertEquals(TopStatus.Done, unread.topStatus())
+    assertEquals(TopStatus.Waiting, unread.copy(status = "idle").topStatus())
+    assertEquals(TopStatus.Failed, unread.copy(status = "failed").topStatus())
     val limited: Thread = unread.copy(status = "failed", lastErrorClass = "usage_limit")
-    assertEquals(CardStatus.Limited, limited.cardStatus())
-    assertEquals(null, thread().cardStatus())
+    assertEquals(TopStatus.Limited, limited.topStatus())
+    assertEquals(null, thread().topStatus())
+    assertEquals("Working", unread.topStatusLabel(TopStatus.Working))
   }
 
   private fun thread(
@@ -296,6 +368,7 @@ class SidebarLogicTest {
     title: String = id,
     status: String = "idle",
     activeRunId: String? = null,
+    latestRunId: String? = null,
     runStartedAt: String? = null,
     createdAt: String = EPOCH,
     updatedAt: String = EPOCH,
@@ -320,6 +393,7 @@ class SidebarLogicTest {
     title = title,
     status = status,
     activeRunId = activeRunId,
+    latestRunId = latestRunId,
     activityRunStartedAt = runStartedAt,
     archivedAt = archivedAt,
     pinnedAt = pinnedAt,

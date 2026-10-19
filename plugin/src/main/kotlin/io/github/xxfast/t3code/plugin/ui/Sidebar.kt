@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -51,13 +52,14 @@ import androidx.compose.ui.unit.dp
 import com.intellij.ui.JBColor
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Thread
+import io.github.xxfast.t3code.protocol.generated.ServerProvider
+import io.github.xxfast.t3code.protocol.pinned
 import java.awt.event.MouseEvent
 import java.time.Duration
 import java.time.Instant
 import org.jetbrains.jewel.bridge.toComposeColor
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.Orientation
-import org.jetbrains.jewel.ui.component.CircularProgressIndicator
 import org.jetbrains.jewel.ui.component.Divider
 import org.jetbrains.jewel.ui.component.IconActionButton
 import org.jetbrains.jewel.ui.component.IconButton
@@ -84,6 +86,7 @@ fun Sidebar(
   selectedThreadId: String?,
   onOpenThread: (String) -> Unit,
   favicons: Map<String, ImageBitmap> = emptyMap(), // by project id, see ProjectIcons
+  providers: Map<String, ServerProvider> = emptyMap(), // by instance id, the server's catalog
   header: @Composable () -> Unit = {}, // the connection banner, shown only when not connected
   // A row was right-clicked at x, y on screen
   onContextMenu: (threadId: String, x: Int, y: Int) -> Unit = { _, _, _ -> },
@@ -103,7 +106,9 @@ fun Sidebar(
     Box(Modifier.weight(1f)) {
       when {
         sections.inbox.isNotEmpty() || sections.settled.isNotEmpty() ->
-          Sections(projects, favicons, sections, selectedThreadId, onOpenThread, onContextMenu)
+          Sections(
+            projects, favicons, providers, sections, selectedThreadId, onOpenThread, onContextMenu,
+          )
 
         else -> Hint(emptyHint(projects.isEmpty(), query, filter))
       }
@@ -275,14 +280,16 @@ private fun UtilityFooter(onOpenSettings: () -> Unit) {
 private fun Sections(
   projects: List<Project>,
   favicons: Map<String, ImageBitmap>,
+  providers: Map<String, ServerProvider>,
   sections: ThreadSections,
   selectedThreadId: String?,
   onOpenThread: (String) -> Unit,
   onContextMenu: (threadId: String, x: Int, y: Int) -> Unit,
 ) {
   val byId: Map<String, Project> = remember(projects) { projects.associateBy { it.id } }
-  // Only the "Working" clock needs seconds; everything else is happy with minutes
-  val period: Long = if (sections.inbox.none { it.active }) 30_000 else 1_000
+  // Only the Working and Waiting clocks need seconds; everything else is happy with minutes
+  val ticking: Set<ThreadStatus> = setOf(ThreadStatus.Working, ThreadStatus.Waiting)
+  val period: Long = if (sections.inbox.none { it.sidebarStatus() in ticking }) 30_000 else 1_000
   val now: Instant by rememberNow(period)
   var settledOpen: Boolean by remember { mutableStateOf(true) }
   var shown: Int by remember { mutableIntStateOf(FIRST_PAGE) }
@@ -302,6 +309,7 @@ private fun Sections(
               thread = thread,
               project = byId[thread.projectId],
               favicon = favicons[thread.projectId],
+              providers = providers,
               now = now,
               selected = thread.id == selectedThreadId,
               onClick = { onOpenThread(thread.id) },
@@ -332,87 +340,164 @@ private fun Sections(
   }
 }
 
+/**
+ * Upstream's card row (`SidebarThreadRow`, variant "card", Sidebar.tsx:2258 onwards): three
+ * lines in a 78px surface. Project icon and name with the status at the right, the title, then
+ * the branch (worktree glyph first) with the pull request badge and the provider stack at the
+ * right. Pins show as a glyph; unpinning is in the context menu.
+ */
 @Composable
 private fun InboxCard(
   thread: Thread,
   project: Project?,
   favicon: ImageBitmap?,
+  providers: Map<String, ServerProvider>,
   now: Instant,
   selected: Boolean,
   onClick: () -> Unit,
   onContextMenu: (x: Int, y: Int) -> Unit,
 ) {
-  val spaced: Modifier = Modifier.padding(vertical = 3.dp)
-  val status: CardStatus? = thread.cardStatus()
+  val status: ThreadStatus = thread.sidebarStatus()
+  val top: TopStatus? = thread.topStatus()
+  val recede: Boolean = thread.recedes(selected)
+  val weight: FontWeight? = if (recede) null else FontWeight.Medium
+  val normal: Color = JewelTheme.globalColors.text.normal
+  val info: Color = JewelTheme.globalColors.text.info
+  val titleColor: Color = when {
+    recede -> info
+    thread.unread || status == ThreadStatus.Input -> normal
+    status == ThreadStatus.Failed -> normal.copy(alpha = 0.95f)
+    else -> normal.copy(alpha = 0.9f)
+  }
   Selectable(
     selected = selected,
     onClick = onClick,
     onContextMenu = onContextMenu,
     rest = subtle(0.05f),
-    modifier = spaced,
+    // The list item's `py-0.5`; a receding working card sits at 70%
+    modifier = Modifier
+      .padding(vertical = 2.dp)
+      .alpha(if (recede && status == ThreadStatus.Working) 0.7f else 1f),
   ) { _ ->
-    Column(
-      modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-      verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
+    Column(Modifier.height(CARD_HEIGHT).padding(horizontal = 10.dp, vertical = 8.dp)) {
       Row(
+        modifier = Modifier.height(20.dp).fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
         if (project != null) ProjectIcon(project, favicon)
         Text(
           text = project?.title.orEmpty(),
-          style = JewelTheme.typography.small,
-          color = JewelTheme.globalColors.text.info,
+          style = small(),
+          color = info,
+          fontWeight = weight,
           modifier = Modifier.weight(1f),
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
         )
-        when {
-          thread.waitingOnYou -> Text(
-            text = "Waiting on you",
-            style = JewelTheme.typography.small,
-            color = JewelTheme.globalColors.text.warning,
-          )
-
-          thread.active -> {
-            CircularProgressIndicator(Modifier.size(12.dp))
-            Text(
-              text = "Working ${duration(Duration.between(thread.runStartedAt(), now))}",
-              style = JewelTheme.typography.small,
-              color = accent(),
-              maxLines = 1,
-            )
-          }
-
-          status != null -> CardStatusLabel(status)
-
-          else -> Text(
-            text = relativeTime(thread.inboxAt(), now),
-            style = JewelTheme.typography.small,
-            color = JewelTheme.globalColors.text.info,
-          )
+        if (thread.pinned) Glyph("pin", subtle(0.65f), 12.dp)
+        if (top != null) {
+          TopStatusLabel(thread, top, now)
+        } else {
+          Text(compactTime(thread.inboxAt(), now), style = small(), color = info)
         }
       }
+      Spacer(Modifier.height(4.dp))
       Text(
         text = thread.title,
-        fontWeight = titleWeight(thread),
+        fontWeight = weight,
+        color = titleColor,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
       )
-      thread.branch?.let { branch ->
-        Text(
-          text = branch,
-          style = JewelTheme.typography.small,
-          color = JewelTheme.globalColors.text.info,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-        )
+      Spacer(Modifier.height(2.dp))
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        val branch: String? = thread.branch
+        if (branch != null) {
+          if (!thread.worktreePath.isNullOrBlank()) Glyph("folder-git-2", subtle(0.4f), 12.dp)
+          Text(
+            text = branch,
+            style = small(),
+            color = subtle(0.4f),
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.MiddleEllipsis, // upstream's `MiddleTruncate`
+          )
+        } else {
+          Spacer(Modifier.weight(1f))
+        }
+        thread.pullRequestBadge()?.let { PullRequestBadgeView(it) }
+        ProviderStack(thread, providers)
       }
     }
   }
 }
 
+/** Upstream's `h-[4.875rem]`, padding included. */
+private val CARD_HEIGHT: Dp = 78.dp
+
+/**
+ * The card's status slot (Sidebar.tsx:2345 to 2385): the status glyph, its label and, while
+ * working or waiting, the clock, all in the status colour.
+ */
+@Composable
+private fun TopStatusLabel(thread: Thread, top: TopStatus, now: Instant) {
+  val (glyph: String, color: Color) = when (top) {
+    TopStatus.Working -> "circle-dashed" to accent()
+    TopStatus.Waiting -> "circle-dot-dashed" to JewelTheme.globalColors.text.info
+    TopStatus.Approval -> "shield-question" to JewelTheme.globalColors.text.warning
+    TopStatus.Input -> "message-circle-question" to indigo()
+    TopStatus.Limited -> "circle-alert" to JewelTheme.globalColors.text.warning
+    TopStatus.Failed -> "circle-alert" to JewelTheme.globalColors.text.error
+    TopStatus.Done -> "circle-check" to success()
+  }
+  val since: Instant? = when (top) {
+    TopStatus.Working -> thread.workingStartedAt()
+    TopStatus.Waiting -> thread.waitingSince()
+    else -> null
+  }
+  Row(
+    horizontalArrangement = Arrangement.spacedBy(4.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Glyph(glyph, color, 16.dp)
+    Text(thread.topStatusLabel(top), style = small(), color = color, fontWeight = FontWeight.Medium)
+    if (since != null) {
+      Text(workingDuration(Duration.between(since, now)), style = small(), color = color)
+    }
+  }
+}
+
+/**
+ * `SidebarProviderStack` (Sidebar.tsx:881): earlier instances small and grey, the current one
+ * last, with its initials badge when the catalog has a sibling on the same driver.
+ */
+@Composable
+private fun ProviderStack(thread: Thread, providers: Map<String, ServerProvider>) {
+  val stack: List<String> = thread.providerStack()
+  val current: ServerProvider = providers[stack.last()] ?: return
+  Row(
+    horizontalArrangement = Arrangement.spacedBy(6.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    for (id in stack.dropLast(1)) {
+      val earlier: ServerProvider = providers[id] ?: continue
+      ProviderIcon(earlier, size = 12.dp, alpha = 0.35f, muted = true)
+    }
+    ProviderIcon(
+      provider = current,
+      size = 14.dp,
+      alpha = 0.6f,
+      badge = showInstanceBadge(current, providers.values),
+    )
+  }
+}
+
+/** `CollapsibleSectionHeader` (ui/collapsible-section-header.tsx): label, rule, chevron. */
 @Composable
 private fun SettledHeader(open: Boolean, onToggle: () -> Unit) {
   Row(
@@ -420,18 +505,29 @@ private fun SettledHeader(open: Boolean, onToggle: () -> Unit) {
       .padding(top = 12.dp) // the thin spacer between the two sections
       .fillMaxWidth()
       .clickable(onClick = onToggle)
-      .padding(horizontal = 18.dp, vertical = 4.dp),
+      .height(32.dp)
+      .padding(horizontal = 18.dp),
     horizontalArrangement = Arrangement.spacedBy(8.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    Text("Settled", style = JewelTheme.typography.small, color = JewelTheme.globalColors.text.info)
+    Text(
+      text = "Settled",
+      style = small(),
+      color = JewelTheme.globalColors.text.info,
+      fontWeight = FontWeight.Medium,
+    )
     Divider(Orientation.Horizontal, Modifier.weight(1f))
     // Upstream's ChevronDownIcon, rotated 180 degrees while collapsed
     val chevron = if (open) AllIconsKeys.General.ChevronDown else AllIconsKeys.General.ChevronUp
-    Icon(chevron, contentDescription = if (open) "Collapse" else "Expand")
+    Icon(chevron, contentDescription = if (open) "Collapse" else "Expand", Modifier.size(12.dp))
   }
 }
 
+/**
+ * Upstream's slim row (variant "slim", Sidebar.tsx:2100 onwards): 36px, icon, title, pin,
+ * badge, time. Settled rows read as secondary until hovered or open; the icon is at 40% and
+ * grey the same way.
+ */
 @Composable
 private fun SettledRow(
   thread: Thread,
@@ -443,16 +539,15 @@ private fun SettledRow(
   onContextMenu: (x: Int, y: Int) -> Unit,
 ) {
   Selectable(selected, onClick, onContextMenu) { hovered ->
+    val lit: Boolean = selected || hovered
     Row(
-      modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-      horizontalArrangement = Arrangement.spacedBy(8.dp),
+      modifier = Modifier.height(36.dp).fillMaxWidth().padding(horizontal = 10.dp),
+      horizontalArrangement = Arrangement.spacedBy(10.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      // Upstream's slim row: the icon is at 40% and greyscale unless the row is open or hovered
-      val muted: Boolean = !(selected || hovered)
-      Box(Modifier.alpha(if (muted) 0.4f else 1f)) {
+      Box(Modifier.alpha(if (lit) 1f else 0.4f)) {
         if (project != null) {
-          ProjectIcon(project, favicon, muted = muted)
+          ProjectIcon(project, favicon, muted = !lit)
         } else {
           Box(Modifier.size(16.dp))
         }
@@ -460,58 +555,37 @@ private fun SettledRow(
       Text(
         text = thread.title,
         modifier = Modifier.weight(1f),
-        fontWeight = titleWeight(thread),
+        fontWeight = if (thread.recedes(selected)) null else FontWeight.Medium,
+        color = if (lit) JewelTheme.globalColors.text.normal else JewelTheme.globalColors.text.info,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
       )
+      if (thread.pinned) Glyph("pin", subtle(0.65f), 12.dp)
       thread.pullRequestBadge()?.let { PullRequestBadgeView(it) }
       Text(
-        text = relativeTime(thread.settledAt(), now),
-        style = JewelTheme.typography.small,
+        text = compactTime(thread.settledAt(), now),
+        style = small(),
         color = JewelTheme.globalColors.text.info,
       )
     }
   }
 }
 
+/** "Show N more" (Sidebar.tsx:5044): a slim-height row, plus glyph, muted text. */
 @Composable
 private fun MoreRow(count: Int, onClick: () -> Unit) {
-  Selectable(selected = false, onClick = onClick) { _ ->
+  Selectable(selected = false, onClick = onClick) { hovered ->
     Row(
-      modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-      horizontalArrangement = Arrangement.spacedBy(8.dp),
+      modifier = Modifier.height(36.dp).fillMaxWidth().padding(horizontal = 10.dp),
+      horizontalArrangement = Arrangement.spacedBy(10.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      Icon(AllIconsKeys.General.Add, contentDescription = null)
-      Text("Show $count more", color = JewelTheme.globalColors.text.info)
+      val color: Color =
+        if (hovered) JewelTheme.globalColors.text.normal
+        else JewelTheme.globalColors.text.info.copy(alpha = 0.55f)
+      Icon(AllIconsKeys.General.Add, contentDescription = null, Modifier.size(16.dp))
+      Text("Show $count more", color = color)
     }
-  }
-}
-
-/**
- * A [CardStatus] where the time would be, as apps/web/src/components/Sidebar.tsx:1705 to 1724
- * draws it: an icon and a label in the status colour. Limited and Failed share upstream's
- * `CircleAlertIcon`, Done is its `CircleCheckIcon`.
- */
-@Composable
-private fun CardStatusLabel(status: CardStatus) {
-  val (icon: IconKey, label: String, color: Color) = when (status) {
-    CardStatus.Limited -> Triple(
-      AllIconsKeys.General.Warning, "Limited", JewelTheme.globalColors.text.warning,
-    )
-
-    CardStatus.Failed -> Triple(
-      AllIconsKeys.General.Error, "Failed", JewelTheme.globalColors.text.error,
-    )
-
-    CardStatus.Done -> Triple(AllIconsKeys.Status.Success, "Done", success())
-  }
-  Row(
-    horizontalArrangement = Arrangement.spacedBy(4.dp),
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    Icon(icon, contentDescription = null, Modifier.size(12.dp))
-    Text(text = label, style = JewelTheme.typography.small, color = color)
   }
 }
 
@@ -520,12 +594,9 @@ private fun CardStatusLabel(status: CardStatus) {
 private fun success(): Color =
   JBColor.namedColor("Label.successForeground", JBColor(0x208A3C, 0x5FAD65)).toComposeColor()
 
-/**
- * Sidebar.tsx gives a title `font-medium` unless the row recedes, and an idle row recedes until
- * it's unread. Ours only lifts the unread ones.
- */
-private fun titleWeight(thread: Thread): FontWeight? =
-  if (thread.unread) FontWeight.Medium else null
+/** Upstream's `text-indigo-600 dark:text-indigo-300` on the Input status. */
+@Composable
+private fun indigo(): Color = if (JewelTheme.isDark) Color(0xFFA5B4FC) else Color(0xFF4F46E5)
 
 /** A rounded, full-width clickable surface: accent tint when selected, a light fill on hover. */
 @Composable
