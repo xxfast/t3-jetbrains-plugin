@@ -55,7 +55,6 @@ fun ThreadsPanel(
   selectedThreadId: String?,
   onOpenThread: (String) -> Unit,
   header: @Composable () -> Unit = {}, // the connection banner, shown only when not connected
-  footer: @Composable () -> Unit = {}, // harness-only controls, where T3 keeps its settings row
 ) {
   val search: TextFieldState = rememberTextFieldState()
   val query: String = search.text.toString()
@@ -73,7 +72,6 @@ fun ThreadsPanel(
         else -> Hint("No threads")
       }
     }
-    footer()
   }
 }
 

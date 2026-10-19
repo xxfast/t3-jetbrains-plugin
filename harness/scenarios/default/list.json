@@ -1,7 +1,4 @@
 {
-  "connection": {
-    "state": "unpaired"
-  },
   "projects": [
     {
       "id": "prj_01JB2K7Q9V3XKSTORE",
@@ -21,69 +18,6 @@
     }
   ],
   "threads": [
-    {
-      "id": "thr_01JC4A1F0QWMIGRATE",
-      "projectId": "prj_01JB2K7Q9V3XKSTORE",
-      "title": "Migrate KStore to kotlinx-io 0.8",
-      "createdBy": "user",
-      "creationSource": "web",
-      "providerInstanceId": "codex",
-      "modelSelection": {
-        "instanceId": "codex",
-        "model": "gpt-5"
-      },
-      "runtimeMode": "approval-required",
-      "interactionMode": "default",
-      "lineage": {
-        "rootThreadId": "thr_01JC4A1F0QWMIGRATE"
-      },
-      "status": "running",
-      "branch": "kotlinx-io-0.8",
-      "latestRunId": "run_01JC4A1F9ZA3",
-      "activeRunId": "run_01JC4A1F9ZA3",
-      "activityRunStartedAt": "2026-10-19T08:40:30.000Z",
-      "latestVisibleMessage": {
-        "id": "msg_01JC4A1FA0X1",
-        "role": "assistant",
-        "text": "Bumping `kotlinx-io` and fixing the `Source` call sites in `:kstore-file`.",
-        "updatedAt": "2026-10-19T08:41:02.000Z"
-      },
-      "itemCount": 14,
-      "visibleItemCount": 14,
-      "hasActionableProposedPlan": false,
-      "pinnedAt": "2026-10-12T07:30:00.000Z",
-      "createdAt": "2026-10-19T08:30:12.000Z",
-      "updatedAt": "2026-10-19T08:41:02.000Z"
-    },
-    {
-      "id": "thr_01JC49ZK2HWAITING",
-      "projectId": "prj_01JB2K7Q9V3XKSTORE",
-      "title": "Run the wasmJs browser tests",
-      "createdBy": "user",
-      "creationSource": "web",
-      "providerInstanceId": "codex",
-      "modelSelection": {
-        "instanceId": "codex",
-        "model": "gpt-5"
-      },
-      "runtimeMode": "approval-required",
-      "interactionMode": "default",
-      "lineage": {
-        "rootThreadId": "thr_01JC49ZK2HWAITING"
-      },
-      "status": "waiting",
-      "latestRunId": "run_01JC49ZK3M1B",
-      "pendingRuntimeRequest": {
-        "id": "req_01JC49ZM7TQ2",
-        "kind": "command",
-        "createdAt": "2026-10-19T08:22:40.000Z"
-      },
-      "itemCount": 6,
-      "visibleItemCount": 6,
-      "hasActionableProposedPlan": false,
-      "createdAt": "2026-10-19T08:20:01.000Z",
-      "updatedAt": "2026-10-19T08:22:40.000Z"
-    },
     {
       "id": "thr_01JC3QX81VIDLE001",
       "projectId": "prj_01JB2K7Q9V3XKSTORE",

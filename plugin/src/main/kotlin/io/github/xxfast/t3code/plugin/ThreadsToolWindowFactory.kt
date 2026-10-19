@@ -9,10 +9,8 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
-import io.github.xxfast.t3code.plugin.fixtures.FixtureClient
 import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ui.ConnectionBanner
-import io.github.xxfast.t3code.plugin.ui.ScenarioPicker
 import io.github.xxfast.t3code.plugin.ui.ThreadsPanel
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.T3Client
@@ -24,7 +22,6 @@ class ThreadsToolWindowFactory : ToolWindowFactory, DumbAware {
   override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
     val t3: T3 = T3.get()
     val client: T3Client = t3.client
-    val fixtures: FixtureClient? = t3.fixtures
     val selection: ThreadSelection = ThreadSelection.getInstance(project)
     val opener: T3Opener = T3Opener.getInstance(project)
     val panel: JComponent = JewelComposePanel {
@@ -43,20 +40,12 @@ class ThreadsToolWindowFactory : ToolWindowFactory, DumbAware {
           )
         }
       }
-      val footer: @Composable () -> Unit = {
-        if (fixtures != null) {
-          val scenarios by fixtures.scenarios.collectAsState()
-          val scenario by fixtures.selected.collectAsState()
-          ScenarioPicker(scenarios, scenario, fixtures::select)
-        }
-      }
       ThreadsPanel(
         projects = projects,
         threads = threads,
         selectedThreadId = selected,
         onOpenThread = opener::openThread,
         header = header,
-        footer = footer,
       )
     }
     val content: Content = ContentFactory.getInstance().createContent(panel, null, false)

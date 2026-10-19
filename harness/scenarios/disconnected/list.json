@@ -1,16 +1,5 @@
 {
-  "connection": {
-    "state": "connected"
-  },
   "projects": [
-    {
-      "id": "prj_01JB2K8M4R7DROUTER",
-      "title": "Decompose-Router",
-      "workspaceRoot": "/Users/xxfast/Developer/XXFAST/KMP/Decompose-Router",
-      "scripts": [],
-      "createdAt": "2026-07-21T11:02:00.000Z",
-      "updatedAt": "2026-10-19T09:12:00.000Z"
-    },
     {
       "id": "prj_01JB2K7Q9V3XKSTORE",
       "title": "KStore",
@@ -18,96 +7,17 @@
       "scripts": [],
       "createdAt": "2026-08-02T09:14:00.000Z",
       "updatedAt": "2026-10-18T22:40:11.000Z"
+    },
+    {
+      "id": "prj_01JB2K8M4R7DROUTER",
+      "title": "Decompose-Router",
+      "workspaceRoot": "/Users/xxfast/Developer/XXFAST/KMP/Decompose-Router",
+      "scripts": [],
+      "createdAt": "2026-07-21T11:02:00.000Z",
+      "updatedAt": "2026-10-19T08:05:43.000Z"
     }
   ],
   "threads": [
-    {
-      "id": "thr_01JC4C0X1UNKNOWN",
-      "projectId": "prj_01JB2K8M4R7DROUTER",
-      "title": "Research how Navigation 3 handles predictive back",
-      "createdBy": "user",
-      "creationSource": "web",
-      "providerInstanceId": "codex",
-      "modelSelection": {
-        "instanceId": "codex",
-        "model": "gpt-5"
-      },
-      "runtimeMode": "approval-required",
-      "interactionMode": "default",
-      "lineage": {
-        "rootThreadId": "thr_01JC4C0X1UNKNOWN"
-      },
-      "status": "completed",
-      "latestRunId": "run_01JC4C0X2V3W",
-      "itemCount": 5,
-      "visibleItemCount": 5,
-      "hasActionableProposedPlan": false,
-      "createdAt": "2026-10-19T09:00:00.000Z",
-      "updatedAt": "2026-10-19T09:12:00.000Z"
-    },
-    {
-      "id": "thr_01JC4A1F0QWMIGRATE",
-      "projectId": "prj_01JB2K7Q9V3XKSTORE",
-      "title": "Migrate KStore to kotlinx-io 0.8",
-      "createdBy": "user",
-      "creationSource": "web",
-      "providerInstanceId": "codex",
-      "modelSelection": {
-        "instanceId": "codex",
-        "model": "gpt-5"
-      },
-      "runtimeMode": "approval-required",
-      "interactionMode": "default",
-      "lineage": {
-        "rootThreadId": "thr_01JC4A1F0QWMIGRATE"
-      },
-      "status": "running",
-      "branch": "kotlinx-io-0.8",
-      "latestRunId": "run_01JC4A1F9ZA3",
-      "activeRunId": "run_01JC4A1F9ZA3",
-      "activityRunStartedAt": "2026-10-19T08:40:30.000Z",
-      "latestVisibleMessage": {
-        "id": "msg_01JC4A1FA0X1",
-        "role": "assistant",
-        "text": "Bumping `kotlinx-io` and fixing the `Source` call sites in `:kstore-file`.",
-        "updatedAt": "2026-10-19T08:41:02.000Z"
-      },
-      "itemCount": 14,
-      "visibleItemCount": 14,
-      "hasActionableProposedPlan": false,
-      "pinnedAt": "2026-10-12T07:30:00.000Z",
-      "createdAt": "2026-10-19T08:30:12.000Z",
-      "updatedAt": "2026-10-19T08:41:02.000Z"
-    },
-    {
-      "id": "thr_01JC49ZK2HWAITING",
-      "projectId": "prj_01JB2K7Q9V3XKSTORE",
-      "title": "Run the wasmJs browser tests",
-      "createdBy": "user",
-      "creationSource": "web",
-      "providerInstanceId": "codex",
-      "modelSelection": {
-        "instanceId": "codex",
-        "model": "gpt-5"
-      },
-      "runtimeMode": "approval-required",
-      "interactionMode": "default",
-      "lineage": {
-        "rootThreadId": "thr_01JC49ZK2HWAITING"
-      },
-      "status": "waiting",
-      "latestRunId": "run_01JC49ZK3M1B",
-      "pendingRuntimeRequest": {
-        "id": "req_01JC49ZM7TQ2",
-        "kind": "command",
-        "createdAt": "2026-10-19T08:22:40.000Z"
-      },
-      "itemCount": 6,
-      "visibleItemCount": 6,
-      "hasActionableProposedPlan": false,
-      "createdAt": "2026-10-19T08:20:01.000Z",
-      "updatedAt": "2026-10-19T08:22:40.000Z"
-    },
     {
       "id": "thr_01JC3QX81VIDLE001",
       "projectId": "prj_01JB2K7Q9V3XKSTORE",
@@ -480,93 +390,5 @@
       "createdAt": "2026-10-09T15:12:00.000Z",
       "updatedAt": "2026-10-09T15:31:48.000Z"
     }
-  ],
-  "items": {
-    "thr_01JC4C0X1UNKNOWN": [
-      {
-        "type": "user_message",
-        "id": "u1",
-        "messageId": "msg_u1",
-        "createdBy": "user",
-        "creationSource": "web",
-        "inputIntent": "turn_start",
-        "attachments": [],
-        "threadId": "thr_01JC4C0X1UNKNOWN",
-        "ordinal": 1,
-        "status": "completed",
-        "text": "How does Navigation 3 handle predictive back? Compare with what we do.",
-        "updatedAt": "2026-10-19T09:00:00.000Z"
-      },
-      {
-        "type": "web_search",
-        "id": "w1",
-        "threadId": "thr_01JC4C0X1UNKNOWN",
-        "ordinal": 2,
-        "status": "completed",
-        "title": "Searched the web",
-        "patterns": [
-          "navigation3 predictive back compose",
-          "NavDisplay onBack"
-        ],
-        "results": [
-          {
-            "title": "Navigation 3 | Android Developers",
-            "url": "https://developer.android.com/guide/navigation/navigation-3",
-            "snippet": "NavDisplay observes the back stack and animates predictive back gestures."
-          }
-        ],
-        "updatedAt": "2026-10-19T09:02:10.000Z"
-      },
-      {
-        "type": "todo_list",
-        "id": "t1",
-        "threadId": "thr_01JC4C0X1UNKNOWN",
-        "ordinal": 3,
-        "status": "completed",
-        "planId": "plan_01JC4C1A0B2C",
-        "steps": [
-          {
-            "id": "s1",
-            "text": "Read NavDisplay's back handling",
-            "status": "completed"
-          },
-          {
-            "id": "s2",
-            "text": "Diff against RouterContent",
-            "status": "completed"
-          },
-          {
-            "id": "s3",
-            "text": "Write up the comparison",
-            "status": "pending"
-          }
-        ],
-        "explanation": "Keeping this to the back gesture, not transitions.",
-        "updatedAt": "2026-10-19T09:05:00.000Z"
-      },
-      {
-        "type": "some_future_type",
-        "id": "x1",
-        "threadId": "thr_01JC4C0X1UNKNOWN",
-        "ordinal": 4,
-        "status": "running",
-        "hologram": {
-          "color": "teal",
-          "depth": 3
-        },
-        "updatedAt": "2026-10-19T09:10:00.000Z"
-      },
-      {
-        "type": "assistant_message",
-        "id": "a1",
-        "messageId": "msg_a1",
-        "streaming": false,
-        "threadId": "thr_01JC4C0X1UNKNOWN",
-        "ordinal": 5,
-        "status": "completed",
-        "text": "Navigation 3 drives predictive back from `NavDisplay`; we do it per router in `RouterContent`. Same gesture, different owner.",
-        "updatedAt": "2026-10-19T09:12:00.000Z"
-      }
-    ]
-  }
+  ]
 }

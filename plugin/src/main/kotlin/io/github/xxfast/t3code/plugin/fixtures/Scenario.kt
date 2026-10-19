@@ -13,10 +13,10 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.long
 
-/** One scenario file under `harness/scenarios`, as written. */
+/** One file in a scenario directory under `harness/scenarios`, as written. */
 @Serializable
 class ScenarioFile(
-  val connection: ScenarioConnection = ScenarioConnection(),
+  val connection: ScenarioConnection? = null,
   val projects: List<Project> = emptyList(),
   val threads: List<Thread> = emptyList(),
   val runs: Map<String, List<Run>> = emptyMap(),
@@ -33,21 +33,22 @@ class ScenarioConnection(
 /** A turn item and how long to wait before it shows up, in milliseconds. */
 class FixtureItem(val item: TurnItem, val after: Long)
 
-/** A scenario file, decoded all the way down so a bad file fails at load, not mid-replay. */
+/**
+ * A scenario file, decoded all the way down so a bad file fails at load, not mid-replay.
+ * [connection] is `null` when the file doesn't set one.
+ */
 class Scenario(
-  val name: String,
-  val connection: ConnectionState,
+  val connection: ConnectionState?,
   val projects: List<Project>,
   val threads: List<Thread>,
   val runs: Map<String, List<Run>>,
   val items: Map<String, List<FixtureItem>>,
 ) {
   companion object {
-    fun decode(name: String, text: String): Scenario {
+    fun decode(text: String): Scenario {
       val file: ScenarioFile = T3Json.decodeFromString(ScenarioFile.serializer(), text)
       return Scenario(
-        name = name,
-        connection = file.connection.toState(),
+        connection = file.connection?.toState(),
         projects = file.projects,
         threads = file.threads,
         runs = file.runs,
@@ -55,8 +56,21 @@ class Scenario(
       )
     }
 
+    /**
+     * One scenario out of a directory's files, in order. Projects and threads dedupe by id, first
+     * wins. Runs and items append per thread. The last file that sets a connection wins, and a
+     * directory that sets none is connected.
+     */
+    fun merge(parts: List<Scenario>): Scenario = Scenario(
+      connection = parts.lastOrNull { it.connection != null }?.connection
+        ?: ConnectionState.Connected(defaultSession),
+      projects = parts.flatMap { it.projects }.distinctBy { it.id },
+      threads = parts.flatMap { it.threads }.distinctBy { it.id },
+      runs = parts.map { it.runs }.fold(emptyMap(), ::append),
+      items = parts.map { it.items }.fold(emptyMap(), ::append),
+    )
+
     fun failed(name: String, message: String): Scenario = Scenario(
-      name = name,
       connection = ConnectionState.Error("scenario $name: $message"),
       projects = emptyList(),
       threads = emptyList(),
@@ -65,6 +79,12 @@ class Scenario(
     )
   }
 }
+
+private fun <T> append(
+  into: Map<String, List<T>>,
+  from: Map<String, List<T>>,
+): Map<String, List<T>> = (into.keys + from.keys)
+  .associateWith { key -> into[key].orEmpty() + from[key].orEmpty() }
 
 private val defaultSession: ServerSession = ServerSession(
   authenticated = true,

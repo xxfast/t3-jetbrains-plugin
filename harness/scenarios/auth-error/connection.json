@@ -1,0 +1,6 @@
+{
+  "connection": {
+    "state": "authError",
+    "message": "EnvironmentAuthInvalidError: bearer token expired or revoked"
+  }
+}

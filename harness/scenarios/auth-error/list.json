@@ -1,5 +1,4 @@
 {
-  "connection": { "state": "connected" },
   "projects": [
     {
       "id": "prj_01JB2K7Q9V3XKSTORE",
@@ -20,69 +19,21 @@
   ],
   "threads": [
     {
-      "id": "thr_01JC4A1F0QWMIGRATE",
-      "projectId": "prj_01JB2K7Q9V3XKSTORE",
-      "title": "Migrate KStore to kotlinx-io 0.8",
-      "createdBy": "user",
-      "creationSource": "web",
-      "providerInstanceId": "codex",
-      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
-      "runtimeMode": "approval-required",
-      "interactionMode": "default",
-      "lineage": { "rootThreadId": "thr_01JC4A1F0QWMIGRATE" },
-      "status": "running",
-      "branch": "kotlinx-io-0.8",
-      "latestRunId": "run_01JC4A1F9ZA3",
-      "activeRunId": "run_01JC4A1F9ZA3",
-      "activityRunStartedAt": "2026-10-19T08:40:30.000Z",
-      "latestVisibleMessage": {
-        "id": "msg_01JC4A1FA0X1",
-        "role": "assistant",
-        "text": "Bumping `kotlinx-io` and fixing the `Source` call sites in `:kstore-file`.",
-        "updatedAt": "2026-10-19T08:41:02.000Z"
-      },
-      "itemCount": 14,
-      "visibleItemCount": 14,
-      "hasActionableProposedPlan": false,
-      "pinnedAt": "2026-10-12T07:30:00.000Z",
-      "createdAt": "2026-10-19T08:30:12.000Z",
-      "updatedAt": "2026-10-19T08:41:02.000Z"
-    },
-    {
-      "id": "thr_01JC49ZK2HWAITING",
-      "projectId": "prj_01JB2K7Q9V3XKSTORE",
-      "title": "Run the wasmJs browser tests",
-      "createdBy": "user",
-      "creationSource": "web",
-      "providerInstanceId": "codex",
-      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
-      "runtimeMode": "approval-required",
-      "interactionMode": "default",
-      "lineage": { "rootThreadId": "thr_01JC49ZK2HWAITING" },
-      "status": "waiting",
-      "latestRunId": "run_01JC49ZK3M1B",
-      "pendingRuntimeRequest": {
-        "id": "req_01JC49ZM7TQ2",
-        "kind": "command",
-        "createdAt": "2026-10-19T08:22:40.000Z"
-      },
-      "itemCount": 6,
-      "visibleItemCount": 6,
-      "hasActionableProposedPlan": false,
-      "createdAt": "2026-10-19T08:20:01.000Z",
-      "updatedAt": "2026-10-19T08:22:40.000Z"
-    },
-    {
       "id": "thr_01JC3QX81VIDLE001",
       "projectId": "prj_01JB2K7Q9V3XKSTORE",
       "title": "Why does `KStore.update` lock twice?",
       "createdBy": "user",
       "creationSource": "web",
       "providerInstanceId": "codex",
-      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
       "runtimeMode": "approval-required",
       "interactionMode": "default",
-      "lineage": { "rootThreadId": "thr_01JC3QX81VIDLE001" },
+      "lineage": {
+        "rootThreadId": "thr_01JC3QX81VIDLE001"
+      },
       "status": "idle",
       "itemCount": 0,
       "visibleItemCount": 0,
@@ -97,10 +48,15 @@
       "createdBy": "user",
       "creationSource": "web",
       "providerInstanceId": "codex",
-      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
       "runtimeMode": "approval-required",
       "interactionMode": "default",
-      "lineage": { "rootThreadId": "thr_01JC2N4B6CDONE001" },
+      "lineage": {
+        "rootThreadId": "thr_01JC2N4B6CDONE001"
+      },
       "status": "completed",
       "branch": "docs-migrations",
       "latestRunId": "run_01JC2N4B7D2F",
@@ -123,10 +79,15 @@
       "createdBy": "user",
       "creationSource": "web",
       "providerInstanceId": "codex",
-      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
       "runtimeMode": "approval-required",
       "interactionMode": "default",
-      "lineage": { "rootThreadId": "thr_01JC3A0P7SPAUSED1" },
+      "lineage": {
+        "rootThreadId": "thr_01JC3A0P7SPAUSED1"
+      },
       "status": "paused",
       "latestRunId": "run_01JC3A0P8T1C",
       "itemCount": 4,
@@ -142,10 +103,15 @@
       "createdBy": "user",
       "creationSource": "web",
       "providerInstanceId": "codex",
-      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
       "runtimeMode": "approval-required",
       "interactionMode": "default",
-      "lineage": { "rootThreadId": "thr_01JC4B2W5RROUTER1" },
+      "lineage": {
+        "rootThreadId": "thr_01JC4B2W5RROUTER1"
+      },
       "status": "running",
       "branch": "ios-26-back",
       "latestRunId": "run_01JC4B2W6S8T",
@@ -165,10 +131,15 @@
       "createdBy": "user",
       "creationSource": "web",
       "providerInstanceId": "codex",
-      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
       "runtimeMode": "approval-required",
       "interactionMode": "default",
-      "lineage": { "rootThreadId": "thr_01JC3ZT0P9FAILED1" },
+      "lineage": {
+        "rootThreadId": "thr_01JC3ZT0P9FAILED1"
+      },
       "status": "failed",
       "latestRunId": "run_01JC3ZT1A4HB",
       "latestVisibleMessage": {
@@ -190,10 +161,15 @@
       "createdBy": "user",
       "creationSource": "web",
       "providerInstanceId": "codex",
-      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
       "runtimeMode": "approval-required",
       "interactionMode": "default",
-      "lineage": { "rootThreadId": "thr_01JC1H7E3KINTERR1" },
+      "lineage": {
+        "rootThreadId": "thr_01JC1H7E3KINTERR1"
+      },
       "status": "interrupted",
       "latestRunId": "run_01JC1H7E4L5N",
       "itemCount": 12,
@@ -209,10 +185,15 @@
       "createdBy": "user",
       "creationSource": "web",
       "providerInstanceId": "codex",
-      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
       "runtimeMode": "approval-required",
       "interactionMode": "default",
-      "lineage": { "rootThreadId": "thr_01JC1A2B3CSETTLE01" },
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE01"
+      },
       "status": "completed",
       "branch": "release-0.10.0",
       "itemCount": 5,
@@ -228,10 +209,15 @@
       "createdBy": "user",
       "creationSource": "web",
       "providerInstanceId": "codex",
-      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
       "runtimeMode": "approval-required",
       "interactionMode": "default",
-      "lineage": { "rootThreadId": "thr_01JC1A2B3CSETTLE02" },
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE02"
+      },
       "status": "completed",
       "itemCount": 5,
       "visibleItemCount": 5,
@@ -246,10 +232,15 @@
       "createdBy": "user",
       "creationSource": "web",
       "providerInstanceId": "codex",
-      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
       "runtimeMode": "approval-required",
       "interactionMode": "default",
-      "lineage": { "rootThreadId": "thr_01JC1A2B3CSETTLE03" },
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE03"
+      },
       "status": "completed",
       "branch": "multi-window",
       "itemCount": 5,
@@ -265,10 +256,15 @@
       "createdBy": "user",
       "creationSource": "web",
       "providerInstanceId": "codex",
-      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
       "runtimeMode": "approval-required",
       "interactionMode": "default",
-      "lineage": { "rootThreadId": "thr_01JC1A2B3CSETTLE04" },
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE04"
+      },
       "status": "idle",
       "itemCount": 5,
       "visibleItemCount": 5,
@@ -283,10 +279,15 @@
       "createdBy": "user",
       "creationSource": "web",
       "providerInstanceId": "codex",
-      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
       "runtimeMode": "approval-required",
       "interactionMode": "default",
-      "lineage": { "rootThreadId": "thr_01JC1A2B3CSETTLE05" },
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE05"
+      },
       "status": "completed",
       "itemCount": 5,
       "visibleItemCount": 5,
@@ -301,10 +302,15 @@
       "createdBy": "user",
       "creationSource": "web",
       "providerInstanceId": "codex",
-      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
       "runtimeMode": "approval-required",
       "interactionMode": "default",
-      "lineage": { "rootThreadId": "thr_01JC1A2B3CSETTLE06" },
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE06"
+      },
       "status": "completed",
       "branch": "release-0.14.0",
       "itemCount": 5,
@@ -320,10 +326,15 @@
       "createdBy": "user",
       "creationSource": "web",
       "providerInstanceId": "codex",
-      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
       "runtimeMode": "approval-required",
       "interactionMode": "default",
-      "lineage": { "rootThreadId": "thr_01JC1A2B3CSETTLE07" },
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE07"
+      },
       "status": "completed",
       "itemCount": 5,
       "visibleItemCount": 5,
@@ -338,10 +349,15 @@
       "createdBy": "user",
       "creationSource": "web",
       "providerInstanceId": "codex",
-      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
       "runtimeMode": "approval-required",
       "interactionMode": "default",
-      "lineage": { "rootThreadId": "thr_01JC1A2B3CSETTLE08" },
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE08"
+      },
       "status": "completed",
       "itemCount": 5,
       "visibleItemCount": 5,
@@ -356,10 +372,15 @@
       "createdBy": "user",
       "creationSource": "web",
       "providerInstanceId": "codex",
-      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
       "runtimeMode": "approval-required",
       "interactionMode": "default",
-      "lineage": { "rootThreadId": "thr_01JBZQ2D8NARCHIVE" },
+      "lineage": {
+        "rootThreadId": "thr_01JBZQ2D8NARCHIVE"
+      },
       "status": "completed",
       "latestRunId": "run_01JBZQ2D9P0Q",
       "itemCount": 7,

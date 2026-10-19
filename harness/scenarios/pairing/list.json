@@ -1,7 +1,4 @@
 {
-  "connection": {
-    "state": "connected"
-  },
   "projects": [
     {
       "id": "prj_01JB2K7Q9V3XKSTORE",
@@ -9,7 +6,7 @@
       "workspaceRoot": "/Users/xxfast/Developer/XXFAST/KMP/KStore",
       "scripts": [],
       "createdAt": "2026-08-02T09:14:00.000Z",
-      "updatedAt": "2026-10-19T08:22:40.000Z"
+      "updatedAt": "2026-10-18T22:40:11.000Z"
     },
     {
       "id": "prj_01JB2K8M4R7DROUTER",
@@ -21,70 +18,6 @@
     }
   ],
   "threads": [
-    {
-      "id": "thr_01JC49ZK2HWAITING",
-      "projectId": "prj_01JB2K7Q9V3XKSTORE",
-      "title": "Run the wasmJs browser tests",
-      "createdBy": "user",
-      "creationSource": "web",
-      "providerInstanceId": "codex",
-      "modelSelection": {
-        "instanceId": "codex",
-        "model": "gpt-5"
-      },
-      "runtimeMode": "approval-required",
-      "interactionMode": "default",
-      "lineage": {
-        "rootThreadId": "thr_01JC49ZK2HWAITING"
-      },
-      "status": "waiting",
-      "latestRunId": "run_01JC49ZK3M1B",
-      "activeRunId": "run_01JC49ZK3M1B",
-      "pendingRuntimeRequest": {
-        "id": "req_01JC49ZM7TQ2",
-        "kind": "command",
-        "createdAt": "2026-10-19T08:22:40.000Z"
-      },
-      "itemCount": 3,
-      "visibleItemCount": 3,
-      "hasActionableProposedPlan": false,
-      "createdAt": "2026-10-19T08:20:01.000Z",
-      "updatedAt": "2026-10-19T08:22:40.000Z"
-    },
-    {
-      "id": "thr_01JC4A1F0QWMIGRATE",
-      "projectId": "prj_01JB2K7Q9V3XKSTORE",
-      "title": "Migrate KStore to kotlinx-io 0.8",
-      "createdBy": "user",
-      "creationSource": "web",
-      "providerInstanceId": "codex",
-      "modelSelection": {
-        "instanceId": "codex",
-        "model": "gpt-5"
-      },
-      "runtimeMode": "approval-required",
-      "interactionMode": "default",
-      "lineage": {
-        "rootThreadId": "thr_01JC4A1F0QWMIGRATE"
-      },
-      "status": "running",
-      "branch": "kotlinx-io-0.8",
-      "latestRunId": "run_01JC4A1F9ZA3",
-      "activeRunId": "run_01JC4A1F9ZA3",
-      "activityRunStartedAt": "2026-10-19T08:40:30.000Z",
-      "latestVisibleMessage": {
-        "id": "msg_01JC4A1FA0X1",
-        "role": "assistant",
-        "text": "Bumping `kotlinx-io` and fixing the `Source` call sites in `:kstore-file`.",
-        "updatedAt": "2026-10-19T08:41:02.000Z"
-      },
-      "itemCount": 14,
-      "visibleItemCount": 14,
-      "hasActionableProposedPlan": false,
-      "pinnedAt": "2026-10-12T07:30:00.000Z",
-      "createdAt": "2026-10-19T08:30:12.000Z",
-      "updatedAt": "2026-10-19T08:41:02.000Z"
-    },
     {
       "id": "thr_01JC3QX81VIDLE001",
       "projectId": "prj_01JB2K7Q9V3XKSTORE",
@@ -457,78 +390,5 @@
       "createdAt": "2026-10-09T15:12:00.000Z",
       "updatedAt": "2026-10-09T15:31:48.000Z"
     }
-  ],
-  "runs": {
-    "thr_01JC49ZK2HWAITING": [
-      {
-        "id": "run_01JC49ZK3M1B",
-        "threadId": "thr_01JC49ZK2HWAITING",
-        "ordinal": 1,
-        "status": "waiting",
-        "providerInstanceId": "codex",
-        "modelSelection": {
-          "instanceId": "codex",
-          "model": "gpt-5"
-        },
-        "userMessageId": "msg_01JC49ZK2J00",
-        "requestedAt": "2026-10-19T08:20:01.000Z",
-        "startedAt": "2026-10-19T08:20:02.000Z"
-      }
-    ]
-  },
-  "items": {
-    "thr_01JC49ZK2HWAITING": [
-      {
-        "type": "user_message",
-        "id": "u1",
-        "threadId": "thr_01JC49ZK2HWAITING",
-        "runId": "run_01JC49ZK3M1B",
-        "ordinal": 1,
-        "status": "completed",
-        "messageId": "msg_01JC49ZK2J00",
-        "createdBy": "user",
-        "creationSource": "web",
-        "inputIntent": "turn_start",
-        "attachments": [],
-        "text": "Run the wasmJs browser tests and tell me what fails.",
-        "updatedAt": "2026-10-19T08:20:01.000Z"
-      },
-      {
-        "type": "assistant_message",
-        "id": "a1",
-        "threadId": "thr_01JC49ZK2HWAITING",
-        "runId": "run_01JC49ZK3M1B",
-        "ordinal": 2,
-        "status": "completed",
-        "messageId": "msg_01JC49ZL0A4C",
-        "streaming": false,
-        "text": "These need a headless Chrome, so I'll run them through Gradle with the Karma launcher.",
-        "updatedAt": "2026-10-19T08:22:38.000Z"
-      },
-      {
-        "type": "approval_request",
-        "id": "r1",
-        "threadId": "thr_01JC49ZK2HWAITING",
-        "runId": "run_01JC49ZK3M1B",
-        "ordinal": 3,
-        "status": "waiting",
-        "title": "Run a command",
-        "requestId": "req_01JC49ZM7TQ2",
-        "requestKind": "command",
-        "prompt": "./gradlew :kstore:wasmJsBrowserTest --no-configuration-cache",
-        "options": [
-          {
-            "decision": "accept",
-            "label": "Run it"
-          },
-          {
-            "decision": "decline",
-            "label": "Don't run"
-          }
-        ],
-        "startedAt": "2026-10-19T08:22:40.000Z",
-        "updatedAt": "2026-10-19T08:22:40.000Z"
-      }
-    ]
-  }
+  ]
 }

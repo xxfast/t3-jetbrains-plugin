@@ -142,13 +142,19 @@ intellijPlatformTesting {
   runIde {
     register("runHarness") {
       sandboxDirectory = layout.buildDirectory.dir("harness-sandbox")
+      // A scenario is a folder under harness/scenarios, picked with -Pt3.scenario=<name>
+      val scenario: String = providers.gradleProperty("t3.scenario").getOrElse("default")
+      val scenarios: File = rootProject.layout.projectDirectory.dir("harness/scenarios").asFile
+      val fixtures: File = scenarios.resolve(scenario)
+      require(fixtures.isDirectory) {
+        val known: String = scenarios.listFiles { file -> file.isDirectory }.orEmpty()
+          .map { it.name }.sorted().joinToString()
+        "No harness scenario '$scenario' in $scenarios. Known: $known"
+      }
       task {
         // Open this repo as the project, the tool window doesn't exist on the welcome screen
         args(rootProject.projectDir.absolutePath)
-        systemProperty(
-          "t3code.fixtures",
-          rootProject.layout.projectDirectory.dir("harness/scenarios").asFile.absolutePath,
-        )
+        systemProperty("t3code.fixtures", fixtures.absolutePath)
       }
     }
   }

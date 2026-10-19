@@ -30,9 +30,6 @@ import kotlinx.coroutines.launch
 /** The plugin's container. Holds the one [T3Client], picked once at startup. */
 @Service(Service.Level.APP)
 class T3(private val scope: CoroutineScope) {
-  /** Only for the tool window's scenario picker. Everything else reads [client]. */
-  val fixtures: FixtureClient?
-
   val client: T3Client
 
   private val pairingError: MutableStateFlow<String?> = MutableStateFlow(null)
@@ -41,8 +38,7 @@ class T3(private val scope: CoroutineScope) {
     val directory: Path? = System.getProperty("t3code.fixtures")
       ?.let { Path.of(it) }
       ?.takeIf { it.isDirectory() }
-    fixtures = directory?.let { FixtureClient(it, scope) }
-    client = fixtures ?: PairingAwareClient(
+    client = directory?.let { FixtureClient(it, scope) } ?: PairingAwareClient(
       real = WebSocketT3Client(
         baseUrl = { T3Settings.get().serverUrl },
         credential = { T3Credentials.load(T3Settings.get().serverUrl) },
@@ -53,7 +49,7 @@ class T3(private val scope: CoroutineScope) {
     )
     val picked: T3Client = (client as? PairingAwareClient)?.real ?: client
     LOG.info("T3 Code client: ${picked.javaClass.simpleName}")
-    if (fixtures == null) client.connect()
+    if (client !is FixtureClient) client.connect()
   }
 
   fun reconnect() {
@@ -63,7 +59,7 @@ class T3(private val scope: CoroutineScope) {
 
   /** Exchanges [input] for a credential, stores it, and reconnects. Failures land in the state. */
   fun pair(input: String) {
-    if (fixtures != null) return
+    if (client is FixtureClient) return
     pairingError.value = null
     scope.launch {
       try {
@@ -81,7 +77,7 @@ class T3(private val scope: CoroutineScope) {
   }
 
   fun forget() {
-    if (fixtures != null) return
+    if (client is FixtureClient) return
     scope.launch {
       T3Credentials.clear(T3Settings.get().serverUrl)
       reconnect()

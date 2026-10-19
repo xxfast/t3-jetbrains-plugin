@@ -13,20 +13,18 @@ import java.nio.file.Path
 import kotlin.io.path.extension
 import kotlin.io.path.getLastModifiedTime
 import kotlin.io.path.isRegularFile
-import kotlin.io.path.nameWithoutExtension
+import kotlin.io.path.name
 import kotlin.io.path.readText
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
@@ -36,11 +34,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * A [T3Client] that replays `*.json` scenarios from [directory] instead of talking to a server.
- * Polls the directory, so editing a file updates whoever is collecting.
+ * A [T3Client] that replays one scenario instead of talking to a server: every `*.json` in
+ * [directory], merged by [Scenario.merge] in filename order. Polls the directory, so editing,
+ * adding or removing a file updates whoever is collecting.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class FixtureClient(
@@ -50,16 +48,9 @@ class FixtureClient(
 ) : T3Client {
   private val log: Logger = Logger.getInstance(FixtureClient::class.java)
 
-  private val _scenarios: MutableStateFlow<List<String>> = MutableStateFlow(emptyList())
-  val scenarios: StateFlow<List<String>> = _scenarios.asStateFlow()
-
-  private val _selected: MutableStateFlow<String?> = MutableStateFlow(null)
-  val selected: StateFlow<String?> = _selected.asStateFlow()
-
   private val loaded: MutableStateFlow<Scenario?> = MutableStateFlow(null)
   private val online: MutableStateFlow<Boolean> = MutableStateFlow(true)
-  private val wake: Channel<Unit> = Channel(Channel.CONFLATED)
-  private var loadedStamp: Pair<String, Long>? = null
+  private var loadedStamp: List<Pair<String, Long>>? = null
 
   override val connection: StateFlow<ConnectionState> = combine(loaded, online) { scenario, on ->
     if (!on) ConnectionState.Disconnected else scenario?.connection ?: ConnectionState.Connecting
@@ -77,14 +68,9 @@ class FixtureClient(
     scope.launch(Dispatchers.IO) {
       while (isActive) {
         poll()
-        withTimeoutOrNull(pollInterval) { wake.receive() }
+        delay(pollInterval)
       }
     }
-  }
-
-  fun select(name: String) {
-    _selected.value = name
-    wake.trySend(Unit)
   }
 
   override fun thread(id: String): Flow<ThreadView> = loaded
@@ -126,36 +112,32 @@ class FixtureClient(
   }
 
   private fun poll() {
-    val files: Map<String, Path> = try {
-      Files.list(directory).use { stream ->
-        stream.filter { it.isRegularFile() && it.extension == "json" }
-          .toList()
-          .associateBy { it.nameWithoutExtension }
-          .toSortedMap()
+    val files: List<Path>
+    val stamp: List<Pair<String, Long>>
+    try {
+      files = Files.list(directory).use { stream ->
+        stream.filter { it.isRegularFile() && it.extension == "json" }.toList().sortedBy { it.name }
       }
+      stamp = files.map { it.name to it.getLastModifiedTime().toMillis() }
     } catch (e: Exception) {
       log.warn("Can't list fixtures in $directory", e)
       return
     }
-    _scenarios.value = files.keys.toList()
-
-    val current: String? = _selected.value
-    val name: String = current?.takeIf { it in files }
-      ?: "connected-list".takeIf { it in files }
-      ?: files.keys.firstOrNull()
-      ?: return
-    if (!_selected.compareAndSet(current, name)) return
-
-    val path: Path = files.getValue(name)
-    val stamp: Pair<String, Long> = name to path.getLastModifiedTime().toMillis()
     if (stamp == loadedStamp) return
     loadedStamp = stamp
-    loaded.value = try {
-      Scenario.decode(name, path.readText())
-    } catch (e: Exception) {
-      log.warn("Can't decode fixture scenario $name", e)
-      Scenario.failed(name, e.message ?: e.javaClass.simpleName)
+    loaded.value = load(files)
+  }
+
+  private fun load(files: List<Path>): Scenario {
+    val parts: List<Scenario> = files.map { file ->
+      try {
+        Scenario.decode(file.readText())
+      } catch (e: Exception) {
+        log.warn("Can't decode fixture ${file.name}", e)
+        return Scenario.failed(file.name, e.message ?: e.javaClass.simpleName)
+      }
     }
+    return Scenario.merge(parts)
   }
 }
 

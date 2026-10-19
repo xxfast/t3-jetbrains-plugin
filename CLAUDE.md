@@ -45,18 +45,18 @@ How it fits together:
   property and nothing else in the plugin knows which one it got.
 - Composables take state, not the client. That's what makes fixture and real interchangeable, and
   it's what makes screenshot tests possible later.
-- Scenarios live in `harness/scenarios/*.json`, one file per state worth looking at:
-  disconnected, pairing, auth error, empty server, connected list, running thread, waiting on
-  approval, unknown item types, a few hundred items. Shapes are the same hand-written `:protocol`
-  types the real client decodes, so scenarios double as test fixtures.
+- A scenario is a folder in `harness/scenarios/`; the fixture client merges every `*.json` in it.
+  `default/` is the thread list plus one demo thread per thread-level state (running, waiting on
+  approval, unknown item types, a few hundred items). `disconnected/`, `pairing/`, `auth-error/`
+  and `empty-server/` cover connection-level states. Shapes are the same `:protocol` types the
+  real client decodes, so scenarios double as test fixtures.
 - Items may carry an `after` delay in milliseconds. The fixture client replays them in order so a
   "running" thread visibly grows, which is the only way to design streaming.
 - The fixture client watches its directory. Edit a JSON file, the tool window updates. No rebuild
   for data changes; a rebuild for Kotlin changes.
-- In fixture mode the tool window header shows a scenario picker. In real mode it doesn't exist.
 - A Gradle task `runHarness` (an `intellijPlatformTesting.runIde` registration) launches the
-  sandbox with the fixtures property set and its own sandbox dir, so harness state never mixes
-  with `runIde` against a real server.
+  sandbox on `harness/scenarios/default` (`-Pt3.scenario=pairing` for another folder) with its own
+  sandbox dir, so harness state never mixes with `runIde` against a real server.
 - Point the Gradle plugin at a locally installed IDE with `local(...)` when one exists (via a
   Gradle property, see "Things learned"). That skips the 1 GB platform download for the harness.
   The release build still targets `intellijIdea("2025.3")`.
