@@ -13,8 +13,8 @@ Unofficial, built for my own use. Will publish if it turns out useful to others.
 
 ## Status
 
-0.1. Pair with a T3 server, browse its threads, read a thread as it runs, and open the files and
-diffs it touches in the IDE. Nothing else yet, see the roadmap.
+Not released. Pair with a T3 server, browse its threads, read a thread as it runs, and open the
+files and diffs it touches in the IDE. Nothing else yet, see the roadmap.
 
 ## Install
 
@@ -55,8 +55,8 @@ Targets IntelliJ Platform 2025.3 and later, so IDEA, Android Studio, WebStorm, R
 
 ## Roadmap
 
-Work items are [GitHub issues](https://github.com/xxfast/t3-jetbrains-plugin/issues), one per
-milestone step. [`ROADMAP.md`](ROADMAP.md) has the milestone goals and the order.
+Work items are [GitHub issues](https://github.com/xxfast/t3-jetbrains-plugin/issues).
+[`ROADMAP.md`](ROADMAP.md) groups them into phases and has the order.
 
 ## Licence
 

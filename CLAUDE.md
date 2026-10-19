@@ -22,8 +22,9 @@ Don't relitigate these. Change them only if the user asks.
   hand-port the whole surface.
 - Target IntelliJ Platform 2025.3 and later (`sinceBuild = 253`, no `untilBuild`). Jewel is bundled from
   251.2, Android Studio is on 262.
-- 0.1 scope: pair with a server, thread list, thread view, open file and diff. Nothing else.
-  Milestones on GitHub are product versions (`0.1`, `0.2`, `0.3`), see `ROADMAP.md`.
+- Phase 1 scope: pair with a server, thread list, thread view, open file and diff. Nothing else.
+  Phases live in `ROADMAP.md`, not as GitHub milestones, and they aren't versions. No public
+  release, and no version numbers, until it's ready for other people.
 - Visual design happens in the **design harness**: the real plugin, in a sandbox IDE, fed by fixture
   data. Not in HTML mockups, not in Claude Design, not in a Compose Desktop standalone. Int UI is
   the design system and it does most of the design work; what's left is layout and states, and
@@ -167,9 +168,12 @@ Hard-won, so recorded here rather than rediscovered.
   than method-body swaps; changed composables redraw only when state changes. Compose Hot Reload
   can't run inside the IDE. Installing the zip from disk into a running IDE needs no restart
   while the plugin stays dynamic (no components, only `toolWindow` EP, light services).
-  Observed on 2026-10-19: neither `buildPlugin` nor `prepareSandbox_runHarness` reloaded the
-  plugin into a running `runHarness` sandbox. Kotlin changes mean restarting the sandbox; JSON
-  scenario edits still apply live.
+  Why Gradle auto-reload fails here (2026-10-19, Windows): `buildPlugin` writes to the sandbox's
+  `plugins/`, but a running `runIde` or `runHarness` loads from `plugins_runIde/` or
+  `plugins_runHarness/`. The matching `prepareSandbox_<task>` targets the right dir but fails on
+  Windows with "user-mapped section open": the sandbox has the jars memory-mapped and the IDE
+  only unloads after it sees the file change. Kotlin changes mean restarting the sandbox or
+  installing the zip from disk; JSON scenario edits still apply live.
 - The JDK `HttpClient` must be built with `version(HTTP_1_1)`. On plain http it otherwise sends
   an h2c `Upgrade` on the first request and the T3 server's WebSocket upgrade handler answers
   with an empty 400. `curl --http2` reproduces it; `curl --http1.1` gets the real answer.

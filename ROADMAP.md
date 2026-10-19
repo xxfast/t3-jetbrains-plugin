@@ -1,9 +1,9 @@
 # Roadmap
 
-Work items are [GitHub issues](https://github.com/xxfast/t3-jetbrains-plugin/issues), grouped into
-[milestones](https://github.com/xxfast/t3-jetbrains-plugin/milestones). This file holds what the
-issue list can't show: what each version achieves and the order to do things in. Milestones are
-product versions. A version ships when its milestone closes.
+Work items are [GitHub issues](https://github.com/xxfast/t3-jetbrains-plugin/issues). This file
+groups them into phases and holds what the issue list can't show: what each phase achieves and the
+order to do things in. Phases are not versions. Versions come when something's ready to release,
+see `Later`.
 
 ## Working an item
 
@@ -17,11 +17,11 @@ product versions. A version ships when its milestone closes.
 - Scope creep goes to a new issue or to `Later` below, not into the item you're on.
 - Principles for every item live in `CLAUDE.md`. Short version: mirror server state, decode with
   `ignoreUnknownKeys`, render unknown things generically, let the IDE do IDE things.
-- UI items (#3 to #6 and most of 0.2) start in the design harness. Add or extend a scenario in
+- UI items (#3 to #6 and most of phase 2) start in the design harness. Add or extend a scenario in
   `harness/scenarios`, design against it, then wire the real client. The PR carries a screenshot
   from the harness. See "Design harness" in `CLAUDE.md`.
 
-## 0.1: it connects, it shows threads
+## Phase 1: it connects, it shows threads
 
 Open the tool window, pair with the local desktop server, see your threads, click a file or diff and
 land in the editor. Nothing else.
@@ -36,9 +36,9 @@ land in the editor. Nothing else.
 6. #5 Thread view
 7. #6 Open file and diff from a thread
 8. #7 Generated contracts and nightly contract check
-9. #8 Release 0.1
+9. #24 Two tool windows: the Sidebar and the ChatView
 
-## 0.2: you can work from the IDE
+## Phase 2: you can work from the IDE
 
 Everything you'd do in the desktop app for a thread that's already running, you can do from the tool
 window. Starting new work still happens in the desktop app.
@@ -52,7 +52,7 @@ window. Starting new work still happens in the desktop app.
 7. #15 Diff review with inline comments
 8. #16 Settings sync and keybindings
 
-## 0.3: you can start work from the IDE
+## Phase 3: you can start work from the IDE
 
 The desktop app becomes optional for day-to-day use. It still owns provider setup, server lifecycle
 and anything administrative.
@@ -68,6 +68,8 @@ and anything administrative.
 
 Not scheduled and not fleshed out. When one gets picked up it becomes an issue.
 
+- Public release (#8). Signed zip on a GitHub release, then the Marketplace. Not until the
+  plugin's ready for people other than me, whichever phase that lands in.
 - Android Studio and Rider specific testing. Same platform, different bundled modules, worth a
   pass before saying "supported".
 - Usage and cost summary from `server.getUsageSummary` on the thread header.
