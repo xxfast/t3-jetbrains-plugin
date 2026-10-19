@@ -640,7 +640,6 @@ const IMPORTS: Record<string, string> = {
   SerialDescriptor: "kotlinx.serialization.descriptors.SerialDescriptor",
   Decoder: "kotlinx.serialization.encoding.Decoder",
   Encoder: "kotlinx.serialization.encoding.Encoder",
-  JsonContentPolymorphicSerializer: "kotlinx.serialization.json.JsonContentPolymorphicSerializer",
   JsonDecoder: "kotlinx.serialization.json.JsonDecoder",
   JsonElement: "kotlinx.serialization.json.JsonElement",
   JsonEncoder: "kotlinx.serialization.json.JsonEncoder",
@@ -851,22 +850,22 @@ function writeSerializers(
   unknown: string,
 ): void {
   const name: string = local(union, union.path);
-  out.use("JsonContentPolymorphicSerializer", "DeserializationStrategy", "JsonElement",
-    "contentOrNull", "jsonObject", "jsonPrimitive");
-  objectHeader(out, indent, select, `JsonContentPolymorphicSerializer<${name}>`, `${name}::class`);
+  out.use("KSerializer", "SerialDescriptor", "Decoder", "Encoder", "JsonDecoder",
+    "DeserializationStrategy", "contentOrNull", "jsonObject", "jsonPrimitive");
+  objectHeader(out, indent, select, `KSerializer<${name}>`);
+  out.line(indent + 1,
+    "override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor");
+  out.line(0, "");
   out.pick(indent + 1, [
-    [[
-      0,
-      `override fun selectDeserializer(element: JsonElement): DeserializationStrategy<${name}> =`,
-    ]],
+    [[0, `private fun select(element: JsonObject): DeserializationStrategy<${name}> =`]],
     [
-      [0, "override fun selectDeserializer("],
-      [1, "element: JsonElement,"],
+      [0, "private fun select("],
+      [1, "element: JsonObject,"],
       [0, `): DeserializationStrategy<${name}> =`],
     ],
   ]);
   const key: string = JSON.stringify(union.discriminator);
-  out.line(indent + 2, `when (element.jsonObject[${key}]?.jsonPrimitive?.contentOrNull) {`);
+  out.line(indent + 2, `when (element[${key}]?.jsonPrimitive?.contentOrNull) {`);
   for (const branch of union.branches) {
     const condition: string = branch.values.map((v) => JSON.stringify(v)).join(", ");
     const target = `${local(union, branch.target.path)}.serializer()`;
@@ -886,10 +885,48 @@ function writeSerializers(
     [[0, "else ->"], [1, `${name}.Unknown.serializer()`]],
   ]);
   out.line(indent + 2, "}");
+  out.line(0, "");
+
+  // A known variant that doesn't decode (a required field missing, a field of the wrong shape)
+  // lands as Unknown with its raw JSON instead of failing the whole payload. Catching
+  // IllegalArgumentException covers SerializationException, its subclass.
+  out.pick(indent + 1, [
+    [[0, `override fun deserialize(decoder: Decoder): ${name} {`]],
+    [[0, "override fun deserialize("], [1, "decoder: Decoder,"], [0, `): ${name} {`]],
+  ]);
+  out.line(indent + 2, "val input: JsonDecoder = decoder as JsonDecoder");
+  out.line(indent + 2, "val element: JsonObject = input.decodeJsonElement().jsonObject");
+  out.line(indent + 2, "return try {");
+  out.line(indent + 3, "input.json.decodeFromJsonElement(select(element), element)");
+  out.line(indent + 2, "} catch (_: IllegalArgumentException) {");
+  out.pick(indent + 3, [
+    [[0, `input.json.decodeFromJsonElement(${name}.Unknown.serializer(), element)`]],
+    [[0, "input.json.decodeFromJsonElement("], [1, `${name}.Unknown.serializer(),`],
+      [1, "element,"], [0, ")"]],
+  ]);
+  out.line(indent + 2, "}");
+  out.line(indent + 1, "}");
+  out.line(0, "");
+
+  out.pick(indent + 1, [
+    [[0, `override fun serialize(encoder: Encoder, value: ${name}) {`]],
+    [[0, "override fun serialize("], [1, "encoder: Encoder,"], [1, `value: ${name},`],
+      [0, ") {"]],
+  ]);
+  out.line(indent + 2, "when (value) {");
+  const targets: string[] = [...new Set(union.branches.map((b) => local(union, b.target.path)))];
+  for (const target of [...targets, `${name}.Unknown`]) {
+    out.pick(indent + 3, [
+      [[0, `is ${target} -> ${target}.serializer().serialize(encoder, value)`]],
+      [[0, `is ${target} ->`], [1, `${target}.serializer().serialize(encoder, value)`]],
+    ]);
+  }
+  out.line(indent + 2, "}");
+  out.line(indent + 1, "}");
   out.line(indent, "}");
   out.line(0, "");
 
-  out.use("KSerializer", "SerialDescriptor", "Decoder", "Encoder", "JsonDecoder", "JsonEncoder");
+  out.use("JsonEncoder");
   objectHeader(out, indent, unknown, `KSerializer<${name}.Unknown>`);
   out.line(indent + 1,
     "override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor");

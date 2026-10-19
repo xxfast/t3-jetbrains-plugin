@@ -48,10 +48,10 @@ public interface T3Client {
   public suspend fun readFile(cwd: String, path: String): FileContents
 
   /** `orchestration.getTurnDiff`: a unified patch for runs [fromTurn] to [toTurn], exclusive. */
-  public suspend fun turnDiff(threadId: String, fromTurn: Int, toTurn: Int): String
+  public suspend fun turnDiff(threadId: String, fromTurn: Long, toTurn: Long): String
 
   /** `orchestration.getFullThreadDiff`: everything up to run [toTurn] as a unified patch. */
-  public suspend fun fullThreadDiff(threadId: String, toTurn: Int): String
+  public suspend fun fullThreadDiff(threadId: String, toTurn: Long): String
 
   /** Start, or start over. Safe to call in any state. */
   public fun connect()

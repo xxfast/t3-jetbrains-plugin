@@ -3,11 +3,11 @@ package io.github.xxfast.t3code.plugin.fixtures
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Run
-import io.github.xxfast.t3code.protocol.ServerAuthDescriptor
 import io.github.xxfast.t3code.protocol.ServerSession
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
-import io.github.xxfast.t3code.protocol.TurnItem
+import io.github.xxfast.t3code.protocol.generated.ServerAuthDescriptor
+import io.github.xxfast.t3code.protocol.generated.TurnItem
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -68,7 +68,12 @@ class Scenario(
 
 private val defaultSession: ServerSession = ServerSession(
   authenticated = true,
-  auth = ServerAuthDescriptor(policy = "desktop-managed-local"),
+  auth = ServerAuthDescriptor(
+    policy = "desktop-managed-local",
+    bootstrapMethods = listOf("desktop-bootstrap"),
+    sessionMethods = listOf("bearer-access-token"),
+    sessionCookieName = "t3_session_3773",
+  ),
   permissions = listOf("orchestration:read", "filesystem:read"),
   scopes = listOf("orchestration:read", "filesystem:read"),
   sessionMethod = "bearer-access-token",

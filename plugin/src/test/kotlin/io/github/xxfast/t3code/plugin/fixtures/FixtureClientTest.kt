@@ -2,7 +2,7 @@ package io.github.xxfast.t3code.plugin.fixtures
 
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.ThreadView
-import io.github.xxfast.t3code.protocol.TurnItem
+import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.extension
@@ -30,6 +30,12 @@ class FixtureClientTest {
     files.forEach { file ->
       val scenario: Scenario = Scenario.decode(file.nameWithoutExtension, file.readText())
       assertTrue(scenario.connection !is ConnectionState.Error, "${file.fileName} failed")
+      // A known item missing a field decodes as Unknown rather than failing, so check for it here
+      val unknown: List<String> = scenario.items.values.flatten()
+        .map { it.item }
+        .filterIsInstance<TurnItem.Unknown>()
+        .map { it.type }
+      assertTrue(unknown.all { it == "some_future_type" }, "${file.fileName}: $unknown")
     }
   }
 
@@ -37,9 +43,11 @@ class FixtureClientTest {
   fun `unknown item types keep their raw json`() {
     val text: String = directory.resolve("unknown-items.json").readText()
     val items: List<FixtureItem> = Scenario.decode("unknown-items", text).items.values.single()
-    val unknown: List<TurnItem.Unknown> = items.map { it.item }.filterIsInstance<TurnItem.Unknown>()
-    assertEquals(listOf("web_search", "todo_list", "some_future_type"), unknown.map { it.type })
-    assertTrue("hologram" in unknown.last().raw)
+    assertIs<TurnItem.WebSearch>(items[1].item)
+    assertIs<TurnItem.TodoList>(items[2].item)
+    val unknown: TurnItem.Unknown = assertIs(items.map { it.item }.single { it is TurnItem.Unknown })
+    assertEquals("some_future_type", unknown.type)
+    assertTrue("hologram" in unknown.raw)
   }
 
   @Test

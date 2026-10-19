@@ -8,7 +8,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonContentPolymorphicSerializer
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonEncoder
@@ -600,14 +599,36 @@ public sealed interface TurnItem {
         val raw: JsonObject,
       ) : Source
 
-      public object SourceSerializer : JsonContentPolymorphicSerializer<Source>(Source::class) {
-        override fun selectDeserializer(element: JsonElement): DeserializationStrategy<Source> =
-          when (element.jsonObject["type"]?.jsonPrimitive?.contentOrNull) {
+      public object SourceSerializer : KSerializer<Source> {
+        override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+        private fun select(element: JsonObject): DeserializationStrategy<Source> =
+          when (element["type"]?.jsonPrimitive?.contentOrNull) {
             "run" -> Source.SourceRun.serializer()
             "node" -> Source.Node.serializer()
             "provider_thread" -> Source.SourceProviderThread.serializer()
             else -> Source.Unknown.serializer()
           }
+
+        override fun deserialize(decoder: Decoder): Source {
+          val input: JsonDecoder = decoder as JsonDecoder
+          val element: JsonObject = input.decodeJsonElement().jsonObject
+          return try {
+            input.json.decodeFromJsonElement(select(element), element)
+          } catch (_: IllegalArgumentException) {
+            input.json.decodeFromJsonElement(Source.Unknown.serializer(), element)
+          }
+        }
+
+        override fun serialize(encoder: Encoder, value: Source) {
+          when (value) {
+            is Source.SourceRun -> Source.SourceRun.serializer().serialize(encoder, value)
+            is Source.Node -> Source.Node.serializer().serialize(encoder, value)
+            is Source.SourceProviderThread ->
+              Source.SourceProviderThread.serializer().serialize(encoder, value)
+            is Source.Unknown -> Source.Unknown.serializer().serialize(encoder, value)
+          }
+        }
       }
 
       public object UnknownSourceSerializer : KSerializer<Source.Unknown> {
@@ -802,9 +823,11 @@ public sealed interface TurnItem {
   ) : TurnItem
 }
 
-public object TurnItemSerializer : JsonContentPolymorphicSerializer<TurnItem>(TurnItem::class) {
-  override fun selectDeserializer(element: JsonElement): DeserializationStrategy<TurnItem> =
-    when (element.jsonObject["type"]?.jsonPrimitive?.contentOrNull) {
+public object TurnItemSerializer : KSerializer<TurnItem> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<TurnItem> =
+    when (element["type"]?.jsonPrimitive?.contentOrNull) {
       "notification" -> TurnItem.TurnItemNotification.serializer()
       "user_message" -> TurnItem.UserMessage.serializer()
       "assistant_message" -> TurnItem.AssistantMessage.serializer()
@@ -832,6 +855,55 @@ public object TurnItemSerializer : JsonContentPolymorphicSerializer<TurnItem>(Tu
       "dynamic_tool" -> TurnItem.DynamicTool.serializer()
       else -> TurnItem.Unknown.serializer()
     }
+
+  override fun deserialize(decoder: Decoder): TurnItem {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(TurnItem.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: TurnItem) {
+    when (value) {
+      is TurnItem.TurnItemNotification ->
+        TurnItem.TurnItemNotification.serializer().serialize(encoder, value)
+      is TurnItem.UserMessage -> TurnItem.UserMessage.serializer().serialize(encoder, value)
+      is TurnItem.AssistantMessage ->
+        TurnItem.AssistantMessage.serializer().serialize(encoder, value)
+      is TurnItem.Reasoning -> TurnItem.Reasoning.serializer().serialize(encoder, value)
+      is TurnItem.ProposedPlan -> TurnItem.ProposedPlan.serializer().serialize(encoder, value)
+      is TurnItem.TodoList -> TurnItem.TodoList.serializer().serialize(encoder, value)
+      is TurnItem.UserInputRequest ->
+        TurnItem.UserInputRequest.serializer().serialize(encoder, value)
+      is TurnItem.FileChange -> TurnItem.FileChange.serializer().serialize(encoder, value)
+      is TurnItem.CommandExecution ->
+        TurnItem.CommandExecution.serializer().serialize(encoder, value)
+      is TurnItem.FileSearch -> TurnItem.FileSearch.serializer().serialize(encoder, value)
+      is TurnItem.WebSearch -> TurnItem.WebSearch.serializer().serialize(encoder, value)
+      is TurnItem.ApprovalRequest -> TurnItem.ApprovalRequest.serializer().serialize(encoder, value)
+      is TurnItem.TurnItemCheckpoint ->
+        TurnItem.TurnItemCheckpoint.serializer().serialize(encoder, value)
+      is TurnItem.RunInterruptRequest ->
+        TurnItem.RunInterruptRequest.serializer().serialize(encoder, value)
+      is TurnItem.RunInterruptResult ->
+        TurnItem.RunInterruptResult.serializer().serialize(encoder, value)
+      is TurnItem.SystemNotice -> TurnItem.SystemNotice.serializer().serialize(encoder, value)
+      is TurnItem.Error -> TurnItem.Error.serializer().serialize(encoder, value)
+      is TurnItem.Compaction -> TurnItem.Compaction.serializer().serialize(encoder, value)
+      is TurnItem.Handoff -> TurnItem.Handoff.serializer().serialize(encoder, value)
+      is TurnItem.Fork -> TurnItem.Fork.serializer().serialize(encoder, value)
+      is TurnItem.ThreadCreated -> TurnItem.ThreadCreated.serializer().serialize(encoder, value)
+      is TurnItem.SecretRequest -> TurnItem.SecretRequest.serializer().serialize(encoder, value)
+      is TurnItem.LinkRequest -> TurnItem.LinkRequest.serializer().serialize(encoder, value)
+      is TurnItem.TurnItemSubagent ->
+        TurnItem.TurnItemSubagent.serializer().serialize(encoder, value)
+      is TurnItem.DynamicTool -> TurnItem.DynamicTool.serializer().serialize(encoder, value)
+      is TurnItem.Unknown -> TurnItem.Unknown.serializer().serialize(encoder, value)
+    }
+  }
 }
 
 public object UnknownTurnItemSerializer : KSerializer<TurnItem.Unknown> {

@@ -8,9 +8,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonContentPolymorphicSerializer
 import kotlinx.serialization.json.JsonDecoder
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonEncoder
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -108,15 +106,37 @@ public data class ThreadShell(
       val raw: JsonObject,
     ) : ForkedFrom
 
-    public object ForkedFromSerializer :
-      JsonContentPolymorphicSerializer<ForkedFrom>(ForkedFrom::class) {
-      override fun selectDeserializer(element: JsonElement): DeserializationStrategy<ForkedFrom> =
-        when (element.jsonObject["type"]?.jsonPrimitive?.contentOrNull) {
+    public object ForkedFromSerializer : KSerializer<ForkedFrom> {
+      override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+      private fun select(element: JsonObject): DeserializationStrategy<ForkedFrom> =
+        when (element["type"]?.jsonPrimitive?.contentOrNull) {
           "run" -> ForkedFrom.ForkedFromRun.serializer()
           "node" -> ForkedFrom.Node.serializer()
           "provider_thread" -> ForkedFrom.ForkedFromProviderThread.serializer()
           else -> ForkedFrom.Unknown.serializer()
         }
+
+      override fun deserialize(decoder: Decoder): ForkedFrom {
+        val input: JsonDecoder = decoder as JsonDecoder
+        val element: JsonObject = input.decodeJsonElement().jsonObject
+        return try {
+          input.json.decodeFromJsonElement(select(element), element)
+        } catch (_: IllegalArgumentException) {
+          input.json.decodeFromJsonElement(ForkedFrom.Unknown.serializer(), element)
+        }
+      }
+
+      override fun serialize(encoder: Encoder, value: ForkedFrom) {
+        when (value) {
+          is ForkedFrom.ForkedFromRun ->
+            ForkedFrom.ForkedFromRun.serializer().serialize(encoder, value)
+          is ForkedFrom.Node -> ForkedFrom.Node.serializer().serialize(encoder, value)
+          is ForkedFrom.ForkedFromProviderThread ->
+            ForkedFrom.ForkedFromProviderThread.serializer().serialize(encoder, value)
+          is ForkedFrom.Unknown -> ForkedFrom.Unknown.serializer().serialize(encoder, value)
+        }
+      }
     }
 
     public object UnknownForkedFromSerializer : KSerializer<ForkedFrom.Unknown> {

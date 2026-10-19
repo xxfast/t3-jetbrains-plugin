@@ -1,8 +1,9 @@
 package io.github.xxfast.t3code.plugin.ui
 
-import io.github.xxfast.t3code.protocol.PendingRuntimeRequest
 import io.github.xxfast.t3code.protocol.Project
+import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
+import io.github.xxfast.t3code.protocol.generated.PendingRuntimeRequestSummary
 import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.test.assertEquals
@@ -76,7 +77,15 @@ class ThreadListLogicTest {
     assertEquals("Dec 24, 2025", ago("2025-12-24T08:00:00Z"))
   }
 
-  private fun project(id: String): Project = Project(id, id, "/tmp/$id", EPOCH, EPOCH)
+  private fun project(id: String): Project = Project(
+    id = id,
+    title = id,
+    workspaceRoot = "/tmp/$id",
+    defaultModelSelection = null,
+    scripts = emptyList(),
+    createdAt = EPOCH,
+    updatedAt = EPOCH,
+  )
 
   private fun thread(
     id: String = "t",
@@ -86,17 +95,32 @@ class ThreadListLogicTest {
     archivedAt: String? = null,
     pinnedAt: String? = null,
     pending: Boolean = false,
-  ): Thread = Thread(
+  ): Thread = BASE_THREAD.copy(
     id = id,
     projectId = projectId,
     title = id,
     status = status,
     archivedAt = archivedAt,
     pinnedAt = pinnedAt,
-    pendingRuntimeRequest = if (pending) PendingRuntimeRequest("r", "command", EPOCH) else null,
-    createdAt = EPOCH,
+    pendingRuntimeRequest =
+      if (pending) PendingRuntimeRequestSummary("r", "command", EPOCH) else null,
     updatedAt = updatedAt,
   )
 }
 
 private const val EPOCH: String = "1970-01-01T00:00:00Z"
+
+/** A thread row with only what upstream requires. Tests copy it with the fields they care about. */
+private val BASE_THREAD: Thread = T3Json.decodeFromString(
+  Thread.serializer(),
+  """
+    {
+      "id": "t", "projectId": "kstore", "title": "t", "status": "idle",
+      "createdBy": "user", "creationSource": "web", "providerInstanceId": "codex",
+      "modelSelection": { "model": "gpt-5" }, "runtimeMode": "full-access",
+      "interactionMode": "default", "lineage": { "rootThreadId": "t" },
+      "hasActionableProposedPlan": false, "itemCount": 0, "visibleItemCount": 0,
+      "createdAt": "$EPOCH", "updatedAt": "$EPOCH"
+    }
+  """,
+)

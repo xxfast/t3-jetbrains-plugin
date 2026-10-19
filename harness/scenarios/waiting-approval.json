@@ -5,6 +5,7 @@
       "id": "prj_01JB2K7Q9V3XKSTORE",
       "title": "KStore",
       "workspaceRoot": "/Users/xxfast/Developer/XXFAST/KMP/KStore",
+      "scripts": [],
       "createdAt": "2026-08-02T09:14:00.000Z",
       "updatedAt": "2026-10-19T08:22:40.000Z"
     }
@@ -14,6 +15,13 @@
       "id": "thr_01JC49ZK2HWAITING",
       "projectId": "prj_01JB2K7Q9V3XKSTORE",
       "title": "Run the wasmJs browser tests",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": { "rootThreadId": "thr_01JC49ZK2HWAITING" },
       "status": "waiting",
       "latestRunId": "run_01JC49ZK3M1B",
       "activeRunId": "run_01JC49ZK3M1B",
@@ -23,6 +31,8 @@
         "createdAt": "2026-10-19T08:22:40.000Z"
       },
       "itemCount": 3,
+      "visibleItemCount": 3,
+      "hasActionableProposedPlan": false,
       "createdAt": "2026-10-19T08:20:01.000Z",
       "updatedAt": "2026-10-19T08:22:40.000Z"
     }
@@ -31,8 +41,12 @@
     "thr_01JC49ZK2HWAITING": [
       {
         "id": "run_01JC49ZK3M1B",
+        "threadId": "thr_01JC49ZK2HWAITING",
         "ordinal": 1,
         "status": "waiting",
+        "providerInstanceId": "codex",
+        "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+        "userMessageId": "msg_01JC49ZK2J00",
         "requestedAt": "2026-10-19T08:20:01.000Z",
         "startedAt": "2026-10-19T08:20:02.000Z"
       }

@@ -2,10 +2,11 @@ package io.github.xxfast.t3code.plugin.ui
 
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.T3Json
-import io.github.xxfast.t3code.protocol.TurnItem
+import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.time.Instant
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 
 /** One row of the thread screen: a run header or an item, with a key unique in the list. */
 sealed interface ThreadRow {
@@ -64,6 +65,14 @@ private val PrettyJson: Json = Json(from = T3Json) { prettyPrint = true }
 
 fun prettyJson(raw: JsonObject): String = PrettyJson.encodeToString(JsonObject.serializer(), raw)
 
+private val FullJson: Json = Json(from = T3Json) { encodeDefaults = true }
+
+/** The item as JSON: as received for [TurnItem.Unknown], re-encoded for the branches we know. */
+fun TurnItem.json(): JsonObject = when (this) {
+  is TurnItem.Unknown -> raw
+  else -> FullJson.encodeToJsonElement(TurnItem.serializer(), this).jsonObject
+}
+
 /**
  * Whether to keep following the tail after rows changed. The user was at the bottom if the last
  * row before the change was on screen.
@@ -72,8 +81,8 @@ fun wasAtBottom(lastVisibleIndex: Int?, previousCount: Int): Boolean =
   previousCount == 0 || (lastVisibleIndex != null && lastVisibleIndex >= previousCount - 1)
 
 /** `+3 -1`, either side left out when absent. */
-fun diffStat(additions: Int?, deletions: Int?): String =
+fun diffStat(additions: Long?, deletions: Long?): String =
   listOfNotNull(additions?.let { "+$it" }, deletions?.let { "-$it" }).joinToString(" ")
 
 /** What "Open" on a file change opens: the first changed path, else the file name. */
-fun TurnItem.FileChange.openPath(): String = changes.firstOrNull()?.path ?: fileName
+fun TurnItem.FileChange.openPath(): String = changes?.firstOrNull()?.path ?: fileName

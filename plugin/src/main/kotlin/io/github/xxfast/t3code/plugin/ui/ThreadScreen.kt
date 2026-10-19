@@ -34,7 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.ThreadView
-import io.github.xxfast.t3code.protocol.TurnItem
+import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.time.Instant
 import kotlinx.coroutines.delay
 import org.jetbrains.jewel.foundation.theme.JewelTheme
@@ -202,10 +202,10 @@ private fun ItemCard(
           Link(if (expanded) "Less" else "More", onClick = onToggle, textStyle = small())
         }
       }
-      if (item.outputOmitted) Caption("Output omitted")
+      if (item.outputOmitted == true) Caption("Output omitted")
       item.exitCode?.let { code ->
         val tint: Color =
-          if (code == 0) JewelTheme.globalColors.text.info else JewelTheme.globalColors.text.error
+          if (code == 0L) JewelTheme.globalColors.text.info else JewelTheme.globalColors.text.error
         Text("exit $code", color = tint, style = small())
       }
     }
@@ -228,34 +228,35 @@ private fun ItemCard(
         )
         Text(diffStat(item.additions, item.deletions), color = JewelTheme.globalColors.text.info)
       }
-      item.changes.forEach { change ->
+      item.changes.orEmpty().forEach { change ->
         Caption("${change.operation} ${change.path}")
       }
     }
 
     is TurnItem.ApprovalRequest -> Card(item, now, label = "Approval: ${item.requestKind}") {
       item.prompt?.let { Text(it) }
-      if (item.options.isNotEmpty()) Caption(item.options.joinToString(" · ") { it.label })
+      val options: List<String> = item.options.orEmpty().map { it.label }
+      if (options.isNotEmpty()) Caption(options.joinToString(" · "))
       Caption("Respond in T3 Code")
     }
 
     is TurnItem.Error -> Card(item, now, label = "Error") {
       Text(item.failure.message, color = JewelTheme.globalColors.text.error)
-      Caption(listOfNotNull(item.failure.failureClass, item.failure.code).joinToString(" "))
+      Caption(listOfNotNull(item.failure.`class`, item.failure.code).joinToString(" "))
     }
 
     is TurnItem.SystemNotice -> Card(item, now, label = "Notice") {
       Text(item.message, color = JewelTheme.globalColors.text.info)
     }
 
-    is TurnItem.Unknown -> GenericCard(item, now, expanded, onToggle)
+    else -> GenericCard(item, now, expanded, onToggle)
   }
 }
 
 /** The fallback for anything this build doesn't know: type, time, and the raw JSON on demand. */
 @Composable
 private fun GenericCard(
-  item: TurnItem.Unknown,
+  item: TurnItem,
   now: Instant,
   expanded: Boolean,
   onToggle: () -> Unit,
@@ -268,7 +269,7 @@ private fun GenericCard(
   ) {
     if (item.title != null) Caption(item.type)
     if (expanded) {
-      val json: String = remember(item.raw) { prettyJson(item.raw) }
+      val json: String = remember(item) { prettyJson(item.json()) }
       Mono(json)
     }
   }

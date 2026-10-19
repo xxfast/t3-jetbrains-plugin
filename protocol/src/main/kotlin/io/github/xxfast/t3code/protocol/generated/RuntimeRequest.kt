@@ -8,9 +8,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonContentPolymorphicSerializer
 import kotlinx.serialization.json.JsonDecoder
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonEncoder
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -60,17 +58,39 @@ public data class RuntimeRequest(
       val raw: JsonObject,
     ) : ResponseCapability
 
-    public object ResponseCapabilitySerializer :
-      JsonContentPolymorphicSerializer<ResponseCapability>(ResponseCapability::class) {
-      override fun selectDeserializer(
-        element: JsonElement,
-      ): DeserializationStrategy<ResponseCapability> =
-        when (element.jsonObject["type"]?.jsonPrimitive?.contentOrNull) {
+    public object ResponseCapabilitySerializer : KSerializer<ResponseCapability> {
+      override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+      private fun select(element: JsonObject): DeserializationStrategy<ResponseCapability> =
+        when (element["type"]?.jsonPrimitive?.contentOrNull) {
           "live" -> ResponseCapability.Live.serializer()
           "message" -> ResponseCapability.Message.serializer()
           "not_resumable" -> ResponseCapability.NotResumable.serializer()
           else -> ResponseCapability.Unknown.serializer()
         }
+
+      override fun deserialize(decoder: Decoder): ResponseCapability {
+        val input: JsonDecoder = decoder as JsonDecoder
+        val element: JsonObject = input.decodeJsonElement().jsonObject
+        return try {
+          input.json.decodeFromJsonElement(select(element), element)
+        } catch (_: IllegalArgumentException) {
+          input.json.decodeFromJsonElement(ResponseCapability.Unknown.serializer(), element)
+        }
+      }
+
+      override fun serialize(encoder: Encoder, value: ResponseCapability) {
+        when (value) {
+          is ResponseCapability.Live ->
+            ResponseCapability.Live.serializer().serialize(encoder, value)
+          is ResponseCapability.Message ->
+            ResponseCapability.Message.serializer().serialize(encoder, value)
+          is ResponseCapability.NotResumable ->
+            ResponseCapability.NotResumable.serializer().serialize(encoder, value)
+          is ResponseCapability.Unknown ->
+            ResponseCapability.Unknown.serializer().serialize(encoder, value)
+        }
+      }
     }
 
     public object UnknownResponseCapabilitySerializer : KSerializer<ResponseCapability.Unknown> {

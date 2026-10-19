@@ -9,8 +9,12 @@ of the upstream repo as Effect schemas. We don't port them by hand:
 - `generate.ts` turns `schema/` into `kotlinx.serialization` classes in
   `:protocol`'s `io.github.xxfast.t3code.protocol.generated`.
 
-Both outputs are checked in. Nothing reads the generated classes yet; the hand-written `Models.kt` is
-still what the plugin uses.
+Both outputs are checked in. The plugin reads the generated classes through `:protocol`'s
+`Models.kt`, which is only aliases (`Project = ProjectShell`, `Thread = ThreadShell`,
+`ServerSession = AuthSessionState`, ...) plus the few things that aren't wire shapes: `Credential`,
+`ThreadView`, and extension properties like `Thread.archived`. A regenerated class name moves one
+alias, not the plugin. Typealiases don't reach nested classes, so code that names a branch
+(`TurnItem.FileChange`) imports `generated.TurnItem` directly.
 
 ## Bump the tag and regenerate
 
@@ -47,8 +51,12 @@ keeps going.
   are nullable with no default.
 - Literal string enums stay `String`, so unknown values still decode.
 - Unions of objects with a literal discriminator (`type`, `_tag`, `kind`, ...) become a sealed
-  interface. Each branch gets its own class, and an `Unknown` branch carries the raw `JsonObject`,
-  same as the hand-written `TurnItem`. Upstream's catch-all members are left to `Unknown`.
+  interface. Each branch gets its own class, and an `Unknown` branch carries the raw `JsonObject`.
+  Upstream's catch-all members are left to `Unknown`.
+- Union decoding is tolerant: the serializer picks the branch by discriminator, and if that branch
+  fails to decode (a required field missing, a field of the wrong shape) the item lands as
+  `Unknown` with its raw JSON instead of failing the whole payload. Everything else stays strict,
+  so a project, thread or run missing a required field still fails to decode.
 - Anything else (`Schema.Unknown`, objects with no declared fields, unions with no discriminator)
   becomes `JsonElement` with a `// TODO(contracts): <why>` comment, plus a warning on stderr.
 - A `$ref` to nothing, or a cycle it can't break with a class, fails the run with the path.

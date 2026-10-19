@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.protocol
 
+import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.net.URI
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -64,7 +65,7 @@ class WebSocketT3ClientTest {
     val (snapshot: ThreadView, updated: ThreadView) = client.thread("thread-1").take(2).toList()
 
     assertEquals(listOf("item-1", "item-2", "item-3", "item-4"), snapshot.items.map { it.id })
-    assertIs<TurnItem.Unknown>(snapshot.items[2])
+    assertIs<TurnItem.Compaction>(snapshot.items[2])
     assertTrue((snapshot.items[3] as TurnItem.AssistantMessage).streaming)
     assertEquals(listOf("run-1"), snapshot.runs.map { it.id })
     assertTrue(snapshot.thread.status != "idle", "Shell status carried over")

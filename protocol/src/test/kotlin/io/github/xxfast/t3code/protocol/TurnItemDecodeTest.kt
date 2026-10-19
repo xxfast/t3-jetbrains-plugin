@@ -11,8 +11,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 
-/** The generated `TurnItem` decodes the harness scenarios the same way the plugin reads them. */
-class GeneratedDecodeTest {
+/** Generated tagged unions pick their branch by discriminator and never throw on a bad item. */
+class TurnItemDecodeTest {
   private val branches: Map<String, KClass<out TurnItem>> = mapOf(
     "user_message" to TurnItem.UserMessage::class,
     "assistant_message" to TurnItem.AssistantMessage::class,
@@ -21,35 +21,54 @@ class GeneratedDecodeTest {
     "file_change" to TurnItem.FileChange::class,
     "error" to TurnItem.Error::class,
     "system_notice" to TurnItem.SystemNotice::class,
-    "web_search" to TurnItem.WebSearch::class,
-    "todo_list" to TurnItem.TodoList::class,
   )
 
   @Test
-  fun runningThread() {
+  fun runningThreadPicksTheBranchByType() {
     val items: List<Pair<JsonObject, TurnItem>> = decode("running-thread.json")
     assertTrue(items.isNotEmpty())
-    for ((raw, item) in items) assertBranch(raw, item)
+    for ((raw, item) in items) {
+      val expected: KClass<out TurnItem> = branches[item.type] ?: TurnItem.Unknown::class
+      assertEquals(expected, item::class, "${raw["id"]} (${item.type})")
+      assertEquals(raw["id"]?.toString()?.trim('"'), item.id)
+    }
   }
 
   @Test
-  fun unknownItems() {
-    val items: List<Pair<JsonObject, TurnItem>> = decode("unknown-items.json")
-    for ((raw, item) in items) assertBranch(raw, item)
-
-    val unknown: TurnItem.Unknown =
-      assertIs(items.map { (_, item) -> item }.single { item -> item is TurnItem.Unknown })
-    assertEquals("some_future_type", unknown.type)
-    assertEquals("x1", unknown.id)
-    assertEquals(4L, unknown.ordinal)
-    assertTrue("hologram" in unknown.raw)
+  fun knownTypeMissingARequiredFieldIsUnknown() {
+    val json = """
+      {"type":"assistant_message","id":"a1","threadId":"t1","ordinal":2,"status":"running",
+       "streaming":true,"updatedAt":"2026-10-19T08:30:15.000Z"}
+    """
+    val item: TurnItem.Unknown = assertIs(T3Json.decodeFromString(TurnItem.serializer(), json))
+    assertEquals("assistant_message", item.type)
+    assertEquals("a1", item.id)
+    assertEquals(2L, item.ordinal)
+    assertEquals("running", item.status)
+    assertTrue("streaming" in item.raw)
   }
 
-  private fun assertBranch(raw: JsonObject, item: TurnItem) {
-    val type: String = item.type
-    val expected: KClass<out TurnItem> = branches[type] ?: TurnItem.Unknown::class
-    assertEquals(expected, item::class, "${raw["id"]} ($type)")
-    assertEquals(raw["id"]?.toString()?.trim('"'), item.id)
+  @Test
+  fun unknownTypeKeepsItsRawJson() {
+    val json = """
+      {"type":"some_future_type","id":"x1","threadId":"t1","ordinal":4,"status":"running",
+       "hologram":{"color":"teal"},"updatedAt":"2026-10-19T09:10:00.000Z"}
+    """
+    val item: TurnItem.Unknown = assertIs(T3Json.decodeFromString(TurnItem.serializer(), json))
+    assertEquals("some_future_type", item.type)
+    assertTrue("hologram" in item.raw)
+  }
+
+  @Test
+  fun nestedUnionFallsBackOnItsOwn() {
+    val json = """
+      {"type":"fork","id":"f1","threadId":"t1","ordinal":1,"status":"completed",
+       "updatedAt":"2026-10-19T09:10:00.000Z","targetThreadId":"t2",
+       "source":{"type":"run","threadId":"t0"}}
+    """
+    val item: TurnItem.Fork = assertIs(T3Json.decodeFromString(TurnItem.serializer(), json))
+    val source: TurnItem.Fork.Source.Unknown = assertIs(item.source)
+    assertEquals("run", source.type)
   }
 
   /** Every item in every thread of a scenario, minus the harness-only `after` delay. */

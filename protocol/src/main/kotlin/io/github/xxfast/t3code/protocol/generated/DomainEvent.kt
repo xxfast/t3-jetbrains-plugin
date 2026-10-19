@@ -8,9 +8,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonContentPolymorphicSerializer
 import kotlinx.serialization.json.JsonDecoder
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonEncoder
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -381,10 +379,11 @@ public sealed interface DomainEvent {
   ) : DomainEvent
 }
 
-public object DomainEventSerializer :
-  JsonContentPolymorphicSerializer<DomainEvent>(DomainEvent::class) {
-  override fun selectDeserializer(element: JsonElement): DeserializationStrategy<DomainEvent> =
-    when (element.jsonObject["type"]?.jsonPrimitive?.contentOrNull) {
+public object DomainEventSerializer : KSerializer<DomainEvent> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<DomainEvent> =
+    when (element["type"]?.jsonPrimitive?.contentOrNull) {
       "thread.created" -> DomainEvent.ThreadCreated.serializer()
       "thread.archived",
       "thread.unarchived",
@@ -434,6 +433,65 @@ public object DomainEventSerializer :
       "context-transfer.updated" -> DomainEvent.ContextTransferUpdated.serializer()
       else -> DomainEvent.Unknown.serializer()
     }
+
+  override fun deserialize(decoder: Decoder): DomainEvent {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(DomainEvent.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: DomainEvent) {
+    when (value) {
+      is DomainEvent.ThreadCreated ->
+        DomainEvent.ThreadCreated.serializer().serialize(encoder, value)
+      is DomainEvent.Thread -> DomainEvent.Thread.serializer().serialize(encoder, value)
+      is DomainEvent.ThreadPullRequestLinkUpdated ->
+        DomainEvent.ThreadPullRequestLinkUpdated.serializer().serialize(encoder, value)
+      is DomainEvent.RunCreated -> DomainEvent.RunCreated.serializer().serialize(encoder, value)
+      is DomainEvent.RunUpdated -> DomainEvent.RunUpdated.serializer().serialize(encoder, value)
+      is DomainEvent.DomainEventRunBackgroundWorkCancelled ->
+        DomainEvent.DomainEventRunBackgroundWorkCancelled.serializer().serialize(encoder, value)
+      is DomainEvent.RunAttemptCreated ->
+        DomainEvent.RunAttemptCreated.serializer().serialize(encoder, value)
+      is DomainEvent.RunAttemptUpdated ->
+        DomainEvent.RunAttemptUpdated.serializer().serialize(encoder, value)
+      is DomainEvent.NodeUpdated -> DomainEvent.NodeUpdated.serializer().serialize(encoder, value)
+      is DomainEvent.SubagentUpdated ->
+        DomainEvent.SubagentUpdated.serializer().serialize(encoder, value)
+      is DomainEvent.DomainEventProviderSession ->
+        DomainEvent.DomainEventProviderSession.serializer().serialize(encoder, value)
+      is DomainEvent.DomainEventProviderSessionDetached ->
+        DomainEvent.DomainEventProviderSessionDetached.serializer().serialize(encoder, value)
+      is DomainEvent.ProviderThreadUpdated ->
+        DomainEvent.ProviderThreadUpdated.serializer().serialize(encoder, value)
+      is DomainEvent.ProviderTurnUpdated ->
+        DomainEvent.ProviderTurnUpdated.serializer().serialize(encoder, value)
+      is DomainEvent.RuntimeRequestUpdated ->
+        DomainEvent.RuntimeRequestUpdated.serializer().serialize(encoder, value)
+      is DomainEvent.MessageUpdated ->
+        DomainEvent.MessageUpdated.serializer().serialize(encoder, value)
+      is DomainEvent.TurnItemUpdated ->
+        DomainEvent.TurnItemUpdated.serializer().serialize(encoder, value)
+      is DomainEvent.PlanUpdated -> DomainEvent.PlanUpdated.serializer().serialize(encoder, value)
+      is DomainEvent.CheckpointScopeCreated ->
+        DomainEvent.CheckpointScopeCreated.serializer().serialize(encoder, value)
+      is DomainEvent.CheckpointCaptured ->
+        DomainEvent.CheckpointCaptured.serializer().serialize(encoder, value)
+      is DomainEvent.CheckpointRollbackRequested ->
+        DomainEvent.CheckpointRollbackRequested.serializer().serialize(encoder, value)
+      is DomainEvent.ContextHandoffUpdated ->
+        DomainEvent.ContextHandoffUpdated.serializer().serialize(encoder, value)
+      is DomainEvent.ContextTransferCreated ->
+        DomainEvent.ContextTransferCreated.serializer().serialize(encoder, value)
+      is DomainEvent.ContextTransferUpdated ->
+        DomainEvent.ContextTransferUpdated.serializer().serialize(encoder, value)
+      is DomainEvent.Unknown -> DomainEvent.Unknown.serializer().serialize(encoder, value)
+    }
+  }
 }
 
 public object UnknownDomainEventSerializer : KSerializer<DomainEvent.Unknown> {

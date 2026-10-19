@@ -100,7 +100,7 @@ public class WebSocketT3Client internal constructor(
     return decode(FileContents.serializer(), call("projects.readFile", payload))
   }
 
-  override suspend fun turnDiff(threadId: String, fromTurn: Int, toTurn: Int): String {
+  override suspend fun turnDiff(threadId: String, fromTurn: Long, toTurn: Long): String {
     val payload: JsonObject = buildJsonObject {
       put("threadId", threadId)
       put("fromTurnCount", fromTurn)
@@ -109,7 +109,7 @@ public class WebSocketT3Client internal constructor(
     return diffOf(call("orchestration.getTurnDiff", payload))
   }
 
-  override suspend fun fullThreadDiff(threadId: String, toTurn: Int): String {
+  override suspend fun fullThreadDiff(threadId: String, toTurn: Long): String {
     val payload: JsonObject = buildJsonObject {
       put("threadId", threadId)
       put("toTurnCount", toTurn)
@@ -179,10 +179,11 @@ public class WebSocketT3Client internal constructor(
   private fun reduce(view: ThreadView?, id: String, item: JsonObject): ThreadView? {
     if (item.string("kind") == "snapshot") {
       val projection: JsonObject = item["projection"] as? JsonObject ?: return null
-      val thread: Thread = decodeOrNull(Thread.serializer(), projection["thread"]) ?: return null
+      val shell: Thread? = _threads.value.find { it.id == id }
+      val thread: Thread = shellOf(projection["thread"], shell) ?: return null
       val visible: List<JsonElement> = (projection["visibleTurnItems"] as? JsonArray).orEmpty()
       return ThreadView(
-        thread = thread.withShellFrom(_threads.value.find { it.id == id }),
+        thread = thread,
         runs = decodeEach(Run.serializer(), projection["runs"]),
         items = visible.mapNotNull { entry ->
           decodeOrNull(TurnItem.serializer(), (entry as? JsonObject)?.get("item"))
@@ -200,8 +201,8 @@ public class WebSocketT3Client internal constructor(
       type == "run.created" || type == "run.updated" -> decodeOrNull(Run.serializer(), payload)
         ?.let { run -> view.copy(runs = view.runs.upsert(run, Run::id)) }
 
-      type.startsWith("thread.") -> decodeOrNull(Thread.serializer(), payload)
-        ?.let { thread -> view.copy(thread = thread.withShellFrom(view.thread)) }
+      type.startsWith("thread.") -> shellOf(payload, view.thread)
+        ?.let { thread -> view.copy(thread = thread) }
 
       else -> null
     }
@@ -230,13 +231,25 @@ public class WebSocketT3Client internal constructor(
   }
 }
 
-/** `AppThread` lacks the shell summaries, so carry them over from the row we already have. */
-private fun Thread.withShellFrom(shell: Thread?): Thread = if (shell == null) this else copy(
-  status = shell.status,
-  itemCount = shell.itemCount,
-  latestVisibleMessage = shell.latestVisibleMessage,
-  pendingRuntimeRequest = shell.pendingRuntimeRequest,
-)
+/**
+ * The thread view and `thread.*` events carry an `AppThread`, which lacks the shell summaries
+ * (status, counts, latest message, pending request). Lay it over the row we already have, or over
+ * an idle one when the shell hasn't listed the thread yet.
+ */
+private fun shellOf(app: JsonElement?, shell: Thread?): Thread? {
+  val fields: JsonObject = app as? JsonObject ?: return null
+  val base: JsonObject = shell
+    ?.let { T3Json.encodeToJsonElement(Thread.serializer(), it) as JsonObject }
+    ?: IdleShell
+  return decodeOrNull(Thread.serializer(), JsonObject(base + fields))
+}
+
+private val IdleShell: JsonObject = buildJsonObject {
+  put("status", "idle")
+  put("itemCount", 0)
+  put("visibleItemCount", 0)
+  put("hasActionableProposedPlan", false)
+}
 
 private fun <T> List<T>.upsert(item: T, id: (T) -> String): List<T> {
   val index: Int = indexOfFirst { id(it) == id(item) }

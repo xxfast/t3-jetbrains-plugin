@@ -5,6 +5,7 @@
       "id": "prj_01JB2K8M4R7DROUTER",
       "title": "Decompose-Router",
       "workspaceRoot": "/Users/xxfast/Developer/XXFAST/KMP/Decompose-Router",
+      "scripts": [],
       "createdAt": "2026-07-21T11:02:00.000Z",
       "updatedAt": "2026-10-19T09:12:00.000Z"
     }
@@ -14,9 +15,18 @@
       "id": "thr_01JC4C0X1UNKNOWN",
       "projectId": "prj_01JB2K8M4R7DROUTER",
       "title": "Research how Navigation 3 handles predictive back",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": { "rootThreadId": "thr_01JC4C0X1UNKNOWN" },
       "status": "completed",
       "latestRunId": "run_01JC4C0X2V3W",
       "itemCount": 5,
+      "visibleItemCount": 5,
+      "hasActionableProposedPlan": false,
       "createdAt": "2026-10-19T09:00:00.000Z",
       "updatedAt": "2026-10-19T09:12:00.000Z"
     }

@@ -7,7 +7,7 @@ import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
-import io.github.xxfast.t3code.protocol.TurnItem
+import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.extension
@@ -110,12 +110,12 @@ class FixtureClient(
 
   override suspend fun readFile(cwd: String, path: String): FileContents {
     val contents = "// fixture content for $path\n"
-    return FileContents(path, contents, byteLength = contents.length.toLong())
+    return FileContents(path, contents, byteLength = contents.length.toLong(), truncated = false)
   }
 
-  override suspend fun turnDiff(threadId: String, fromTurn: Int, toTurn: Int): String = PATCH
+  override suspend fun turnDiff(threadId: String, fromTurn: Long, toTurn: Long): String = PATCH
 
-  override suspend fun fullThreadDiff(threadId: String, toTurn: Int): String = PATCH
+  override suspend fun fullThreadDiff(threadId: String, toTurn: Long): String = PATCH
 
   override fun connect() {
     online.value = true

@@ -7,6 +7,7 @@
       "id": "prj_01JB2K7Q9V3XKSTORE",
       "title": "KStore",
       "workspaceRoot": "/Users/xxfast/Developer/XXFAST/KMP/KStore",
+      "scripts": [],
       "createdAt": "2026-08-02T09:14:00.000Z",
       "updatedAt": "2026-10-19T08:41:02.000Z"
     }
@@ -16,11 +17,25 @@
       "id": "thr_01JC4A1F0QWMIGRATE",
       "projectId": "prj_01JB2K7Q9V3XKSTORE",
       "title": "Migrate KStore to kotlinx-io 0.8",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC4A1F0QWMIGRATE"
+      },
       "status": "running",
       "branch": "kotlinx-io-0.8",
       "latestRunId": "run_01JC4A2K7QB8",
       "activeRunId": "run_01JC4A2K7QB8",
       "itemCount": 14,
+      "visibleItemCount": 14,
+      "hasActionableProposedPlan": false,
       "createdAt": "2026-10-19T08:30:12.000Z",
       "updatedAt": "2026-10-19T08:43:30.000Z"
     }
@@ -29,16 +44,30 @@
     "thr_01JC4A1F0QWMIGRATE": [
       {
         "id": "run_01JC4A1F9ZA3",
+        "threadId": "thr_01JC4A1F0QWMIGRATE",
         "ordinal": 1,
         "status": "completed",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "userMessageId": "msg_01JC4A1F0R11",
         "requestedAt": "2026-10-19T08:30:12.000Z",
         "startedAt": "2026-10-19T08:30:13.000Z",
         "completedAt": "2026-10-19T08:41:02.000Z"
       },
       {
         "id": "run_01JC4A2K7QB8",
+        "threadId": "thr_01JC4A1F0QWMIGRATE",
         "ordinal": 2,
         "status": "running",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "userMessageId": "msg_u2",
         "requestedAt": "2026-10-19T08:42:00.000Z",
         "startedAt": "2026-10-19T08:42:01.000Z"
       }

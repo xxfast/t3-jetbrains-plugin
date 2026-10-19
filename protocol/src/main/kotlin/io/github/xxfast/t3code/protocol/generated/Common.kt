@@ -9,7 +9,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonContentPolymorphicSerializer
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonEncoder
@@ -46,14 +45,33 @@ public sealed interface ChatAttachment {
   ) : ChatAttachment
 }
 
-public object ChatAttachmentSerializer :
-  JsonContentPolymorphicSerializer<ChatAttachment>(ChatAttachment::class) {
-  override fun selectDeserializer(element: JsonElement): DeserializationStrategy<ChatAttachment> =
-    when (element.jsonObject["type"]?.jsonPrimitive?.contentOrNull) {
+public object ChatAttachmentSerializer : KSerializer<ChatAttachment> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<ChatAttachment> =
+    when (element["type"]?.jsonPrimitive?.contentOrNull) {
       "image" -> ChatImageAttachment.serializer()
       "file" -> ChatFileAttachment.serializer()
       else -> ChatAttachment.Unknown.serializer()
     }
+
+  override fun deserialize(decoder: Decoder): ChatAttachment {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(ChatAttachment.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: ChatAttachment) {
+    when (value) {
+      is ChatImageAttachment -> ChatImageAttachment.serializer().serialize(encoder, value)
+      is ChatFileAttachment -> ChatFileAttachment.serializer().serialize(encoder, value)
+      is ChatAttachment.Unknown -> ChatAttachment.Unknown.serializer().serialize(encoder, value)
+    }
+  }
 }
 
 public object UnknownChatAttachmentSerializer : KSerializer<ChatAttachment.Unknown> {
@@ -199,15 +217,37 @@ public data class AppThread(
       val raw: JsonObject,
     ) : ForkedFrom
 
-    public object ForkedFromSerializer :
-      JsonContentPolymorphicSerializer<ForkedFrom>(ForkedFrom::class) {
-      override fun selectDeserializer(element: JsonElement): DeserializationStrategy<ForkedFrom> =
-        when (element.jsonObject["type"]?.jsonPrimitive?.contentOrNull) {
+    public object ForkedFromSerializer : KSerializer<ForkedFrom> {
+      override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+      private fun select(element: JsonObject): DeserializationStrategy<ForkedFrom> =
+        when (element["type"]?.jsonPrimitive?.contentOrNull) {
           "run" -> ForkedFrom.ForkedFromRun.serializer()
           "node" -> ForkedFrom.Node.serializer()
           "provider_thread" -> ForkedFrom.ForkedFromProviderThread.serializer()
           else -> ForkedFrom.Unknown.serializer()
         }
+
+      override fun deserialize(decoder: Decoder): ForkedFrom {
+        val input: JsonDecoder = decoder as JsonDecoder
+        val element: JsonObject = input.decodeJsonElement().jsonObject
+        return try {
+          input.json.decodeFromJsonElement(select(element), element)
+        } catch (_: IllegalArgumentException) {
+          input.json.decodeFromJsonElement(ForkedFrom.Unknown.serializer(), element)
+        }
+      }
+
+      override fun serialize(encoder: Encoder, value: ForkedFrom) {
+        when (value) {
+          is ForkedFrom.ForkedFromRun ->
+            ForkedFrom.ForkedFromRun.serializer().serialize(encoder, value)
+          is ForkedFrom.Node -> ForkedFrom.Node.serializer().serialize(encoder, value)
+          is ForkedFrom.ForkedFromProviderThread ->
+            ForkedFrom.ForkedFromProviderThread.serializer().serialize(encoder, value)
+          is ForkedFrom.Unknown -> ForkedFrom.Unknown.serializer().serialize(encoder, value)
+        }
+      }
     }
 
     public object UnknownForkedFromSerializer : KSerializer<ForkedFrom.Unknown> {
@@ -435,12 +475,11 @@ public sealed interface ContextTransferResolution {
   ) : ContextTransferResolution
 }
 
-public object ContextTransferResolutionSerializer :
-  JsonContentPolymorphicSerializer<ContextTransferResolution>(ContextTransferResolution::class) {
-  override fun selectDeserializer(
-    element: JsonElement,
-  ): DeserializationStrategy<ContextTransferResolution> =
-    when (element.jsonObject["strategy"]?.jsonPrimitive?.contentOrNull) {
+public object ContextTransferResolutionSerializer : KSerializer<ContextTransferResolution> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<ContextTransferResolution> =
+    when (element["strategy"]?.jsonPrimitive?.contentOrNull) {
       "native_fork" -> ContextTransferResolution.NativeFork.serializer()
       "portable_context" -> ContextTransferResolution.PortableContext.serializer()
       "delta_context" -> ContextTransferResolution.DeltaContext.serializer()
@@ -448,6 +487,33 @@ public object ContextTransferResolutionSerializer :
       "checkpoint_context" -> ContextTransferResolution.CheckpointContext.serializer()
       else -> ContextTransferResolution.Unknown.serializer()
     }
+
+  override fun deserialize(decoder: Decoder): ContextTransferResolution {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(ContextTransferResolution.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: ContextTransferResolution) {
+    when (value) {
+      is ContextTransferResolution.NativeFork ->
+        ContextTransferResolution.NativeFork.serializer().serialize(encoder, value)
+      is ContextTransferResolution.PortableContext ->
+        ContextTransferResolution.PortableContext.serializer().serialize(encoder, value)
+      is ContextTransferResolution.DeltaContext ->
+        ContextTransferResolution.DeltaContext.serializer().serialize(encoder, value)
+      is ContextTransferResolution.ForkDeltaContext ->
+        ContextTransferResolution.ForkDeltaContext.serializer().serialize(encoder, value)
+      is ContextTransferResolution.CheckpointContext ->
+        ContextTransferResolution.CheckpointContext.serializer().serialize(encoder, value)
+      is ContextTransferResolution.Unknown ->
+        ContextTransferResolution.Unknown.serializer().serialize(encoder, value)
+    }
+  }
 }
 
 public object UnknownContextTransferResolutionSerializer :
@@ -663,12 +729,11 @@ public sealed interface NotificationSource {
   ) : NotificationSource
 }
 
-public object NotificationSourceSerializer :
-  JsonContentPolymorphicSerializer<NotificationSource>(NotificationSource::class) {
-  override fun selectDeserializer(
-    element: JsonElement,
-  ): DeserializationStrategy<NotificationSource> =
-    when (element.jsonObject["kind"]?.jsonPrimitive?.contentOrNull) {
+public object NotificationSourceSerializer : KSerializer<NotificationSource> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<NotificationSource> =
+    when (element["kind"]?.jsonPrimitive?.contentOrNull) {
       "delegated_task" -> NotificationSource.DelegatedTask.serializer()
       "background_task" -> NotificationSource.BackgroundTask.serializer()
       "background_command" -> NotificationSource.BackgroundCommand.serializer()
@@ -678,6 +743,37 @@ public object NotificationSourceSerializer :
       "system" -> NotificationSource.System.serializer()
       else -> NotificationSource.Unknown.serializer()
     }
+
+  override fun deserialize(decoder: Decoder): NotificationSource {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(NotificationSource.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: NotificationSource) {
+    when (value) {
+      is NotificationSource.DelegatedTask ->
+        NotificationSource.DelegatedTask.serializer().serialize(encoder, value)
+      is NotificationSource.BackgroundTask ->
+        NotificationSource.BackgroundTask.serializer().serialize(encoder, value)
+      is NotificationSource.BackgroundCommand ->
+        NotificationSource.BackgroundCommand.serializer().serialize(encoder, value)
+      is NotificationSource.NotificationSourceSubagent ->
+        NotificationSource.NotificationSourceSubagent.serializer().serialize(encoder, value)
+      is NotificationSource.Command ->
+        NotificationSource.Command.serializer().serialize(encoder, value)
+      is NotificationSource.Monitor ->
+        NotificationSource.Monitor.serializer().serialize(encoder, value)
+      is NotificationSource.System ->
+        NotificationSource.System.serializer().serialize(encoder, value)
+      is NotificationSource.Unknown ->
+        NotificationSource.Unknown.serializer().serialize(encoder, value)
+    }
+  }
 }
 
 public object UnknownNotificationSourceSerializer : KSerializer<NotificationSource.Unknown> {
@@ -749,18 +845,42 @@ public sealed interface PendingBackgroundTask {
   ) : PendingBackgroundTask
 }
 
-public object PendingBackgroundTaskSerializer :
-  JsonContentPolymorphicSerializer<PendingBackgroundTask>(PendingBackgroundTask::class) {
-  override fun selectDeserializer(
-    element: JsonElement,
-  ): DeserializationStrategy<PendingBackgroundTask> =
-    when (element.jsonObject["kind"]?.jsonPrimitive?.contentOrNull) {
+public object PendingBackgroundTaskSerializer : KSerializer<PendingBackgroundTask> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<PendingBackgroundTask> =
+    when (element["kind"]?.jsonPrimitive?.contentOrNull) {
       "subagent" -> PendingBackgroundTask.PendingBackgroundTaskSubagent.serializer()
       "command" -> PendingBackgroundTask.Command.serializer()
       "monitor" -> PendingBackgroundTask.Monitor.serializer()
       "background_task" -> PendingBackgroundTask.BackgroundTask.serializer()
       else -> PendingBackgroundTask.Unknown.serializer()
     }
+
+  override fun deserialize(decoder: Decoder): PendingBackgroundTask {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(PendingBackgroundTask.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: PendingBackgroundTask) {
+    when (value) {
+      is PendingBackgroundTask.PendingBackgroundTaskSubagent ->
+        PendingBackgroundTask.PendingBackgroundTaskSubagent.serializer().serialize(encoder, value)
+      is PendingBackgroundTask.Command ->
+        PendingBackgroundTask.Command.serializer().serialize(encoder, value)
+      is PendingBackgroundTask.Monitor ->
+        PendingBackgroundTask.Monitor.serializer().serialize(encoder, value)
+      is PendingBackgroundTask.BackgroundTask ->
+        PendingBackgroundTask.BackgroundTask.serializer().serialize(encoder, value)
+      is PendingBackgroundTask.Unknown ->
+        PendingBackgroundTask.Unknown.serializer().serialize(encoder, value)
+    }
+  }
 }
 
 public object UnknownPendingBackgroundTaskSerializer : KSerializer<PendingBackgroundTask.Unknown> {
@@ -839,14 +959,34 @@ public sealed interface PlanArtifact {
   ) : PlanArtifact
 }
 
-public object PlanArtifactSerializer :
-  JsonContentPolymorphicSerializer<PlanArtifact>(PlanArtifact::class) {
-  override fun selectDeserializer(element: JsonElement): DeserializationStrategy<PlanArtifact> =
-    when (element.jsonObject["kind"]?.jsonPrimitive?.contentOrNull) {
+public object PlanArtifactSerializer : KSerializer<PlanArtifact> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<PlanArtifact> =
+    when (element["kind"]?.jsonPrimitive?.contentOrNull) {
       "proposed_plan" -> PlanArtifact.ProposedPlan.serializer()
       "todo_list" -> PlanArtifact.TodoList.serializer()
       else -> PlanArtifact.Unknown.serializer()
     }
+
+  override fun deserialize(decoder: Decoder): PlanArtifact {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(PlanArtifact.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: PlanArtifact) {
+    when (value) {
+      is PlanArtifact.ProposedPlan ->
+        PlanArtifact.ProposedPlan.serializer().serialize(encoder, value)
+      is PlanArtifact.TodoList -> PlanArtifact.TodoList.serializer().serialize(encoder, value)
+      is PlanArtifact.Unknown -> PlanArtifact.Unknown.serializer().serialize(encoder, value)
+    }
+  }
 }
 
 public object UnknownPlanArtifactSerializer : KSerializer<PlanArtifact.Unknown> {
@@ -1196,19 +1336,39 @@ public sealed interface ThreadLaunchWorkspaceStrategy {
   ) : ThreadLaunchWorkspaceStrategy
 }
 
-public object ThreadLaunchWorkspaceStrategySerializer :
-  JsonContentPolymorphicSerializer<ThreadLaunchWorkspaceStrategy>(
-    ThreadLaunchWorkspaceStrategy::class,
-  ) {
-  override fun selectDeserializer(
-    element: JsonElement,
-  ): DeserializationStrategy<ThreadLaunchWorkspaceStrategy> =
-    when (element.jsonObject["type"]?.jsonPrimitive?.contentOrNull) {
+public object ThreadLaunchWorkspaceStrategySerializer : KSerializer<ThreadLaunchWorkspaceStrategy> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<ThreadLaunchWorkspaceStrategy> =
+    when (element["type"]?.jsonPrimitive?.contentOrNull) {
       "root" -> ThreadLaunchWorkspaceStrategy.Root.serializer()
       "existing_worktree" -> ThreadLaunchWorkspaceStrategy.ExistingWorktree.serializer()
       "worktree" -> ThreadLaunchWorkspaceStrategy.Worktree.serializer()
       else -> ThreadLaunchWorkspaceStrategy.Unknown.serializer()
     }
+
+  override fun deserialize(decoder: Decoder): ThreadLaunchWorkspaceStrategy {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(ThreadLaunchWorkspaceStrategy.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: ThreadLaunchWorkspaceStrategy) {
+    when (value) {
+      is ThreadLaunchWorkspaceStrategy.Root ->
+        ThreadLaunchWorkspaceStrategy.Root.serializer().serialize(encoder, value)
+      is ThreadLaunchWorkspaceStrategy.ExistingWorktree ->
+        ThreadLaunchWorkspaceStrategy.ExistingWorktree.serializer().serialize(encoder, value)
+      is ThreadLaunchWorkspaceStrategy.Worktree ->
+        ThreadLaunchWorkspaceStrategy.Worktree.serializer().serialize(encoder, value)
+      is ThreadLaunchWorkspaceStrategy.Unknown ->
+        ThreadLaunchWorkspaceStrategy.Unknown.serializer().serialize(encoder, value)
+    }
+  }
 }
 
 public object UnknownThreadLaunchWorkspaceStrategySerializer :
@@ -1404,16 +1564,36 @@ public sealed interface SnapShotAccessibility {
   ) : SnapShotAccessibility
 }
 
-public object SnapShotAccessibilitySerializer :
-  JsonContentPolymorphicSerializer<SnapShotAccessibility>(SnapShotAccessibility::class) {
-  override fun selectDeserializer(
-    element: JsonElement,
-  ): DeserializationStrategy<SnapShotAccessibility> =
-    when (element.jsonObject["format"]?.jsonPrimitive?.contentOrNull) {
+public object SnapShotAccessibilitySerializer : KSerializer<SnapShotAccessibility> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<SnapShotAccessibility> =
+    when (element["format"]?.jsonPrimitive?.contentOrNull) {
       "flat-text" -> SnapShotAccessibility.FlatText.serializer()
       "element-tree" -> SnapShotAccessibility.ElementTree.serializer()
       else -> SnapShotAccessibility.Unknown.serializer()
     }
+
+  override fun deserialize(decoder: Decoder): SnapShotAccessibility {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(SnapShotAccessibility.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: SnapShotAccessibility) {
+    when (value) {
+      is SnapShotAccessibility.FlatText ->
+        SnapShotAccessibility.FlatText.serializer().serialize(encoder, value)
+      is SnapShotAccessibility.ElementTree ->
+        SnapShotAccessibility.ElementTree.serializer().serialize(encoder, value)
+      is SnapShotAccessibility.Unknown ->
+        SnapShotAccessibility.Unknown.serializer().serialize(encoder, value)
+    }
+  }
 }
 
 public object UnknownSnapShotAccessibilitySerializer : KSerializer<SnapShotAccessibility.Unknown> {
@@ -1514,17 +1694,37 @@ public sealed interface StoredProjectIcon {
   ) : StoredProjectIcon
 }
 
-public object StoredProjectIconSerializer :
-  JsonContentPolymorphicSerializer<StoredProjectIcon>(StoredProjectIcon::class) {
-  override fun selectDeserializer(
-    element: JsonElement,
-  ): DeserializationStrategy<StoredProjectIcon> =
-    when (element.jsonObject["kind"]?.jsonPrimitive?.contentOrNull) {
+public object StoredProjectIconSerializer : KSerializer<StoredProjectIcon> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<StoredProjectIcon> =
+    when (element["kind"]?.jsonPrimitive?.contentOrNull) {
       "lucide" -> StoredProjectIcon.Lucide.serializer()
       "emoji" -> StoredProjectIcon.Emoji.serializer()
       "monogram" -> StoredProjectIcon.Monogram.serializer()
       else -> StoredProjectIcon.Unknown.serializer()
     }
+
+  override fun deserialize(decoder: Decoder): StoredProjectIcon {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(StoredProjectIcon.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: StoredProjectIcon) {
+    when (value) {
+      is StoredProjectIcon.Lucide -> StoredProjectIcon.Lucide.serializer().serialize(encoder, value)
+      is StoredProjectIcon.Emoji -> StoredProjectIcon.Emoji.serializer().serialize(encoder, value)
+      is StoredProjectIcon.Monogram ->
+        StoredProjectIcon.Monogram.serializer().serialize(encoder, value)
+      is StoredProjectIcon.Unknown ->
+        StoredProjectIcon.Unknown.serializer().serialize(encoder, value)
+    }
+  }
 }
 
 public object UnknownStoredProjectIconSerializer : KSerializer<StoredProjectIcon.Unknown> {
@@ -1695,15 +1895,37 @@ public sealed interface ToolActivityIcon {
   ) : ToolActivityIcon
 }
 
-public object ToolActivityIconSerializer :
-  JsonContentPolymorphicSerializer<ToolActivityIcon>(ToolActivityIcon::class) {
-  override fun selectDeserializer(element: JsonElement): DeserializationStrategy<ToolActivityIcon> =
-    when (element.jsonObject["_tag"]?.jsonPrimitive?.contentOrNull) {
+public object ToolActivityIconSerializer : KSerializer<ToolActivityIcon> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<ToolActivityIcon> =
+    when (element["_tag"]?.jsonPrimitive?.contentOrNull) {
       "website" -> ToolActivityIcon.Website.serializer()
       "native-app" -> ToolActivityIcon.NativeApp.serializer()
       "themed-logo" -> ToolActivityIcon.ThemedLogo.serializer()
       else -> ToolActivityIcon.Unknown.serializer()
     }
+
+  override fun deserialize(decoder: Decoder): ToolActivityIcon {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(ToolActivityIcon.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: ToolActivityIcon) {
+    when (value) {
+      is ToolActivityIcon.Website -> ToolActivityIcon.Website.serializer().serialize(encoder, value)
+      is ToolActivityIcon.NativeApp ->
+        ToolActivityIcon.NativeApp.serializer().serialize(encoder, value)
+      is ToolActivityIcon.ThemedLogo ->
+        ToolActivityIcon.ThemedLogo.serializer().serialize(encoder, value)
+      is ToolActivityIcon.Unknown -> ToolActivityIcon.Unknown.serializer().serialize(encoder, value)
+    }
+  }
 }
 
 public object UnknownToolActivityIconSerializer : KSerializer<ToolActivityIcon.Unknown> {
@@ -1748,17 +1970,36 @@ public sealed interface ToolActivityNativeAppReference {
 }
 
 public object ToolActivityNativeAppReferenceSerializer :
-  JsonContentPolymorphicSerializer<ToolActivityNativeAppReference>(
-    ToolActivityNativeAppReference::class,
-  ) {
-  override fun selectDeserializer(
-    element: JsonElement,
-  ): DeserializationStrategy<ToolActivityNativeAppReference> =
-    when (element.jsonObject["_tag"]?.jsonPrimitive?.contentOrNull) {
+  KSerializer<ToolActivityNativeAppReference> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<ToolActivityNativeAppReference> =
+    when (element["_tag"]?.jsonPrimitive?.contentOrNull) {
       "app-id" -> ToolActivityNativeAppReference.AppId.serializer()
       "display-name" -> ToolActivityNativeAppReference.DisplayName.serializer()
       else -> ToolActivityNativeAppReference.Unknown.serializer()
     }
+
+  override fun deserialize(decoder: Decoder): ToolActivityNativeAppReference {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(ToolActivityNativeAppReference.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: ToolActivityNativeAppReference) {
+    when (value) {
+      is ToolActivityNativeAppReference.AppId ->
+        ToolActivityNativeAppReference.AppId.serializer().serialize(encoder, value)
+      is ToolActivityNativeAppReference.DisplayName ->
+        ToolActivityNativeAppReference.DisplayName.serializer().serialize(encoder, value)
+      is ToolActivityNativeAppReference.Unknown ->
+        ToolActivityNativeAppReference.Unknown.serializer().serialize(encoder, value)
+    }
+  }
 }
 
 public object UnknownToolActivityNativeAppReferenceSerializer :
@@ -1825,13 +2066,31 @@ public sealed interface TurnTokenUsage {
   ) : TurnTokenUsage
 }
 
-public object TurnTokenUsageSerializer :
-  JsonContentPolymorphicSerializer<TurnTokenUsage>(TurnTokenUsage::class) {
-  override fun selectDeserializer(element: JsonElement): DeserializationStrategy<TurnTokenUsage> =
-    when (element.jsonObject["usageScope"]?.jsonPrimitive?.contentOrNull) {
+public object TurnTokenUsageSerializer : KSerializer<TurnTokenUsage> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<TurnTokenUsage> =
+    when (element["usageScope"]?.jsonPrimitive?.contentOrNull) {
       "main_agent" -> TurnTokenUsage.MainAgent.serializer()
       else -> TurnTokenUsage.Unknown.serializer()
     }
+
+  override fun deserialize(decoder: Decoder): TurnTokenUsage {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(TurnTokenUsage.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: TurnTokenUsage) {
+    when (value) {
+      is TurnTokenUsage.MainAgent -> TurnTokenUsage.MainAgent.serializer().serialize(encoder, value)
+      is TurnTokenUsage.Unknown -> TurnTokenUsage.Unknown.serializer().serialize(encoder, value)
+    }
+  }
 }
 
 public object UnknownTurnTokenUsageSerializer : KSerializer<TurnTokenUsage.Unknown> {
@@ -1890,18 +2149,39 @@ public data class UserInputAttachmentAnswerPayload(
       val raw: JsonObject,
     ) : AttachmentsByQuestionIdItem
 
-    public object AttachmentsByQuestionIdItemSerializer :
-      JsonContentPolymorphicSerializer<AttachmentsByQuestionIdItem>(
-        AttachmentsByQuestionIdItem::class,
-      ) {
-      override fun selectDeserializer(
-        element: JsonElement,
+    public object AttachmentsByQuestionIdItemSerializer : KSerializer<AttachmentsByQuestionIdItem> {
+      override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+      private fun select(
+        element: JsonObject,
       ): DeserializationStrategy<AttachmentsByQuestionIdItem> =
-        when (element.jsonObject["type"]?.jsonPrimitive?.contentOrNull) {
+        when (element["type"]?.jsonPrimitive?.contentOrNull) {
           "image" -> ChatImageAttachment.serializer()
           "file" -> ChatFileAttachment.serializer()
           else -> AttachmentsByQuestionIdItem.Unknown.serializer()
         }
+
+      override fun deserialize(decoder: Decoder): AttachmentsByQuestionIdItem {
+        val input: JsonDecoder = decoder as JsonDecoder
+        val element: JsonObject = input.decodeJsonElement().jsonObject
+        return try {
+          input.json.decodeFromJsonElement(select(element), element)
+        } catch (_: IllegalArgumentException) {
+          input.json.decodeFromJsonElement(
+            AttachmentsByQuestionIdItem.Unknown.serializer(),
+            element,
+          )
+        }
+      }
+
+      override fun serialize(encoder: Encoder, value: AttachmentsByQuestionIdItem) {
+        when (value) {
+          is ChatImageAttachment -> ChatImageAttachment.serializer().serialize(encoder, value)
+          is ChatFileAttachment -> ChatFileAttachment.serializer().serialize(encoder, value)
+          is AttachmentsByQuestionIdItem.Unknown ->
+            AttachmentsByQuestionIdItem.Unknown.serializer().serialize(encoder, value)
+        }
+      }
     }
 
     public object UnknownAttachmentsByQuestionIdItemSerializer :

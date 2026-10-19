@@ -2,6 +2,8 @@ package io.github.xxfast.t3code.plugin.ui
 
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Thread
+import io.github.xxfast.t3code.protocol.archived
+import io.github.xxfast.t3code.protocol.pinned
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId

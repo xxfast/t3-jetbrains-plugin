@@ -1,9 +1,9 @@
 package io.github.xxfast.t3code.plugin.ui
 
-import io.github.xxfast.t3code.protocol.FileChangeEntry
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.T3Json
-import io.github.xxfast.t3code.protocol.TurnItem
+import io.github.xxfast.t3code.protocol.generated.FileChangeDetail
+import io.github.xxfast.t3code.protocol.generated.TurnItem
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -83,22 +83,37 @@ class ThreadScreenLogicTest {
     assertEquals("+2 -1", diffStat(2, 1))
     assertEquals("+2", diffStat(2, null))
     assertEquals("", diffStat(null, null))
-    val change = TurnItem.FileChange(id = "f", updatedAt = "", fileName = "A.kt")
+    val change: TurnItem.FileChange = item("""{"type":"file_change","fileName":"A.kt"}""")
     assertEquals("A.kt", change.openPath())
     val moved: TurnItem.FileChange =
-      change.copy(changes = listOf(FileChangeEntry(operation = "update", path = "src/A.kt")))
+      change.copy(changes = listOf(FileChangeDetail(operation = "update", path = "src/A.kt")))
     assertEquals("src/A.kt", moved.openPath())
   }
 
   private fun at(time: String): String = "2026-10-19T$time:00Z"
 
-  private fun run(id: String, ordinal: Int, requested: String): Run =
-    Run(id = id, ordinal = ordinal, status = "completed", requestedAt = at(requested))
+  private fun run(id: String, ordinal: Long, requested: String): Run = T3Json.decodeFromString(
+    Run.serializer(),
+    """
+      {
+        "id": "$id", "threadId": "t", "ordinal": $ordinal, "status": "completed",
+        "providerInstanceId": "codex", "modelSelection": { "model": "gpt-5" },
+        "userMessageId": "m", "requestedAt": "${at(requested)}"
+      }
+    """,
+  )
 
-  private fun notice(id: String, time: String? = null, updatedAt: String? = null): TurnItem =
-    TurnItem.SystemNotice(
-      id = id,
-      updatedAt = updatedAt ?: time?.let(::at) ?: "",
-      message = id,
-    )
+  private fun notice(id: String, time: String? = null, updatedAt: String? = null): TurnItem {
+    val notice: TurnItem.SystemNotice = item("""{"type":"system_notice","message":"$id"}""")
+    return notice.copy(id = id, updatedAt = updatedAt ?: time?.let(::at) ?: "")
+  }
+
+  /** A turn item from [json] plus the fields every item requires. */
+  private inline fun <reified T : TurnItem> item(json: String): T {
+    val fields: JsonObject = T3Json.parseToJsonElement(json).jsonObject
+    val common: JsonObject = T3Json.parseToJsonElement(
+      """{"id":"i","threadId":"t","ordinal":1,"status":"completed","updatedAt":""}""",
+    ).jsonObject
+    return T3Json.decodeFromJsonElement(TurnItem.serializer(), JsonObject(common + fields)) as T
+  }
 }

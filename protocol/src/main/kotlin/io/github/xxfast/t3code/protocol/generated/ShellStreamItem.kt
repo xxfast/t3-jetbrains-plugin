@@ -8,9 +8,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonContentPolymorphicSerializer
 import kotlinx.serialization.json.JsonDecoder
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonEncoder
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -71,10 +69,11 @@ public sealed interface ShellStreamItem {
   ) : ShellStreamItem
 }
 
-public object ShellStreamItemSerializer :
-  JsonContentPolymorphicSerializer<ShellStreamItem>(ShellStreamItem::class) {
-  override fun selectDeserializer(element: JsonElement): DeserializationStrategy<ShellStreamItem> =
-    when (element.jsonObject["kind"]?.jsonPrimitive?.contentOrNull) {
+public object ShellStreamItemSerializer : KSerializer<ShellStreamItem> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<ShellStreamItem> =
+    when (element["kind"]?.jsonPrimitive?.contentOrNull) {
       "synchronized" -> ShellStreamItem.Synchronized.serializer()
       "snapshot" -> ShellStreamItem.Snapshot.serializer()
       "project.updated" -> ShellStreamItem.ProjectUpdated.serializer()
@@ -83,6 +82,33 @@ public object ShellStreamItemSerializer :
       "thread.removed" -> ShellStreamItem.ThreadRemoved.serializer()
       else -> ShellStreamItem.Unknown.serializer()
     }
+
+  override fun deserialize(decoder: Decoder): ShellStreamItem {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(ShellStreamItem.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: ShellStreamItem) {
+    when (value) {
+      is ShellStreamItem.Synchronized ->
+        ShellStreamItem.Synchronized.serializer().serialize(encoder, value)
+      is ShellStreamItem.Snapshot -> ShellStreamItem.Snapshot.serializer().serialize(encoder, value)
+      is ShellStreamItem.ProjectUpdated ->
+        ShellStreamItem.ProjectUpdated.serializer().serialize(encoder, value)
+      is ShellStreamItem.ProjectRemoved ->
+        ShellStreamItem.ProjectRemoved.serializer().serialize(encoder, value)
+      is ShellStreamItem.ThreadUpdated ->
+        ShellStreamItem.ThreadUpdated.serializer().serialize(encoder, value)
+      is ShellStreamItem.ThreadRemoved ->
+        ShellStreamItem.ThreadRemoved.serializer().serialize(encoder, value)
+      is ShellStreamItem.Unknown -> ShellStreamItem.Unknown.serializer().serialize(encoder, value)
+    }
+  }
 }
 
 public object UnknownShellStreamItemSerializer : KSerializer<ShellStreamItem.Unknown> {

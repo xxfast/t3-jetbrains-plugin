@@ -26,7 +26,7 @@ import io.github.xxfast.t3code.protocol.FileContents
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.ThreadView
-import io.github.xxfast.t3code.protocol.TurnItem
+import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.nio.file.Path
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope

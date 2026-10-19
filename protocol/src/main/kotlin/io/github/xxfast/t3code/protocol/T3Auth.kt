@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.protocol
 
+import io.github.xxfast.t3code.protocol.generated.AuthAccessTokenResult
 import java.io.IOException
 import java.net.URI
 import java.net.URLDecoder
@@ -11,8 +12,6 @@ import java.time.Duration
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.future.await
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonObject
 
@@ -53,12 +52,12 @@ public class T3Auth(
       .header("Content-Type", "application/x-www-form-urlencoded")
       .POST(HttpRequest.BodyPublishers.ofString(body))
       .build()
-    val token: TokenResponse = send(request, TokenResponse.serializer())
+    val token: AuthAccessTokenResult = send(request, AuthAccessTokenResult.serializer())
     return Credential(
       accessToken = token.accessToken,
       tokenType = token.tokenType,
       scopes = token.scope.split(" ").filter { it.isNotBlank() },
-      expiresInSeconds = token.expiresIn,
+      expiresInSeconds = token.expiresIn.toLong(),
     )
   }
 
@@ -100,10 +99,3 @@ internal fun pairingCode(codeOrLink: String): String {
   return URLDecoder.decode(token, Charsets.UTF_8)
 }
 
-@Serializable
-private class TokenResponse(
-  @SerialName("access_token") val accessToken: String,
-  @SerialName("token_type") val tokenType: String = "Bearer",
-  @SerialName("expires_in") val expiresIn: Long? = null,
-  val scope: String = "",
-)

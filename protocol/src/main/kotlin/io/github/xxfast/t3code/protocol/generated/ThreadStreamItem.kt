@@ -8,9 +8,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonContentPolymorphicSerializer
 import kotlinx.serialization.json.JsonDecoder
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonEncoder
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -53,15 +51,37 @@ public sealed interface ThreadStreamItem {
   ) : ThreadStreamItem
 }
 
-public object ThreadStreamItemSerializer :
-  JsonContentPolymorphicSerializer<ThreadStreamItem>(ThreadStreamItem::class) {
-  override fun selectDeserializer(element: JsonElement): DeserializationStrategy<ThreadStreamItem> =
-    when (element.jsonObject["kind"]?.jsonPrimitive?.contentOrNull) {
+public object ThreadStreamItemSerializer : KSerializer<ThreadStreamItem> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<ThreadStreamItem> =
+    when (element["kind"]?.jsonPrimitive?.contentOrNull) {
       "synchronized" -> ThreadStreamItem.Synchronized.serializer()
       "snapshot" -> ThreadStreamItem.Snapshot.serializer()
       "event" -> ThreadStreamItem.Event.serializer()
       else -> ThreadStreamItem.Unknown.serializer()
     }
+
+  override fun deserialize(decoder: Decoder): ThreadStreamItem {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(ThreadStreamItem.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: ThreadStreamItem) {
+    when (value) {
+      is ThreadStreamItem.Synchronized ->
+        ThreadStreamItem.Synchronized.serializer().serialize(encoder, value)
+      is ThreadStreamItem.Snapshot ->
+        ThreadStreamItem.Snapshot.serializer().serialize(encoder, value)
+      is ThreadStreamItem.Event -> ThreadStreamItem.Event.serializer().serialize(encoder, value)
+      is ThreadStreamItem.Unknown -> ThreadStreamItem.Unknown.serializer().serialize(encoder, value)
+    }
+  }
 }
 
 public object UnknownThreadStreamItemSerializer : KSerializer<ThreadStreamItem.Unknown> {
