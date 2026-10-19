@@ -85,6 +85,9 @@ Hard-won, so recorded here rather than rediscovered.
   must match the Compose runtime the IDE ships. Check the IDE's `lib/` before bumping.
 - Never bundle stdlib or coroutines in the plugin: `kotlin.stdlib.default.dependency=false` plus
   excludes on the plugin's configurations. `:protocol` then needs stdlib as `compileOnly`.
+  kotlinx-serialization is the exception: the IDE's `intellij.libraries.kotlinx.serialization.json`
+  is an internal module from 2026.3 and the plugin silently fails to load if it depends on it.
+  Bundle serialization-json in the plugin instead.
 - First plugin build downloads the platform, about 1 GB. On this network that took over 30 minutes and
   was killed. Run it in a terminal, not from an agent with a timeout.
 - Local T3 desktop server listens on `127.0.0.1:3773`. `GET /api/auth/session` works unauthenticated

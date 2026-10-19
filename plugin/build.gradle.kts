@@ -6,6 +6,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
   alias(libs.plugins.kotlin.jvm)
   alias(libs.plugins.kotlin.compose)
+  alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.intellij.platform)
 }
 
@@ -35,7 +36,6 @@ val bundledModules: List<String> = listOf(
   "intellij.libraries.compose.runtime.desktop",
   "intellij.libraries.skiko",
   "intellij.libraries.kotlinx.coroutines.core",
-  "intellij.libraries.kotlinx.serialization.json",
 )
 
 kotlin {
@@ -53,14 +53,12 @@ configurations.runtimeClasspath {
   exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk8")
   exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
   exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core-jvm")
-  exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-serialization-core")
-  exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-serialization-core-jvm")
-  exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-serialization-json")
-  exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-serialization-json-jvm")
 }
 
 dependencies {
   implementation(project(":protocol"))
+  // The IDE's copy is an internal module from 2026.3, plugins can't depend on it. Bundle ours.
+  implementation(libs.kotlinx.serialization.json)
 
   intellijPlatform {
     if (localIde != null) local(localIde) else intellijIdea("2025.3")
@@ -69,6 +67,20 @@ dependencies {
     zipSigner()
     testFramework(TestFrameworkType.Platform)
   }
+
+  testImplementation(libs.kotlin.test)
+  testImplementation(libs.kotlinx.coroutines.test)
+  testImplementation(libs.junit.jupiter)
+  testRuntimeOnly(libs.junit.platform.launcher)
+}
+
+tasks.test {
+  // The platform test framework drags in JUnit Vintage, which can't start next to Jupiter 5.13
+  useJUnitPlatform { includeEngines("junit-jupiter") }
+  systemProperty(
+    "t3code.scenarios",
+    rootProject.layout.projectDirectory.dir("harness/scenarios").asFile.absolutePath,
+  )
 }
 
 intellijPlatform {

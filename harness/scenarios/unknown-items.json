@@ -1,0 +1,87 @@
+{
+  "connection": { "state": "connected" },
+  "projects": [
+    {
+      "id": "prj_01JB2K8M4R7DROUTER",
+      "title": "Decompose-Router",
+      "workspaceRoot": "/Users/xxfast/Developer/XXFAST/KMP/Decompose-Router",
+      "createdAt": "2026-07-21T11:02:00.000Z",
+      "updatedAt": "2026-10-19T09:12:00.000Z"
+    }
+  ],
+  "threads": [
+    {
+      "id": "thr_01JC4C0X1UNKNOWN",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Research how Navigation 3 handles predictive back",
+      "status": "completed",
+      "latestRunId": "run_01JC4C0X2V3W",
+      "itemCount": 5,
+      "createdAt": "2026-10-19T09:00:00.000Z",
+      "updatedAt": "2026-10-19T09:12:00.000Z"
+    }
+  ],
+  "items": {
+    "thr_01JC4C0X1UNKNOWN": [
+      {
+        "type": "user_message",
+        "id": "u1",
+        "threadId": "thr_01JC4C0X1UNKNOWN",
+        "ordinal": 1,
+        "status": "completed",
+        "text": "How does Navigation 3 handle predictive back? Compare with what we do.",
+        "updatedAt": "2026-10-19T09:00:00.000Z"
+      },
+      {
+        "type": "web_search",
+        "id": "w1",
+        "threadId": "thr_01JC4C0X1UNKNOWN",
+        "ordinal": 2,
+        "status": "completed",
+        "title": "Searched the web",
+        "patterns": ["navigation3 predictive back compose", "NavDisplay onBack"],
+        "results": [
+          {
+            "title": "Navigation 3 | Android Developers",
+            "url": "https://developer.android.com/guide/navigation/navigation-3",
+            "snippet": "NavDisplay observes the back stack and animates predictive back gestures."
+          }
+        ],
+        "updatedAt": "2026-10-19T09:02:10.000Z"
+      },
+      {
+        "type": "todo_list",
+        "id": "t1",
+        "threadId": "thr_01JC4C0X1UNKNOWN",
+        "ordinal": 3,
+        "status": "completed",
+        "planId": "plan_01JC4C1A0B2C",
+        "steps": [
+          { "text": "Read NavDisplay's back handling", "status": "completed" },
+          { "text": "Diff against RouterContent", "status": "completed" },
+          { "text": "Write up the comparison", "status": "pending" }
+        ],
+        "explanation": "Keeping this to the back gesture, not transitions.",
+        "updatedAt": "2026-10-19T09:05:00.000Z"
+      },
+      {
+        "type": "some_future_type",
+        "id": "x1",
+        "threadId": "thr_01JC4C0X1UNKNOWN",
+        "ordinal": 4,
+        "status": "running",
+        "hologram": { "color": "teal", "depth": 3 },
+        "updatedAt": "2026-10-19T09:10:00.000Z"
+      },
+      {
+        "type": "assistant_message",
+        "id": "a1",
+        "threadId": "thr_01JC4C0X1UNKNOWN",
+        "ordinal": 5,
+        "status": "completed",
+        "text": "Navigation 3 drives predictive back from `NavDisplay`; we do it per router in `RouterContent`. Same gesture, different owner.",
+        "updatedAt": "2026-10-19T09:12:00.000Z"
+      }
+    ]
+  }
+}

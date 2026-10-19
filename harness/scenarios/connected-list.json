@@ -1,0 +1,132 @@
+{
+  "connection": { "state": "connected" },
+  "projects": [
+    {
+      "id": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "KStore",
+      "workspaceRoot": "/Users/xxfast/Developer/XXFAST/KMP/KStore",
+      "createdAt": "2026-08-02T09:14:00.000Z",
+      "updatedAt": "2026-10-18T22:40:11.000Z"
+    },
+    {
+      "id": "prj_01JB2K8M4R7DROUTER",
+      "title": "Decompose-Router",
+      "workspaceRoot": "/Users/xxfast/Developer/XXFAST/KMP/Decompose-Router",
+      "createdAt": "2026-07-21T11:02:00.000Z",
+      "updatedAt": "2026-10-19T08:05:43.000Z"
+    }
+  ],
+  "threads": [
+    {
+      "id": "thr_01JC4A1F0QWMIGRATE",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Migrate KStore to kotlinx-io 0.8",
+      "status": "running",
+      "branch": "kotlinx-io-0.8",
+      "latestRunId": "run_01JC4A1F9ZA3",
+      "activeRunId": "run_01JC4A1F9ZA3",
+      "latestVisibleMessage": {
+        "id": "msg_01JC4A1FA0X1",
+        "role": "assistant",
+        "text": "Bumping `kotlinx-io` and fixing the `Source` call sites in `:kstore-file`.",
+        "updatedAt": "2026-10-19T08:41:02.000Z"
+      },
+      "itemCount": 14,
+      "pinnedAt": "2026-10-12T07:30:00.000Z",
+      "createdAt": "2026-10-19T08:30:12.000Z",
+      "updatedAt": "2026-10-19T08:41:02.000Z"
+    },
+    {
+      "id": "thr_01JC49ZK2HWAITING",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Run the wasmJs browser tests",
+      "status": "waiting",
+      "latestRunId": "run_01JC49ZK3M1B",
+      "activeRunId": "run_01JC49ZK3M1B",
+      "pendingRuntimeRequest": {
+        "id": "req_01JC49ZM7TQ2",
+        "kind": "command",
+        "createdAt": "2026-10-19T08:22:40.000Z"
+      },
+      "itemCount": 6,
+      "createdAt": "2026-10-19T08:20:01.000Z",
+      "updatedAt": "2026-10-19T08:22:40.000Z"
+    },
+    {
+      "id": "thr_01JC3QX81VIDLE001",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Why does `KStore.update` lock twice?",
+      "status": "idle",
+      "itemCount": 0,
+      "createdAt": "2026-10-18T22:40:11.000Z",
+      "updatedAt": "2026-10-18T22:40:11.000Z"
+    },
+    {
+      "id": "thr_01JC2N4B6CDONE001",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Add a versioned migration sample to the docs",
+      "status": "completed",
+      "branch": "docs-migrations",
+      "latestRunId": "run_01JC2N4B7D2F",
+      "latestVisibleMessage": {
+        "id": "msg_01JC2N9QW8R4",
+        "role": "assistant",
+        "text": "Added `docs/migrations.md` with a v1 to v2 sample and linked it from the README.",
+        "updatedAt": "2026-10-18T14:12:09.000Z"
+      },
+      "itemCount": 23,
+      "createdAt": "2026-10-18T13:51:30.000Z",
+      "updatedAt": "2026-10-18T14:12:09.000Z"
+    },
+    {
+      "id": "thr_01JC4B2W5RROUTER1",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Fix predictive back on iOS 26",
+      "status": "running",
+      "branch": "ios-26-back",
+      "latestRunId": "run_01JC4B2W6S8T",
+      "activeRunId": "run_01JC4B2W6S8T",
+      "itemCount": 31,
+      "pinnedAt": "2026-10-17T19:00:00.000Z",
+      "createdAt": "2026-10-19T07:55:20.000Z",
+      "updatedAt": "2026-10-19T08:05:43.000Z"
+    },
+    {
+      "id": "thr_01JC3ZT0P9FAILED1",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Bump Decompose to 3.4.0 and rerun the sample app",
+      "status": "failed",
+      "latestRunId": "run_01JC3ZT1A4HB",
+      "latestVisibleMessage": {
+        "id": "msg_01JC3ZV2K1MM",
+        "role": "assistant",
+        "text": "Gradle sync fails: `com.arkivanov.decompose:decompose:3.4.0` isn't on Maven Central yet.",
+        "updatedAt": "2026-10-18T21:03:17.000Z"
+      },
+      "itemCount": 9,
+      "createdAt": "2026-10-18T20:58:44.000Z",
+      "updatedAt": "2026-10-18T21:03:17.000Z"
+    },
+    {
+      "id": "thr_01JC1H7E3KINTERR1",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Explore a `rememberOnRoute` for ViewModels",
+      "status": "interrupted",
+      "latestRunId": "run_01JC1H7E4L5N",
+      "itemCount": 12,
+      "createdAt": "2026-10-17T10:20:00.000Z",
+      "updatedAt": "2026-10-17T10:44:31.000Z"
+    },
+    {
+      "id": "thr_01JBZQ2D8NARCHIVE",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Draft the 0.6 release notes",
+      "status": "completed",
+      "latestRunId": "run_01JBZQ2D9P0Q",
+      "itemCount": 7,
+      "archivedAt": "2026-10-10T16:00:00.000Z",
+      "createdAt": "2026-10-09T15:12:00.000Z",
+      "updatedAt": "2026-10-09T15:31:48.000Z"
+    }
+  ]
+}

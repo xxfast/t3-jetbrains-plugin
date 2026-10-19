@@ -1,0 +1,90 @@
+{
+  "connection": { "state": "connected" },
+  "projects": [
+    {
+      "id": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "KStore",
+      "workspaceRoot": "/Users/xxfast/Developer/XXFAST/KMP/KStore",
+      "createdAt": "2026-08-02T09:14:00.000Z",
+      "updatedAt": "2026-10-19T08:22:40.000Z"
+    }
+  ],
+  "threads": [
+    {
+      "id": "thr_01JC49ZK2HWAITING",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Run the wasmJs browser tests",
+      "status": "waiting",
+      "latestRunId": "run_01JC49ZK3M1B",
+      "activeRunId": "run_01JC49ZK3M1B",
+      "pendingRuntimeRequest": {
+        "id": "req_01JC49ZM7TQ2",
+        "kind": "command",
+        "createdAt": "2026-10-19T08:22:40.000Z"
+      },
+      "itemCount": 3,
+      "createdAt": "2026-10-19T08:20:01.000Z",
+      "updatedAt": "2026-10-19T08:22:40.000Z"
+    }
+  ],
+  "runs": {
+    "thr_01JC49ZK2HWAITING": [
+      {
+        "id": "run_01JC49ZK3M1B",
+        "ordinal": 1,
+        "status": "waiting",
+        "requestedAt": "2026-10-19T08:20:01.000Z",
+        "startedAt": "2026-10-19T08:20:02.000Z"
+      }
+    ]
+  },
+  "items": {
+    "thr_01JC49ZK2HWAITING": [
+      {
+        "type": "user_message",
+        "id": "u1",
+        "threadId": "thr_01JC49ZK2HWAITING",
+        "runId": "run_01JC49ZK3M1B",
+        "ordinal": 1,
+        "status": "completed",
+        "messageId": "msg_01JC49ZK2J00",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "Run the wasmJs browser tests and tell me what fails.",
+        "updatedAt": "2026-10-19T08:20:01.000Z"
+      },
+      {
+        "type": "assistant_message",
+        "id": "a1",
+        "threadId": "thr_01JC49ZK2HWAITING",
+        "runId": "run_01JC49ZK3M1B",
+        "ordinal": 2,
+        "status": "completed",
+        "messageId": "msg_01JC49ZL0A4C",
+        "streaming": false,
+        "text": "These need a headless Chrome, so I'll run them through Gradle with the Karma launcher.",
+        "updatedAt": "2026-10-19T08:22:38.000Z"
+      },
+      {
+        "type": "approval_request",
+        "id": "r1",
+        "threadId": "thr_01JC49ZK2HWAITING",
+        "runId": "run_01JC49ZK3M1B",
+        "ordinal": 3,
+        "status": "waiting",
+        "title": "Run a command",
+        "requestId": "req_01JC49ZM7TQ2",
+        "requestKind": "command",
+        "prompt": "./gradlew :kstore:wasmJsBrowserTest --no-configuration-cache",
+        "options": [
+          { "decision": "accept", "label": "Run it" },
+          { "decision": "decline", "label": "Don't run" }
+        ],
+        "startedAt": "2026-10-19T08:22:40.000Z",
+        "updatedAt": "2026-10-19T08:22:40.000Z"
+      }
+    ]
+  }
+}
