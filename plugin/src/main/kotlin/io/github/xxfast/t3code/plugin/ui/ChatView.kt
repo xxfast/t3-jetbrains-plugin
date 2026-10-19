@@ -73,7 +73,6 @@ import org.jetbrains.jewel.markdown.processing.MarkdownProcessor
 import org.jetbrains.jewel.ui.component.Link
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.Tooltip
-import org.jetbrains.jewel.ui.component.VerticallyScrollableContainer
 import org.jetbrains.jewel.ui.typography
 
 /** The editor scheme's background, read again whenever the theme changes. */
@@ -303,7 +302,7 @@ private fun MessagesTimeline(
   BoxWithConstraints(Modifier.fillMaxSize()) {
     // `.messages-timeline-scroll`: 12px a side when narrow, 48px from 640px up
     val side: Dp = if (maxWidth >= 640.dp) 48.dp else 12.dp
-    VerticallyScrollableContainer(scrollState = state, modifier = Modifier.fillMaxSize()) {
+    TimelineScrollContainer(state, keys = rows.map { it.id }, modifier = Modifier.fillMaxSize()) {
       LazyColumn(
         state = state,
         modifier = Modifier.fillMaxSize(),
