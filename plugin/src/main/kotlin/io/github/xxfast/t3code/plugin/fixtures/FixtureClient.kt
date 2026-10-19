@@ -99,6 +99,8 @@ class FixtureClient(
     return FileContents(path, contents, byteLength = contents.length.toLong(), truncated = false)
   }
 
+  override suspend fun projectFavicon(cwd: String, path: String?): ByteArray? = null
+
   override suspend fun turnDiff(threadId: String, fromTurn: Long, toTurn: Long): String = PATCH
 
   override suspend fun fullThreadDiff(threadId: String, toTurn: Long): String = PATCH

@@ -1,6 +1,9 @@
 package io.github.xxfast.t3code.protocol
 
+import java.io.IOException
 import java.net.URI
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import java.net.http.HttpClient
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -12,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
@@ -22,6 +26,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 
 /** The real [T3Client]: HTTP for the handshake, one Effect RPC socket for everything else. */
 public class WebSocketT3Client internal constructor(
@@ -98,6 +103,34 @@ public class WebSocketT3Client internal constructor(
       put("relativePath", path)
     }
     return decode(FileContents.serializer(), call("projects.readFile", payload))
+  }
+
+  override suspend fun projectFavicon(cwd: String, path: String?): ByteArray? {
+    val payload: JsonObject = buildJsonObject {
+      putJsonObject("resource") {
+        put("_tag", "project-favicon")
+        put("cwd", cwd)
+        if (path != null) put("path", path)
+      }
+    }
+    val relative: String =
+      (call("assets.createUrl", payload) as? JsonObject)?.string("relativeUrl") ?: return null
+    // Upstream's marker for "this project has no favicon", see shared/projectFavicon.ts
+    if (relative.substringAfterLast('/') == "project-favicon-missing") return null
+    val socket: URI = socketUri()
+    val scheme: String = if (socket.scheme == "wss") "https" else "http"
+    val base: String = URI(scheme, null, socket.host, socket.port, null, null, null).toString()
+    val request: HttpRequest.Builder = HttpRequest.newBuilder(URI(base + relative)).GET()
+    credential()?.let { request.header("Authorization", "Bearer ${it.accessToken}") }
+    val response: HttpResponse<ByteArray> = try {
+      http.sendAsync(request.build(), HttpResponse.BodyHandlers.ofByteArray()).await()
+    } catch (e: IOException) {
+      throw T3Exception.Transport("Can't fetch $relative: ${e.message}", e)
+    }
+    if (response.statusCode() !in 200..299) {
+      throw T3Exception.Transport("HTTP ${response.statusCode()} from $relative")
+    }
+    return response.body().takeIf { it.isNotEmpty() }
   }
 
   override suspend fun turnDiff(threadId: String, fromTurn: Long, toTurn: Long): String {

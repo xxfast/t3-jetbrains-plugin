@@ -4,6 +4,9 @@ import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.generated.DelegatedFrom
 import io.github.xxfast.t3code.protocol.generated.PendingRuntimeRequestSummary
+import io.github.xxfast.t3code.protocol.generated.ThreadLinkedPullRequest
+import io.github.xxfast.t3code.protocol.generated.ThreadPullRequestLink
+import io.github.xxfast.t3code.protocol.generated.ThreadPullRequestSnapshot
 import java.time.Duration
 import java.time.Instant
 import kotlin.test.assertEquals
@@ -143,11 +146,25 @@ class ThreadsLogicTest {
   }
 
   @Test
-  fun `project initials`() {
-    assertEquals("KS", initials("KStore"))
-    assertEquals("DR", initials("Decompose-Router"))
-    assertEquals("TJ", initials("t3-jetbrains-plugin"))
-    assertEquals("", initials("--"))
+  fun `pull request badge picks the open link, a stack, or the latest`() {
+    assertEquals(null, thread().pullRequestBadge())
+    val one: Thread = thread(pullRequests = listOf(link(564, "open")))
+    assertEquals(PullRequestBadge("open", "564", "https://pr/564"), one.pullRequestBadge())
+    val draft: Thread = thread(pullRequests = listOf(link(7, "open", draft = true)))
+    assertEquals("draft", draft.pullRequestBadge()?.state)
+    val stack: Thread = thread(pullRequests = listOf(link(1, "open"), link(2, "open")))
+    assertEquals(PullRequestBadge("stack", "2", "https://pr/1"), stack.pullRequestBadge())
+    val done: Thread = thread(
+      pullRequests = listOf(
+        link(3, "merged", updatedAt = "2026-10-01T00:00:00Z"),
+        link(4, "closed", updatedAt = "2026-10-02T00:00:00Z"),
+        link(5, "merged", updatedAt = "2026-09-01T00:00:00Z", source = "stack-dismissed"),
+      ),
+    )
+    assertEquals(PullRequestBadge("closed", "4", "https://pr/4"), done.pullRequestBadge())
+    val legacy: Thread =
+      BASE_THREAD.copy(linkedPullRequest = ThreadLinkedPullRequest("p", "r", 9, "u"))
+    assertEquals(PullRequestBadge("pending", "9", "u"), legacy.pullRequestBadge())
   }
 
   @Test
@@ -181,6 +198,7 @@ class ThreadsLogicTest {
     relationship: String? = null,
     delegatedFrom: String? = null,
     pending: Boolean = false,
+    pullRequests: List<ThreadPullRequestLink>? = null,
   ): Thread = BASE_THREAD.copy(
     id = id,
     title = title,
@@ -198,11 +216,32 @@ class ThreadsLogicTest {
     lineage = BASE_THREAD.lineage.copy(relationshipToParent = relationship),
     delegatedFrom = delegatedFrom?.let { DelegatedFrom("env", it, "parent") },
     createdAt = createdAt,
+    pullRequests = pullRequests,
     pendingRuntimeRequest =
       if (pending) PendingRuntimeRequestSummary("r", "command", EPOCH) else null,
     updatedAt = updatedAt,
   )
 }
+
+private fun link(
+  number: Long,
+  state: String,
+  draft: Boolean = false,
+  updatedAt: String = EPOCH,
+  source: String = "manual",
+): ThreadPullRequestLink = ThreadPullRequestLink(
+  host = "github.com",
+  repository = "xxfast/t3-jetbrains-plugin",
+  number = number,
+  url = "https://pr/$number",
+  source = source,
+  linkedAt = EPOCH,
+  snapshot = ThreadPullRequestSnapshot(
+    state = state, title = "PR $number", headBranch = "h", baseBranch = "main", isDraft = draft,
+    updatedAt = updatedAt, syncedAt = EPOCH,
+  ),
+  stack = null,
+)
 
 private const val EPOCH: String = "1970-01-01T00:00:00Z"
 

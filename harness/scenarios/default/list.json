@@ -122,7 +122,27 @@
       "hasActionableProposedPlan": false,
       "pinnedAt": "2026-10-17T19:00:00.000Z",
       "createdAt": "2026-10-19T07:55:20.000Z",
-      "updatedAt": "2026-10-19T08:05:43.000Z"
+      "updatedAt": "2026-10-19T08:05:43.000Z",
+      "pullRequests": [
+        {
+          "host": "github.com",
+          "repository": "xxfast/Decompose-Router",
+          "number": 212,
+          "url": "https://github.com/xxfast/Decompose-Router/pull/212",
+          "source": "branch",
+          "linkedAt": "2026-10-19T08:05:43.000Z",
+          "snapshot": {
+            "state": "open",
+            "title": "Fix predictive back on iOS 26",
+            "headBranch": "fix/predictive-back",
+            "baseBranch": "main",
+            "isDraft": true,
+            "updatedAt": "2026-10-19T08:05:43.000Z",
+            "syncedAt": "2026-10-19T08:05:43.000Z"
+          },
+          "stack": null
+        }
+      ]
     },
     {
       "id": "thr_01JC3ZT0P9FAILED1",
@@ -202,7 +222,28 @@
       "createdAt": "2026-10-18T11:05:00.000Z",
       "updatedAt": "2026-10-18T11:05:00.000Z",
       "settledAt": "2026-10-18T11:05:00.000Z",
-      "settledOverride": "settled"
+      "settledOverride": "settled",
+      "pullRequests": [
+        {
+          "host": "github.com",
+          "repository": "xxfast/KStore",
+          "number": 564,
+          "url": "https://github.com/xxfast/KStore/pull/564",
+          "source": "branch",
+          "linkedAt": "2026-10-18T11:05:00.000Z",
+          "snapshot": {
+            "state": "merged",
+            "title": "Release 0.10.0",
+            "headBranch": "release/0.10.0",
+            "baseBranch": "main",
+            "isDraft": false,
+            "updatedAt": "2026-10-18T11:05:00.000Z",
+            "syncedAt": "2026-10-18T11:05:00.000Z",
+            "mergedAt": "2026-10-18T11:05:00.000Z"
+          },
+          "stack": null
+        }
+      ]
     },
     {
       "id": "thr_01JC1A2B3CSETTLE02",

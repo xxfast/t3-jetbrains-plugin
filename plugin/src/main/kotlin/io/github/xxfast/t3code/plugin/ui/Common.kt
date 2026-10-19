@@ -1,10 +1,8 @@
 package io.github.xxfast.t3code.plugin.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
@@ -25,20 +23,6 @@ fun Hint(text: String) {
   Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
     Text(text, color = JewelTheme.globalColors.text.info, textAlign = TextAlign.Center)
   }
-}
-
-/** The project's initials in a small rounded box, T3's project badge without the favicon. */
-@Composable
-fun ProjectBadge(title: String) {
-  Text(
-    text = initials(title),
-    style = JewelTheme.typography.small,
-    color = JewelTheme.globalColors.text.info,
-    maxLines = 1,
-    modifier = Modifier
-      .background(subtle(0.1f), RoundedCornerShape(3.dp))
-      .padding(horizontal = 3.dp),
-  )
 }
 
 /** Wall clock time, ticking every [periodMillis]. */

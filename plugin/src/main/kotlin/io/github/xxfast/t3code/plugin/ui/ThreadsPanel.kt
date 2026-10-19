@@ -28,8 +28,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.xxfast.t3code.protocol.Project
@@ -54,6 +56,7 @@ fun ThreadsPanel(
   threads: List<Thread>,
   selectedThreadId: String?,
   onOpenThread: (String) -> Unit,
+  favicons: Map<String, ImageBitmap> = emptyMap(), // by project id, see ProjectIcons
   header: @Composable () -> Unit = {}, // the connection banner, shown only when not connected
 ) {
   val search: TextFieldState = rememberTextFieldState()
@@ -65,7 +68,7 @@ fun ThreadsPanel(
     Box(Modifier.weight(1f)) {
       when {
         sections.inbox.isNotEmpty() || sections.settled.isNotEmpty() ->
-          Sections(projects, sections, selectedThreadId, onOpenThread)
+          Sections(projects, favicons, sections, selectedThreadId, onOpenThread)
 
         projects.isEmpty() -> Hint("No projects yet. Open the T3 Code desktop app to add one.")
         query.isNotBlank() -> Hint("No threads match")
@@ -90,11 +93,12 @@ private fun SearchField(state: TextFieldState) {
 @Composable
 private fun Sections(
   projects: List<Project>,
+  favicons: Map<String, ImageBitmap>,
   sections: ThreadSections,
   selectedThreadId: String?,
   onOpenThread: (String) -> Unit,
 ) {
-  val titles: Map<String, String> = remember(projects) { projects.associate { it.id to it.title } }
+  val byId: Map<String, Project> = remember(projects) { projects.associateBy { it.id } }
   // Only the "Working" clock needs seconds; everything else is happy with minutes
   val period: Long = if (sections.inbox.none { it.active }) 30_000 else 1_000
   val now: Instant by rememberNow(period)
@@ -107,7 +111,8 @@ private fun Sections(
       items(sections.inbox, key = { "inbox:${it.id}" }) { thread ->
         InboxCard(
           thread = thread,
-          projectTitle = titles[thread.projectId].orEmpty(),
+          project = byId[thread.projectId],
+          favicon = favicons[thread.projectId],
           now = now,
           selected = thread.id == selectedThreadId,
           onClick = { onOpenThread(thread.id) },
@@ -121,6 +126,8 @@ private fun Sections(
       items(sections.settled.take(shown), key = { "settled:${it.id}" }) { thread ->
         SettledRow(
           thread = thread,
+          project = byId[thread.projectId],
+          favicon = favicons[thread.projectId],
           now = now,
           selected = thread.id == selectedThreadId,
           onClick = { onOpenThread(thread.id) },
@@ -134,7 +141,8 @@ private fun Sections(
 @Composable
 private fun InboxCard(
   thread: Thread,
-  projectTitle: String,
+  project: Project?,
+  favicon: ImageBitmap?,
   now: Instant,
   selected: Boolean,
   onClick: () -> Unit,
@@ -149,9 +157,9 @@ private fun InboxCard(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        ProjectBadge(projectTitle)
+        if (project != null) ProjectIcon(project, favicon)
         Text(
-          text = projectTitle,
+          text = project?.title.orEmpty(),
           style = JewelTheme.typography.small,
           color = JewelTheme.globalColors.text.info,
           modifier = Modifier.weight(1f),
@@ -215,20 +223,31 @@ private fun SettledHeader(open: Boolean, onToggle: () -> Unit) {
 }
 
 @Composable
-private fun SettledRow(thread: Thread, now: Instant, selected: Boolean, onClick: () -> Unit) {
+private fun SettledRow(
+  thread: Thread,
+  project: Project?,
+  favicon: ImageBitmap?,
+  now: Instant,
+  selected: Boolean,
+  onClick: () -> Unit,
+) {
   Selectable(selected, onClick) {
     Row(
       modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
       horizontalArrangement = Arrangement.spacedBy(8.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      Icon(AllIconsKeys.Toolwindows.ToolWindowMessages, contentDescription = null)
+      // Dimmed like upstream's settled rows, which sit at 40% until hovered
+      Box(Modifier.alpha(if (selected) 1f else 0.4f)) {
+        if (project != null) ProjectIcon(project, favicon) else Box(Modifier.size(16.dp))
+      }
       Text(
         text = thread.title,
         modifier = Modifier.weight(1f),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
       )
+      thread.pullRequestBadge()?.let { PullRequestBadgeView(it) }
       Text(
         text = relativeTime(thread.settledAt(), now),
         style = JewelTheme.typography.small,

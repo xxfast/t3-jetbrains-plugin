@@ -47,6 +47,12 @@ public interface T3Client {
   /** `projects.readFile`. [path] is workspace-relative or absolute. */
   public suspend fun readFile(cwd: String, path: String): FileContents
 
+  /**
+   * The project's favicon as encoded image bytes, or null when the server has none for it.
+   * `assets.createUrl` then a GET of the signed URL it answers with; either failing throws.
+   */
+  public suspend fun projectFavicon(cwd: String, path: String?): ByteArray?
+
   /** `orchestration.getTurnDiff`: a unified patch for runs [fromTurn] to [toTurn], exclusive. */
   public suspend fun turnDiff(threadId: String, fromTurn: Long, toTurn: Long): String
 

@@ -1,6 +1,7 @@
 package io.github.xxfast.t3code.plugin
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -43,10 +44,13 @@ class ChatToolWindowFactory : ToolWindowFactory, DumbAware {
 fun ChatContent(project: Project, view: ThreadView?) {
   val opener: T3Opener = T3Opener.getInstance(project)
   val projects: List<T3Project> by T3.get().client.projects.collectAsState()
+  val favicons by ProjectIcons.get().favicons.collectAsState()
+  LaunchedEffect(projects) { ProjectIcons.get().ensure(projects) }
   val projectId: String? = view?.thread?.projectId
   ThreadScreen(
     view = view,
-    projectTitle = projects.find { it.id == projectId }?.title,
+    project = projects.find { it.id == projectId },
+    favicon = favicons[projectId],
     onOpenFile = { path -> view?.let { opener.openFile(it, path) } },
     onDiffFile = { change -> view?.let { opener.showDiff(it, change) } },
     onDiffRun = { run -> view?.let { opener.showRunDiff(it, run) } },

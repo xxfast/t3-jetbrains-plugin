@@ -91,6 +91,7 @@ class WebSocketT3ClientTest {
     client.connection.first { it is ConnectionState.Connected }
     assertEquals("# hi", client.readFile("/repo", "README.md").contents)
     assertFailsWith<T3Exception.ScopeRequired> { client.turnDiff("thread-1", 0, 1) }
+    assertFailsWith<T3Exception.ScopeRequired> { client.projectFavicon("/repo", null) }
   }
 
   @Test

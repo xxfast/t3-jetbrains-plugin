@@ -2,6 +2,9 @@ package io.github.xxfast.t3code.plugin.ui
 
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.archived
+import io.github.xxfast.t3code.protocol.generated.ThreadLinkedPullRequest
+import io.github.xxfast.t3code.protocol.generated.ThreadPullRequestLink
+import io.github.xxfast.t3code.protocol.generated.ThreadPullRequestSnapshot
 import io.github.xxfast.t3code.protocol.pinned
 import java.time.Duration
 import java.time.Instant
@@ -101,15 +104,40 @@ fun duration(elapsed: Duration): String {
   }
 }
 
-/** Two letters for a project badge: the first letters of the first two words, else two letters. */
-fun initials(title: String): String {
-  val words: List<String> = title.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
-  val letters: String = when {
-    words.size >= 2 -> "${words[0].first()}${words[1].first()}"
-    else -> words.firstOrNull()?.take(2).orEmpty()
+/**
+ * What the row's pull request badge shows, mirroring upstream's `resolveThreadCurrentPullRequest`
+ * minus stack chains: one open link shows as itself, several open ones as a stack of that many,
+ * none open as the most recently updated link. Older servers only have `linkedPullRequest`.
+ */
+data class PullRequestBadge(val state: String, val text: String, val url: String)
+
+fun Thread.pullRequestBadge(): PullRequestBadge? {
+  val visible: List<ThreadPullRequestLink> =
+    pullRequests.orEmpty().filter { it.source != "stack-dismissed" }
+  if (visible.isEmpty()) {
+    val legacy: ThreadLinkedPullRequest = linkedPullRequest ?: return null
+    return PullRequestBadge("pending", legacy.number.toString(), legacy.url)
   }
-  return letters.uppercase()
+  val open: List<ThreadPullRequestLink> =
+    visible.filter { it.snapshot == null || it.snapshot?.state == "open" }
+  if (open.size > 1) {
+    val allDraft: Boolean = open.all { it.snapshot?.isDraft == true }
+    val state: String = if (allDraft) "draft" else "stack"
+    return PullRequestBadge(state, open.size.toString(), open.first().url)
+  }
+  val link: ThreadPullRequestLink = open.singleOrNull()
+    ?: visible.maxBy { link -> link.lastTouched() }
+  val snapshot: ThreadPullRequestSnapshot? = link.snapshot
+  val state: String = when {
+    snapshot == null -> "pending"
+    snapshot.state == "open" && snapshot.isDraft -> "draft"
+    else -> snapshot.state
+  }
+  return PullRequestBadge(state, link.number.toString(), link.url)
 }
+
+private fun ThreadPullRequestLink.lastTouched(): Instant =
+  (snapshot?.updatedAt ?: snapshot?.syncedAt ?: linkedAt).toInstant()
 
 /** `just now`, `5m`, `3h`, `12d`: upstream's `formatRelativeElapsed`, value only. */
 fun relativeTime(then: Instant, now: Instant): String {

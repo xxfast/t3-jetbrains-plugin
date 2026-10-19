@@ -30,11 +30,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.TurnItem
@@ -60,13 +62,14 @@ private val MAX_CONTENT_WIDTH = 760.dp
 @Composable
 fun ThreadScreen(
   view: ThreadView?, // null until the first snapshot arrives
-  projectTitle: String?, // for the breadcrumb
+  project: Project?, // for the breadcrumb
+  favicon: ImageBitmap?, // the project's, when ProjectIcons has it
   onOpenFile: (path: String) -> Unit, // "Open" on a file_change row
   onDiffFile: (TurnItem.FileChange) -> Unit, // "Diff" on a file_change row
   onDiffRun: (Run) -> Unit, // "Diff" on a run's line
 ) {
   Column(Modifier.fillMaxSize()) {
-    Breadcrumb(view, projectTitle)
+    Breadcrumb(view, project, favicon)
     Divider(Orientation.Horizontal, Modifier.fillMaxWidth())
     if (view == null || view.items.isEmpty()) {
       Hint(if (view == null) "Loading..." else "Nothing in this thread yet")
@@ -80,15 +83,16 @@ fun ThreadScreen(
 }
 
 @Composable
-private fun Breadcrumb(view: ThreadView?, projectTitle: String?) {
+private fun Breadcrumb(view: ThreadView?, project: Project?, favicon: ImageBitmap?) {
   Row(
     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
     horizontalArrangement = Arrangement.spacedBy(6.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    if (projectTitle != null) {
-      ProjectBadge(projectTitle)
-      Text(projectTitle, color = JewelTheme.globalColors.text.info, maxLines = 1)
+    if (project != null) {
+      // Upstream's ChatHeader: the favicon at 14px, then the name, then the separator
+      ProjectIcon(project, favicon, 14.dp)
+      Text(project.title, color = JewelTheme.globalColors.text.info, maxLines = 1)
       Text("/", color = JewelTheme.globalColors.text.info)
     }
     Text(

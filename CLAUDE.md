@@ -66,6 +66,12 @@ scenario becomes the test fixture and the PR gets a screenshot from the harness.
 
 ## Principles
 
+Match T3 Code's own implementation as closely as possible, not just its behaviour. When the
+plugin needs a rule the desktop app has (how the sidebar sorts, what a row shows, how a monogram
+is derived), port the upstream function from `~/Developer/XXFAST/TS/T3Code` with the same name,
+the same precedence and the same edge cases, and say in a comment which upstream file it mirrors.
+Upstream drifts; a one-to-one port is a diff away from catching up, a reinterpretation isn't.
+
 The plugin mirrors server state and never reimplements T3 logic. Decode with `ignoreUnknownKeys`, fall
 back to a generic renderer for anything unrecognised, and open files, diffs and terminals in the IDE
 rather than rebuilding them. Every line of copied T3 logic is a line we maintain when T3 ships a feature.
@@ -137,6 +143,12 @@ Hard-won, so recorded here rather than rediscovered.
     is listed. Pinned sort by `pinOrderKey`; active by `activeOrderKey`, keyless first by
     `max(createdAt, unsettledAt)`; settled by `settledAt` then last activity. Inbox row time is
     `latestUserMessageAt ?: updatedAt`.
+  - Row icons (`apps/web/src/components/ProjectFavicon.tsx`): `projectIcon` override first
+    (monogram, emoji, lucide), else the favicon via `assets.createUrl` with
+    `{_tag:"project-favicon", cwd}` (scope `orchestration:read`) and a GET of the signed
+    `relativeUrl` (no auth needed; a filename of `project-favicon-missing` means none), else a
+    monogram derived from the title (`projectIdentity.ts`). Favicons are often SVG; skia can't
+    decode those, `com.intellij.ui.svg.loadSvg` can.
   - No delta events. Streaming text is repeated `turn-item.updated` events carrying the whole
     item with `streaming: true`; upsert by id. A "turn" is a `Run`; `getTurnDiff` counts run
     ordinals.
