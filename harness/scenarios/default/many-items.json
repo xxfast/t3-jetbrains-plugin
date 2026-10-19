@@ -4647,5 +4647,23 @@
         "message": "Context compacted after pass 80."
       }
     ]
+  },
+  "checkpoints": {
+    "thr_01JC5D0M4NYITEMS": [
+      {
+        "id": "chk_01JC5D0M6RUN1",
+        "threadId": "thr_01JC5D0M4NYITEMS",
+        "scopeId": "scope_01JC5D0M4ROOT",
+        "runId": "run_01JC5D0M5P6Q",
+        "nodeId": "node_01JC5D0M5P6Q",
+        "parentCheckpointId": null,
+        "ordinalWithinScope": 1,
+        "appRunOrdinal": 1,
+        "ref": "refs/t3/checkpoints/chk_01JC5D0M6RUN1",
+        "status": "ready",
+        "files": [],
+        "capturedAt": "2026-10-19T08:41:02.000Z"
+      }
+    ]
   }
 }
