@@ -146,10 +146,10 @@ private fun selection(editor: Editor): IntRange {
     return line..line
   }
 
+  // selectedLines takes 0-based lines and answers 1-based ones
   val endLine: Int = document.getLineNumber(selection.selectionEnd)
   val endsAtLineStart: Boolean = selection.selectionEnd == document.getLineStartOffset(endLine)
-  val startLine: Int = document.getLineNumber(selection.selectionStart) + 1
-  return selectedLines(startLine, endLine + 1, endsAtLineStart)
+  return selectedLines(document.getLineNumber(selection.selectionStart), endLine, endsAtLineStart)
 }
 
 /** A side's lines; a missing side (added or deleted file) has none. */

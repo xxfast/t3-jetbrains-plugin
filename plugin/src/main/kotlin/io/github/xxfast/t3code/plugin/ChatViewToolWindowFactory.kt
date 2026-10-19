@@ -11,6 +11,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import com.intellij.openapi.diagnostic.Logger
@@ -30,8 +31,8 @@ import io.github.xxfast.t3code.plugin.ui.Advance
 import io.github.xxfast.t3code.plugin.ide.VcsStatuses
 import io.github.xxfast.t3code.plugin.ide.threadCwd
 import io.github.xxfast.t3code.plugin.ide.notify
-import io.github.xxfast.t3code.plugin.review.INTERRUPT_FIRST
 import io.github.xxfast.t3code.plugin.review.checkpointForRun
+import io.github.xxfast.t3code.plugin.review.rollbackBlockReason
 import io.github.xxfast.t3code.plugin.ui.ChatView
 import io.github.xxfast.t3code.plugin.ui.ComposerFooterActions
 import io.github.xxfast.t3code.plugin.ui.ComposerFooterState
@@ -50,7 +51,6 @@ import io.github.xxfast.t3code.plugin.ui.advance
 import io.github.xxfast.t3code.plugin.ui.answersResponse
 import io.github.xxfast.t3code.plugin.ui.approvalResponse
 import io.github.xxfast.t3code.plugin.ui.composerFooter
-import io.github.xxfast.t3code.plugin.ui.active
 import io.github.xxfast.t3code.plugin.ui.composerState
 import io.github.xxfast.t3code.plugin.ui.contextId
 import io.github.xxfast.t3code.plugin.ui.setPendingUserInputCustomAnswer
@@ -131,6 +131,8 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
   LaunchedEffect(projects) { ProjectIcons.get().ensure(projects) }
 
   val view: ThreadView? = load.view
+  // For a check after a modal dialog, which outlives this composition's view
+  val latest: ThreadView? by rememberUpdatedState(view)
   // Again when a dispatch answers: the view may already be past its sequence, or resolved
   val requests: PendingThreadRequests = remember(view?.runtimeRequests, view?.items) {
     derivePendingThreadRequests(view?.runtimeRequests.orEmpty(), view?.items.orEmpty())
@@ -173,7 +175,7 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
     footerActions = footerActions,
     onClearReview = { comments.forEach { controller.removeContext(threadId, it.contextId) } },
     onRollback = { run ->
-      view?.let { current -> confirmRollback(project, controller, current, run) }
+      view?.let { current -> confirmRollback(project, controller, current, run) { latest } }
     },
     onSend = { text, mode -> view?.let { controller.send(it, text, mode) } },
     onQueueChange = { queue = it },
@@ -348,13 +350,15 @@ private val LOG: Logger = Logger.getInstance(ChatViewToolWindowFactory::class.ja
 /**
  * Rolls [view]'s thread back to [run]'s checkpoint once you say so, with the desktop's copy for
  * its per-checkpoint "Roll back" (`ChatView.tsx:5808`). A turn can start while the dialog is up,
- * so the latest row is checked again before anything goes out.
+ * so [latest] is asked for the view again and the link's own rule ([rollbackBlockReason]) is
+ * checked once more before anything goes out.
  */
 private fun confirmRollback(
   project: Project,
   controller: ChatController,
   view: ThreadView,
   run: Run,
+  latest: () -> ThreadView?,
 ) {
   val checkpoint: Checkpoint = checkpointForRun(view, run) ?: return
   val answer: Int = Messages.showYesNoDialog(
@@ -367,14 +371,13 @@ private fun confirmRollback(
   )
   if (answer != Messages.YES) return
 
-  val client: T3Client = T3.get().client
-  val row: Thread? = client.threads.value.find { it.id == view.thread.id }
-  val reason: String? = operateBlockReason(client.connection.value)
-    ?: INTERRUPT_FIRST.takeIf { row?.active == true }
+  val current: ThreadView = latest() ?: return
+  val connection: ConnectionState = T3.get().client.connection.value
+  val reason: String? = rollbackBlockReason(operateBlockReason(connection), current)
   if (reason != null) {
     notify(project, reason, NotificationType.WARNING)
     return
   }
 
-  controller.rollback(view, checkpoint)
+  controller.rollback(current, checkpoint)
 }

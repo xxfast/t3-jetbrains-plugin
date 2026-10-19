@@ -41,13 +41,9 @@ data class DraftExtras(
 
   /** [comment] joins the draft, once per context id and up to upstream's record cap. */
   fun withComment(comment: ReviewCommentContext): DraftExtras {
+    // By id only, like addComposerDraftReviewComment (composerDraftStore.ts:3765): upstream keeps
+    // several notes on the same lines
     if (comments.any { it.contextId == comment.contextId }) return this
-    // Ids are minted per comment, so the same lines again would pile up; the newer note wins
-    val same: Int = comments.indexOfFirst { it.sameRange(comment) }
-    if (same >= 0) {
-      return copy(comments = comments.toMutableList().apply { set(same, comment) }, notice = null)
-    }
-
     if (comments.size >= COMPOSER_CONTEXT_MAX_RECORDS) {
       return copy(notice = "You can add up to $COMPOSER_CONTEXT_MAX_RECORDS context items.")
     }
@@ -82,12 +78,3 @@ fun outgoingText(text: String, extras: DraftExtras): String {
   if (cited.isEmpty() && extras.attachments.isNotEmpty()) return ATTACHMENT_ONLY_BOOTSTRAP_PROMPT
   return cited
 }
-
-/**
- * Whether [other] comments on the same lines of the same file in the same section. A file
- * comment's indices are file lines and a diff comment's are diff rows, so the section keeps them
- * apart.
- */
-private fun ReviewCommentContext.sameRange(other: ReviewCommentContext): Boolean =
-  sectionId == other.sectionId && filePath == other.filePath &&
-    startIndex == other.startIndex && endIndex == other.endIndex

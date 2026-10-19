@@ -30,6 +30,7 @@ import io.github.xxfast.t3code.plugin.review.ADD_REVIEW_COMMENT
 import io.github.xxfast.t3code.plugin.review.T3DiffSource
 import io.github.xxfast.t3code.plugin.review.T3_DIFF_SOURCE
 import io.github.xxfast.t3code.plugin.settings.T3Settings
+import io.github.xxfast.t3code.plugin.ui.commentFilePath
 import io.github.xxfast.t3code.plugin.settings.ThreadHost
 import io.github.xxfast.t3code.protocol.FileContents
 import io.github.xxfast.t3code.protocol.Run
@@ -108,7 +109,8 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
           } else {
             Sides(oldStr, newStr, excerpt = true)
           }
-          val request: SimpleDiffRequest = request(view, change.fileName, sides, local, run)
+          val request: SimpleDiffRequest =
+            request(view, change.fileName, sides, local, run, where.cwd)
           withContext(Dispatchers.EDT) { DiffManager.getInstance().showDiff(project, request) }
         }
 
@@ -146,7 +148,7 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
         local != null -> text(local)
         else -> serverText(where.cwd, file.path)
       }
-      request(view, file.path, file.sides(current), local, run)
+      request(view, file.path, file.sides(current), local, run, where.cwd)
     }
     withContext(Dispatchers.EDT) {
       val manager: DiffManager = DiffManager.getInstance()
@@ -168,6 +170,7 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
     sides: Sides,
     local: VirtualFile?,
     run: Run?,
+    cwd: String,
   ): SimpleDiffRequest {
     val factory: DiffContentFactory = DiffContentFactory.getInstance()
     val type: FileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName(path))
@@ -179,7 +182,10 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
       content(sides.after)
     }
     val request = SimpleDiffRequest(path, content(sides.before), right, "Before", "After")
-    val source = T3DiffSource(view.thread.id, path, run?.id, run?.ordinal, sides.excerpt)
+    // A comment names the file the way the editor selection does: relative to the thread's cwd.
+    // Claude's and Codex's file_change items carry absolute paths
+    val reviewPath: String = commentFilePath(cwd, resolve(cwd, path))
+    val source = T3DiffSource(view.thread.id, reviewPath, run?.id, run?.ordinal, sides.excerpt)
     request.putUserData(T3_DIFF_SOURCE, source)
     ActionManager.getInstance().getAction(ADD_REVIEW_COMMENT)?.let { action ->
       request.putUserData(DiffUserDataKeys.CONTEXT_ACTIONS, listOf(action))

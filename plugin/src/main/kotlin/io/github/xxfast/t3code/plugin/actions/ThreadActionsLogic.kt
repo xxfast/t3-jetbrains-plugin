@@ -1,5 +1,7 @@
 package io.github.xxfast.t3code.plugin.actions
 
+import io.github.xxfast.t3code.plugin.ui.READ_ONLY as COMPOSER_READ_ONLY
+import io.github.xxfast.t3code.plugin.ui.operateBlockReason
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.Thread
@@ -24,12 +26,12 @@ val INTERRUPTIBLE: Set<String> = setOf("preparing", "starting", "running", "wait
 
 enum class ThreadActionKind { Stop, Interrupt, Archive, Pin, MarkUnread }
 
-/** Why no command can go out on [connection], or null when one can. */
-fun blockedBy(connection: ConnectionState): String? = when {
-  connection !is ConnectionState.Connected -> NOT_CONNECTED
-  !connection.session.has(OPERATE) -> READ_ONLY
-  else -> null
-}
+/**
+ * Why no command can go out on [connection], or null when one can: [operateBlockReason], the one
+ * rule, with the short read-only text a tooltip has room for.
+ */
+fun blockedBy(connection: ConnectionState): String? = operateBlockReason(connection)
+  ?.let { reason -> if (reason == COMPOSER_READ_ONLY) READ_ONLY else reason }
 
 /** Why [kind] can't run on [row] right now, or null when it can. */
 fun disabledReason(kind: ThreadActionKind, connection: ConnectionState, row: Thread?): String? {

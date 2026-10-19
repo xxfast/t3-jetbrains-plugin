@@ -234,10 +234,28 @@ fun reviewCommentReference(comment: ReviewCommentContext): String =
  * (`projectComposerContextForProvider`).
  */
 fun withContextReferences(text: String, references: List<String>): String {
-  val missing: List<String> = references.distinct().filterNot { text.contains(it) }
+  // By context id, like collectInlineContextIds: a link already there with another label counts
+  val cited: MutableSet<String> = inlineContextIds(text).toMutableSet()
+  val missing: List<String> = references.filter { reference ->
+    cited.add(inlineContextIds(reference).singleOrNull() ?: reference)
+  }
   if (missing.isEmpty()) return text
   val boundary: Boolean = text.isEmpty() || text.last() in " \n\t\r"
   return "$text${if (boundary) "" else " "}${missing.joinToString(" ")} "
+}
+
+/** `collectInlineContextIds`: the context ids [text]'s links cite, in order, once each. */
+fun inlineContextIds(text: String): List<String> {
+  if (!text.contains("](t3-context:")) return emptyList()
+  return CONTEXT_LINK.findAll(text)
+    .mapNotNull { match ->
+      val parts: List<String> = match.groupValues[3].removePrefix(CONTEXT_HREF_PREFIX).split('/')
+      parts.takeIf { it.size == 2 }
+        ?.takeIf { CONTEXT_KIND_PATTERN.matches(it[0]) && CONTEXT_ID_PATTERN.matches(it[1]) }
+        ?.get(1)
+    }
+    .distinct()
+    .toList()
 }
 
 /** [text] without its context links, for showing a sent message. Upstream draws them as chips. */

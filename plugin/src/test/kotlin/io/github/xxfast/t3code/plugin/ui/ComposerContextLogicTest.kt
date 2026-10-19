@@ -142,6 +142,11 @@ class ComposerContextLogicTest {
     // ensureInlineContextReferences: a reference the text already cites isn't added again
     assertEquals("see $reference ", withContextReferences("see $reference ", listOf(reference)))
     assertEquals("$reference ", withContextReferences("", listOf(reference, reference)))
+    // By context id, like collectInlineContextIds: the same link under another label counts
+    val relabelled = "see [mine](t3-context://v1/review-comment/review-comment_c1) "
+    assertEquals(relabelled, withContextReferences(relabelled, listOf(reference)))
+    assertEquals(listOf("review-comment_c1"), inlineContextIds(relabelled))
+    assertEquals(emptyList(), inlineContextIds("plain [b](https://x)"))
     assertEquals("fix", withContextReferences("fix", emptyList()))
 
     assertEquals("fix this", stripContextReferences("fix this $reference "))

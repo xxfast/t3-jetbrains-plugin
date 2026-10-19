@@ -32,11 +32,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 import io.github.xxfast.t3code.plugin.ui.activeCapabilities
 import io.github.xxfast.t3code.plugin.ui.activeRun
-import io.github.xxfast.t3code.plugin.ui.contextId
-import io.github.xxfast.t3code.plugin.ui.messageContext
 import io.github.xxfast.t3code.plugin.ui.messageDispatch
 import io.github.xxfast.t3code.plugin.ui.optimisticMessage
-import io.github.xxfast.t3code.plugin.ui.toRecord
 import io.github.xxfast.t3code.protocol.Checkpoint
 import io.github.xxfast.t3code.protocol.OrchestrationV2Command
 import io.github.xxfast.t3code.protocol.Run
@@ -86,17 +83,30 @@ class ChatController(private val project: Project, private val scope: CoroutineS
    * Rolls [view]'s thread back to [checkpoint], `checkpoint.rollback` the way
    * `revertThreadCheckpoint` sends it (`commands.ts:873`): scope and checkpoint, and no
    * `restoreFiles`, like the desktop's per-checkpoint "Roll back". The thread stream shows the
-   * `checkpoint.rollback-requested` that follows; a refusal is a balloon.
+   * `checkpoint.rollback-requested` that follows; a refusal is a balloon. One at a time per
+   * thread, upstream's `rewindingThreadKeys` (`ChatView.tsx:5793`): a second click while the
+   * first is still on its way does nothing.
    */
   fun rollback(view: ThreadView, checkpoint: Checkpoint) {
+    val threadId: String = view.thread.id
+    if (!rollingBack.add(threadId)) return
     val command = Command.CheckpointRollback(
       commandId = UUID.randomUUID().toString(),
-      threadId = view.thread.id,
+      threadId = threadId,
       scopeId = checkpoint.scopeId,
       checkpointId = checkpoint.id,
     )
-    scope.launchReporting(project, "Couldn't roll back") { client.dispatch(command) }
+    scope.launchReporting(project, "Couldn't roll back") {
+      try {
+        client.dispatch(command)
+      } finally {
+        rollingBack.remove(threadId)
+      }
+    }
   }
+
+  /** Threads with a `checkpoint.rollback` still being dispatched. */
+  private val rollingBack: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
   private val _catalog: MutableStateFlow<ServerInfo?> = MutableStateFlow(null)
 

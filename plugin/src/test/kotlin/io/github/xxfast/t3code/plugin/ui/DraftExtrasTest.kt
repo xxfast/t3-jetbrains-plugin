@@ -57,14 +57,12 @@ class DraftExtrasTest {
   }
 
   @Test
-  fun aSecondCommentOnTheSameLinesReplacesTheFirst() {
+  fun aSecondCommentOnTheSameLinesIsKeptTooLikeUpstream() {
     val contents = "a\nb\nc\nd"
     val first: ReviewCommentContext = fileReviewComment("c1", "src/a.kt", 2, 3, "one", contents)
-    val other: ReviewCommentContext = fileReviewComment("c5", "src/a.kt", 4, 4, "x", contents)
     val second: ReviewCommentContext = fileReviewComment("c9", "src/a.kt", 2, 3, "two", contents)
-    val extras: DraftExtras =
-      DraftExtras().withComment(first).withComment(other).withComment(second)
-    assertEquals(listOf(second, other), extras.comments, "The newer note, in the older's place")
+    val extras: DraftExtras = DraftExtras().withComment(first).withComment(second)
+    assertEquals(listOf(first, second), extras.comments, "Only the id dedupes")
   }
 
   @Test
