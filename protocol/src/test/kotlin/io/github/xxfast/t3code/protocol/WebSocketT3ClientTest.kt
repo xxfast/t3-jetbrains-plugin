@@ -106,6 +106,34 @@ class WebSocketT3ClientTest {
   }
 
   @Test
+  fun threadFlowUpsertsMessagesAndProviderThreads() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+    val views: List<ThreadView> = client.thread("thread-1").take(5).toList()
+
+    assertEquals(emptyList(), views.first().messages)
+    assertEquals(emptyList(), views.first().providerThreads)
+    val message: ConversationMessage = views[3].messages.single()
+    assertEquals("message-queued-1", message.id)
+    assertEquals("user", message.role)
+    assertEquals(emptyList(), views[3].providerThreads)
+    val thread: ProviderThread = views[4].providerThreads.single()
+    assertEquals("session-1", thread.providerSessionId)
+    assertEquals(views[3].messages, views[4].messages)
+    assertEquals(views[2].runtimeRequests, views[4].runtimeRequests)
+  }
+
+  @Test
+  fun threadFlowTracksTheSequenceAndASnapshotNeverMovesItBack() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+    val views: List<ThreadView> = client.thread("thread-1").take(6).toList()
+
+    assertEquals(listOf(100L, 101L, 102L, 103L, 104L, 104L), views.map { it.sequence })
+    assertEquals(views.first().items, views.last().items, "The second snapshot still applies")
+  }
+
+  @Test
   fun aDieOnALiveSocketFailsTheFlowInsteadOfHanging() = realTimeTest {
     val client: WebSocketT3Client = client()
     client.connect()

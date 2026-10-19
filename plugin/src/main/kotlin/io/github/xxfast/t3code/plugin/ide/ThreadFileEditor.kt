@@ -11,41 +11,51 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.UserDataHolderBase
 import io.github.xxfast.t3code.plugin.ChatContent
 import io.github.xxfast.t3code.plugin.T3
+import io.github.xxfast.t3code.plugin.ThreadLoad
 import io.github.xxfast.t3code.plugin.ThreadSelection
-import io.github.xxfast.t3code.protocol.ThreadView
+import io.github.xxfast.t3code.plugin.threadLoad
 import java.beans.PropertyChangeListener
 import javax.swing.JComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.jewel.bridge.JewelComposePanel
 
 /** One thread in an editor tab. One subscription per tab, shared by the screen and the title. */
+@OptIn(ExperimentalCoroutinesApi::class)
 class ThreadFileEditor(
   private val project: Project,
   private val file: ThreadVirtualFile,
 ) : UserDataHolderBase(), FileEditor, DumbAware {
   private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-  private val view: StateFlow<ThreadView?> = T3.get().client.thread(file.threadId)
-    .stateIn(scope, SharingStarted.Eagerly, null)
+  /** Bumped by Retry; every bump resubscribes. */
+  private val attempt: MutableStateFlow<Int> = MutableStateFlow(0)
+
+  private val load: StateFlow<ThreadLoad> = attempt
+    .flatMapLatest { T3.get().client.threadLoad(file.threadId) }
+    .stateIn(scope, SharingStarted.Eagerly, ThreadLoad())
 
   private val panel: JComponent = JewelComposePanel {
-    val current: ThreadView? by view.collectAsState()
-    ChatContent(project, current)
+    val current: ThreadLoad by load.collectAsState()
+    ChatContent(project, file.threadId, current, onRetry = { attempt.update { it + 1 } })
   }
 
   init {
     scope.launch {
-      view.mapNotNull { it?.thread?.title }.distinctUntilChanged().collect { title ->
+      load.mapNotNull { it.view?.thread?.title }.distinctUntilChanged().collect { title ->
         if (title == file.title) return@collect
         file.title = title
         withContext(Dispatchers.EDT) {

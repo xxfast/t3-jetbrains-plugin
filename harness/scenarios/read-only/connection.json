@@ -1,0 +1,17 @@
+{
+  "connection": {
+    "state": "connected",
+    "session": {
+      "authenticated": true,
+      "auth": {
+        "policy": "desktop-managed-local",
+        "bootstrapMethods": ["desktop-bootstrap"],
+        "sessionMethods": ["bearer-access-token"],
+        "sessionCookieName": "t3_session_3773"
+      },
+      "permissions": ["orchestration:read", "filesystem:read"],
+      "scopes": ["orchestration:read", "filesystem:read"],
+      "sessionMethod": "bearer-access-token"
+    }
+  }
+}

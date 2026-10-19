@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.fixtures
 
+import io.github.xxfast.t3code.protocol.ConversationMessage
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.Thread
@@ -22,6 +23,10 @@ data class Overlay(
   val runtimeRequests: Map<String, List<RuntimeRequest>> = emptyMap(),
   /** Provider session ids that `provider-session.detach` removed. */
   val detachedSessions: Set<String> = emptySet(),
+  /** Per thread, upserted over the scenario's conversation messages by id. */
+  val messages: Map<String, List<ConversationMessage>> = emptyMap(),
+  /** The fixture server's sequence as of the last `message.dispatch`, what every view reports. */
+  val sequence: Long = 0,
 ) {
   fun row(thread: Thread): Thread = threads[thread.id] ?: thread
 
@@ -30,6 +35,11 @@ data class Overlay(
 
   fun upsertRun(threadId: String, run: Run): Overlay =
     copy(runs = runs + (threadId to runs[threadId].orEmpty().upsert(run, Run::id)))
+
+  fun upsertMessage(threadId: String, message: ConversationMessage): Overlay = copy(
+    messages = messages +
+      (threadId to messages[threadId].orEmpty().upsert(message, ConversationMessage::id)),
+  )
 
   fun upsertRequest(threadId: String, request: RuntimeRequest): Overlay = copy(
     runtimeRequests = runtimeRequests +
@@ -50,6 +60,8 @@ data class Overlay(
         listed.none { it.id == request.id }
       },
       providerSessions = base.providerSessions.filterNot { it.id in detachedSessions },
+      messages = base.messages.upsertAll(messages[id].orEmpty(), ConversationMessage::id),
+      sequence = maxOf(base.sequence, sequence),
     )
   }
 }

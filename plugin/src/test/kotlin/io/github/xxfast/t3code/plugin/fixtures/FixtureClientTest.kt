@@ -1,6 +1,7 @@
 package io.github.xxfast.t3code.plugin.fixtures
 
 import io.github.xxfast.t3code.protocol.ConnectionState
+import io.github.xxfast.t3code.protocol.ServerSession
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
@@ -8,6 +9,7 @@ import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TurnItem
+import io.github.xxfast.t3code.protocol.has
 import io.github.xxfast.t3code.protocol.pinned
 import java.nio.file.Files
 import java.nio.file.Path
@@ -56,7 +58,7 @@ class FixtureClientTest {
   fun `every file in every scenario decodes`() {
     val folders: List<Path> = list(scenarios).filter { it.isDirectory() }
     assertEquals(
-      listOf("auth-error", "default", "disconnected", "empty-server", "pairing"),
+      listOf("auth-error", "default", "disconnected", "empty-server", "pairing", "read-only"),
       folders.map { it.name },
     )
     folders.forEach { folder ->
@@ -91,10 +93,23 @@ class FixtureClientTest {
   @Test
   fun `connection scenarios list the same threads as default, byte for byte`() {
     val expected: ByteArray = default.resolve("list.json").readBytes()
-    listOf("disconnected", "pairing", "auth-error").forEach { name ->
+    listOf("disconnected", "pairing", "auth-error", "read-only").forEach { name ->
       val copy: ByteArray = scenarios.resolve(name).resolve("list.json").readBytes()
       assertContentEquals(expected, copy, "$name/list.json drifted from default/list.json")
     }
+  }
+
+  @Test
+  fun `default can operate tasks, read-only can only read`() {
+    fun session(name: String): ServerSession {
+      val folder: Path = scenarios.resolve(name)
+      val parts: List<Scenario> = jsonFiles(folder).map { Scenario.decode(it.readText()) }
+      return assertIs<ConnectionState.Connected>(Scenario.merge(parts).connection).session
+    }
+
+    assertTrue(session("default").has("orchestration:operate"))
+    assertFalse(session("read-only").has("orchestration:operate"))
+    assertTrue(session("read-only").has("orchestration:read"))
   }
 
   @Test
@@ -202,12 +217,15 @@ class FixtureClientTest {
     val client = FixtureClient(default, backgroundScope)
     client.threads.first { threads -> threads.any { it.id == IDLE } }
 
-    client.dispatch(message(IDLE, messageId = "m1", text = "hello"))
+    val at: Long = client.dispatch(message(IDLE, messageId = "m1", text = "hello"))
 
     val sent: ThreadView = client.thread(IDLE).first { view -> view.items.isNotEmpty() }
+    assertTrue(sent.sequence >= at, "The view is at or past the dispatch")
     val user: TurnItem.UserMessage = assertIs(sent.items.single())
     assertEquals("hello", user.text)
     assertEquals("m1", user.messageId)
+    assertEquals(listOf("m1"), sent.messages.map { it.id })
+    assertEquals("user", sent.messages.single().role)
     assertEquals("running", sent.thread.status)
     assertEquals("running", sent.runs.single().status)
 

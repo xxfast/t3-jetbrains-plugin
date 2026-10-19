@@ -2,6 +2,7 @@ package io.github.xxfast.t3code.plugin.fixtures
 
 import com.intellij.openapi.diagnostic.Logger
 import io.github.xxfast.t3code.protocol.ConnectionState
+import io.github.xxfast.t3code.protocol.ConversationMessage
 import io.github.xxfast.t3code.protocol.FileContents
 import io.github.xxfast.t3code.protocol.OrchestrationV2Command
 import io.github.xxfast.t3code.protocol.Project
@@ -163,8 +164,9 @@ class FixtureClient(
 
   override suspend fun dispatch(command: OrchestrationV2Command): Long {
     val now: String = Instant.now().toString()
+    val at: Long = sequence.incrementAndGet()
     when (command) {
-      is Command.MessageDispatch -> send(command, now)
+      is Command.MessageDispatch -> send(command, now, at)
 
       is Command.RuntimeRequestRespond -> respond(command, now)
 
@@ -295,11 +297,11 @@ class FixtureClient(
 
       else -> log.info("Fixture ignores ${command.type}")
     }
-    return sequence.incrementAndGet()
+    return at
   }
 
   /** The user's message now, a streaming reply after 600 ms, done 600 ms after that. */
-  private fun send(command: Command.MessageDispatch, now: String) {
+  private fun send(command: Command.MessageDispatch, now: String, at: Long) {
     val threadId: String = command.threadId
     val runId = "run_fixture_${command.messageId}"
     val replyId = "msg_fixture_reply_${command.messageId}"
@@ -351,10 +353,29 @@ class FixtureClient(
         context = command.context,
         attachments = command.attachments,
       )
+      // The projection's message, what a queued send has before its run starts
+      val conversation = ConversationMessage(
+        createdBy = command.createdBy,
+        creationSource = command.creationSource,
+        id = command.messageId,
+        threadId = threadId,
+        runId = runId,
+        nodeId = null,
+        role = "user",
+        text = command.text,
+        context = command.context,
+        attachments = command.attachments,
+        streaming = false,
+        createdAt = now,
+        updatedAt = now,
+      )
       sent = run
       return@update overlay
         .upsertRun(threadId, run)
         .upsertItem(threadId, message)
+        .upsertMessage(threadId, conversation)
+        // What the views report, so a sent message retires by sequence like on a real server
+        .copy(sequence = maxOf(overlay.sequence, at))
         .withRow(threadId) { thread ->
           thread.copy(
             status = "running",
@@ -617,7 +638,8 @@ class FixtureClient(
     loadedStamp = stamp
     replies.values.forEach { it.cancel() }
     replies.clear()
-    overlay.value = Overlay()
+    // The sequence only moves forward, or a sent message waiting on it would never retire
+    overlay.value = Overlay(sequence = sequence.get())
     loaded.value = load(files)
   }
 

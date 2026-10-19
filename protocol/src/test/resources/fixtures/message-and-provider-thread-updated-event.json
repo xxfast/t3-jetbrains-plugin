@@ -1,0 +1,59 @@
+{
+  "_tag": "Chunk",
+  "requestId": "0",
+  "values": [
+    {
+      "kind": "event",
+      "sequence": 103,
+      "event": {
+        "id": "event-103",
+        "threadId": "thread-1",
+        "runId": null,
+        "occurredAt": "2026-10-19T06:00:07.000Z",
+        "type": "message.updated",
+        "payload": {
+          "createdBy": "user",
+          "creationSource": "web",
+          "id": "message-queued-1",
+          "threadId": "thread-1",
+          "runId": null,
+          "nodeId": null,
+          "role": "user",
+          "text": "And the docs too",
+          "attachments": [],
+          "streaming": false,
+          "createdAt": "2026-10-19T06:00:07.000Z",
+          "updatedAt": "2026-10-19T06:00:07.000Z"
+        }
+      }
+    },
+    {
+      "kind": "event",
+      "sequence": 104,
+      "event": {
+        "id": "event-104",
+        "threadId": "thread-1",
+        "runId": "run-1",
+        "occurredAt": "2026-10-19T06:00:08.000Z",
+        "type": "provider-thread.updated",
+        "payload": {
+          "id": "provider-thread-1",
+          "driver": "codex",
+          "providerInstanceId": "codex",
+          "providerSessionId": "session-1",
+          "appThreadId": "thread-1",
+          "ownerNodeId": null,
+          "nativeThreadRef": null,
+          "nativeConversationHeadRef": null,
+          "status": "active",
+          "firstRunOrdinal": 1,
+          "lastRunOrdinal": 1,
+          "handoffIds": [],
+          "forkedFrom": null,
+          "createdAt": "2026-10-19T06:00:00.000Z",
+          "updatedAt": "2026-10-19T06:00:08.000Z"
+        }
+      }
+    }
+  ]
+}

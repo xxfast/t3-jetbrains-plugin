@@ -35,6 +35,12 @@ public typealias RuntimeRequest = io.github.xxfast.t3code.protocol.generated.Run
 
 public typealias ProviderSession = io.github.xxfast.t3code.protocol.generated.ProviderSession
 
+public typealias ProviderThread = io.github.xxfast.t3code.protocol.generated.ProviderThread
+
+/** A message in the conversation, queued ones included. `id` is the dispatched `messageId`. */
+public typealias ConversationMessage =
+  io.github.xxfast.t3code.protocol.generated.ConversationMessage
+
 public typealias Checkpoint = io.github.xxfast.t3code.protocol.generated.Checkpoint
 
 /** What `projects.readFile` answers. */
@@ -62,7 +68,8 @@ public data class Credential(
 
 /**
  * One open thread: the row, its runs and the items to render, in order, plus the projection's
- * pending requests, attached provider sessions and captured checkpoints.
+ * pending requests, attached provider sessions and threads, captured checkpoints, and its
+ * conversation messages (queued ones have a message long before they have an item).
  */
 public data class ThreadView(
   val thread: Thread,
@@ -71,6 +78,13 @@ public data class ThreadView(
   val runtimeRequests: List<RuntimeRequest> = emptyList(),
   val providerSessions: List<ProviderSession> = emptyList(),
   val checkpoints: List<Checkpoint> = emptyList(),
+  val providerThreads: List<ProviderThread> = emptyList(),
+  val messages: List<ConversationMessage> = emptyList(),
+  /**
+   * How far into the server's command log this view is: the last event's `sequence`, or a
+   * snapshot's `snapshotSequence`, whichever is later. Compare with what `dispatch` returned.
+   */
+  val sequence: Long = 0,
 )
 
 /** `server.getConfig`, the parts the plugin uses. */

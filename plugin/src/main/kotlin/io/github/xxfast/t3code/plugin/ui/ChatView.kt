@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableIntState
@@ -34,6 +35,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.xxfast.t3code.protocol.Project
@@ -62,8 +64,14 @@ private val MAX_CONTENT_WIDTH = 760.dp
 @Composable
 fun ChatView(
   view: ThreadView?, // null until the first snapshot arrives
+  error: String?, // why the thread stopped loading, if it did
   project: Project?, // for the breadcrumb
   favicon: ImageBitmap?, // the project's, when ProjectIcons has it
+  composer: ComposerState,
+  draft: TextFieldState, // what's typed in the composer
+  onSend: (text: String, mode: ComposerDispatchMode) -> Unit,
+  onQueueChange: (Boolean) -> Unit,
+  onRetry: () -> Unit, // resubscribe after an error
   onOpenFile: (path: String) -> Unit, // "Open" on a file_change row
   onDiffFile: (TurnItem.FileChange) -> Unit, // "Diff" on a file_change row
   onDiffRun: (Run) -> Unit, // "Diff" on a run's line
@@ -71,14 +79,69 @@ fun ChatView(
   Column(Modifier.fillMaxSize()) {
     Breadcrumb(view, project, favicon)
     Divider(Orientation.Horizontal, Modifier.fillMaxWidth())
-    if (view == null || view.items.isEmpty()) {
-      Hint(if (view == null) "Loading..." else "Nothing in this thread yet")
-    } else {
-      val processor: MarkdownProcessor = remember { MarkdownProcessor() }
-      ProvideMarkdownStyling(markdownProcessor = processor) {
-        Items(view, processor, onOpenFile, onDiffFile, onDiffRun)
+    // A stream that fails after rendering keeps the thread and says so on top
+    if (error != null && view != null) ErrorLine(error, onRetry)
+    Box(Modifier.weight(1f).fillMaxWidth()) {
+      when {
+        view == null && error != null -> LoadError(error, onRetry)
+        view == null -> Hint("Loading...")
+        view.items.isEmpty() -> Hint("Nothing in this thread yet")
+        else -> {
+          val processor: MarkdownProcessor = remember { MarkdownProcessor() }
+          ProvideMarkdownStyling(markdownProcessor = processor) {
+            Items(view, processor, onOpenFile, onDiffFile, onDiffRun)
+          }
+        }
       }
     }
+    if (view != null) {
+      Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+        Composer(
+          state = composer,
+          draft = draft,
+          onSend = onSend,
+          onQueueChange = onQueueChange,
+          modifier = Modifier
+            .widthIn(max = MAX_CONTENT_WIDTH)
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
+        )
+      }
+    }
+  }
+}
+
+@Composable
+private fun LoadError(error: String, onRetry: () -> Unit) {
+  Column(
+    modifier = Modifier.fillMaxSize().padding(16.dp),
+    verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
+    horizontalAlignment = Alignment.CenterHorizontally,
+  ) {
+    Text(
+      text = "Couldn't load this thread: $error",
+      color = JewelTheme.globalColors.text.info,
+      textAlign = TextAlign.Center,
+    )
+    Link("Retry", onClick = onRetry)
+  }
+}
+
+@Composable
+private fun ErrorLine(error: String, onRetry: () -> Unit) {
+  Row(
+    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+    horizontalArrangement = Arrangement.spacedBy(8.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Text(
+      text = "Stopped updating: $error",
+      color = JewelTheme.globalColors.text.error,
+      modifier = Modifier.weight(1f),
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis,
+    )
+    Link("Retry", onClick = onRetry)
   }
 }
 

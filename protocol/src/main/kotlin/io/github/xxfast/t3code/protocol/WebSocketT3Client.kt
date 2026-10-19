@@ -304,7 +304,11 @@ public class WebSocketT3Client internal constructor(
     }
   }
 
-  /** The next view after [item], or null when [item] changes nothing this client renders. */
+  /**
+   * The next view after [item], or null when there's nothing to show yet. Every event moves
+   * [ThreadView.sequence] on, even one this client doesn't otherwise render; a snapshot never
+   * moves it back.
+   */
   private fun reduce(view: ThreadView?, id: String, item: JsonObject): ThreadView? {
     if (item.string("kind") == "snapshot") {
       val projection: JsonObject = item["projection"] as? JsonObject ?: return null
@@ -321,13 +325,17 @@ public class WebSocketT3Client internal constructor(
         providerSessions =
           decodeEach(ProviderSession.serializer(), projection["providerSessions"]),
         checkpoints = decodeEach(Checkpoint.serializer(), projection["checkpoints"]),
+        providerThreads = decodeEach(ProviderThread.serializer(), projection["providerThreads"]),
+        messages = decodeEach(ConversationMessage.serializer(), projection["messages"]),
+        sequence = maxOf(view?.sequence ?: 0, item.long("snapshotSequence") ?: 0),
       )
     }
     if (view == null || item.string("kind") != "event") return null
     val event: JsonObject = item["event"] as? JsonObject ?: return null
     val type: String = event.string("type") ?: return null
     val payload: JsonElement? = event["payload"]
-    return when {
+    val sequence: Long = item.long("sequence") ?: view.sequence
+    val next: ThreadView? = when {
       type == "turn-item.updated" -> decodeOrNull(TurnItem.serializer(), payload)
         ?.let { turnItem -> view.copy(items = view.items.upsert(turnItem, TurnItem::id)) }
 
@@ -350,6 +358,16 @@ public class WebSocketT3Client internal constructor(
           view.copy(providerSessions = view.providerSessions.filterNot { it.id == id })
         }
 
+      type == "provider-thread.updated" -> decodeOrNull(ProviderThread.serializer(), payload)
+        ?.let { thread ->
+          view.copy(providerThreads = view.providerThreads.upsert(thread, ProviderThread::id))
+        }
+
+      type == "message.updated" -> decodeOrNull(ConversationMessage.serializer(), payload)
+        ?.let { message ->
+          view.copy(messages = view.messages.upsert(message, ConversationMessage::id))
+        }
+
       type == "checkpoint.captured" -> decodeOrNull(Checkpoint.serializer(), payload)
         ?.let { checkpoint ->
           view.copy(checkpoints = view.checkpoints.upsert(checkpoint, Checkpoint::id))
@@ -360,6 +378,7 @@ public class WebSocketT3Client internal constructor(
 
       else -> null
     }
+    return (next ?: view).copy(sequence = sequence)
   }
 
   /**
