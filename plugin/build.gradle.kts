@@ -35,7 +35,6 @@ val bundledModules: List<String> = listOf(
   "intellij.libraries.compose.foundation.desktop",
   "intellij.libraries.compose.runtime.desktop",
   "intellij.libraries.skiko",
-  "intellij.libraries.kotlinx.coroutines.core",
 )
 
 kotlin {
