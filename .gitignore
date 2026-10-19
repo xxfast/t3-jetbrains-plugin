@@ -1,0 +1,16 @@
+/.gradle/
+/.kotlin/
+build/
+local.properties
+
+# IntelliJ Platform Gradle Plugin
+/.intellijPlatform/
+
+# Mac
+.DS_Store
+
+# IntelliJ: ignore all IDE config except the shared code style, project icon and name
+.idea/*
+!.idea/codeStyles/
+!.idea/icon.svg
+!.idea/.name
