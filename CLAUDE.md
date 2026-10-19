@@ -150,8 +150,10 @@ Hard-won, so recorded here rather than rediscovered.
     (monogram, emoji, lucide), else the favicon via `assets.createUrl` with
     `{_tag:"project-favicon", cwd}` (scope `orchestration:read`) and a GET of the signed
     `relativeUrl` (no auth needed; a filename of `project-favicon-missing` means none), else a
-    monogram derived from the title (`projectIdentity.ts`). Favicons are often SVG; skia can't
-    decode those, `com.intellij.ui.svg.loadSvg` can.
+    monogram derived from the title (`projectIdentity.ts`). Favicons are often SVG;
+    `Image.makeFromEncoded` can't decode those. `com.intellij.ui.svg.loadSvg` can but it's
+    `@ApiStatus.Internal` and `verifyPlugin` fails the build on it. Use skiko's
+    `org.jetbrains.skia.svg.SVGDOM` (what Compose Desktop uses for SVG resources) instead.
   - No delta events. Streaming text is repeated `turn-item.updated` events carrying the whole
     item with `streaming: true`; upsert by id. A "turn" is a `Run`; `getTurnDiff` counts run
     ordinals.

@@ -5,7 +5,6 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
-import com.intellij.ui.svg.loadSvg
 import io.github.xxfast.t3code.protocol.Project
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -14,9 +13,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import java.awt.image.BufferedImage
 import kotlinx.coroutines.launch
+import org.jetbrains.skia.Data
 import org.jetbrains.skia.Image
+import org.jetbrains.skia.Surface
+import org.jetbrains.skia.svg.SVGDOM
+import org.jetbrains.skia.svg.SVGLengthUnit
+import org.jetbrains.skia.svg.SVGSVG
 
 /**
  * Project favicons by project id, fetched once per project and favicon path. The list only
@@ -59,15 +62,44 @@ class ProjectIcons(private val scope: CoroutineScope) {
   }
 
   /**
-   * Skia for the raster formats; the platform's SVG loader for the rest. An SVG rasterises at
-   * its own size, which can be thousands of pixels, so it's redone at the size a row needs.
+   * Skia for the raster formats; skiko's SVG DOM for the rest, the same renderer Compose Desktop
+   * uses for SVG resources. The platform has `com.intellij.ui.svg.loadSvg` but it's internal API
+   * and the plugin verifier rejects it. An SVG has no pixels of its own, so it's drawn at the
+   * size a row needs.
    */
   private fun decode(bytes: ByteArray): ImageBitmap? {
     runCatching { Image.makeFromEncoded(bytes).toComposeImageBitmap() }.getOrNull()?.let { return it }
-    val natural: BufferedImage = runCatching { loadSvg(bytes, 1f) }.getOrNull() ?: return null
-    val scale: Float = RASTER_SIZE / maxOf(natural.width, natural.height).coerceAtLeast(1)
-    val sized: BufferedImage = if (scale < 1f) loadSvg(bytes, scale) else natural
-    return sized.toComposeImageBitmap()
+    return runCatching { decodeSvg(bytes) }.getOrNull()
+  }
+
+  private fun decodeSvg(bytes: ByteArray): ImageBitmap? {
+    val side: Int = RASTER_SIZE.toInt()
+    return SVGDOM(Data.makeFromBytes(bytes)).use { dom ->
+      val root: SVGSVG = dom.root ?: return null
+      Surface.makeRasterN32Premul(side, side).use { surface ->
+        val natural: Pair<Float, Float>? = naturalSize(root)
+        if (root.viewBox == null && natural != null) {
+          // Without a viewBox the container size doesn't rescale the drawing, so scale the canvas
+          val scale: Float = RASTER_SIZE / maxOf(natural.first, natural.second)
+          surface.canvas.scale(scale, scale)
+          dom.setContainerSize(natural.first, natural.second)
+        } else {
+          dom.setContainerSize(RASTER_SIZE, RASTER_SIZE)
+        }
+        dom.render(surface.canvas)
+        surface.makeImageSnapshot().toComposeImageBitmap()
+      }
+    }
+  }
+
+  /** The SVG's own width and height, when they're absolute and positive. */
+  private fun naturalSize(root: SVGSVG): Pair<Float, Float>? {
+    val width = root.width
+    val height = root.height
+    val absolute = setOf(SVGLengthUnit.NUMBER, SVGLengthUnit.PX)
+    if (width.unit !in absolute || height.unit !in absolute) return null
+    if (width.value <= 0f || height.value <= 0f) return null
+    return width.value to height.value
   }
 
   companion object {
