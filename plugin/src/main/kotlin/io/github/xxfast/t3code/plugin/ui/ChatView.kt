@@ -51,6 +51,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.ide.CopyPasteManager
 import io.github.xxfast.t3code.plugin.review.checkpointForRun
 import io.github.xxfast.t3code.plugin.review.rollbackBlockReason
@@ -63,6 +64,7 @@ import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.awt.datatransfer.StringSelection
 import java.time.Instant
 import kotlinx.serialization.json.JsonObject
+import org.jetbrains.jewel.bridge.toComposeColor
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.intui.markdown.bridge.ProvideMarkdownStyling
 import org.jetbrains.jewel.markdown.Markdown
@@ -73,6 +75,14 @@ import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.Tooltip
 import org.jetbrains.jewel.ui.component.VerticallyScrollableContainer
 import org.jetbrains.jewel.ui.typography
+
+/** The editor scheme's background, read again whenever the theme changes. */
+@Composable
+private fun editorBackground(): Color {
+  return remember(JewelTheme.globalColors) {
+    EditorColorsManager.getInstance().globalScheme.defaultBackground.toComposeColor()
+  }
+}
 
 /** `--chat-content-max-width`, 46rem: the timeline and composer lane, centred when wider. */
 private val MAX_CONTENT_WIDTH = 736.dp
@@ -101,7 +111,8 @@ fun ChatView(
   extras: DraftExtras = DraftExtras(), // the draft's attachments and context
   attachmentActions: AttachmentActions = AttachmentActions(),
 ) {
-  Column(Modifier.fillMaxSize()) {
+  // Upstream's `bg-background` is the page, so the editor's background rather than the panel's
+  Column(Modifier.fillMaxSize().background(editorBackground())) {
     ChatHeader(view, project, favicon, vcs)
     // A stream that fails after rendering keeps the thread and says so on top
     if (error != null && view != null) ErrorLine(error, onRetry)
