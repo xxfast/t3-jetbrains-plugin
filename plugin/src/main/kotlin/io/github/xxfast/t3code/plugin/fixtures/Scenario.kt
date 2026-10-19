@@ -109,8 +109,20 @@ private val defaultSession: ServerSession = ServerSession(
     sessionMethods = listOf("bearer-access-token"),
     sessionCookieName = "t3_session_3773",
   ),
-  permissions = listOf("orchestration:read", "orchestration:operate", "filesystem:read"),
-  scopes = listOf("orchestration:read", "orchestration:operate", "filesystem:read"),
+  permissions = listOf(
+    "orchestration:read",
+    "orchestration:operate",
+    "terminal:read",
+    "terminal:operate",
+    "filesystem:read",
+  ),
+  scopes = listOf(
+    "orchestration:read",
+    "orchestration:operate",
+    "terminal:read",
+    "terminal:operate",
+    "filesystem:read",
+  ),
   sessionMethod = "bearer-access-token",
 )
 

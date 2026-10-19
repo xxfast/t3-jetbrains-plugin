@@ -9,8 +9,8 @@
         "sessionMethods": ["bearer-access-token"],
         "sessionCookieName": "t3_session_3773"
       },
-      "permissions": ["orchestration:read", "orchestration:operate", "filesystem:read"],
-      "scopes": ["orchestration:read", "orchestration:operate", "filesystem:read"],
+      "permissions": ["orchestration:read", "orchestration:operate", "terminal:read", "terminal:operate", "filesystem:read"],
+      "scopes": ["orchestration:read", "orchestration:operate", "terminal:read", "terminal:operate", "filesystem:read"],
       "sessionMethod": "bearer-access-token"
     }
   }
