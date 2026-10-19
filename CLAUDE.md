@@ -137,6 +137,9 @@ Hard-won, so recorded here rather than rediscovered.
   than method-body swaps; changed composables redraw only when state changes. Compose Hot Reload
   can't run inside the IDE. Installing the zip from disk into a running IDE needs no restart
   while the plugin stays dynamic (no components, only `toolWindow` EP, light services).
+  Observed on 2026-10-19: neither `buildPlugin` nor `prepareSandbox_runHarness` reloaded the
+  plugin into a running `runHarness` sandbox. Kotlin changes mean restarting the sandbox; JSON
+  scenario edits still apply live.
 - Building against the local 263 can link 263-only APIs (Jewel `MenuComboBox`, `Icon(iconDescriptor=)`,
   `AnActionEvent.coroutineScope`) that don't exist on 253. CI compiling against `intellijIdea("2025.3")`
   plus `verifyPlugin` with a `pluginVerification { ides { } }` block is the guard.
