@@ -79,6 +79,16 @@
       "updatedAt": "2026-10-18T14:12:09.000Z"
     },
     {
+      "id": "thr_01JC3A0P7SPAUSED1",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Benchmark the IndexedDB codec against the old one on a 5 MB store",
+      "status": "paused",
+      "latestRunId": "run_01JC3A0P8T1C",
+      "itemCount": 4,
+      "createdAt": "2026-10-15T09:02:00.000Z",
+      "updatedAt": "2026-10-15T09:40:26.000Z"
+    },
+    {
       "id": "thr_01JC4B2W5RROUTER1",
       "projectId": "prj_01JB2K8M4R7DROUTER",
       "title": "Fix predictive back on iOS 26",
