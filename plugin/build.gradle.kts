@@ -3,6 +3,7 @@ import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.extensions.intellijPlatform
 import org.jetbrains.intellij.platform.gradle.models.ProductRelease
+import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -140,6 +141,13 @@ intellijPlatform {
   }
 }
 
+// Air's agent panel and its ACP agents get in the way, in every sandbox
+val distractingPlugins: List<String> = listOf("com.intellij.air")
+
+tasks.withType<PrepareSandboxTask>().configureEach {
+  disabledPlugins.addAll(distractingPlugins)
+}
+
 tasks.runIde {
   // Open this repo as the project, the tool windows don't exist on the welcome screen
   args(rootProject.projectDir.absolutePath)
@@ -149,6 +157,8 @@ intellijPlatformTesting {
   runIde {
     register("runHarness") {
       sandboxDirectory = layout.buildDirectory.dir("harness-sandbox")
+      // Custom run tasks take disabled plugins from here, not from the withType above
+      plugins { disablePlugins(distractingPlugins) }
       // A scenario is a folder under harness/scenarios, picked with -Pt3.scenario=<name>
       val scenario: String = providers.gradleProperty("t3.scenario").getOrElse("default")
       val scenarios: File = rootProject.layout.projectDirectory.dir("harness/scenarios").asFile
