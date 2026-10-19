@@ -3,7 +3,11 @@
 A native JetBrains plugin for [T3 Code](https://github.com/pingdotgg/t3code). Threads, tool calls and
 permission prompts in a tool window; files, diffs and terminals in the IDE you already have.
 
-![T3 Code tool window](docs/screenshot.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshot-light.png">
+  <img alt="T3 Code tool window" src="docs/screenshot-light.png">
+</picture>
 
 Unofficial, built for my own use. Will publish if it turns out useful to others.
 
