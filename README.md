@@ -27,8 +27,10 @@ Not released. What works today:
   "Open worktree in new window" when it isn't.
 - A git line on the thread header: branch, changed files, ahead and behind.
 - Model, mode and plan controls in the composer footer.
-- Attachments: TODO(#14), one line when it lands.
-- #15: TODO, one line when it lands.
+- Attach files and images: drop them on the composer, paste them, or pick them with "+". A
+  selection in the editor goes along as context through "Add to T3 thread".
+- Review a diff in the IDE's viewer and leave comments on its lines; they go with the next
+  message. "Roll back" on a turn, behind a confirmation.
 
 See the roadmap for what's next.
 
