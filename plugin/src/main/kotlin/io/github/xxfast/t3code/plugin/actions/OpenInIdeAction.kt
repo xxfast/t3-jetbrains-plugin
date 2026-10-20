@@ -9,6 +9,7 @@ import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.wm.ToolWindowManager
 import io.github.xxfast.t3code.plugin.T3
 import io.github.xxfast.t3code.plugin.ide.IGNORE_CASE
 import io.github.xxfast.t3code.plugin.ide.T3Opener
@@ -66,14 +67,26 @@ class OpenInIdeAction : AnAction(), DumbAware {
     val window: Project? = ReadAction.compute<Project?, RuntimeException> {
       windowFor(cwd, windows, ::localRoots)
     }
-    // The thread goes along: the window it lands in opens it, as a click in its Sidebar would
+    val fromSidebar: Boolean = e.getData(T3DataKeys.FROM_SIDEBAR) == true
     if (window != null) {
-      T3Opener.getInstance(window).openThread(row.id)
+      showThread(window, row.id, fromSidebar)
       ProjectUtil.focusProjectWindow(window, true)
     } else {
       val opened: Project = ProjectUtil.openOrImport(cwd, null, true) ?: return
-      T3Opener.getInstance(opened).openThread(row.id)
+      showThread(opened, row.id, fromSidebar)
     }
+  }
+
+  /**
+   * The thread goes along: [window] opens it, as a click in its Sidebar would. Asked from a
+   * Sidebar row, that window's Sidebar shows too, without taking focus from the thread.
+   */
+  private fun showThread(window: Project, threadId: String, fromSidebar: Boolean) {
+    T3Opener.getInstance(window).openThread(threadId)
+    if (!fromSidebar) return
+    // Once its tool windows are registered, which a window opened just now may not have yet
+    val manager: ToolWindowManager = ToolWindowManager.getInstance(window)
+    manager.invokeLater { manager.getToolWindow(SIDEBAR_TOOL_WINDOW)?.show() }
   }
 }
 
