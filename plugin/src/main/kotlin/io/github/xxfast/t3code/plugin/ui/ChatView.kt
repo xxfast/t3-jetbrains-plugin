@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
@@ -38,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -46,6 +46,10 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -111,6 +115,27 @@ fun ChatView(
   attachmentActions: AttachmentActions = AttachmentActions(),
   contextWindow: ComposerContextWindow = ComposerContextWindow(usage = null),
 ) {
+  val threadId: String? = view?.thread?.id
+  val timeline: LazyListState = remember(threadId) { LazyListState() }
+  val scrollCollapse: ComposerScrollCollapse = remember(threadId) { ComposerScrollCollapse() }
+  // `canScrollCollapseComposer`'s and `composerHasExpandedChrome`'s parts the plugin has: a
+  // multi-line prompt, a request, chips or a note on the draft, or an error keep it open
+  val hasMultilinePrompt: Boolean = draft.text.contains('\n')
+  val hasExpandedChrome: Boolean = pending != null ||
+    composer.error != null ||
+    composer.reviewComments > 0 ||
+    extras.attachments.isNotEmpty() ||
+    extras.comments.isNotEmpty() ||
+    extras.notice != null ||
+    extras.blockReason != null
+  val collapseEligible: Boolean = !hasMultilinePrompt && !hasExpandedChrome
+  val resting: Boolean = shouldUseRestingComposerLayout(
+    isScrollCollapsed = scrollCollapse.collapsed,
+    timelineOverflows = timeline.canScrollBackward || timeline.canScrollForward,
+    hasMultilinePrompt = hasMultilinePrompt,
+    hasExpandedChrome = hasExpandedChrome,
+  )
+
   // Upstream's `bg-background` is the page, so the editor's background rather than the panel's
   Column(Modifier.fillMaxSize().background(editorBackground())) {
     ChatHeader(view, project, favicon, vcs)
@@ -126,9 +151,11 @@ fun ChatView(
           ProvideMarkdownStyling(markdownProcessor = processor) {
             MessagesTimeline(
               view = view,
+              state = timeline,
               processor = processor,
               operateReason = composer.disabledReason,
               actions = TimelineActions(onOpenFile, onDiffFile, onDiffRun, onRollback),
+              modifier = Modifier.timelineWheel(timeline, scrollCollapse, collapseEligible),
             )
           }
         }
@@ -149,6 +176,8 @@ fun ChatView(
           extras = extras,
           attachmentActions = attachmentActions,
           contextWindow = contextWindow,
+          resting = resting,
+          onPromptFocus = { scrollCollapse.expandForEditor(System.currentTimeMillis()) },
           modifier = Modifier
             .widthIn(max = MAX_CONTENT_WIDTH)
             .fillMaxWidth()
@@ -258,9 +287,11 @@ private fun ChatHeader(
 @Composable
 private fun MessagesTimeline(
   view: ThreadView,
+  state: LazyListState,
   processor: MarkdownProcessor,
   operateReason: String?, // why nothing can change the thread, when it can't
   actions: TimelineActions,
+  modifier: Modifier = Modifier,
 ) {
   val running: Run? = activeRun(view.runs)
   val now: Instant by rememberNow(if (running != null) 1_000 else 30_000)
@@ -298,10 +329,9 @@ private fun MessagesTimeline(
       expansion = expansion.copy(workGroupIds = expansion.workGroupIds.toggle(groupId))
     },
   )
-  val state: LazyListState = rememberLazyListState()
   FollowTail(state, rows, view.items.lastOrNull())
 
-  BoxWithConstraints(Modifier.fillMaxSize()) {
+  BoxWithConstraints(modifier.fillMaxSize()) {
     // `.messages-timeline-scroll`: 12px a side when narrow, 48px from 640px up
     val side: Dp = if (maxWidth >= 640.dp) 48.dp else 12.dp
     TimelineScrollContainer(state, keys = rows.map { it.id }, modifier = Modifier.fillMaxSize()) {
@@ -327,6 +357,31 @@ private fun MessagesTimeline(
     }
   }
 }
+
+/**
+ * `handleTimelineWheel`, ChatComposer.tsx:5046: wheel steps over the timeline fold the composer,
+ * read before the list scrolls ([PointerEventPass.Initial]) and never consumed. A wheel step is
+ * a line, `DOM_DELTA_LINE`'s 16px.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+private fun Modifier.timelineWheel(
+  state: LazyListState,
+  collapse: ComposerScrollCollapse,
+  eligible: Boolean,
+): Modifier = onPointerEvent(PointerEventType.Scroll, PointerEventPass.Initial) { event ->
+  if (event.keyboardModifiers.isCtrlPressed) return@onPointerEvent
+  val deltaY: Float = event.changes.firstOrNull()?.scrollDelta?.y ?: return@onPointerEvent
+  if (deltaY == 0f) return@onPointerEvent
+  collapse.onWheel(
+    now = System.currentTimeMillis(),
+    deltaY = deltaY * WHEEL_LINE_PX,
+    canScrollBackward = state.canScrollBackward,
+    canScrollForward = state.canScrollForward,
+    eligible = eligible,
+  )
+}
+
+private const val WHEEL_LINE_PX: Float = 16f
 
 private fun <T> Set<T>.toggle(value: T): Set<T> = if (value in this) this - value else this + value
 

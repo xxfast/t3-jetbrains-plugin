@@ -63,15 +63,8 @@ fun TraitsPicker(
     Tooltip(tooltip = { Text(label) }) {
       ComposerControl(onClick = { open = !open }, enabled = enabled) {
         ComposerControlIcon("brain")
-        Text(
-          text = label,
-          // Codex's labels run long, so its trigger truncates
-          modifier = Modifier.widthIn(max = 192.dp),
-          color = composerControlLabel(),
-          fontWeight = FontWeight.Medium,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-        )
+        // Codex's labels run long, so its trigger truncates
+        ComposerControlLabel(label, maxWidth = 192.dp)
         ComposerControlChevron()
       }
     }

@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import org.jetbrains.jewel.foundation.theme.JewelTheme
@@ -68,15 +69,10 @@ fun ProviderModelPicker(
   var open: Boolean by remember { mutableStateOf(false) }
   Box {
     ComposerControl(onClick = { open = !open }, enabled = enabled && state.models.isNotEmpty()) {
-      state.provider?.let { provider: ServerProvider -> ProviderIcon(provider, 16.dp) }
-      Text(
-        text = state.modelLabel,
-        modifier = Modifier.widthIn(max = 192.dp),
-        color = composerControlLabel(),
-        fontWeight = FontWeight.Medium,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-      )
+      val xs: Boolean = LocalComposerControlSize.current == ComposerControlSize.XS
+      val icon: Dp = if (xs) 12.dp else 16.dp
+      state.provider?.let { provider: ServerProvider -> ProviderIcon(provider, icon) }
+      ComposerControlLabel(state.modelLabel, maxWidth = 192.dp)
       ComposerControlChevron()
     }
     if (open) {
@@ -152,7 +148,7 @@ private fun RuntimeModeSelect(
     Tooltip(tooltip = { Text(current.description) }) {
       ComposerControl(onClick = { open = !open }, enabled = enabled) {
         ComposerControlIcon(current.icon)
-        Text(current.label, color = composerControlLabel(), fontWeight = FontWeight.Medium)
+        ComposerControlLabel(current.label)
         ComposerControlChevron()
       }
     }
@@ -207,13 +203,11 @@ private fun InteractionModeToggle(mode: String, enabled: Boolean, onToggle: () -
       if (plan) {
         ComposerControlIcon("pencil-ruler", tint = JewelTheme.globalColors.text.normal)
       } else {
-        ComposerControlIcon("bot", large = true)
+        // `opticalSize` large only in `sm`
+        val sm: Boolean = LocalComposerControlSize.current == ComposerControlSize.SM
+        ComposerControlIcon("bot", large = sm)
       }
-      Text(
-        text = if (plan) "Plan" else "Build",
-        color = composerControlLabel(),
-        fontWeight = FontWeight.Medium,
-      )
+      ComposerControlLabel(if (plan) "Plan" else "Build")
     }
   }
 }
