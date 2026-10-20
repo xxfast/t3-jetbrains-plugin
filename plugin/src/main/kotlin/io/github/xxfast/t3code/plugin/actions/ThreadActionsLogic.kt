@@ -138,10 +138,14 @@ fun stopCommands(view: ThreadView, commandId: String): List<Command.ProviderSess
 /** `archiveThread` or `unarchiveThread`, by where [row] is now. */
 fun archiveCommand(row: Thread, commandId: String): Command =
   if (row.archived) {
-    Command.ThreadUnarchive(commandId = commandId, threadId = row.id)
+    unarchiveCommand(row, commandId)
   } else {
     Command.ThreadArchive(commandId = commandId, threadId = row.id)
   }
+
+/** `unarchiveThread`, and undoing an archive. */
+fun unarchiveCommand(row: Thread, commandId: String): Command =
+  Command.ThreadUnarchive(commandId = commandId, threadId = row.id)
 
 /** `pinThread` without an order key, or `unpinThread`. */
 fun pinCommand(row: Thread, commandId: String): Command =
@@ -254,3 +258,20 @@ fun copyThreadId(row: Thread): Copied = Copied("Thread ID copied", row.id)
 
 const val PATH_UNAVAILABLE: String = "Path unavailable"
 const val NO_PATH: String = "This thread does not have a workspace path to copy."
+
+/** Undoing an unpin, useThreadActions.ts:681: pinned again where it was. */
+fun repinCommand(row: Thread, commandId: String): Command =
+  Command.ThreadPin(commandId = commandId, threadId = row.id, orderKey = row.pinOrderKey)
+
+/**
+ * Undoing a settle, useThreadActions.ts:729: un-settle, then put back the pin and the snooze the
+ * server dropped with it, in that order. Sent one at a time, stopping at the first failure.
+ */
+fun unsettleUndoCommands(row: Thread, commandId: String): List<Command> = buildList {
+  add(Command.ThreadUnsettle(commandId = "$commandId:unsettle", threadId = row.id, reason = "user"))
+  if (row.pinned) add(repinCommand(row, "$commandId:pin"))
+  row.snoozedUntil?.let { until ->
+    val id: String = "$commandId:snooze"
+    add(Command.ThreadSnooze(commandId = id, threadId = row.id, snoozedUntil = until))
+  }
+}

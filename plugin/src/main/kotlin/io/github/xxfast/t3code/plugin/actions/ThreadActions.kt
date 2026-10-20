@@ -82,7 +82,8 @@ class InterruptRunAction : ThreadAction(ThreadActionKind.Interrupt) {
 
 /**
  * Archive or unarchive: upstream's `archiveThread` and `unarchiveThread`, commands.ts:426.
- * Archiving asks first when "Confirm thread archiving" is on, as Sidebar.tsx:4387 does.
+ * Archiving asks first when "Confirm thread archiving" is on, as Sidebar.tsx:4387 does, and
+ * offers an undo, as useThreadActions.ts:378.
  */
 class ArchiveThreadAction : ThreadAction(ThreadActionKind.Archive) {
   override fun present(presentation: Presentation, row: Thread?) {
@@ -90,13 +91,27 @@ class ArchiveThreadAction : ThreadAction(ThreadActionKind.Archive) {
   }
 
   override suspend fun perform(target: ThreadTarget) {
-    val asks: Boolean = !target.row.archived && T3Settings.get().confirmThreadArchive
-    if (asks && !target.confirm(archivePrompt(target.row), null, "Archive")) return
-    target.client.dispatch(archiveCommand(target.row, target.commandId()))
+    val row: Thread = target.row
+    val undos: ThreadUndos = ThreadUndos.getInstance(target.project)
+    if (row.archived) {
+      undos.undo.invalidate(UndoKind.ARCHIVE, row.id)
+      target.client.dispatch(archiveCommand(row, target.commandId()))
+      return
+    }
+    val asks: Boolean = T3Settings.get().confirmThreadArchive
+    if (asks && !target.confirm(archivePrompt(row), null, "Archive")) return
+    undos.undoable(
+      UndoKind.ARCHIVE, row.id, UndoAction.Archived, "Failed to undo archive",
+      send = { target.client.dispatch(archiveCommand(row, target.commandId())) },
+      revert = { target.client.dispatch(unarchiveCommand(row, target.commandId())) },
+    )
   }
 }
 
-/** Pin or unpin: upstream's `pinThread` and `unpinThread`, commands.ts:444 and 493. */
+/**
+ * Pin or unpin: upstream's `pinThread` and `unpinThread`, commands.ts:444 and 493. Unpinning
+ * offers an undo that pins it back in place, useThreadActions.ts:681.
+ */
 class PinThreadAction : ThreadAction(ThreadActionKind.Pin) {
   override fun present(presentation: Presentation, row: Thread?) {
     val pinned: Boolean = row?.pinned == true
@@ -105,7 +120,18 @@ class PinThreadAction : ThreadAction(ThreadActionKind.Pin) {
   }
 
   override suspend fun perform(target: ThreadTarget) {
-    target.client.dispatch(pinCommand(target.row, target.commandId()))
+    val row: Thread = target.row
+    val undos: ThreadUndos = ThreadUndos.getInstance(target.project)
+    if (!row.pinned) {
+      undos.undo.invalidate(UndoKind.PIN, row.id)
+      target.client.dispatch(pinCommand(row, target.commandId()))
+      return
+    }
+    undos.undoable(
+      UndoKind.PIN, row.id, UndoAction.Unpinned, "Failed to undo unpin",
+      send = { target.client.dispatch(pinCommand(row, target.commandId())) },
+      revert = { target.client.dispatch(repinCommand(row, target.commandId())) },
+    )
   }
 }
 
@@ -198,8 +224,24 @@ class SettleThreadAction : ThreadAction(ThreadActionKind.Settle, THREAD_SETTLEME
   }
 
   override suspend fun perform(target: ThreadTarget) {
-    val command: Command = settleCommand(target.row, target.commandId())
-    if (target.row.settled) target.client.dispatch(command) else target.park(command)
+    val row: Thread = target.row
+    val command: Command = settleCommand(row, target.commandId())
+    val undos: ThreadUndos = ThreadUndos.getInstance(target.project)
+    if (row.settled) {
+      undos.undo.invalidate(UndoKind.SETTLE, row.id)
+      target.client.dispatch(command)
+      return
+    }
+    // Settling drops the pin and the snooze; an older undo of either would un-settle it
+    undos.undo.invalidate(UndoKind.PIN, row.id)
+    undos.undo.invalidate(UndoKind.SNOOZE, row.id)
+    undos.undoable(
+      UndoKind.SETTLE, row.id, UndoAction.Settled, "Failed to undo settle",
+      send = { target.park(command) },
+      revert = {
+        unsettleUndoCommands(row, target.commandId()).forEach { target.client.dispatch(it) }
+      },
+    )
   }
 }
 
@@ -271,7 +313,7 @@ class SnoozePresetAction(private val preset: SnoozePreset) :
   }
 
   override suspend fun perform(target: ThreadTarget) {
-    target.park(snoozeCommand(target.row, preset.snoozedUntil, target.commandId()))
+    target.snooze(preset.snoozedUntil)
   }
 }
 
@@ -285,8 +327,18 @@ class CustomSnoozeAction : ThreadAction(ThreadActionKind.Snooze, THREAD_SNOOZE) 
     val until: Instant = withContext(Dispatchers.EDT) {
       CustomSnoozeDialog(target.project).takeIf { it.showAndGet() }?.until
     } ?: return
-    target.park(snoozeCommand(target.row, until, target.commandId()))
+    target.snooze(until)
   }
+}
+
+/** `snoozeThread`, useThreadActions.ts:849, with "Wake" as its undo. */
+private suspend fun ThreadTarget.snooze(until: Instant) {
+  val undos: ThreadUndos = ThreadUndos.getInstance(project)
+  undos.undoable(
+    UndoKind.SNOOZE, row.id, UndoAction.Snoozed, "Failed to wake thread",
+    send = { park(snoozeCommand(row, until, commandId())) },
+    revert = { client.dispatch(wakeCommand(row, commandId())) },
+  )
 }
 
 /** "Wake thread", `attemptUnsnooze` (Sidebar.tsx:3299): back to the inbox now. */
@@ -294,6 +346,7 @@ class WakeThreadAction : ThreadAction(ThreadActionKind.Wake, THREAD_SNOOZE) {
   override fun visible(row: Thread?): Boolean = row?.snoozed(Instant.now()) == true
 
   override suspend fun perform(target: ThreadTarget) {
+    ThreadUndos.getInstance(target.project).undo.invalidate(UndoKind.SNOOZE, target.row.id)
     target.client.dispatch(wakeCommand(target.row, target.commandId()))
   }
 }

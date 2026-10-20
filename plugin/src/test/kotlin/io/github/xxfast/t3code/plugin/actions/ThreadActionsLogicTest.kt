@@ -89,6 +89,23 @@ class ThreadActionsLogicTest {
   }
 
   @Test
+  fun `undoing a settle puts the pin and the snooze back after un-settling`() {
+    val plain: List<Command> = unsettleUndoCommands(row.copy(pinnedAt = null), "c")
+    val unsettle: Command =
+      Command.ThreadUnsettle(commandId = "c:unsettle", threadId = row.id, reason = "user")
+    assertEquals(listOf(unsettle), plain)
+    val pinned: Thread = row.copy(
+      pinnedAt = "2026-10-19T09:00:00Z",
+      pinOrderKey = "a0",
+      snoozedUntil = "2026-10-20T09:00:00Z",
+    )
+    val types: List<String> = unsettleUndoCommands(pinned, "c").map { it.type }
+    assertEquals(listOf("thread.unsettle", "thread.pin", "thread.snooze"), types)
+    val repin: Command = unsettleUndoCommands(pinned, "c")[1]
+    assertEquals(Command.ThreadPin(commandId = "c:pin", threadId = row.id, orderKey = "a0"), repin)
+  }
+
+  @Test
   fun `copy branch only with a branch, thread id always`() {
     assertEquals(Copied("Branch copied", "kotlinx-io-0.8"), copyBranch(row))
     assertNull(copyBranch(row.copy(branch = null)))

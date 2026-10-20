@@ -40,6 +40,8 @@
     <notificationGroup id="T3 Code" displayType="BALLOON"/>
     <!-- Puts T3Code.PasteAttachment ahead of $Paste while the composer has focus -->
     <actionPromoter implementation="io.github.xxfast.t3code.plugin.actions.PasteAttachmentPromoter"/>
+    <!-- Puts T3Code.UndoThreadAction ahead of $Undo in the Sidebar -->
+    <actionPromoter implementation="io.github.xxfast.t3code.plugin.actions.UndoThreadPromoter"/>
   </extensions>
 
   <actions>
@@ -171,6 +173,15 @@
         description="Focus the IDE window that has the thread's checkout open, else open it in a new one"
         icon="AllIcons.Actions.MenuOpen"/>
     </group>
+
+    <!-- Upstream's thread.undo: the latest settle, snooze, unpin or archive, while its notice is up -->
+    <action
+      id="T3Code.UndoThreadAction"
+      class="io.github.xxfast.t3code.plugin.actions.UndoThreadAction"
+      text="Undo T3 thread action"
+      description="Undo the latest settle, snooze, unpin or archive"
+      icon="AllIcons.Actions.Undo"
+      use-shortcut-of="$Undo"/>
 
     <!-- Paste over the composer with files or an image on the clipboard attaches them -->
     <action
