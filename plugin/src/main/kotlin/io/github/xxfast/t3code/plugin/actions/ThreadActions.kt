@@ -9,6 +9,7 @@ import com.intellij.openapi.actionSystem.Toggleable
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.MessageDialogBuilder
 import com.intellij.openapi.ui.Messages
@@ -33,11 +34,13 @@ import io.github.xxfast.t3code.plugin.ui.sections
 import io.github.xxfast.t3code.plugin.ui.settled
 import io.github.xxfast.t3code.plugin.ui.snoozePresets
 import io.github.xxfast.t3code.plugin.ui.snoozed
+import io.github.xxfast.t3code.protocol.Project as T3Project
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.archived
 import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.pinned
+import java.awt.datatransfer.StringSelection
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -113,9 +116,75 @@ class PinThreadAction : ThreadAction(ThreadActionKind.Pin) {
 class MarkUnreadAction : ThreadAction(ThreadActionKind.MarkUnread) {
   override suspend fun perform(target: ThreadTarget) {
     ThreadVisits.getInstance(target.project).markedUnread(target.row)
+    // Read-only pairings keep the item, as upstream's menu does; there it stays a local mark,
+    // where upstream's dispatch fails without a word (useThreadActions.ts:202)
+    if (blockedBy(target.client.connection.value) != null) return
     val command = Command.ThreadMarkUnread(commandId = target.commandId(), threadId = target.row.id)
     target.client.dispatch(command)
   }
+}
+
+/**
+ * "Filter by project" or "Show all projects" (threadActionMenu.logic.ts:162, Sidebar.tsx:4266):
+ * the Sidebar's project filter, narrowed to the row's project or opened back up.
+ */
+class FilterByProjectAction : ThreadAction(ThreadActionKind.FilterByProject, menuOnly = true) {
+  override fun update(e: AnActionEvent) {
+    super.update(e)
+    val project: Project = e.project ?: return
+    val row: Thread? = e.threadRow(project, T3.get().client)
+    val scope: ProjectScope? = row?.let { scope(project, it) }
+    if (scope == null) {
+      e.presentation.isEnabledAndVisible = false
+      return
+    }
+    e.presentation.text = scope.text
+  }
+
+  override suspend fun perform(target: ThreadTarget) {
+    val scope: ProjectScope = scope(target.project, target.row) ?: return
+    ProjectAwareness.getInstance(target.project).choose(scope.next)
+  }
+
+  private fun scope(project: Project, row: Thread): ProjectScope? {
+    val filter: ProjectFilter = ProjectAwareness.getInstance(project).filter.value
+    return projectScope(row, T3.get().client.projects.value, filter)
+  }
+}
+
+/** "Copy" (threadActionMenu.logic.ts:194): Path, Branch, Thread ID. Fine on a read-only pairing. */
+class CopyGroup : ThreadActionGroup(capability = null, requiresOperate = false)
+
+/** One of [CopyGroup]'s items: [copied] onto the clipboard, then upstream's toast. */
+abstract class CopyAction : ThreadAction(ThreadActionKind.Copy, menuOnly = true) {
+  protected abstract fun copied(row: Thread, projects: List<T3Project>): Copied?
+
+  override suspend fun perform(target: ThreadTarget) {
+    val copied: Copied? = copied(target.row, target.client.projects.value)
+    if (copied == null) {
+      notify(target.project, NO_PATH, NotificationType.ERROR, PATH_UNAVAILABLE)
+      return
+    }
+    withContext(Dispatchers.EDT) {
+      CopyPasteManager.getInstance().setContents(StringSelection(copied.text))
+    }
+    notify(target.project, copied.text, NotificationType.INFORMATION, copied.title)
+  }
+}
+
+class CopyPathAction : CopyAction() {
+  override fun copied(row: Thread, projects: List<T3Project>): Copied? = copyPath(row, projects)
+}
+
+/** Only on a thread with a branch, as upstream's menu. */
+class CopyBranchAction : CopyAction() {
+  override fun visible(row: Thread?): Boolean = row?.branch != null
+
+  override fun copied(row: Thread, projects: List<T3Project>): Copied? = copyBranch(row)
+}
+
+class CopyThreadIdAction : CopyAction() {
+  override fun copied(row: Thread, projects: List<T3Project>): Copied = copyThreadId(row)
 }
 
 /**

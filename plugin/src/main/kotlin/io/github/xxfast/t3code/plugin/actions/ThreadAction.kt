@@ -78,18 +78,21 @@ abstract class ThreadAction(
 
 /**
  * A submenu of thread actions, hidden like a [ThreadAction] when the server doesn't do
- * [capability] or this is the thread view's toolbar.
+ * [capability] or this is the thread view's toolbar. Greyed on a pairing that can't operate,
+ * unless its items don't need to.
  */
-abstract class ThreadActionGroup(private val capability: String?) : DefaultActionGroup(),
-  DumbAware {
+abstract class ThreadActionGroup(
+  private val capability: String?,
+  private val requiresOperate: Boolean = true,
+) : DefaultActionGroup(), DumbAware {
   override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
   override fun update(e: AnActionEvent) {
     val project: Project? = e.project
     e.presentation.isVisible = project != null && e.shows(project, capability, menuOnly = true)
     // Greyed with its items on a connection that can't operate, as upstream's menu does
-    e.presentation.isEnabled =
-      e.presentation.isVisible && blockedBy(T3.get().client.connection.value) == null
+    val blocked: Boolean = requiresOperate && blockedBy(T3.get().client.connection.value) != null
+    e.presentation.isEnabled = e.presentation.isVisible && !blocked
   }
 }
 

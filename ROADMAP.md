@@ -82,6 +82,7 @@ commands are already generated in `Command.kt`. Independent of phase 3 except wh
 10. #34 Sidebar keyboard navigation
 11. #35 Drag files onto threads and threads into the composer
 12. #36 Sidebar empty state and project picker
+13. #38 Project settings from the thread menu
 
 ## Later
 

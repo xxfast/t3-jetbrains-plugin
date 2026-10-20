@@ -1,11 +1,13 @@
 package io.github.xxfast.t3code.plugin.actions
 
 import io.github.xxfast.t3code.plugin.ui.READ_ONLY as COMPOSER_READ_ONLY
+import io.github.xxfast.t3code.plugin.ui.ProjectFilter
 import io.github.xxfast.t3code.plugin.ui.operateBlockReason
 import io.github.xxfast.t3code.plugin.ui.SnoozePreset
 import io.github.xxfast.t3code.plugin.ui.canSnooze
 import io.github.xxfast.t3code.plugin.ui.settled
 import io.github.xxfast.t3code.protocol.ConnectionState
+import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
@@ -31,8 +33,15 @@ val INTERRUPTIBLE: Set<String> = setOf("preparing", "starting", "running", "wait
 
 enum class ThreadActionKind {
   Stop, Interrupt, Archive, Pin, MarkUnread, Settle, AutoSettle, Snooze, Wake, Rename,
-  RegenerateTitle, Delete,
+  RegenerateTitle, Delete, FilterByProject, Copy,
 }
+
+/**
+ * `threadActionRequiresOperate`, threadActionMenu.logic.ts:92: read markers and copying stay
+ * available to a read-only pairing. Filter by project isn't on upstream's list, so it greys too.
+ */
+val ThreadActionKind.requiresOperate: Boolean
+  get() = this != ThreadActionKind.MarkUnread && this != ThreadActionKind.Copy
 
 /**
  * Why no command can go out on [connection], or null when one can: [operateBlockReason], the one
@@ -48,13 +57,13 @@ fun disabledReason(
   row: Thread?,
   now: Instant = Instant.now(),
 ): String? {
-  blockedBy(connection)?.let { return it }
+  if (kind.requiresOperate) blockedBy(connection)?.let { return it }
   if (row == null) return NO_THREAD
   return when (kind) {
     // The shell row has no provider runtime, so Stop finds out from the thread itself
     ThreadActionKind.Stop, ThreadActionKind.Pin, ThreadActionKind.Settle,
     ThreadActionKind.AutoSettle, ThreadActionKind.Wake, ThreadActionKind.Rename,
-    ThreadActionKind.Delete -> null
+    ThreadActionKind.Delete, ThreadActionKind.FilterByProject, ThreadActionKind.Copy -> null
     ThreadActionKind.RegenerateTitle ->
       if (row.titleRegeneration == null) null else "Already regenerating the title"
     // threadActionMenu.logic.ts's `canSnoozeNow`
@@ -209,3 +218,39 @@ fun archivePrompt(row: Thread): String = "Archive thread \"${row.title}\"?"
 fun deletePrompt(row: Thread): String = "Delete thread \"${row.title}\"?"
 
 const val DELETE_WARNING: String = "This permanently clears conversation history for this thread."
+
+/**
+ * "Filter by project" (threadActionMenu.logic.ts:162, Sidebar.tsx:4266): what the item says for
+ * [row] under [filter], and the filter picking it leads to. Null when the row's project isn't
+ * listed, where upstream has no project group either. Upstream labels a project group; the
+ * Sidebar's filter is by project, so this labels the project.
+ */
+data class ProjectScope(val text: String, val next: ProjectFilter)
+
+fun projectScope(row: Thread, projects: List<Project>, filter: ProjectFilter): ProjectScope? {
+  val project: Project = projects.find { it.id == row.projectId } ?: return null
+  val only: ProjectFilter = ProjectFilter.Only(setOf(project.id))
+  return if (filter == only) {
+    ProjectScope("Show all projects", ProjectFilter.All)
+  } else {
+    ProjectScope("Filter by ${project.title}", only)
+  }
+}
+
+/** `threadWorkspacePath`, Sidebar.tsx:4196: the worktree, else the project's root. */
+fun workspacePath(row: Thread, projects: List<Project>): String? =
+  row.worktreePath ?: projects.find { it.id == row.projectId }?.workspaceRoot
+
+/** What a Copy item copies, and upstream's toast for it (Sidebar.tsx:2737 to 2790). */
+data class Copied(val title: String, val text: String)
+
+/** Copy > Path: [workspacePath], or null where upstream says "Path unavailable". */
+fun copyPath(row: Thread, projects: List<Project>): Copied? =
+  workspacePath(row, projects)?.let { path -> Copied("Path copied", path) }
+
+fun copyBranch(row: Thread): Copied? = row.branch?.let { branch -> Copied("Branch copied", branch) }
+
+fun copyThreadId(row: Thread): Copied = Copied("Thread ID copied", row.id)
+
+const val PATH_UNAVAILABLE: String = "Path unavailable"
+const val NO_PATH: String = "This thread does not have a workspace path to copy."

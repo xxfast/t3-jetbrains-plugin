@@ -43,7 +43,8 @@
   </extensions>
 
   <actions>
-    <!-- Thread lifecycle: the thread view's toolbar, T3 Chat View's title, Sidebar rows -->
+    <!-- Thread lifecycle: the thread view's toolbar, T3 Chat View's title, Sidebar rows. Between
+         Stop and Open worktree, upstream's order and separators, threadActionMenu.logic.ts -->
     <group id="T3Code.ThreadActions" text="T3 Code Thread" popup="false">
       <action
         id="T3Code.InterruptRun"
@@ -102,6 +103,12 @@
         text="Mark unread"
         description="Show the thread's latest run as unseen"
         icon="AllIcons.Toolwindows.NotificationsNew"/>
+      <action
+        id="T3Code.FilterByProject"
+        class="io.github.xxfast.t3code.plugin.actions.FilterByProjectAction"
+        text="Filter by project"
+        description="List only this thread's project in the Sidebar, or all of them again"
+        icon="AllIcons.General.Filter"/>
       <group
         id="T3Code.AutoSettle"
         class="io.github.xxfast.t3code.plugin.actions.AutoSettleGroup"
@@ -117,6 +124,31 @@
           class="io.github.xxfast.t3code.plugin.actions.AutoSettleOffAction"
           text="Disabled"
           description="Keep the thread in the inbox until it's settled by hand"/>
+      </group>
+      <separator/>
+      <group
+        id="T3Code.Copy"
+        class="io.github.xxfast.t3code.plugin.actions.CopyGroup"
+        text="Copy"
+        icon="AllIcons.Actions.Copy"
+        popup="true">
+        <action
+          id="T3Code.CopyPath"
+          class="io.github.xxfast.t3code.plugin.actions.CopyPathAction"
+          text="Path"
+          description="Copy the thread's worktree, else its project's root"
+          icon="AllIcons.Nodes.Folder"/>
+        <action
+          id="T3Code.CopyBranch"
+          class="io.github.xxfast.t3code.plugin.actions.CopyBranchAction"
+          text="Branch"
+          description="Copy the thread's branch name"
+          icon="AllIcons.Vcs.Branch"/>
+        <action
+          id="T3Code.CopyThreadId"
+          class="io.github.xxfast.t3code.plugin.actions.CopyThreadIdAction"
+          text="Thread ID"
+          description="Copy the thread's ID"/>
       </group>
       <separator/>
       <action

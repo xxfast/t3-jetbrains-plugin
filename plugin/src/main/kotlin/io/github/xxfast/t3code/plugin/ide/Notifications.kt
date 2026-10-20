@@ -14,11 +14,11 @@ const val NOTIFICATION_GROUP: String = "T3 Code"
 
 private val LOG: Logger = Logger.getInstance("io.github.xxfast.t3code.plugin.ide.Notifications")
 
-/** A balloon in the T3 Code group. */
-fun notify(project: Project, message: String, type: NotificationType) {
+/** A balloon in the T3 Code group, with [title] above [message] when there's one. */
+fun notify(project: Project, message: String, type: NotificationType, title: String = "") {
   NotificationGroupManager.getInstance()
     .getNotificationGroup(NOTIFICATION_GROUP)
-    .createNotification(message, type)
+    .createNotification(title, message, type)
     .notify(project)
 }
 

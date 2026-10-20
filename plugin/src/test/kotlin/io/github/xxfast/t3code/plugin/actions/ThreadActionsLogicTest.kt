@@ -1,8 +1,10 @@
 package io.github.xxfast.t3code.plugin.actions
 
 import io.github.xxfast.t3code.plugin.fixtures.Scenario
+import io.github.xxfast.t3code.plugin.ui.ProjectFilter
 import io.github.xxfast.t3code.plugin.ui.SnoozePreset
 import io.github.xxfast.t3code.protocol.ConnectionState
+import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.ProviderSession
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.ServerSession
@@ -43,12 +45,54 @@ class ThreadActionsLogicTest {
   }
 
   @Test
-  fun `every action is disabled by the connection first, then by the row`() {
-    ThreadActionKind.entries.forEach { kind ->
+  fun `every operating action is disabled by the connection first, then by the row`() {
+    ThreadActionKind.entries.filter { it.requiresOperate }.forEach { kind ->
       assertEquals(NOT_CONNECTED, disabledReason(kind, ConnectionState.Connecting, row))
       assertEquals(READ_ONLY, disabledReason(kind, connected("orchestration:read"), row))
       assertEquals(NO_THREAD, disabledReason(kind, OPERATING, null))
     }
+  }
+
+  @Test
+  fun `read-only keeps mark unread and copy, as threadActionRequiresOperate`() {
+    val operating: List<ThreadActionKind> = ThreadActionKind.entries.filter { it.requiresOperate }
+    assertEquals(ThreadActionKind.entries - operating, listOf(MARK_UNREAD, COPY))
+    assertTrue(ThreadActionKind.FilterByProject in operating)
+    val done: Thread = row.copy(latestRunCompletedAt = "2026-10-19T09:00:00Z")
+    assertNull(disabledReason(MARK_UNREAD, connected("orchestration:read"), done))
+    assertNull(disabledReason(COPY, connected("orchestration:read"), row))
+    assertNull(disabledReason(COPY, ConnectionState.Disconnected, row))
+    assertEquals(NO_THREAD, disabledReason(COPY, ConnectionState.Disconnected, null))
+  }
+
+  @Test
+  fun `filter by project narrows to the row's project, then shows all again`() {
+    val projects: List<Project> = listOf(project(row.projectId, "KStore"), project("p2", "Other"))
+    val all: ProjectScope = assertNotNull(projectScope(row, projects, ProjectFilter.All))
+    assertEquals("Filter by KStore", all.text)
+    assertEquals(ProjectFilter.Only(setOf(row.projectId)), all.next)
+    val only: ProjectScope = assertNotNull(projectScope(row, projects, all.next))
+    assertEquals(ProjectScope("Show all projects", ProjectFilter.All), only)
+    val both = ProjectFilter.Only(setOf(row.projectId, "p2"))
+    assertEquals("Filter by KStore", projectScope(row, projects, both)?.text)
+    assertNull(projectScope(row, emptyList(), ProjectFilter.All))
+  }
+
+  @Test
+  fun `copy path is the worktree, else the project root, else unavailable`() {
+    val projects: List<Project> = listOf(project(row.projectId, "KStore"))
+    val inWorktree: Thread = row.copy(worktreePath = "/code/wt")
+    assertEquals(Copied("Path copied", "/code/wt"), copyPath(inWorktree, projects))
+    val local: Thread = row.copy(worktreePath = null)
+    assertEquals(Copied("Path copied", "/code/${row.projectId}"), copyPath(local, projects))
+    assertNull(copyPath(local, emptyList()))
+  }
+
+  @Test
+  fun `copy branch only with a branch, thread id always`() {
+    assertEquals(Copied("Branch copied", "kotlinx-io-0.8"), copyBranch(row))
+    assertNull(copyBranch(row.copy(branch = null)))
+    assertEquals(Copied("Thread ID copied", row.id), copyThreadId(row))
   }
 
   @Test
@@ -252,3 +296,17 @@ private fun connected(vararg permissions: String): ConnectionState.Connected =
   )
 
 private val OPERATING: ConnectionState = connected("orchestration:read", OPERATE)
+
+private val MARK_UNREAD: ThreadActionKind = ThreadActionKind.MarkUnread
+
+private val COPY: ThreadActionKind = ThreadActionKind.Copy
+
+private fun project(id: String, title: String): Project = T3Json.decodeFromString(
+  Project.serializer(),
+  """
+    {
+      "id": "$id", "title": "$title", "workspaceRoot": "/code/$id", "scripts": [],
+      "createdAt": "2026-10-19T09:00:00Z", "updatedAt": "2026-10-19T09:00:00Z"
+    }
+  """,
+)
