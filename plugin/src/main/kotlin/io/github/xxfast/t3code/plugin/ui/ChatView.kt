@@ -101,7 +101,7 @@ fun ChatView(
   onClearReview: () -> Unit, // drop the review comments going with the next message
   onRollback: (Run) -> Unit, // back to the state after this run, from a prompt's revert
   onSend: (text: String, mode: ComposerDispatchMode) -> Unit,
-  onQueueChange: (Boolean) -> Unit,
+  onInterrupt: () -> Unit, // the composer's stop button, on the newest run
   onRetry: () -> Unit, // resubscribe after an error
   onOpenFile: (path: String) -> Unit, // a changed file's path
   onDiffFile: (TurnItem.FileChange) -> Unit, // "Diff" on a file change's details
@@ -109,6 +109,7 @@ fun ChatView(
   vcs: VcsSummary? = null, // the checkout's git line under the title, when there's one
   extras: DraftExtras = DraftExtras(), // the draft's attachments and context
   attachmentActions: AttachmentActions = AttachmentActions(),
+  contextWindow: ComposerContextWindow = ComposerContextWindow(usage = null),
 ) {
   // Upstream's `bg-background` is the page, so the editor's background rather than the panel's
   Column(Modifier.fillMaxSize().background(editorBackground())) {
@@ -135,7 +136,7 @@ fun ChatView(
     }
     if (view != null) {
       Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-        Composer(
+        ChatComposer(
           state = composer,
           draft = draft,
           pending = pending,
@@ -144,9 +145,10 @@ fun ChatView(
           footerActions = footerActions,
           onClearReview = onClearReview,
           onSend = onSend,
-          onQueueChange = onQueueChange,
+          onInterrupt = onInterrupt,
           extras = extras,
           attachmentActions = attachmentActions,
+          contextWindow = contextWindow,
           modifier = Modifier
             .widthIn(max = MAX_CONTENT_WIDTH)
             .fillMaxWidth()

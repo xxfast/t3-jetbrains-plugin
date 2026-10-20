@@ -4,6 +4,7 @@ import io.github.xxfast.t3code.protocol.Checkpoint
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.ProviderSession
+import io.github.xxfast.t3code.protocol.ProviderThread
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ServerSession
@@ -28,6 +29,7 @@ class ScenarioFile(
   val runtimeRequests: Map<String, List<RuntimeRequest>> = emptyMap(),
   val providerSessions: Map<String, List<ProviderSession>> = emptyMap(),
   val checkpoints: Map<String, List<Checkpoint>> = emptyMap(),
+  val providerThreads: Map<String, List<ProviderThread>> = emptyMap(),
   val terminals: List<TerminalSummary> = emptyList(),
 )
 
@@ -54,6 +56,8 @@ class Scenario(
   val runtimeRequests: Map<String, List<RuntimeRequest>> = emptyMap(),
   val providerSessions: Map<String, List<ProviderSession>> = emptyMap(),
   val checkpoints: Map<String, List<Checkpoint>> = emptyMap(),
+  // Each thread's provider threads, for the composer's context window meter
+  val providerThreads: Map<String, List<ProviderThread>> = emptyMap(),
   val terminals: List<TerminalSummary> = emptyList(), // what `subscribeTerminalMetadata` lists
 ) {
   companion object {
@@ -68,13 +72,15 @@ class Scenario(
         runtimeRequests = file.runtimeRequests,
         providerSessions = file.providerSessions,
         checkpoints = file.checkpoints,
+        providerThreads = file.providerThreads,
         terminals = file.terminals,
       )
     }
 
     /**
      * One scenario out of a directory's files, in order. Projects, threads and terminals dedupe
-     * by id, first wins. Runs, items, requests, sessions and checkpoints append per thread. The
+     * by id, first wins. Runs, items, requests, sessions, checkpoints and provider threads append
+     * per thread. The
      * last file that sets a connection wins, and a directory that sets none is connected.
      */
     fun merge(parts: List<Scenario>): Scenario = Scenario(
@@ -87,6 +93,7 @@ class Scenario(
       runtimeRequests = parts.map { it.runtimeRequests }.fold(emptyMap(), ::append),
       providerSessions = parts.map { it.providerSessions }.fold(emptyMap(), ::append),
       checkpoints = parts.map { it.checkpoints }.fold(emptyMap(), ::append),
+      providerThreads = parts.map { it.providerThreads }.fold(emptyMap(), ::append),
       terminals = parts.flatMap { it.terminals }.distinctBy { it.threadId to it.terminalId },
     )
 

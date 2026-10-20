@@ -17,7 +17,7 @@ Not released. What works today:
 
 - Pair with a T3 server, browse its threads in the Sidebar, read a thread live as it runs.
 - Open the files and diffs a thread touches, in the IDE's own editor and diff viewer.
-- Send messages, steer or queue while a run is going.
+- Send messages, steer while a run is going (Ctrl/Cmd-click or Ctrl/Cmd+Enter queues), or stop it.
 - Answer approvals and questions from the composer. A balloon and a Sidebar badge say when a
   thread is waiting on you.
 - Interrupt, stop session, pin, mark unread and archive. On the thread's toolbar, the
@@ -26,8 +26,9 @@ Not released. What works today:
 - A project picker that defaults to whatever this IDE window has open, worktrees included.
   "Open in IDE" when it isn't: focuses the window that has the thread's checkout, else opens one.
 - A git line on the thread header: branch, changed files, ahead and behind.
-- Model, mode and plan controls in the composer footer.
-- Attach files and images: drop them on the composer, paste them, or pick them with "+". A
+- The desktop's composer: model, effort, runtime mode and Plan/Build in its footer, a context
+  window meter with "Compact context", and an offer to compact a big, cold Claude thread first.
+- Attach files and images: drop them on the composer, paste them, or pick them with the paperclip. A
   selection in the editor goes along as context through "Add to T3 thread".
 - Review a diff in the IDE's viewer and leave comments on its lines; they go with the next
   message. Revert to before a prompt from its hover row, behind a confirmation.

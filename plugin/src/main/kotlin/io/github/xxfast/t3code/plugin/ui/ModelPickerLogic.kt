@@ -4,6 +4,7 @@ import io.github.xxfast.t3code.protocol.ProviderSession
 import io.github.xxfast.t3code.protocol.ProviderThread
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.ModelCapabilities
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.ServerProviderModel
@@ -13,23 +14,43 @@ import kotlinx.serialization.json.contentOrNull
 // The thread settings the server owns, set from the composer's footer like upstream's
 // `ChatComposer.tsx` (`ComposerFooterModeControls`, `ProviderModelPicker`). Nothing is kept here.
 
-/** One runtime mode, `runtimeModeConfig` in `apps/web/src/components/chat/runtimeModeConfig.ts`. */
-data class RuntimeModeOption(val mode: String, val label: String, val description: String)
+/**
+ * One runtime mode, `runtimeModeConfig` in `apps/web/src/components/chat/runtimeModeConfig.ts`.
+ * [icon] is the lucide glyph's name.
+ */
+data class RuntimeModeOption(
+  val mode: String,
+  val label: String,
+  val description: String,
+  val icon: String,
+)
 
 /** `runtimeModeConfig`, in upstream's order. */
 val RUNTIME_MODES: List<RuntimeModeOption> = listOf(
-  RuntimeModeOption("approval-required", "Supervised", "Ask before commands and file changes."),
+  RuntimeModeOption(
+    mode = "approval-required",
+    label = "Supervised",
+    description = "Ask before commands and file changes.",
+    icon = "lock",
+  ),
   RuntimeModeOption(
     mode = "auto-accept-edits",
     label = "Auto-accept edits",
     description = "Auto-approve edits, ask before other actions.",
+    icon = "pen-line",
   ),
   RuntimeModeOption(
     mode = "auto",
     label = "Auto",
     description = "Supported providers approve routine actions; others still ask.",
+    icon = "sparkles",
   ),
-  RuntimeModeOption("full-access", "Full access", "Allow commands and edits without prompts."),
+  RuntimeModeOption(
+    mode = "full-access",
+    label = "Full access",
+    description = "Allow commands and edits without prompts.",
+    icon = "lock-open",
+  ),
 )
 
 /**
@@ -345,12 +366,19 @@ fun updateThreadModelSelection(
 
 /** What the composer's footer shows for the thread's settings. Built by [composerFooter]. */
 data class ComposerFooterState(
+  val provider: ServerProvider?,
   val modelLabel: String,
   val models: List<ModelPickerGroup>,
   val runtimeModes: List<RuntimeModeOption>,
   val runtimeMode: String,
   val showInteractionModeToggle: Boolean,
   val interactionMode: String,
+  /** The model's option descriptors, for the traits picker. */
+  val capabilities: ModelCapabilities? = null,
+  /** What the next message sends: the instance, the model and its options. */
+  val selection: ModelSelection? = null,
+  /** What the provider says it runs, [deriveReportedModelSelection]. Display only. */
+  val reported: ModelSelection? = null,
 )
 
 /**
@@ -363,17 +391,23 @@ fun composerFooter(
   model: String?,
   runtimeMode: String,
   interactionMode: String,
+  selection: ModelSelection? = null,
+  reported: ModelSelection? = null,
 ): ComposerFooterState {
   val provider: ServerProvider? = selectedProvider(providers, instanceId)
   val modes: List<RuntimeModeOption> = compatibleRuntimeModeOptions(provider)
   val interaction: InteractionModeResolution =
     resolveComposerInteractionMode(provider, interactionMode)
   return ComposerFooterState(
+    provider = provider,
     modelLabel = modelPickerLabel(providers, instanceId, model),
     models = modelPickerItems(providers, instanceId, model),
     runtimeModes = modes,
     runtimeMode = compatibleRuntimeMode(runtimeMode, modes),
     showInteractionModeToggle = interaction.enabled,
     interactionMode = interaction.interactionMode,
+    capabilities = provider?.let { getProviderModelCapabilities(it.models, model, it.driver) },
+    selection = selection,
+    reported = reported,
   )
 }

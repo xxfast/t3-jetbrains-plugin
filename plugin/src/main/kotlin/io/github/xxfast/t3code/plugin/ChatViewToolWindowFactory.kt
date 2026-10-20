@@ -14,8 +14,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
-import com.intellij.openapi.diagnostic.Logger
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
@@ -23,29 +23,35 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
+import io.github.xxfast.t3code.plugin.actions.interruptCommand
 import io.github.xxfast.t3code.plugin.actions.threadActions
 import io.github.xxfast.t3code.plugin.ide.ProjectAwareness
 import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ide.ThreadVisits
-import io.github.xxfast.t3code.plugin.ui.Advance
 import io.github.xxfast.t3code.plugin.ide.VcsStatuses
-import io.github.xxfast.t3code.plugin.ide.threadCwd
 import io.github.xxfast.t3code.plugin.ide.notify
+import io.github.xxfast.t3code.plugin.ide.threadCwd
 import io.github.xxfast.t3code.plugin.review.checkpointForRun
 import io.github.xxfast.t3code.plugin.review.rollbackBlockReason
+import io.github.xxfast.t3code.plugin.ui.Advance
+import io.github.xxfast.t3code.plugin.ui.COMPACT_COMMAND
 import io.github.xxfast.t3code.plugin.ui.ChatView
+import io.github.xxfast.t3code.plugin.ui.ComposerContextWindow
+import io.github.xxfast.t3code.plugin.ui.ComposerDispatchMode
 import io.github.xxfast.t3code.plugin.ui.ComposerFooterActions
 import io.github.xxfast.t3code.plugin.ui.ComposerFooterState
-import io.github.xxfast.t3code.plugin.ui.ModelChangeBlock
 import io.github.xxfast.t3code.plugin.ui.ComposerState
+import io.github.xxfast.t3code.plugin.ui.ContextWindowSnapshot
 import io.github.xxfast.t3code.plugin.ui.DraftExtras
-import io.github.xxfast.t3code.plugin.ui.PendingUserInputDraftAnswer
 import io.github.xxfast.t3code.plugin.ui.Hint
+import io.github.xxfast.t3code.plugin.ui.ModelChangeBlock
 import io.github.xxfast.t3code.plugin.ui.PendingActions
 import io.github.xxfast.t3code.plugin.ui.PendingRequest
 import io.github.xxfast.t3code.plugin.ui.PendingThreadRequests
+import io.github.xxfast.t3code.plugin.ui.PendingUserInputDraftAnswer
 import io.github.xxfast.t3code.plugin.ui.ReviewCommentContext
 import io.github.xxfast.t3code.plugin.ui.VcsSummary
+import io.github.xxfast.t3code.plugin.ui.activeContextWindow
 import io.github.xxfast.t3code.plugin.ui.activeRun
 import io.github.xxfast.t3code.plugin.ui.advance
 import io.github.xxfast.t3code.plugin.ui.answersResponse
@@ -53,18 +59,23 @@ import io.github.xxfast.t3code.plugin.ui.approvalResponse
 import io.github.xxfast.t3code.plugin.ui.composerFooter
 import io.github.xxfast.t3code.plugin.ui.composerState
 import io.github.xxfast.t3code.plugin.ui.contextId
-import io.github.xxfast.t3code.plugin.ui.setPendingUserInputCustomAnswer
 import io.github.xxfast.t3code.plugin.ui.derivePendingThreadRequests
+import io.github.xxfast.t3code.plugin.ui.deriveReportedModelSelection
 import io.github.xxfast.t3code.plugin.ui.dismissal
 import io.github.xxfast.t3code.plugin.ui.getStartedThreadModelChangeBlockReason
 import io.github.xxfast.t3code.plugin.ui.instance
 import io.github.xxfast.t3code.plugin.ui.mergeOptimistic
-import io.github.xxfast.t3code.plugin.ui.operateBlockReason
 import io.github.xxfast.t3code.plugin.ui.nextModelSelection
+import io.github.xxfast.t3code.plugin.ui.operateBlockReason
+import io.github.xxfast.t3code.plugin.ui.optionsJson
 import io.github.xxfast.t3code.plugin.ui.pendingRequest
+import io.github.xxfast.t3code.plugin.ui.providerSupportsManualCompaction
+import io.github.xxfast.t3code.plugin.ui.rememberNow
 import io.github.xxfast.t3code.plugin.ui.seedUserInputDraftAnswers
+import io.github.xxfast.t3code.plugin.ui.setPendingUserInputCustomAnswer
 import io.github.xxfast.t3code.plugin.ui.setThreadInteractionMode
 import io.github.xxfast.t3code.plugin.ui.setThreadRuntimeMode
+import io.github.xxfast.t3code.plugin.ui.shouldOfferResumeCompaction
 import io.github.xxfast.t3code.plugin.ui.slug
 import io.github.xxfast.t3code.plugin.ui.threadSupportsProviderHandoff
 import io.github.xxfast.t3code.plugin.ui.togglePendingUserInputOptionSelection
@@ -82,6 +93,7 @@ import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import io.github.xxfast.t3code.protocol.generated.UserInputQuestion
+import java.time.Instant
 import java.util.UUID
 import javax.swing.JComponent
 import org.jetbrains.jewel.bridge.JewelComposePanel
@@ -126,7 +138,6 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
   val extras: Map<String, DraftExtras> by controller.extras.collectAsState()
   val comments: List<ReviewCommentContext> = extras[threadId]?.comments.orEmpty()
   val pending: PendingMessages = outboxes[threadId] ?: PendingMessages()
-  var queue: Boolean by remember(threadId) { mutableStateOf(false) }
   val draft: TextFieldState = remember(threadId) { controller.draft(threadId) }
   LaunchedEffect(projects) { ProjectIcons.get().ensure(projects) }
 
@@ -150,13 +161,16 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
     running = view?.let { activeRun(it.runs) } != null,
     sending = pending.sending,
     error = pending.error,
-    queue = queue,
+    // Upstream's `followUpBehavior` default; Ctrl/Cmd sends the other
+    queue = false,
     reviewComments = comments.size,
   )
   val (request: PendingRequest?, actions: PendingActions) =
     rememberPendingRequest(view, requests, pending.responding, controller)
   val (footer: ComposerFooterState?, footerActions: ComposerFooterActions) =
     rememberComposerFooter(view, pending, connection, controller)
+  val contextWindow: ComposerContextWindow =
+    rememberContextWindow(view, footer, composer, connection, controller)
   val projectId: String? = view?.thread?.projectId
   // One subscription per checkout, shared by every tab showing it
   val cwd: String? = threadCwd(view?.thread, projects)
@@ -177,8 +191,19 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
     onRollback = { run ->
       view?.let { current -> confirmRollback(project, controller, current, run) { latest } }
     },
-    onSend = { text, mode -> view?.let { controller.send(it, text, mode) } },
-    onQueueChange = { queue = it },
+    onSend = { text, mode ->
+      // `compactBeforeSend`, ChatView.tsx:6370: a `/compact` of its own doesn't compact twice
+      val compactFirst: Boolean = contextWindow.compactBeforeSendTokens != null &&
+        !contextWindow.keepFullHistory &&
+        text.lowercase() != COMPACT_COMMAND
+      view?.let { controller.send(it, text, mode, compactFirst) }
+    },
+    onInterrupt = {
+      view?.let { current ->
+        interruptCommand(current, UUID.randomUUID().toString())
+          ?.let { command -> controller.dispatchForThread(current, command) }
+      }
+    },
     onRetry = onRetry,
     onOpenFile = { path -> view?.let { opener.openFile(it, path) } },
     onDiffFile = { change -> view?.let { opener.showDiff(it, change) } },
@@ -186,6 +211,60 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
     vcs = vcs,
     extras = extras[threadId] ?: DraftExtras(),
     attachmentActions = rememberAttachmentActions(project, threadId, controller),
+    contextWindow = contextWindow,
+  )
+}
+
+/**
+ * The footer's context window: [view]'s usage (`activeContextWindow`, ChatView.tsx:2547), its
+ * "Compact context" when the provider has `/compact`, and upstream's `resumeCompactionTokens`
+ * (ChatView.tsx:5307) with the per-thread "keep full history" choice. Upstream's "never" answer
+ * to Claude's own resume question and held queued runs aren't checked.
+ */
+@Composable
+private fun rememberContextWindow(
+  view: ThreadView?,
+  footer: ComposerFooterState?,
+  composer: ComposerState,
+  connection: ConnectionState,
+  controller: ChatController,
+): ComposerContextWindow {
+  val threadId: String? = view?.thread?.id
+  var keepFullHistory: Boolean by remember(threadId) { mutableStateOf(false) }
+  val minute: Instant by rememberNow(60_000)
+  val usage: ContextWindowSnapshot? = remember(view) { view?.let(::activeContextWindow) }
+  val canCompact: Boolean = providerSupportsManualCompaction(footer?.provider)
+  val disabledReason: String? = when {
+    operateBlockReason(connection) != null -> "This connection cannot change threads."
+    !canCompact -> "Compaction is unavailable for this provider"
+    else -> null
+  }
+  val offer: Boolean = usage != null &&
+    disabledReason == null &&
+    shouldOfferResumeCompaction(
+      driver = footer?.provider?.driver,
+      usedTokens = usage.usedTokens,
+      updatedAt = usage.updatedAt,
+      promptCacheTtlMs = usage.promptCacheTtlMs,
+      now = minute,
+    )
+  return ComposerContextWindow(
+    usage = usage,
+    modelDisplayName = footer?.modelLabel,
+    // `compactThreadContext`: nothing while a run, a send or a request is in the way
+    onCompact = if (canCompact) {
+      {
+        if (view != null && !composer.running && !composer.sending) {
+          controller.send(view, COMPACT_COMMAND, ComposerDispatchMode.AUTO)
+        }
+      }
+    } else {
+      null
+    },
+    compactDisabledReason = disabledReason,
+    compactBeforeSendTokens = if (offer) usage?.usedTokens else null,
+    keepFullHistory = keepFullHistory,
+    onToggleKeepFullHistory = { keepFullHistory = !keepFullHistory },
   )
 }
 
@@ -291,6 +370,8 @@ private fun rememberComposerFooter(
       model = selection?.slug,
       runtimeMode = pending.settings.runtimeMode(thread),
       interactionMode = pending.settings.interactionMode(thread),
+      selection = selection,
+      reported = view?.let(::deriveReportedModelSelection),
     )
   }
 
@@ -327,6 +408,12 @@ private fun rememberComposerFooter(
           controller.dispatchForThread(current, command)
         }
       }
+    },
+    // Upstream keeps a trait as a composer draft, so it goes with the next message
+    onModelOptions = onModelOptions@{ options ->
+      val current: ThreadView = view ?: return@onModelOptions
+      val base: ModelSelection = selection ?: return@onModelOptions
+      controller.draftModel(current.thread.id, base.copy(options = optionsJson(options)))
     },
     onRuntimeMode = { mode ->
       view?.let { current ->

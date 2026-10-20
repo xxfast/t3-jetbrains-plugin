@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
@@ -43,6 +44,7 @@ import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.CircularProgressIndicator
 import org.jetbrains.jewel.ui.component.IconActionButton
 import org.jetbrains.jewel.ui.component.Text
+import org.jetbrains.jewel.ui.component.Tooltip
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import org.jetbrains.jewel.ui.typography
 
@@ -152,15 +154,18 @@ private fun Chip(
   }
 }
 
-/** Opens a file picker. Not upstream's paste or drop, a way in that doesn't need either. */
+/**
+ * The footer's paperclip, `ChatComposer.tsx` around line 7330: a ghost `icon-sm` button that
+ * opens a file picker, tooltip "Attach files".
+ */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip
 @Composable
 fun AttachButton(enabled: Boolean, actions: AttachmentActions) {
-  IconActionButton(
-    key = AllIconsKeys.General.Add,
-    contentDescription = "Attach files",
-    onClick = actions.onPickFiles,
-    enabled = enabled,
-  )
+  Tooltip(tooltip = { Text("Attach files") }) {
+    ComposerControl(onClick = actions.onPickFiles, enabled = enabled, square = true) {
+      ComposerControlIcon("paperclip")
+    }
+  }
 }
 /**
  * Files dragged from outside the IDE onto the composer, as [onFiles]. A drop whose files can't be

@@ -36,6 +36,7 @@ public typealias RuntimeRequest = io.github.xxfast.t3code.protocol.generated.Run
 public typealias ProviderSession = io.github.xxfast.t3code.protocol.generated.ProviderSession
 
 public typealias ProviderThread = io.github.xxfast.t3code.protocol.generated.ProviderThread
+public typealias ProviderTurn = io.github.xxfast.t3code.protocol.generated.ProviderTurn
 
 /** A message in the conversation, queued ones included. `id` is the dispatched `messageId`. */
 public typealias ConversationMessage =
@@ -79,6 +80,8 @@ public data class ThreadView(
   val providerSessions: List<ProviderSession> = emptyList(),
   val checkpoints: List<Checkpoint> = emptyList(),
   val providerThreads: List<ProviderThread> = emptyList(),
+  /** Each provider turn, carrying the live context window usage while one runs. */
+  val providerTurns: List<ProviderTurn> = emptyList(),
   val messages: List<ConversationMessage> = emptyList(),
   /**
    * How far into the server's command log this view is: the last event's `sequence`, or a

@@ -1,24 +1,18 @@
 package io.github.xxfast.t3code.plugin.ui
 
-import androidx.compose.foundation.border
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
@@ -31,88 +25,85 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import org.jetbrains.jewel.foundation.theme.JewelTheme
-import org.jetbrains.jewel.ui.component.CheckboxRow
-import org.jetbrains.jewel.ui.component.CircularProgressIndicator
-import org.jetbrains.jewel.ui.component.IconActionButton
 import org.jetbrains.jewel.ui.component.Link
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.TextArea
-import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import org.jetbrains.jewel.ui.typography
 
 /**
- * The box at the bottom of the ChatView: a text area and a round send button at the bottom
- * right, like upstream's `ChatComposer.tsx` and `ComposerPrimaryActions.tsx`. Plain text only.
- * While the thread waits on you, [pending] takes the box over: an approval hides the text field,
- * a question shows its own.
+ * The box at the bottom of the ChatView, upstream's `ChatComposer.tsx`: a [ComposerSurface] with
+ * the prompt on top (`data-chat-composer-body`) and the footer below
+ * (`data-chat-composer-footer`): [ComposerControls] on the left, the paperclip and
+ * [ComposerPrimaryActions] on the right. Plain text only. While the thread waits on you,
+ * [pending] takes the body over: an approval hides the prompt and the footer, a question shows
+ * its own.
  */
 @Composable
-fun Composer(
+fun ChatComposer(
   state: ComposerState,
   draft: TextFieldState,
   onSend: (text: String, mode: ComposerDispatchMode) -> Unit,
-  onQueueChange: (Boolean) -> Unit,
   modifier: Modifier = Modifier,
+  onInterrupt: () -> Unit = {},
   pending: PendingRequest? = null,
   pendingActions: PendingActions = PendingActions(),
   footer: ComposerFooterState? = null,
   footerActions: ComposerFooterActions = ComposerFooterActions(),
   extras: DraftExtras = DraftExtras(),
   attachmentActions: AttachmentActions = AttachmentActions(),
+  contextWindow: ComposerContextWindow = ComposerContextWindow(usage = null),
   onClearReview: () -> Unit = {},
 ) {
-  val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
-  val focused: Boolean by interactions.collectIsFocusedAsState()
-  val outline: Color = if (focused) accent() else JewelTheme.globalColors.borders.normal
-
-  // [alternate] is Ctrl/Cmd+Enter while running: the other follow-up behaviour, steer <-> queue
+  // [alternate] is Ctrl/Cmd+Enter or Ctrl/Cmd-click while running: the other follow-up behaviour
   fun send(alternate: Boolean) {
     val text: String = draft.text.toString()
     if (!sendable(text, state, extras)) return
     onSend(text.trim(), resolveComposerDispatchMode(state.running, alternate, state.queue))
   }
 
-  // ComposerPrimaryActions.tsx, around line 276
-  val label: String = when (resolveComposerDispatchMode(state.running, false, state.queue)) {
-    ComposerDispatchMode.QUEUE -> "Queue message"
-    ComposerDispatchMode.STEER -> "Steer message"
-    else -> "Submit message"
-  }
-
   Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
     if (state.reviewComments > 0) ReviewBanner(state.reviewComments, onClearReview)
-    Column(
+    ComposerSurface(
       modifier = Modifier
         .fillMaxWidth()
-        .border(1.dp, outline, RoundedCornerShape(16.dp))
         .fileDropTarget(
           enabled = state.enabled && pending == null,
           onFiles = attachmentActions.onFiles,
           onRefused = attachmentActions.onRefused,
-        )
-        .padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 6.dp),
+        ),
     ) {
-      // Above whatever takes the box, so context added during an approval still shows
-      ComposerChips(extras, state.enabled, attachmentActions)
-      when (pending) {
-        is PendingRequest.Approval ->
-          ComposerPendingApprovalPanel(pending, state.enabled, pendingActions)
+      Column {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp)
+            .padding(bottom = if (pending is PendingRequest.Approval) 16.dp else 8.dp),
+        ) {
+          // Above whatever takes the box, so context added during an approval still shows
+          ComposerChips(extras, state.enabled, attachmentActions)
+          when (pending) {
+            is PendingRequest.Approval ->
+              ComposerPendingApprovalPanel(pending, state.enabled, pendingActions)
 
-        is PendingRequest.UserInput ->
-          ComposerPendingUserInputPanel(pending, state.enabled, pendingActions)
+            is PendingRequest.UserInput ->
+              ComposerPendingUserInputPanel(pending, state.enabled, pendingActions)
 
-        null -> MessageInput(
-          state = state,
-          draft = draft,
-          interactions = interactions,
-          label = label,
-          onSend = ::send,
-          onQueueChange = onQueueChange,
-          footer = footer,
-          footerActions = footerActions,
-          extras = extras,
-          attachmentActions = attachmentActions,
-        )
+            null -> ComposerPromptEditor(state, draft, attachmentActions, ::send)
+          }
+        }
+        if (pending == null) {
+          ComposerFooter(
+            state = state,
+            draft = draft,
+            hasSendableContent = sendable(draft.text.toString(), state, extras),
+            footer = footer,
+            footerActions = footerActions,
+            attachmentActions = attachmentActions,
+            contextWindow = contextWindow,
+            onSend = ::send,
+            onInterrupt = onInterrupt,
+          )
+        }
       }
     }
     state.disabledReason?.let { reason ->
@@ -124,61 +115,84 @@ fun Composer(
   }
 }
 
-/** The text field and the send row, when nothing is pending. */
+/**
+ * The prompt, upstream's `ComposerPromptEditor`: borderless, `leading-relaxed`, at least 78dp
+ * (`min-h-19.5`) and at most 208dp (`max-h-52`) before it scrolls.
+ */
 @Composable
-private fun MessageInput(
+private fun ComposerPromptEditor(
   state: ComposerState,
   draft: TextFieldState,
-  interactions: MutableInteractionSource,
-  label: String,
+  attachmentActions: AttachmentActions,
   onSend: (alternate: Boolean) -> Unit,
-  onQueueChange: (Boolean) -> Unit,
+) {
+  TextArea(
+    state = draft,
+    modifier = Modifier
+      .fillMaxWidth()
+      .heightIn(min = 78.dp, max = 208.dp)
+      .attachmentTarget(state.enabled, attachmentActions)
+      .composerKeys(draft, state.running, onSend),
+    enabled = state.enabled,
+    lineLimits = TextFieldLineLimits.MultiLine(),
+    // Upstream's short placeholder (ChatComposer.tsx:6695). The long one offers @tags,
+    // skills and slash commands, which this plugin doesn't have.
+    placeholder = { Text("Ask anything...", color = JewelTheme.globalColors.text.info) },
+    undecorated = true,
+  )
+}
+
+/**
+ * `data-chat-composer-footer`: the controls on the left, scrolling sideways when they don't fit
+ * (`overflow-x-auto`), and the actions on the right (`data-chat-composer-actions`).
+ */
+@Composable
+private fun ComposerFooter(
+  state: ComposerState,
+  draft: TextFieldState,
+  hasSendableContent: Boolean,
   footer: ComposerFooterState?,
   footerActions: ComposerFooterActions,
-  extras: DraftExtras,
   attachmentActions: AttachmentActions,
+  contextWindow: ComposerContextWindow,
+  onSend: (alternate: Boolean) -> Unit,
+  onInterrupt: () -> Unit,
 ) {
-  Column {
-    TextArea(
-      state = draft,
-      modifier = Modifier
-        .fillMaxWidth()
-        .attachmentTarget(state.enabled, attachmentActions)
-        .composerKeys(draft, state.running, onSend),
-      enabled = state.enabled,
-      lineLimits = TextFieldLineLimits.MultiLine(minHeightInLines = 2, maxHeightInLines = 12),
-      interactionSource = interactions,
-      // Upstream's short placeholder (ChatComposer.tsx:6695). The long one offers @tags,
-      // skills and slash commands, which this plugin doesn't have.
-      placeholder = { Text("Ask anything...") },
-      undecorated = true,
-    )
+  Row(
+    // The model picker's `-ms-2.5` pulls its icon back to the prompt's edge
+    modifier = Modifier.fillMaxWidth().padding(start = 6.dp, end = 16.dp, bottom = 16.dp),
+    horizontalArrangement = Arrangement.spacedBy(8.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
     Row(
-      modifier = Modifier.fillMaxWidth(),
+      modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      footer?.let { ComposerControls(it, state.enabled, footerActions, draft) }
+    }
+    Row(
       horizontalArrangement = Arrangement.spacedBy(8.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      footer?.let { ComposerFooterModeControls(it, state.enabled, footerActions) }
       AttachButton(state.enabled, attachmentActions)
-      if (state.showQueueToggle) {
-        CheckboxRow(
-          text = "Queue instead of steering",
-          checked = state.queue,
-          onCheckedChange = onQueueChange,
-          textStyle = JewelTheme.typography.small,
+      // `ComposerFooterPrimaryActions`: the meter, then the primary actions
+      contextWindow.usage?.let { usage ->
+        ContextWindowMeter(
+          usage = usage,
+          modelDisplayName = contextWindow.modelDisplayName,
+          onCompact = contextWindow.onCompact,
+          compactDisabledReason = contextWindow.compactDisabledReason,
         )
       }
-      Spacer(Modifier.weight(1f))
-      if (state.sending) {
-        CircularProgressIndicator(Modifier.padding(4.dp).size(16.dp))
-      } else {
-        IconActionButton(
-          key = AllIconsKeys.General.ArrowUp,
-          contentDescription = label,
-          onClick = { onSend(false) },
-          enabled = sendable(draft.text.toString(), state, extras),
-        )
-      }
+      ComposerPrimaryActions(
+        state = state,
+        hasSendableContent = hasSendableContent,
+        onSend = onSend,
+        onInterrupt = onInterrupt,
+        compactBeforeSendTokens = contextWindow.compactBeforeSendTokens,
+        keepFullHistory = contextWindow.keepFullHistory,
+        onToggleKeepFullHistory = contextWindow.onToggleKeepFullHistory,
+      )
     }
   }
 }

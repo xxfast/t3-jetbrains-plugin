@@ -364,6 +364,7 @@ public class WebSocketT3Client internal constructor(
           decodeEach(ProviderSession.serializer(), projection["providerSessions"]),
         checkpoints = decodeEach(Checkpoint.serializer(), projection["checkpoints"]),
         providerThreads = decodeEach(ProviderThread.serializer(), projection["providerThreads"]),
+        providerTurns = decodeEach(ProviderTurn.serializer(), projection["providerTurns"]),
         messages = decodeEach(ConversationMessage.serializer(), projection["messages"]),
         sequence = maxOf(view?.sequence ?: 0, item.long("snapshotSequence") ?: 0),
       )
@@ -399,6 +400,14 @@ public class WebSocketT3Client internal constructor(
       type == "provider-thread.updated" -> decodeOrNull(ProviderThread.serializer(), payload)
         ?.let { thread ->
           view.copy(providerThreads = view.providerThreads.upsert(thread, ProviderThread::id))
+        }
+
+      // An update without usage keeps the turn's last report
+      type == "provider-turn.updated" -> decodeOrNull(ProviderTurn.serializer(), payload)
+        ?.let { turn ->
+          val previous: ProviderTurn? = view.providerTurns.find { it.id == turn.id }
+          val merged: ProviderTurn = turn.copy(tokenUsage = turn.tokenUsage ?: previous?.tokenUsage)
+          view.copy(providerTurns = view.providerTurns.upsert(merged, ProviderTurn::id))
         }
 
       type == "message.updated" -> decodeOrNull(ConversationMessage.serializer(), payload)

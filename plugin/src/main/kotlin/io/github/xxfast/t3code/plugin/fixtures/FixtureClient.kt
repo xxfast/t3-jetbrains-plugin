@@ -22,16 +22,21 @@ import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
+import io.github.xxfast.t3code.protocol.generated.BooleanProviderOptionDescriptor
 import io.github.xxfast.t3code.protocol.generated.ChatFileAttachment
 import io.github.xxfast.t3code.protocol.generated.ChatImageAttachment
 import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.LatestVisibleMessageSummary
+import io.github.xxfast.t3code.protocol.generated.ModelCapabilities
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
+import io.github.xxfast.t3code.protocol.generated.ProviderOptionChoice
+import io.github.xxfast.t3code.protocol.generated.SelectProviderOptionDescriptor
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.ServerProviderAuth
 import io.github.xxfast.t3code.protocol.generated.ServerProviderModel
+import io.github.xxfast.t3code.protocol.generated.ServerProviderSlashCommand
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TerminalMetadataStreamEvent
@@ -155,6 +160,7 @@ class FixtureClient(
       runtimeRequests = scenario.runtimeRequests[thread.id].orEmpty(),
       providerSessions = scenario.providerSessions[thread.id].orEmpty(),
       checkpoints = scenario.checkpoints[thread.id].orEmpty(),
+      providerThreads = scenario.providerThreads[thread.id].orEmpty(),
     )
     emit(view())
     entries.drop(snapshot).forEach { entry ->
@@ -779,17 +785,22 @@ class FixtureClient(
         showInteractionModeToggle = true,
         supportedRuntimeModes = listOf("approval-required", "full-access"),
         models = listOf(
-          model("gpt-5", "GPT-5"),
-          model("gpt-5-mini", "GPT-5 mini", badge = "new"),
+          model("gpt-5", "GPT-5", capabilities = CODEX_TRAITS),
+          model("gpt-5-mini", "GPT-5 mini", badge = "new", capabilities = CODEX_TRAITS),
           model("gpt-4.1", "GPT-4.1", isLegacy = true),
         ),
       ),
+      // Claude can `/compact`, so its threads offer "Compact context" and compact-before-send
       provider(
         instanceId = "claude",
         driver = "claudeAgent",
         displayName = "Claude",
         showInteractionModeToggle = false,
-        models = listOf(model("opus", "Opus"), model("sonnet", "Sonnet")),
+        models = listOf(
+          model("opus", "Opus", capabilities = CLAUDE_TRAITS),
+          model("sonnet", "Sonnet", capabilities = CLAUDE_TRAITS),
+        ),
+        slashCommands = listOf(ServerProviderSlashCommand("compact", "Summarize the history")),
       ),
     ),
     serverResolvedCommandContext = true,
@@ -900,6 +911,7 @@ private fun provider(
   showInteractionModeToggle: Boolean,
   supportedRuntimeModes: List<String>? = null,
   models: List<ServerProviderModel>,
+  slashCommands: List<ServerProviderSlashCommand>? = null,
 ): ServerProvider = ServerProvider(
   instanceId = instanceId,
   driver = driver,
@@ -913,6 +925,7 @@ private fun provider(
   auth = ServerProviderAuth(status = "authenticated"),
   checkedAt = "2026-10-19T06:00:00.000Z",
   models = models,
+  slashCommands = slashCommands,
 )
 
 private fun model(
@@ -920,13 +933,48 @@ private fun model(
   name: String,
   badge: String? = null,
   isLegacy: Boolean? = null,
+  capabilities: ModelCapabilities? = null,
 ): ServerProviderModel = ServerProviderModel(
   slug = slug,
   name = name,
   badge = badge,
   isCustom = false,
   isLegacy = isLegacy,
-  capabilities = null,
+  capabilities = capabilities,
+)
+
+/** Codex's reasoning effort, for the traits picker. */
+private val CODEX_TRAITS: ModelCapabilities = ModelCapabilities(
+  optionDescriptors = listOf(
+    SelectProviderOptionDescriptor(
+      id = "reasoningEffort",
+      label = "Reasoning effort",
+      options = listOf(
+        ProviderOptionChoice("low", "Low"),
+        ProviderOptionChoice("medium", "Medium", isDefault = true),
+        ProviderOptionChoice("high", "High"),
+      ),
+    ),
+  ),
+)
+
+/** Claude's effort, with Ultrathink going into the prompt, and fast mode. */
+private val CLAUDE_TRAITS: ModelCapabilities = ModelCapabilities(
+  optionDescriptors = listOf(
+    SelectProviderOptionDescriptor(
+      id = "effort",
+      label = "Effort",
+      options = listOf(
+        ProviderOptionChoice("low", "Low"),
+        ProviderOptionChoice("medium", "Medium"),
+        ProviderOptionChoice("high", "High", isDefault = true),
+        ProviderOptionChoice("max", "Max", description = "Deepest reasoning, slowest replies"),
+        ProviderOptionChoice("ultrathink", "Ultrathink"),
+      ),
+      promptInjectedValues = listOf("ultrathink"),
+    ),
+    BooleanProviderOptionDescriptor(id = "fastMode", label = "Fast mode", currentValue = false),
+  ),
 )
 
 private val PATCH: String = """

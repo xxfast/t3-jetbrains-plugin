@@ -6,12 +6,13 @@
       "title": "Demo: a few hundred items",
       "createdBy": "user",
       "creationSource": "web",
-      "providerInstanceId": "codex",
+      "providerInstanceId": "claude",
       "modelSelection": {
-        "instanceId": "codex",
-        "model": "gpt-5"
+        "instanceId": "claude",
+        "model": "opus"
       },
-      "runtimeMode": "approval-required",
+      "activeProviderThreadId": "pth_01JC5D0M4NYITEMS",
+      "runtimeMode": "full-access",
       "interactionMode": "default",
       "lineage": {
         "rootThreadId": "thr_01JC5D0M4NYITEMS"
@@ -25,6 +26,34 @@
       "updatedAt": "2026-10-19T08:45:00.000Z"
     }
   ],
+  "providerThreads": {
+    "thr_01JC5D0M4NYITEMS": [
+      {
+        "id": "pth_01JC5D0M4NYITEMS",
+        "driver": "claudeAgent",
+        "providerInstanceId": "claude",
+        "providerSessionId": null,
+        "appThreadId": "thr_01JC5D0M4NYITEMS",
+        "ownerNodeId": null,
+        "nativeThreadRef": null,
+        "nativeConversationHeadRef": null,
+        "status": "idle",
+        "firstRunOrdinal": 1,
+        "lastRunOrdinal": 1,
+        "handoffIds": [],
+        "forkedFrom": null,
+        "contextUsage": {
+          "usedTokens": 301400,
+          "maxTokens": 1000000,
+          "totalProcessedTokens": 4820000,
+          "compactsAutomatically": true,
+          "cost": { "amount": 12.4, "currency": "USD" }
+        },
+        "createdAt": "2026-10-19T06:00:00.000Z",
+        "updatedAt": "2026-10-19T08:45:00.000Z"
+      }
+    ]
+  },
   "runs": {
     "thr_01JC5D0M4NYITEMS": [
       {

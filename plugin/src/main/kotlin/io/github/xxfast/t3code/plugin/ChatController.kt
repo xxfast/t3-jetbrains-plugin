@@ -10,6 +10,7 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import io.github.xxfast.t3code.plugin.ide.launchReporting
 import io.github.xxfast.t3code.plugin.ui.AttachmentClass
+import io.github.xxfast.t3code.plugin.ui.COMPACT_COMMAND
 import io.github.xxfast.t3code.plugin.ui.ComposerDispatchMode
 import io.github.xxfast.t3code.plugin.ui.DraftAttachment
 import io.github.xxfast.t3code.plugin.ui.DraftExtras
@@ -41,7 +42,9 @@ import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.Command.MessageDispatch.DispatchMode
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
+import io.github.xxfast.t3code.protocol.generated.ProviderCapabilities
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.time.Instant
 import java.util.UUID
@@ -415,9 +418,16 @@ class ChatController(private val project: Project, private val scope: CoroutineS
 
   /**
    * Sends [text] as a follow-up on [view]'s thread. It shows at once until the server
-   * acknowledges it; a refusal takes it back out and puts the text back in the draft.
+   * acknowledges it; a refusal takes it back out and puts the text back in the draft. With
+   * [compactFirst] a `/compact` goes out first and the message queues behind it, as upstream's
+   * `compactBeforeSend` (`ChatView.tsx:6370`): steering into a compaction is refused.
    */
-  fun send(view: ThreadView, text: String, mode: ComposerDispatchMode) {
+  fun send(
+    view: ThreadView,
+    text: String,
+    mode: ComposerDispatchMode,
+    compactFirst: Boolean = false,
+  ) {
     val threadId: String = view.thread.id
     val messageId: String = UUID.randomUUID().toString()
     // Attachments and context ride along; the pinned server always advertises
@@ -440,17 +450,40 @@ class ChatController(private val project: Project, private val scope: CoroutineS
         val info: ServerInfo = client.serverInfo()
         _catalog.value = info
         val run: Run? = activeRun(view.runs)
+        val capabilities: ProviderCapabilities? =
+          activeCapabilities(run, view.providerThreads, view.providerSessions)
+        if (compactFirst) {
+          val compact: Command.MessageDispatch = messageDispatch(
+            threadId = threadId,
+            commandId = UUID.randomUUID().toString(),
+            messageId = UUID.randomUUID().toString(),
+            text = COMPACT_COMMAND,
+            serverResolved = info.serverResolvedCommandContext,
+            requested = mode,
+            activeRun = run,
+            capabilities = capabilities,
+            modelSelection = model,
+          )
+          client.dispatch(compact)
+        }
         val command: Command.MessageDispatch = messageDispatch(
           threadId = threadId,
           commandId = UUID.randomUUID().toString(),
           messageId = messageId,
           text = outgoing,
           serverResolved = info.serverResolvedCommandContext,
-          requested = mode,
+          requested = if (compactFirst) ComposerDispatchMode.QUEUE else mode,
           activeRun = run,
-          capabilities = activeCapabilities(run, view.providerThreads, view.providerSessions),
+          capabilities = capabilities,
           modelSelection = model,
-        ).copy(attachments = attachments, context = context)
+        ).let { dispatch ->
+          // The compaction is the active run now, whatever this view last saw
+          if (compactFirst) {
+            dispatch.copy(dispatchMode = DispatchMode.QueueAfterActive())
+          } else {
+            dispatch
+          }
+        }.copy(attachments = attachments, context = context)
         val sequence: Long = client.dispatch(command)
         update(threadId) { pending -> pending.delivered(messageId, sequence) }
         // The message holds them now; they're no longer the draft's to release

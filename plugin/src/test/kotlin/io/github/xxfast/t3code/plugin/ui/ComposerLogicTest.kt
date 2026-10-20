@@ -254,7 +254,7 @@ class ComposerLogicTest {
       composerState(ConnectionState.Disconnected, true, false, null, true)
     assertFalse(offline.enabled)
     assertEquals(NOT_CONNECTED, offline.disabledReason)
-    assertFalse(offline.showQueueToggle)
+    assertFalse(offline.canInterrupt)
 
     val readOnly: ComposerState =
       composerState(connected("orchestration:read"), false, false, null, false)
@@ -269,14 +269,14 @@ class ComposerLogicTest {
   }
 
   @Test
-  fun `queue toggle only shows while a run is going`() {
+  fun `stop only offers while a run is going`() {
     val connection: ConnectionState.Connected = connected(OPERATE_SCOPE)
     val idle: ComposerState = composerState(connection, false, false, null, queue = true)
-    assertFalse(idle.showQueueToggle)
+    assertFalse(idle.canInterrupt)
     assertFalse(idle.running)
 
     val running: ComposerState = composerState(connection, true, false, null, queue = true)
-    assertTrue(running.showQueueToggle)
+    assertTrue(running.canInterrupt)
     assertTrue(running.running)
     assertTrue(running.queue)
   }

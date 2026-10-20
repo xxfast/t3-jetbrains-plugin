@@ -31,8 +31,9 @@ data class ComposerState(
   val error: String?,
   /** A run is going, so a send is a follow-up: steered into it or queued behind it. */
   val running: Boolean,
-  val showQueueToggle: Boolean,
-  /** The follow-up behaviour: queue when on, steer when off. */
+  /** Upstream's `canInterrupt`: a run is going and this pairing may stop it. */
+  val canInterrupt: Boolean,
+  /** The follow-up behaviour (upstream's `followUpBehavior` setting): queue when on, else steer. */
   val queue: Boolean,
   /** Review comments going with the next message. */
   val reviewComments: Int = 0,
@@ -78,7 +79,7 @@ fun composerState(
     sending = sending,
     error = error,
     running = running,
-    showQueueToggle = enabled && running,
+    canInterrupt = enabled && running,
     queue = queue,
     reviewComments = reviewComments,
   )
