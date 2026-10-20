@@ -11,6 +11,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
 import io.github.xxfast.t3code.plugin.T3
 import io.github.xxfast.t3code.plugin.ide.IGNORE_CASE
+import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ide.isUnder
 import io.github.xxfast.t3code.plugin.ide.localRoots
 import io.github.xxfast.t3code.plugin.ide.notify
@@ -23,9 +24,9 @@ import kotlin.io.path.isDirectory
 
 /**
  * "Open in IDE", upstream's `OpenInPicker` (ThreadDetailsPanel.tsx:164) with the IDE as the only
- * editor: focuses the window that has the thread's [gitCwd] open, else opens it in a new one.
- * Hidden when it belongs in this window already. Doesn't need the server, only the path, and only
- * when the server's paths are this machine's.
+ * editor: focuses the window that has the thread's [gitCwd] open, else opens it in a new one,
+ * and shows the thread there. Hidden when it belongs in this window already. Doesn't need the
+ * server, only the path, and only when the server's paths are this machine's.
  */
 class OpenInIdeAction : AnAction(), DumbAware {
   override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
@@ -65,10 +66,13 @@ class OpenInIdeAction : AnAction(), DumbAware {
     val window: Project? = ReadAction.compute<Project?, RuntimeException> {
       windowFor(cwd, windows, ::localRoots)
     }
+    // The thread goes along: the window it lands in opens it, as a click in its Sidebar would
     if (window != null) {
+      T3Opener.getInstance(window).openThread(row.id)
       ProjectUtil.focusProjectWindow(window, true)
     } else {
-      ProjectUtil.openOrImport(cwd, null, true)
+      val opened: Project = ProjectUtil.openOrImport(cwd, null, true) ?: return
+      T3Opener.getInstance(opened).openThread(row.id)
     }
   }
 }
