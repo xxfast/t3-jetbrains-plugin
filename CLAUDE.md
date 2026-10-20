@@ -130,6 +130,11 @@ Hard-won, so recorded here rather than rediscovered.
   first when the composer's data key is in the context (`PasteAttachmentAction`). Expect the
   same for any other shortcut the IDE keymap owns.
 - `gradle` isn't installed globally on these machines. Commit the wrapper.
+- A Compose library goes in non-transitive (`isTransitive = false`) and must be built against
+  the Compose the IDE bundles: `javap -constants` on `androidx.compose.runtime.ComposeVersion` in
+  `intellij.libraries.compose.runtime.desktop.jar` says which (13000, Compose 1.10, on 2025.3
+  and 2026.3). Haze was tried for the composer's glass on 2026-10-20 and dropped; 1.7.2 was
+  the last version on Compose 1.10, 1.7.3 and 2.x need Compose 1.12 and newer Kotlin metadata.
 - Upstream is cloned at `~/Developer/XXFAST/TS/T3Code`, checked out at the tag in
   `contracts/T3CODE_VERSION`. When a question is "how does T3 decide X", read the source there
   (`apps/web` for the UI rules, `apps/server` for the wire) instead of inferring from screenshots

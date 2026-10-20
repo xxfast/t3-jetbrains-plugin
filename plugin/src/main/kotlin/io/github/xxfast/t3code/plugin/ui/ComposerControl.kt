@@ -24,13 +24,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.foundation.theme.LocalTextStyle
@@ -43,9 +45,10 @@ private val CONTROL_SHAPE: Shape = RoundedCornerShape(8.dp)
 val COMPOSER_SHAPE: Shape = RoundedCornerShape(24.dp)
 
 /**
- * The composer's card, `ComposerSurface.tsx`'s `Shell`, `Host` and `Main`: a raised fill, a
- * hairline outline (`--chat-composer-outline`, black at 8% light, white at 5% dark) and
- * `shadow-composer` on light themes only. [highlight] is the drag-over ring.
+ * The composer's card, `ComposerSurface.tsx`'s `Shell`, `Host` and `Main`: a solid
+ * `--chat-composer-glass-surface` (upstream's backdrop blur left out), a hairline outline (`--chat-composer-outline`, black at 8% light, white at 5% dark) and
+ * `shadow-composer` (`0 12px 28px -18px` black at 40%) on light themes only. [highlight] is the
+ * drag-over ring.
  */
 @Composable
 fun ComposerSurface(
@@ -59,7 +62,7 @@ fun ComposerSurface(
   val ring: Color = if (highlight) accent().copy(alpha = 0.7f) else outline
   Box(
     modifier = modifier
-      .then(if (dark) Modifier else Modifier.shadow(8.dp, COMPOSER_SHAPE, clip = false))
+      .then(if (dark) Modifier else Modifier.dropShadow(COMPOSER_SHAPE, COMPOSER_SHADOW))
       .clip(COMPOSER_SHAPE)
       .background(composerGlassSurface())
       .then(if (highlight) Modifier.background(subtle(0.06f)) else Modifier)
@@ -68,6 +71,14 @@ fun ComposerSurface(
     content()
   }
 }
+
+/** `--shadow-composer`: `0 12px 28px -18px rgb(0 0 0 / 40%)`. */
+private val COMPOSER_SHADOW: Shadow = Shadow(
+  radius = 28.dp,
+  spread = (-18).dp,
+  offset = DpOffset(0.dp, 12.dp),
+  color = Color.Black.copy(alpha = 0.4f),
+)
 
 /**
  * `--chat-composer-glass-surface`: `--card` on light themes, `--surface-raised` on dark. The IDE

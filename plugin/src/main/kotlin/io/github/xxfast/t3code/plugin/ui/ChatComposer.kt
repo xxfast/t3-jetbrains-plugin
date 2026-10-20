@@ -1,25 +1,12 @@
 package io.github.xxfast.t3code.plugin.ui
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.input.TextFieldLineLimits
@@ -27,6 +14,7 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -44,8 +32,15 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.drop
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Link
@@ -82,6 +77,7 @@ fun ChatComposer(
   contextWindow: ComposerContextWindow = ComposerContextWindow(usage = null),
   resting: Boolean = false,
   onPromptFocus: () -> Unit = {},
+  onSettledHeight: (Int) -> Unit = {},
   onClearReview: () -> Unit = {},
 ) {
   // [alternate] is Ctrl/Cmd+Enter or Ctrl/Cmd-click while running: the other follow-up behaviour
@@ -91,7 +87,11 @@ fun ChatComposer(
     onSend(text.trim(), resolveComposerDispatchMode(state.running, alternate, state.queue))
   }
 
+  // `useComposerRestingTransition`: one clock per change moves the height, the prompt, the
+  // actions and the controls together
   val folded: Boolean = resting && pending == null
+  val motion: ComposerRestingMotion = remember { ComposerRestingMotion(folded) }
+  LaunchedEffect(folded) { motion.moveTo(folded) }
   val actions: @Composable () -> Unit = {
     ComposerActions(
       state = state,
@@ -103,7 +103,13 @@ fun ChatComposer(
     )
   }
 
-  Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+  Column(
+    // The timeline keeps room for the settled composer only, see [resolveComposerTimelineInset]
+    modifier = modifier.onGloballyPositioned { coordinates ->
+      if (motion.settled) onSettledHeight(coordinates.size.height)
+    },
+    verticalArrangement = Arrangement.spacedBy(4.dp),
+  ) {
     if (state.reviewComments > 0) ReviewBanner(state.reviewComments, onClearReview)
     ComposerSurface(
       modifier = Modifier
@@ -114,12 +120,39 @@ fun ChatComposer(
           onRefused = attachmentActions.onRefused,
         ),
     ) {
-      // `useComposerRestingTransition`: the surface's height eases between the two layouts
-      Column(Modifier.animateContentSize(restingTween())) {
-        Column(
+      when (pending) {
+        null -> ComposerBody(
+          motion = motion,
+          chips = { ComposerChips(extras, state.enabled, attachmentActions) },
+          prompt = {
+            ComposerPromptEditor(
+              state = state,
+              draft = draft,
+              progress = { motion.expansion },
+              attachmentActions = attachmentActions,
+              onSend = ::send,
+              onFocus = onPromptFocus,
+            )
+          },
+          actions = actions,
+          controls = {
+            Row(Modifier.horizontalScroll(rememberScrollState())) {
+              footer?.let { ComposerControls(it, state.enabled, footerActions, draft) }
+            }
+          },
+          restingControls = {
+            Row(Modifier.horizontalScroll(rememberScrollState())) {
+              CompositionLocalProvider(LocalComposerControlSize provides ComposerControlSize.XS) {
+                footer?.let { ComposerControls(it, state.enabled, footerActions, draft) }
+              }
+            }
+          },
+        )
+
+        else -> Column(
           modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = if (folded) 8.dp else 16.dp)
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp)
             .padding(bottom = if (pending is PendingRequest.Approval) 16.dp else 8.dp),
         ) {
           // Above whatever takes the box, so context added during an approval still shows
@@ -130,39 +163,6 @@ fun ChatComposer(
 
             is PendingRequest.UserInput ->
               ComposerPendingUserInputPanel(pending, state.enabled, pendingActions)
-
-            // One prompt in both layouts, so it keeps its focus and caret across the change
-            null -> Row(verticalAlignment = Alignment.CenterVertically) {
-              ComposerPromptEditor(
-                state = state,
-                draft = draft,
-                resting = folded,
-                attachmentActions = attachmentActions,
-                onSend = ::send,
-                onFocus = onPromptFocus,
-                modifier = Modifier.weight(1f),
-              )
-              // The actions move beside the prompt (`data-chat-composer-transition-actions`)
-              AnimatedVisibility(folded, enter = arrive(), exit = depart()) {
-                Box(Modifier.padding(start = 8.dp)) { actions() }
-              }
-            }
-          }
-        }
-        if (pending == null) {
-          AnimatedContent(
-            targetState = folded,
-            transitionSpec = {
-              (arrive() togetherWith depart())
-                .using(SizeTransform(clip = false) { _, _ -> restingTween() })
-            },
-            label = "composer footer",
-          ) { rests ->
-            if (rests) {
-              RestingControls(state, footer, footerActions, draft)
-            } else {
-              ComposerFooter(state, draft, footer, footerActions, actions)
-            }
           }
         }
       }
@@ -176,30 +176,17 @@ fun ChatComposer(
   }
 }
 
-private fun <T> restingTween(): FiniteAnimationSpec<T> =
-  tween(COMPOSER_RESTING_TRANSITION_MS, easing = COMPOSER_RESTING_TRANSITION_EASING)
-
-/** Arriving controls fade in and drift up `COMPOSER_RESTING_CONTROLS_ARRIVAL_DRIFT_PX`. */
-private fun arrive(): EnterTransition =
-  fadeIn(restingTween()) + slideInVertically(restingTween()) { RESTING_ARRIVAL_DRIFT }
-
-private const val RESTING_ARRIVAL_DRIFT: Int = 4
-
-/** Departing controls clear out in the first third, so the two sets barely overlap. */
-private fun depart(): ExitTransition =
-  fadeOut(tween(COMPOSER_RESTING_TRANSITION_MS / 3, easing = COMPOSER_RESTING_TRANSITION_EASING))
-
 /**
- * The prompt, upstream's `ComposerPromptEditor`: borderless, `leading-relaxed`, at least 78dp
- * (`min-h-19.5`) and at most 208dp (`max-h-52`) before it scrolls. Resting, it's one line in a
- * 32dp row (`max-h-8 min-h-8 leading-8`).
+ * The prompt, upstream's `ComposerPromptEditor`: borderless and `leading-relaxed`, as tall as
+ * [ComposerBody] makes it. Resting, its one line sits centred in the 32dp row (`leading-8`), so
+ * the text eases down by [RESTING_TEXT_INSET] as [progress] falls to 0.
  */
 @OptIn(ExperimentalComposeUiApi::class) // onPointerEvent
 @Composable
 private fun ComposerPromptEditor(
   state: ComposerState,
   draft: TextFieldState,
-  resting: Boolean,
+  progress: () -> Float,
   attachmentActions: AttachmentActions,
   onSend: (alternate: Boolean) -> Unit,
   onFocus: () -> Unit,
@@ -209,82 +196,122 @@ private fun ComposerPromptEditor(
   LaunchedEffect(draft) {
     snapshotFlow { draft.text.toString() to draft.selection }.drop(1).collect { onFocus() }
   }
-  Box(
+  TextArea(
+    state = draft,
     modifier = modifier
-      .heightIn(min = if (resting) 32.dp else 78.dp)
-      .onPointerEvent(PointerEventType.Press, PointerEventPass.Initial) { onFocus() },
-    contentAlignment = if (resting) Alignment.CenterStart else Alignment.TopStart,
-  ) {
-    TextArea(
-      state = draft,
-      modifier = Modifier
-        .fillMaxWidth()
-        .heightIn(min = if (resting) 0.dp else 78.dp, max = if (resting) 32.dp else 208.dp)
-        .onFocusChanged { if (it.isFocused) onFocus() }
-        .attachmentTarget(state.enabled, attachmentActions)
-        .composerKeys(draft, state.running, onSend),
-      enabled = state.enabled,
-      lineLimits = TextFieldLineLimits.MultiLine(),
-      // Upstream's short placeholder (ChatComposer.tsx:6695). The long one offers @tags,
-      // skills and slash commands, which this plugin doesn't have.
-      placeholder = { Text("Ask anything...", color = JewelTheme.globalColors.text.info) },
-      undecorated = true,
-    )
-  }
-}
-
-/**
- * `data-chat-composer-footer`: the controls on the left, scrolling sideways when they don't fit
- * (`overflow-x-auto`), and the actions on the right (`data-chat-composer-actions`).
- */
-@Composable
-private fun ComposerFooter(
-  state: ComposerState,
-  draft: TextFieldState,
-  footer: ComposerFooterState?,
-  footerActions: ComposerFooterActions,
-  actions: @Composable () -> Unit,
-) {
-  Row(
-    // The model picker's `-ms-2.5` pulls its icon back to the prompt's edge
-    modifier = Modifier.fillMaxWidth().padding(start = 6.dp, end = 16.dp, bottom = 16.dp),
-    horizontalArrangement = Arrangement.spacedBy(8.dp),
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    Row(
-      modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      footer?.let { ComposerControls(it, state.enabled, footerActions, draft) }
-    }
-    actions()
-  }
-}
-
-/**
- * `data-chat-composer-resting-controls`: the same controls at `xs`, in a 32dp strip under the
- * resting prompt (`absolute bottom-2 inset-x-4`).
- */
-@Composable
-private fun RestingControls(
-  state: ComposerState,
-  footer: ComposerFooterState?,
-  footerActions: ComposerFooterActions,
-  draft: TextFieldState,
-) {
-  Row(
-    modifier = Modifier
       .fillMaxWidth()
-      .height(32.dp)
-      .padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
-      .horizontalScroll(rememberScrollState()),
-    verticalAlignment = Alignment.Bottom,
-  ) {
-    CompositionLocalProvider(LocalComposerControlSize provides ComposerControlSize.XS) {
-      footer?.let { ComposerControls(it, state.enabled, footerActions, draft) }
+      .onPointerEvent(PointerEventType.Press, PointerEventPass.Initial) { onFocus() }
+      .offset { IntOffset(0, (RESTING_TEXT_INSET.toPx() * (1 - progress())).roundToInt()) }
+      .onFocusChanged { if (it.isFocused) onFocus() }
+      .attachmentTarget(state.enabled, attachmentActions)
+      .composerKeys(draft, state.running, onSend),
+    enabled = state.enabled,
+    lineLimits = TextFieldLineLimits.MultiLine(),
+    // Upstream's short placeholder (ChatComposer.tsx:6695). The long one offers @tags,
+    // skills and slash commands, which this plugin doesn't have.
+    placeholder = { Text("Ask anything...", color = JewelTheme.globalColors.text.info) },
+    undecorated = true,
+  )
+}
+
+/** How far a resting prompt's one line sits from the row's top to look centred in 32dp. */
+private val RESTING_TEXT_INSET: Dp = 6.dp
+
+/**
+ * The composer without a request, laid out for [motion]'s expansion between resting (0) and
+ * expanded (1) so one clock moves everything, as `useComposerRestingTransition` animates the
+ * surface and pins the footer to its edge:
+ *
+ * - the prompt grows from one 32dp line beside the actions to at least 78dp (`min-h-19.5`, at most
+ *   208dp, `max-h-52`) across the full width;
+ * - the [actions] slide from the prompt's row (`data-chat-composer-transition-actions`) down to
+ *   the footer's, riding the bottom edge;
+ * - the footer's [controls] (`sm`, the model picker's `-ms-2.5` pulling them to 6dp) and the
+ *   resting strip's [restingControls] (`xs`, `absolute bottom-2 inset-x-4`) swap in place, the
+ *   departing set gone at once and the arriving one fading in as [ComposerRestingMotion] says.
+ */
+@Composable
+private fun ComposerBody(
+  motion: ComposerRestingMotion,
+  chips: @Composable () -> Unit,
+  prompt: @Composable () -> Unit,
+  actions: @Composable () -> Unit,
+  controls: @Composable () -> Unit,
+  restingControls: @Composable () -> Unit,
+) {
+  Layout(
+    contents = listOf(chips, prompt, actions, controls, restingControls),
+    modifier = Modifier.fillMaxWidth(),
+  ) { (chip, editor, action, control, rest), constraints ->
+    val t: Float = motion.expansion
+    val width: Int = constraints.maxWidth
+    val side: Int = 16.dp.roundToPx()
+    val gap: Int = 8.dp.roundToPx()
+    val loose = Constraints(maxWidth = (width - 2 * side).coerceAtLeast(0))
+
+    val chipsPlaceable: Placeable? = chip.firstOrNull()?.measure(loose)
+    val actionsPlaceable: Placeable = action.first().measure(Constraints())
+    val actionsWidth: Int = actionsPlaceable.width
+
+    // One line beside the actions, or the full width at 78dp and up
+    val restingWidth: Int = (width - 2 * side - actionsWidth - gap).coerceAtLeast(0)
+    val editorWidth: Int = lerp(restingWidth, width - 2 * side, t)
+    val restingHeight: Int = 32.dp.roundToPx()
+    val minHeight: Int = 78.dp.roundToPx()
+    val editorConstraints: Constraints = if (t >= 1f) {
+      Constraints(editorWidth, editorWidth, minHeight, 208.dp.roundToPx())
+    } else {
+      Constraints.fixed(editorWidth, lerp(restingHeight, minHeight, t))
+    }
+    val editorPlaceable: Placeable = editor.first().measure(editorConstraints)
+
+    val controlsWidth: Int = (width - 6.dp.roundToPx() - side - actionsWidth - gap).coerceAtLeast(0)
+    val controlsPlaceable: Placeable? =
+      control.firstOrNull()?.measure(Constraints(maxWidth = controlsWidth))
+    val restPlaceable: Placeable? = rest.firstOrNull()?.measure(loose)
+
+    val chipsHeight: Int = chipsPlaceable?.height ?: 0
+    val editorTop: Int = lerp(8.dp.roundToPx(), 16.dp.roundToPx(), t) + chipsHeight
+    val bodyBottom: Int = editorTop + editorPlaceable.height + gap
+    // The resting strip's `h-8`, or the footer's 32dp row and its `pb-4`
+    val height: Int = bodyBottom + lerp(32.dp.roundToPx(), 48.dp.roundToPx(), t)
+
+    layout(width, height) {
+      chipsPlaceable?.place(side, lerp(8.dp.roundToPx(), 16.dp.roundToPx(), t))
+      editorPlaceable.place(side, editorTop)
+
+      val footerCentre: Int = height - 32.dp.roundToPx()
+      val restingCentre: Int = editorTop + restingHeight / 2
+      val actionsY: Int = lerp(restingCentre, footerCentre, t) - actionsPlaceable.height / 2
+      actionsPlaceable.place(width - side - actionsWidth, actionsY)
+
+      val drift: Float = 4.dp.toPx()
+      val arriving: Float = motion.footerAlpha
+      controlsPlaceable?.let { placeable ->
+        if (arriving > 0f) {
+          val y: Int = footerCentre - placeable.height / 2
+          placeable.placeWithLayer(6.dp.roundToPx(), y) {
+            alpha = arriving
+            translationY = drift * (1 - arriving)
+          }
+        }
+      }
+      val resting: Float = motion.stripAlpha
+      restPlaceable?.let { placeable ->
+        if (resting > 0f) {
+          val y: Int = height - gap - placeable.height
+          placeable.placeWithLayer(side, y) {
+            alpha = resting
+            translationY = -drift * (1 - resting)
+          }
+        }
+      }
     }
   }
 }
+
+private fun lerp(start: Int, stop: Int, fraction: Float): Int =
+  (start + (stop - start) * fraction).roundToInt()
 
 /** `data-chat-composer-actions`: the paperclip, the meter and [ComposerPrimaryActions]. */
 @Composable

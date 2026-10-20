@@ -1,7 +1,12 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -140,3 +145,70 @@ class ComposerScrollCollapse {
     collapsed = false
   }
 }
+
+/**
+ * `resolveComposerTimelineInset`, composerFooterLayout.ts:57: how much of the timeline's bottom
+ * the composer covers. Resting keeps the larger of what it had and the overlay, so folding and
+ * unfolding never resize the timeline; the first resting measure reserves upstream's
+ * `COMPOSER_RESTING_EXPANSION_MIN_PX` for the unfold.
+ */
+fun resolveComposerTimelineInset(
+  current: Int,
+  overlayHeight: Int,
+  resting: Boolean,
+  expansionMin: Int,
+): Int = if (resting) {
+  maxOf(current, overlayHeight + if (current == 0) expansionMin else 0)
+} else {
+  overlayHeight
+}
+
+/**
+ * The composer's fold and unfold, `useComposerRestingTransition` (ChatComposer.tsx:448), as one
+ * clock per change. Everything here is read in layout and drawing, never in composition, so a
+ * frame of it only re-places the composer.
+ *
+ * - [expansion] eases from where the composer was (a reversal mid-way starts from there) to 0
+ *   resting or 1 expanded, with upstream's easing. Height, prompt and actions follow it.
+ * - The departing controls go at once. Unfolding, the footer's fade in over the second half
+ *   from 4px below; folding, the strip's fade in over the whole change from 4px above.
+ */
+@Stable
+class ComposerRestingMotion(resting: Boolean) {
+  private val clock: Animatable<Float, AnimationVector1D> = Animatable(1f)
+  private var from: Float = if (resting) 0f else 1f
+
+  var resting: Boolean by mutableStateOf(resting)
+    private set
+
+  val expansion: Float
+    get() {
+      val to: Float = if (resting) 0f else 1f
+      return from + (to - from) * COMPOSER_RESTING_TRANSITION_EASING.transform(clock.value)
+    }
+
+  /** The footer's controls: in over the second half of an unfold. */
+  val footerAlpha: Float
+    get() = if (resting) 0f else ease(((clock.value - 0.5f) * 2).coerceIn(0f, 1f))
+
+  /** The resting strip: in over the whole fold. */
+  val stripAlpha: Float
+    get() = if (resting) ease(clock.value) else 0f
+
+  /** No change under way, so the composer has its final height. */
+  val settled: Boolean
+    get() = !clock.isRunning
+
+  suspend fun moveTo(next: Boolean) {
+    if (next == resting) return
+    from = expansion
+    resting = next
+    clock.snapTo(0f)
+    clock.animateTo(1f, tween(COMPOSER_RESTING_TRANSITION_MS, easing = LinearEasing))
+  }
+
+  private fun ease(fraction: Float): Float = COMPOSER_RESTING_TRANSITION_EASING.transform(fraction)
+}
+
+/** `COMPOSER_RESTING_EXPANSION_MIN_PX`: the empty expanded composer over its resting row. */
+const val COMPOSER_RESTING_EXPANSION_MIN_DP: Int = 94

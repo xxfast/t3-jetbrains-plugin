@@ -50,6 +50,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -129,6 +130,8 @@ fun ChatView(
     extras.notice != null ||
     extras.blockReason != null
   val collapseEligible: Boolean = !hasMultilinePrompt && !hasExpandedChrome
+  // How much of the timeline's bottom the composer covers, in pixels
+  var inset: Int by remember(threadId) { mutableIntStateOf(0) }
   val resting: Boolean = shouldUseRestingComposerLayout(
     isScrollCollapsed = scrollCollapse.collapsed,
     timelineOverflows = timeline.canScrollBackward || timeline.canScrollForward,
@@ -141,6 +144,8 @@ fun ChatView(
     ChatHeader(view, project, favicon, vcs)
     // A stream that fails after rendering keeps the thread and says so on top
     if (error != null && view != null) ErrorLine(error, onRetry)
+    // The composer floats over the timeline's bottom, as upstream's overlay does, so its fold
+    // and unfold never resize the timeline
     Box(Modifier.weight(1f).fillMaxWidth()) {
       when {
         view == null && error != null -> LoadError(error, onRetry)
@@ -155,14 +160,16 @@ fun ChatView(
               processor = processor,
               operateReason = composer.disabledReason,
               actions = TimelineActions(onOpenFile, onDiffFile, onDiffRun, onRollback),
+              bottomInset = with(LocalDensity.current) { inset.toDp() },
               modifier = Modifier.timelineWheel(timeline, scrollCollapse, collapseEligible),
             )
           }
         }
       }
-    }
-    if (view != null) {
-      Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+      if (view != null) {
+        val expansionMin: Int = with(LocalDensity.current) {
+          COMPOSER_RESTING_EXPANSION_MIN_DP.dp.roundToPx()
+        }
         ChatComposer(
           state = composer,
           draft = draft,
@@ -178,7 +185,11 @@ fun ChatView(
           contextWindow = contextWindow,
           resting = resting,
           onPromptFocus = { scrollCollapse.expandForEditor(System.currentTimeMillis()) },
+          onSettledHeight = { height ->
+            inset = resolveComposerTimelineInset(inset, height, resting, expansionMin)
+          },
           modifier = Modifier
+            .align(Alignment.BottomCenter)
             .widthIn(max = MAX_CONTENT_WIDTH)
             .fillMaxWidth()
             .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp),
@@ -291,6 +302,7 @@ private fun MessagesTimeline(
   processor: MarkdownProcessor,
   operateReason: String?, // why nothing can change the thread, when it can't
   actions: TimelineActions,
+  bottomInset: Dp,
   modifier: Modifier = Modifier,
 ) {
   val running: Run? = activeRun(view.runs)
@@ -338,7 +350,7 @@ private fun MessagesTimeline(
       LazyColumn(
         state = state,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 16.dp),
+        contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp + bottomInset),
         horizontalAlignment = Alignment.CenterHorizontally,
       ) {
         itemsIndexed(rows, key = { _, row -> row.id }) { index, row ->

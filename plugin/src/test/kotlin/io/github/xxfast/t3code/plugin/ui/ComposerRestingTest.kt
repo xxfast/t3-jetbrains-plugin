@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
@@ -63,5 +64,15 @@ class ComposerRestingTest {
     assertTrue(collapse.collapsed)
     collapse.expandForEditor(10)
     assertFalse(collapse.collapsed)
+  }
+
+  @Test
+  fun `the timeline inset holds while resting so folding never resizes it`() {
+    // Expanded, it follows the composer
+    assertEquals(150, resolveComposerTimelineInset(0, 150, resting = false, expansionMin = 94))
+    // Folding keeps the expanded room
+    assertEquals(150, resolveComposerTimelineInset(150, 80, resting = true, expansionMin = 94))
+    // Resting from the start reserves room for the unfold
+    assertEquals(174, resolveComposerTimelineInset(0, 80, resting = true, expansionMin = 94))
   }
 }
