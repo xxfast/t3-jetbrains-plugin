@@ -128,7 +128,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         onContextMenu = { threadId, x, y -> showThreadMenu(project, threadId, x, y) },
         filter = filter,
         onFilterChange = awareness::choose,
-        onNewThread = null, // #17
+        onNewThread = if (operable) NewThread.getInstance(project)::open else null,
         onOpenSettings = { T3.openSettings(project) },
         settlement = settlement,
         snooze = snooze,

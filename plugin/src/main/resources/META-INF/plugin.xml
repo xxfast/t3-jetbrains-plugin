@@ -174,6 +174,18 @@
         icon="AllIcons.Actions.MenuOpen"/>
     </group>
 
+    <!-- Upstream's chat.new: the "New thread in..." picker. In the IDE's New and Generate popups,
+         what mod+n opens here, rather than on the key itself -->
+    <action
+      id="T3Code.NewThread"
+      class="io.github.xxfast.t3code.plugin.actions.NewThreadAction"
+      text="T3 Thread"
+      description="Start a T3 Code thread in a project"
+      icon="/icons/t3Sidebar.svg">
+      <add-to-group group-id="NewGroup" anchor="last"/>
+      <add-to-group group-id="GenerateGroup" anchor="last"/>
+    </action>
+
     <!-- Upstream's thread.undo: the latest settle, snooze, unpin or archive, while its notice is up -->
     <action
       id="T3Code.UndoThreadAction"

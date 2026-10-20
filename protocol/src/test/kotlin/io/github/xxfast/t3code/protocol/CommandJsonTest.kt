@@ -42,6 +42,35 @@ class CommandJsonTest {
   }
 
   @Test
+  fun nullOrFieldsGoOutAsNullAndOptionalOnesStayAbsent() {
+    val create = Command.ThreadCreate(
+      createdBy = "user",
+      creationSource = "web",
+      commandId = "c1",
+      threadId = "t1",
+      projectId = "p1",
+      title = "New thread",
+      modelSelection = ModelSelection(
+        instanceId = JsonPrimitive("codex"),
+        model = JsonPrimitive("gpt-5"),
+      ),
+      runtimeMode = "full-access",
+      interactionMode = "default",
+      branch = null,
+      worktreePath = null,
+    )
+    val encoded: String = T3JsonOut.encodeToString(OrchestrationV2Command.serializer(), create)
+    assertEquals(
+      """{"type":"thread.create","createdBy":"user","creationSource":"web","commandId":"c1",""" +
+        """"threadId":"t1","projectId":"p1","title":"New thread",""" +
+        """"modelSelection":{"instanceId":"codex","model":"gpt-5"},""" +
+        """"runtimeMode":"full-access","interactionMode":"default",""" +
+        """"branch":null,"worktreePath":null}""",
+      encoded,
+    )
+  }
+
+  @Test
   fun anOptionalDiscriminatorIsStillSent() {
     val image = AttachmentCreateUploadUrlInput.Image(
       name = "shot.png",

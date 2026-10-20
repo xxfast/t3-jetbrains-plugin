@@ -130,13 +130,13 @@ public class WebSocketT3Client internal constructor(
 
   override suspend fun dispatch(command: OrchestrationV2Command): Long {
     val payload: JsonElement =
-      T3Json.encodeToJsonElement(OrchestrationV2Command.serializer(), command)
+      T3JsonOut.encodeToJsonElement(OrchestrationV2Command.serializer(), command)
     val result: JsonElement = call("orchestration.dispatchCommand", payload)
     return decode(DispatchCommandResult.serializer(), result).sequence
   }
 
   override fun terminal(input: TerminalAttachInput): Flow<TerminalAttachStreamEvent> {
-    val payload: JsonElement = T3Json.encodeToJsonElement(TerminalAttachInput.serializer(), input)
+    val payload: JsonElement = T3JsonOut.encodeToJsonElement(TerminalAttachInput.serializer(), input)
     return resubscribing("terminal.attach", payload, TerminalAttachStreamEvent.serializer())
   }
 
@@ -204,7 +204,7 @@ public class WebSocketT3Client internal constructor(
     input: AttachmentCreateUploadUrlInput,
   ): AttachmentCreateUploadUrlResult {
     val payload: JsonElement =
-      T3Json.encodeToJsonElement(AttachmentCreateUploadUrlInput.serializer(), input)
+      T3JsonOut.encodeToJsonElement(AttachmentCreateUploadUrlInput.serializer(), input)
     val result: JsonElement = call("attachments.createUploadUrl", payload)
     return decode(AttachmentCreateUploadUrlResult.serializer(), result)
   }
@@ -225,7 +225,7 @@ public class WebSocketT3Client internal constructor(
     input: PersistChatAttachmentsInput,
   ): PersistChatAttachmentsResult {
     val payload: JsonElement =
-      T3Json.encodeToJsonElement(PersistChatAttachmentsInput.serializer(), input)
+      T3JsonOut.encodeToJsonElement(PersistChatAttachmentsInput.serializer(), input)
     val result: JsonElement = call("assets.persistChatAttachments", payload)
     return decode(PersistChatAttachmentsResult.serializer(), result)
   }

@@ -185,7 +185,7 @@ data class ModelPickerGroup(
  * `isProviderInstancePickerReady`, `apps/web/src/providerInstances.ts:70`: enabled, available
  * and ready. Others list only the thread's current model, so it still reads as picked.
  */
-private fun ServerProvider.pickerReady(): Boolean =
+internal fun ServerProvider.pickerReady(): Boolean =
   enabled && availability != "unavailable" && status == "ready"
 
 /**
