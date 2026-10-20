@@ -78,3 +78,38 @@ fun outgoingText(text: String, extras: DraftExtras): String {
   if (cited.isEmpty() && extras.attachments.isNotEmpty()) return ATTACHMENT_ONLY_BOOTSTRAP_PROMPT
   return cited
 }
+
+/** `truncate`, packages/shared/src/String.ts: [text] trimmed, cut to [maxLength] plus "...". */
+fun truncate(text: String, maxLength: Int = 50): String {
+  val trimmed: String = text.trim()
+  return if (trimmed.length <= maxLength) trimmed else "${trimmed.take(maxLength)}..."
+}
+
+/**
+ * The title a thread shows until the server has generated one, as `ChatView.tsx:6854` seeds it:
+ * the prompt without its context links, else the first image, file or review comment, else
+ * `NEW_THREAD_TITLE`. Sent as `titleSeed` on every dispatch; the server only acts on it for a
+ * thread's first message (`Orchestrator.ts:4660`), where it also queues title generation.
+ * Without it the thread stays "New thread" for good. Assistant citations aren't flattened here
+ * because the plugin's composer can't insert them.
+ */
+fun titleSeed(text: String, extras: DraftExtras): String {
+  val fromText: String = stripInlineContextReferences(text).trim()
+  val seed: String = when {
+    fromText.isNotEmpty() -> fromText
+    else -> {
+      val image: DraftAttachment? =
+        extras.attachments.firstOrNull { it.kind == AttachmentKind.IMAGE }
+      val file: DraftAttachment? =
+        extras.attachments.firstOrNull { it.kind != AttachmentKind.IMAGE }
+      val comment: ReviewCommentContext? = extras.comments.firstOrNull()
+      when {
+        image != null -> "Image: ${image.name}"
+        file != null -> "File: ${file.name}"
+        comment != null -> "Review: ${reviewCommentContextLabel(comment)}"
+        else -> NEW_THREAD_TITLE
+      }
+    }
+  }
+  return truncate(seed)
+}

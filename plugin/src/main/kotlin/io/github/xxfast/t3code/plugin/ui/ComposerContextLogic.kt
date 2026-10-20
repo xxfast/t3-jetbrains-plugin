@@ -244,6 +244,17 @@ fun withContextReferences(text: String, references: List<String>): String {
   return "$text${if (boundary) "" else " "}${missing.joinToString(" ")} "
 }
 
+/** `stripInlineContextReferences`, composerContextReferences.ts:36: [text] without its links. */
+fun stripInlineContextReferences(text: String): String {
+  if (!text.contains("](t3-context:")) return text
+  return CONTEXT_LINK.replace(text) { match ->
+    val parts: List<String> = match.groupValues[3].removePrefix(CONTEXT_HREF_PREFIX).split('/')
+    val valid: Boolean = parts.size == 2 &&
+      CONTEXT_KIND_PATTERN.matches(parts[0]) && CONTEXT_ID_PATTERN.matches(parts[1])
+    if (valid) "" else match.value
+  }
+}
+
 /** `collectInlineContextIds`: the context ids [text]'s links cite, in order, once each. */
 fun inlineContextIds(text: String): List<String> {
   if (!text.contains("](t3-context:")) return emptyList()

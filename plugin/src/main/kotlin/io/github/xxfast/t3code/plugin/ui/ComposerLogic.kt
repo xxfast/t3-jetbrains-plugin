@@ -205,6 +205,7 @@ fun messageDispatch(
   capabilities: ProviderCapabilities?,
   modelSelection: ModelSelection? = null,
   context: MessageContext? = null,
+  titleSeed: String? = null,
 ): Command.MessageDispatch = Command.MessageDispatch(
   createdBy = "user",
   creationSource = "web",
@@ -216,6 +217,7 @@ fun messageDispatch(
   attachments = emptyList(),
   deliveryIntent = deliveryIntent(serverResolved, requested),
   modelSelection = modelSelection,
+  titleSeed = titleSeed,
   dispatchMode = dispatchMode(serverResolved, requested, activeRun, capabilities),
 )
 

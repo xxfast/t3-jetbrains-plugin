@@ -21,6 +21,7 @@ import io.github.xxfast.t3code.plugin.ui.attachmentLimitError
 import io.github.xxfast.t3code.plugin.ui.classifyAttachment
 import io.github.xxfast.t3code.plugin.ui.messageContext
 import io.github.xxfast.t3code.plugin.ui.outgoingText
+import io.github.xxfast.t3code.plugin.ui.titleSeed
 import io.github.xxfast.t3code.plugin.ui.toRecord
 import io.github.xxfast.t3code.plugin.ui.uploadUrlInput
 import io.github.xxfast.t3code.plugin.ui.uploadedAttachment
@@ -476,6 +477,9 @@ class ChatController(private val project: Project, private val scope: CoroutineS
           activeRun = run,
           capabilities = capabilities,
           modelSelection = model,
+          // What the Sidebar shows until the server names the thread; the server ignores it
+          // past the first message
+          titleSeed = titleSeed(text, extras),
         ).let { dispatch ->
           // The compaction is the active run now, whatever this view last saw
           if (compactFirst) {

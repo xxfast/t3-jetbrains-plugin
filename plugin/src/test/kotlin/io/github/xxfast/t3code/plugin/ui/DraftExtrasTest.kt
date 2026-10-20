@@ -99,4 +99,22 @@ class DraftExtrasTest {
     assertEquals(ATTACHMENT_ONLY_BOOTSTRAP_PROMPT, outgoingText("  ", ready))
     assertEquals("look", outgoingText("look", ready))
   }
+
+  @Test
+  fun titleSeedFollowsChatView() {
+    val file: DraftAttachment =
+      draft("notes.pdf", kind = AttachmentKind.FILE, mimeType = "application/pdf", size = 3)
+    assertEquals("fix the build", titleSeed("  fix the build\n", DraftExtras()))
+    assertEquals(
+      "fix",
+      titleSeed("fix ${reviewCommentReference(comment)} ", DraftExtras()),
+      "Context links don't seed the title",
+    )
+    assertEquals("Image: a.png", titleSeed("", DraftExtras().attaching(file).attaching(image)))
+    assertEquals("File: notes.pdf", titleSeed(" ", DraftExtras().attaching(file)))
+    assertEquals("Review: a.kt L1 to L2", titleSeed("", DraftExtras().withComment(comment)))
+    assertEquals(NEW_THREAD_TITLE, titleSeed("", DraftExtras()))
+    assertEquals("${"x".repeat(50)}...", titleSeed("x".repeat(60), DraftExtras()))
+  }
+
 }
