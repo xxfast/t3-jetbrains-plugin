@@ -24,7 +24,7 @@ Not released. What works today:
   "T3 Chat View" title and the Sidebar's right-click menu, all in Find Action and keymaps.
 - The thread's terminal as a tab in the IDE's Terminal tool window.
 - A project picker that defaults to whatever this IDE window has open, worktrees included.
-  "Open worktree in new window" when it isn't.
+  "Open in IDE" when it isn't: focuses the window that has the thread's checkout, else opens one.
 - A git line on the thread header: branch, changed files, ahead and behind.
 - Model, mode and plan controls in the composer footer.
 - Attach files and images: drop them on the composer, paste them, or pick them with "+". A

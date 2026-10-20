@@ -165,10 +165,10 @@
         icon="AllIcons.General.Delete"/>
       <separator/>
       <action
-        id="T3Code.OpenWorktree"
-        class="io.github.xxfast.t3code.plugin.actions.OpenWorktreeAction"
-        text="Open worktree in new window"
-        description="Open the thread's worktree as its own IDE window"
+        id="T3Code.OpenInIde"
+        class="io.github.xxfast.t3code.plugin.actions.OpenInIdeAction"
+        text="Open in IDE"
+        description="Focus the IDE window that has the thread's checkout open, else open it in a new one"
         icon="AllIcons.Actions.MenuOpen"/>
     </group>
 

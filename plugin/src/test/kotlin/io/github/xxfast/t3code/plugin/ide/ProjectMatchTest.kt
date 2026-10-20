@@ -1,6 +1,9 @@
 package io.github.xxfast.t3code.plugin.ide
 
-import io.github.xxfast.t3code.plugin.actions.openWorktreeReason
+import io.github.xxfast.t3code.plugin.actions.belongsIn
+import io.github.xxfast.t3code.plugin.actions.gitCwd
+import io.github.xxfast.t3code.plugin.actions.openInIdeReason
+import io.github.xxfast.t3code.plugin.actions.windowFor
 import io.github.xxfast.t3code.plugin.ui.ProjectFilter
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.T3Json
@@ -107,24 +110,55 @@ class ProjectMatchTest {
   }
 
   @Test
-  fun `open worktree needs a worktree nobody has open`() {
-    val row: Thread = thread("wt", worktree = "/t3/worktrees/kstore/fix")
-    assertNull(openWorktreeReason(row, true) { listOf(path("/code/kstore")) })
-    val open: String? = openWorktreeReason(row, true) { listOf(path("/t3/worktrees/kstore/fix")) }
-    assertEquals("Worktree is already open", open)
-    assertEquals("Server is on another machine", openWorktreeReason(row, false) { emptyList() })
-    assertEquals("No thread selected", openWorktreeReason(null, true) { emptyList() })
+  fun `open in IDE goes to the worktree, else the project's root`() {
+    val worktree: Thread = thread("wt", worktree = "/t3/worktrees/kstore/fix")
+    assertEquals(path("/t3/worktrees/kstore/fix"), gitCwd(worktree, PROJECTS))
+    assertEquals(path("/code/kstore"), gitCwd(thread("plain", worktree = null), PROJECTS))
+    assertNull(gitCwd(thread("plain", worktree = null), emptyList()))
   }
 
   @Test
-  fun `open worktree only reads the open roots when there's a worktree to look for`() {
+  fun `a thread belongs in a window that has its checkout or a folder above it`() {
+    val cwd: Path = path("/code/kstore")
+    assertTrue(belongsIn(cwd, listOf(path("/code/kstore"))))
+    assertTrue(belongsIn(cwd, listOf(path("/code")), ignoreCase = false), "Monorepo window")
+    assertTrue(belongsIn(cwd, listOf(path("/Code/KStore")), ignoreCase = true))
+    assertFalse(belongsIn(cwd, listOf(path("/Code/KStore")), ignoreCase = false))
+    assertFalse(belongsIn(cwd, listOf(path("/code/kstore/core"))), "Only part of it is open")
+    assertFalse(belongsIn(cwd, listOf(path("/code/router"))))
+  }
+
+  @Test
+  fun `open in IDE focuses the window the checkout belongs in, else opens one`() {
+    val windows: Map<String, List<Path>> = mapOf(
+      "router" to listOf(path("/code/router")),
+      "monorepo" to listOf(path("/code")),
+    )
+    val roots: (String) -> List<Path> = { windows.getValue(it) }
+    assertEquals("monorepo", windowFor(path("/code/kstore"), windows.keys.toList(), roots))
+    assertEquals("router", windowFor(path("/code/router"), windows.keys.toList(), roots))
+    assertNull(windowFor(path("/t3/worktrees/kstore/fix"), windows.keys.toList(), roots))
+  }
+
+  @Test
+  fun `open in IDE needs a local path that's on this disk`() {
+    val row: Thread = thread("wt", worktree = "/t3/worktrees/kstore/fix")
+    val cwd: Path = path("/t3/worktrees/kstore/fix")
+    assertNull(openInIdeReason(row, cwd, true) { true })
+    assertEquals("$cwd isn't on this disk", openInIdeReason(row, cwd, true) { false })
+    assertEquals("Server is on another machine", openInIdeReason(row, cwd, false) { true })
+    assertEquals("Thread has no workspace path", openInIdeReason(row, null, true) { true })
+    assertEquals("No thread selected", openInIdeReason(null, cwd, true) { true })
+  }
+
+  @Test
+  fun `open in IDE only touches the disk when the server is local`() {
     var reads = 0
-    val roots: () -> List<Path> = { reads++; emptyList() }
-    assertEquals("Thread has no worktree", openWorktreeReason(thread("plain", null), true, roots))
-    openWorktreeReason(null, true, roots)
-    openWorktreeReason(thread("wt", "/t3/wt"), false, roots)
+    val exists: (Path) -> Boolean = { reads++; true }
+    openInIdeReason(thread("wt", "/t3/wt"), path("/t3/wt"), false, exists)
+    openInIdeReason(null, path("/t3/wt"), true, exists)
     assertEquals(0, reads)
-    openWorktreeReason(thread("wt", "/t3/wt"), true, roots)
+    openInIdeReason(thread("wt", "/t3/wt"), path("/t3/wt"), true, exists)
     assertEquals(1, reads)
   }
 
