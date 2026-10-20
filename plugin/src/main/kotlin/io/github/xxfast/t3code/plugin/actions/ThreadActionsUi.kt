@@ -61,6 +61,7 @@ private fun threadContext(project: Project, threadId: String): DataContext =
   SimpleDataContext.builder()
     .add(CommonDataKeys.PROJECT, project)
     .add(T3DataKeys.THREAD_ID, threadId)
+    .add(T3DataKeys.FROM_SIDEBAR, true)
     .build()
 
 /** Runs the registered action [actionId] on [threadId], for a row's hover button. */

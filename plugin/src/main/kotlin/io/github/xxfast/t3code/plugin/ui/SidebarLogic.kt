@@ -36,8 +36,12 @@ class RowActions(
   val snooze: ((threadId: String, x: Int, y: Int) -> Unit)? = null,
   /** Wakes a snoozed row now. */
   val wake: ((threadId: String) -> Unit)? = null,
-  /** Dismisses "Woke": a visit at the wake time. Reading needs no operate scope. */
+  /** Dismisses "Woke": a visit at the wake time. */
   val dismissWoke: ((threadId: String, wokeAt: String) -> Unit)? = null,
+  /** Starts renaming a row in place, on a double-click. */
+  val rename: ((threadId: String) -> Unit)? = null,
+  /** Ends renaming in place: what was typed, or null for Escape. */
+  val renamed: (threadId: String, typed: String?) -> Unit = { _, _ -> },
 )
 
 /**

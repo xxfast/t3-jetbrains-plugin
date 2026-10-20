@@ -85,6 +85,18 @@
         icon="AllIcons.Vcs.History"/>
       <separator/>
       <action
+        id="T3Code.RenameThread"
+        class="io.github.xxfast.t3code.plugin.actions.RenameThreadAction"
+        text="Rename thread"
+        description="Give the thread a new title"
+        icon="AllIcons.Actions.Edit"/>
+      <action
+        id="T3Code.RegenerateTitle"
+        class="io.github.xxfast.t3code.plugin.actions.RegenerateTitleAction"
+        text="Regenerate title"
+        description="Have the server write a new title from the conversation"
+        icon="AllIcons.Actions.Refresh"/>
+      <action
         id="T3Code.MarkUnread"
         class="io.github.xxfast.t3code.plugin.actions.MarkUnreadAction"
         text="Mark unread"
@@ -113,6 +125,12 @@
         text="Archive thread"
         description="Archive or unarchive the thread"
         icon="AllIcons.FileTypes.Archive"/>
+      <action
+        id="T3Code.DeleteThread"
+        class="io.github.xxfast.t3code.plugin.actions.DeleteThreadAction"
+        text="Delete"
+        description="Delete the thread and its conversation history"
+        icon="AllIcons.General.Delete"/>
       <separator/>
       <action
         id="T3Code.OpenWorktree"

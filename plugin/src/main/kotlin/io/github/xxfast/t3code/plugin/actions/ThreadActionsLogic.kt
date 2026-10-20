@@ -30,7 +30,8 @@ const val NOT_SNOOZABLE: String = "Waiting on you, or about to start a turn"
 val INTERRUPTIBLE: Set<String> = setOf("preparing", "starting", "running", "waiting")
 
 enum class ThreadActionKind {
-  Stop, Interrupt, Archive, Pin, MarkUnread, Settle, AutoSettle, Snooze, Wake,
+  Stop, Interrupt, Archive, Pin, MarkUnread, Settle, AutoSettle, Snooze, Wake, Rename,
+  RegenerateTitle, Delete,
 }
 
 /**
@@ -52,7 +53,10 @@ fun disabledReason(
   return when (kind) {
     // The shell row has no provider runtime, so Stop finds out from the thread itself
     ThreadActionKind.Stop, ThreadActionKind.Pin, ThreadActionKind.Settle,
-    ThreadActionKind.AutoSettle, ThreadActionKind.Wake -> null
+    ThreadActionKind.AutoSettle, ThreadActionKind.Wake, ThreadActionKind.Rename,
+    ThreadActionKind.Delete -> null
+    ThreadActionKind.RegenerateTitle ->
+      if (row.titleRegeneration == null) null else "Already regenerating the title"
     // threadActionMenu.logic.ts's `canSnoozeNow`
     ThreadActionKind.Snooze -> if (row.canSnooze(now)) null else NOT_SNOOZABLE
     ThreadActionKind.Interrupt -> if (row.interruptible) null else "Nothing running"
@@ -163,3 +167,45 @@ fun wakeCommand(row: Thread, commandId: String): Command =
 
 /** A snooze preset's menu entry, threadActionMenu.logic.ts:141: "Tomorrow (9:00 AM)". */
 fun presetText(preset: SnoozePreset): String = "${preset.label} (${preset.whenLabel})"
+
+/** threadActionMenu.logic.ts:151: "Regenerating…" while the server's at it. */
+fun regenerateText(row: Thread?): String =
+  if (row?.titleRegeneration != null) "Regenerating…" else "Regenerate title"
+
+/** `updateThreadMetadata` with `regenerateTitle`, Sidebar.tsx:4341. */
+fun regenerateTitleCommand(row: Thread, commandId: String): Command =
+  Command.ThreadMetadataUpdate(commandId = commandId, threadId = row.id, regenerateTitle = true)
+
+/** What renaming [row] to what was typed does, `commitThreadRename` (Sidebar.tsx:3163). */
+sealed interface Rename {
+  data class To(val title: String) : Rename
+
+  /** The same title: nothing goes out. */
+  data object Unchanged : Rename
+
+  /** Blank: upstream warns "Thread title cannot be empty" and keeps the old one. */
+  data object Empty : Rename
+}
+
+fun rename(row: Thread, typed: String): Rename {
+  val title: String = typed.trim()
+  return when {
+    title.isEmpty() -> Rename.Empty
+    title == row.title -> Rename.Unchanged
+    else -> Rename.To(title)
+  }
+}
+
+fun renameCommand(row: Thread, title: String, commandId: String): Command =
+  Command.ThreadMetadataUpdate(commandId = commandId, threadId = row.id, title = title)
+
+/** `deleteThread`, commands.ts:420. */
+fun deleteCommand(row: Thread, commandId: String): Command =
+  Command.ThreadDelete(commandId = commandId, threadId = row.id)
+
+/** Upstream's confirmations, Sidebar.tsx:4387 and 4414. */
+fun archivePrompt(row: Thread): String = "Archive thread \"${row.title}\"?"
+
+fun deletePrompt(row: Thread): String = "Delete thread \"${row.title}\"?"
+
+const val DELETE_WARNING: String = "This permanently clears conversation history for this thread."

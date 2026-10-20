@@ -4,6 +4,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.ValidationInfo
+import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBRadioButton
 import com.intellij.ui.components.JBTextField
@@ -16,6 +17,7 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.swing.JComponent
+import javax.swing.event.DocumentEvent
 
 /**
  * Upstream's `CustomSnoozeDialog` (apps/web/src/components/CustomSnoozeDialog.tsx): a date and
@@ -41,6 +43,12 @@ class CustomSnoozeDialog(project: Project) : DialogWrapper(project) {
     title = "Custom Snooze"
     setOKButtonText("Snooze")
     init()
+    // Checked on every edit, so Snooze is only ever pressable with a time to send
+    val recheck = object : DocumentAdapter() {
+      override fun textChanged(e: DocumentEvent) = initValidation()
+    }
+    listOf(date, time, amount).forEach { it.document.addDocumentListener(recheck) }
+    listOf(byDate, byDuration, unit).forEach { it.addItemListener { initValidation() } }
   }
 
   override fun createCenterPanel(): JComponent = panel {
@@ -67,10 +75,12 @@ class CustomSnoozeDialog(project: Project) : DialogWrapper(project) {
     }
     until = resolveCustomSnooze(input, Instant.now())
     if (until != null) return null
-    return if (byDate.isSelected) {
-      ValidationInfo("Choose a valid date and time in the future.", date)
+    // In the dialog's error row, not a balloon over the fields it would cover
+    val error: String = if (byDate.isSelected) {
+      "Choose a valid date and time in the future."
     } else {
-      ValidationInfo("Enter a positive duration.", amount)
+      "Enter a positive duration."
     }
+    return ValidationInfo(error)
   }
 }

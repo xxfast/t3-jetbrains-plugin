@@ -12,6 +12,7 @@ import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.PendingRuntimeRequestSummary
 import io.github.xxfast.t3code.protocol.generated.ServerAuthDescriptor
+import io.github.xxfast.t3code.protocol.generated.ThreadTitleRegeneration
 import java.nio.file.Path
 import java.time.Instant
 import kotlin.io.path.readText
@@ -137,6 +138,38 @@ class ThreadActionsLogicTest {
     )
     assertEquals(NOT_SNOOZABLE, disabledReason(ThreadActionKind.Snooze, OPERATING, asking))
     assertNull(disabledReason(ThreadActionKind.Wake, OPERATING, asking))
+  }
+
+  @Test
+  fun `rename trims, and sends nothing for the same or a blank title`() {
+    assertEquals(Rename.To("New title"), rename(row, "  New title "))
+    assertEquals(Rename.Unchanged, rename(row, " ${row.title} "))
+    assertEquals(Rename.Empty, rename(row, "   "))
+    val expected = Command.ThreadMetadataUpdate(commandId = "c", threadId = row.id, title = "T")
+    assertEquals(expected, renameCommand(row, "T", "c"))
+  }
+
+  @Test
+  fun `regenerate title waits for the one in flight`() {
+    val regenerating: Thread =
+      row.copy(titleRegeneration = ThreadTitleRegeneration("r", "2026-10-19T09:00:00Z"))
+    assertEquals("Regenerate title", regenerateText(row))
+    assertEquals("Regenerating…", regenerateText(regenerating))
+    assertNull(disabledReason(ThreadActionKind.RegenerateTitle, OPERATING, row))
+    assertTrue(disabledReason(ThreadActionKind.RegenerateTitle, OPERATING, regenerating) != null)
+    val expected = Command.ThreadMetadataUpdate(
+      commandId = "c",
+      threadId = row.id,
+      regenerateTitle = true,
+    )
+    assertEquals(expected, regenerateTitleCommand(row, "c"))
+  }
+
+  @Test
+  fun `delete and the confirmations read as upstream's`() {
+    assertEquals(Command.ThreadDelete(commandId = "c", threadId = row.id), deleteCommand(row, "c"))
+    assertEquals("Delete thread \"${row.title}\"?", deletePrompt(row))
+    assertEquals("Archive thread \"${row.title}\"?", archivePrompt(row))
   }
 
   @Test

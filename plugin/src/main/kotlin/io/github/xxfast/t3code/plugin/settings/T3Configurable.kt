@@ -8,6 +8,7 @@ import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.ui.dsl.builder.Cell
 import com.intellij.ui.dsl.builder.bindItem
+import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.COLUMNS_LARGE
@@ -36,6 +37,16 @@ class T3Configurable : BoundConfigurable("T3 Code") {
       row("Open threads in") {
         comboBox(ThreadHost.entries, textListCellRenderer { it?.label })
           .bindItem(T3Settings.get()::openThreadsIn.toNullableProperty())
+      }
+      row {
+        checkBox("Confirm thread archiving")
+          .bindSelected(T3Settings.get()::confirmThreadArchive)
+          .comment("Ask before a thread is archived.")
+      }
+      row {
+        checkBox("Confirm thread deletion")
+          .bindSelected(T3Settings.get()::confirmThreadDelete)
+          .comment("Ask before deleting a thread and its chat history.")
       }
       row {
         button("Pair...") {

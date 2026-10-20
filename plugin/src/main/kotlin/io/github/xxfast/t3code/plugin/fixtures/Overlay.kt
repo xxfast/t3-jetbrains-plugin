@@ -26,6 +26,8 @@ data class Overlay(
   val detachedSessions: Set<String> = emptySet(),
   /** Per thread, upserted over the scenario's conversation messages by id. */
   val messages: Map<String, List<ConversationMessage>> = emptyMap(),
+  /** Threads `thread.delete` removed, as the server's `thread.removed` would. */
+  val deleted: Set<String> = emptySet(),
   /** The fixture server's sequence as of the last `message.dispatch`, what every view reports. */
   val sequence: Long = 0,
 ) {

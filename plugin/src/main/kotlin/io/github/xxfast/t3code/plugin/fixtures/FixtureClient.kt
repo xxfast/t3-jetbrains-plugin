@@ -4,6 +4,7 @@ import com.intellij.openapi.diagnostic.Logger
 import io.github.xxfast.t3code.plugin.ui.THREAD_AUTO_SETTLE_OPT_OUT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SNOOZE
+import io.github.xxfast.t3code.plugin.ui.THREAD_TITLE_REGENERATION
 import io.github.xxfast.t3code.plugin.ui.instance
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.ConversationMessage
@@ -34,6 +35,7 @@ import io.github.xxfast.t3code.protocol.generated.ServerProviderModel
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TerminalSessionSnapshot
+import io.github.xxfast.t3code.protocol.generated.ThreadTitleRegeneration
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import io.github.xxfast.t3code.protocol.generated.UserInputAttachmentAnswerPayload
 import io.github.xxfast.t3code.protocol.generated.VcsStatusLocalResult
@@ -120,7 +122,7 @@ class FixtureClient(
     .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
   override val threads: StateFlow<List<Thread>> = combine(loaded, overlay) { scenario, overlay ->
-    scenario?.threads.orEmpty().map(overlay::row)
+    scenario?.threads.orEmpty().filter { it.id !in overlay.deleted }.map(overlay::row)
   }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
   init {
@@ -310,6 +312,23 @@ class FixtureClient(
           snoozedAt = null,
           updatedAt = if (alreadyAwake) row.updatedAt else now,
         )
+      }
+
+      // Orchestrator.ts:2941, the title half. A regeneration stands in for the server's title
+      // generator: it runs a couple of seconds, then completes with a made-up title
+      is Command.ThreadMetadataUpdate -> {
+        val title: String? = command.title
+        if (title != null) {
+          updateRow(command.threadId) { row -> row.copy(title = title, updatedAt = now) }
+        }
+        if (command.regenerateTitle == true) {
+          regenerateTitle(command.threadId, command.commandId, now)
+        }
+      }
+
+      // Orchestrator.ts:11262. Gone from the shell, as `thread.removed` takes it
+      is Command.ThreadDelete -> overlay.update { overlay ->
+        overlay.copy(deleted = overlay.deleted + command.threadId)
       }
 
       // Orchestrator.ts:2889
@@ -587,6 +606,20 @@ class FixtureClient(
       }
     }
 
+  private fun regenerateTitle(threadId: String, requestId: String, now: String) {
+    updateRow(threadId) { row ->
+      row.copy(titleRegeneration = ThreadTitleRegeneration(requestId, now), updatedAt = now)
+    }
+    scope.launch {
+      delay(TITLE_REGENERATION)
+      updateRow(threadId) { row ->
+        if (row.titleRegeneration?.requestId != requestId) return@updateRow row
+        val title: String = row.title.removeSuffix(REGENERATED) + REGENERATED
+        row.copy(title = title, titleRegeneration = null, updatedAt = Instant.now().toString())
+      }
+    }
+  }
+
   private fun updateRow(threadId: String, change: (Thread) -> Thread) =
     overlay.update { overlay -> overlay.withRow(threadId, change) }
 
@@ -754,7 +787,12 @@ class FixtureClient(
       ),
     ),
     serverResolvedCommandContext = true,
-    capabilities = setOf(THREAD_SETTLEMENT, THREAD_AUTO_SETTLE_OPT_OUT, THREAD_SNOOZE),
+    capabilities = setOf(
+      THREAD_SETTLEMENT,
+      THREAD_AUTO_SETTLE_OPT_OUT,
+      THREAD_SNOOZE,
+      THREAD_TITLE_REGENERATION,
+    ),
   )
 
   override fun connect() {
@@ -800,6 +838,10 @@ class FixtureClient(
 }
 
 private const val REPLY_STEP_MILLIS: Long = 600
+
+/** How long the fixture's title generator takes, and the mark it leaves on the title. */
+private val TITLE_REGENERATION: Duration = 2.seconds
+private const val REGENERATED: String = " (regenerated)"
 
 /** Item statuses that are still going; an interrupt cancels them. */
 private val IN_FLIGHT: Set<String> = setOf("pending", "running", "waiting")

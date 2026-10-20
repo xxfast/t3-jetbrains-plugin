@@ -60,7 +60,8 @@ abstract class ThreadAction(
     val client: T3Client = T3.get().client
     val row: Thread = e.threadRow(project, client) ?: return
     val live: ThreadView? = e.getData(T3DataKeys.THREAD_VIEW)?.takeIf { it.thread.id == row.id }
-    val target = ThreadTarget(project, client, row, live)
+    val sidebar: Boolean = e.getData(T3DataKeys.FROM_SIDEBAR) == true
+    val target = ThreadTarget(project, client, row, live, sidebar)
     val text: String = e.presentation.text ?: templateText ?: "do that"
     ThreadActionScope.getInstance(project).scope
       .launchReporting(project, "Couldn't ${text.lowercase()}") { perform(target) }
@@ -85,8 +86,10 @@ abstract class ThreadActionGroup(private val capability: String?) : DefaultActio
 
   override fun update(e: AnActionEvent) {
     val project: Project? = e.project
-    e.presentation.isEnabledAndVisible =
-      project != null && e.shows(project, capability, menuOnly = true)
+    e.presentation.isVisible = project != null && e.shows(project, capability, menuOnly = true)
+    // Greyed with its items on a connection that can't operate, as upstream's menu does
+    e.presentation.isEnabled =
+      e.presentation.isVisible && blockedBy(T3.get().client.connection.value) == null
   }
 }
 
@@ -105,12 +108,16 @@ fun AnActionEvent.threadId(project: Project): String? =
 fun AnActionEvent.threadRow(project: Project, client: T3Client): Thread? =
   threadId(project)?.let { id -> client.threads.value.find { it.id == id } }
 
-/** What an action acts on: [row], and the host's live view of it when there is one. */
+/**
+ * What an action acts on: [row], and the host's live view of it when there is one. [fromSidebar]
+ * when a Sidebar row asked.
+ */
 class ThreadTarget(
   val project: Project,
   val client: T3Client,
   val row: Thread,
   private val live: ThreadView?,
+  val fromSidebar: Boolean = false,
 ) {
   /** The host's live view, or one look at the thread: subscribe, take the snapshot, unsubscribe. */
   suspend fun view(): ThreadView =

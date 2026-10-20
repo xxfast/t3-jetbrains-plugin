@@ -4,29 +4,30 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -39,13 +40,22 @@ import androidx.compose.ui.awt.awtEventOrNull
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -63,9 +73,9 @@ import org.jetbrains.jewel.bridge.toComposeColor
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.Orientation
 import org.jetbrains.jewel.ui.component.Divider
+import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.IconActionButton
 import org.jetbrains.jewel.ui.component.IconButton
-import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.PopupMenu
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.TextField
@@ -102,6 +112,7 @@ fun Sidebar(
   actions: RowActions = RowActions(), // the rows' hover buttons
   shelves: Shelves = Shelves(),
   onShelvesChange: (Shelves) -> Unit = {},
+  renaming: String? = null, // the row being renamed in place
 ) {
   val search: TextFieldState = rememberTextFieldState()
   val query: String = search.text.toString()
@@ -119,7 +130,7 @@ fun Sidebar(
           sections.settled.isNotEmpty() ->
           Sections(
             projects, favicons, providers, sections, selectedThreadId, onOpenThread, onContextMenu,
-            actions, shelves, onShelvesChange,
+            actions, shelves, onShelvesChange, renaming,
           )
 
         else -> Hint(emptyHint(projects.isEmpty(), query, filter))
@@ -300,6 +311,7 @@ private fun Sections(
   actions: RowActions,
   shelves: Shelves,
   onShelvesChange: (Shelves) -> Unit,
+  renaming: String?,
 ) {
   val byId: Map<String, Project> = remember(projects) { projects.associateBy { it.id } }
   // Only the Working and Waiting clocks need seconds; everything else is happy with minutes
@@ -328,6 +340,7 @@ private fun Sections(
                 onClick = { onOpenThread(thread.id) },
                 onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
                 actions = actions,
+                renaming = thread.id == renaming,
               )
             },
           )
@@ -346,6 +359,7 @@ private fun Sections(
             onClick = { onOpenThread(thread.id) },
             onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
             actions = actions,
+            renaming = thread.id == renaming,
           )
         }
         if (sections.snoozed.isNotEmpty()) {
@@ -399,6 +413,7 @@ private fun InboxCard(
   onClick: () -> Unit,
   onContextMenu: (x: Int, y: Int) -> Unit,
   actions: RowActions,
+  renaming: Boolean,
 ) {
   val status: ThreadStatus = thread.sidebarStatus()
   val woke: Boolean = thread.woke(now)
@@ -417,6 +432,7 @@ private fun InboxCard(
     selected = selected,
     onClick = onClick,
     onContextMenu = onContextMenu,
+    onDoubleClick = actions.rename?.let { rename -> { rename(thread.id) } },
     rest = subtle(0.05f),
     // A receding working card sits at 70% until hovered
     restAlpha = if (recede && status == ThreadStatus.Working) 0.7f else 1f,
@@ -468,13 +484,7 @@ private fun InboxCard(
         }
       }
       Spacer(Modifier.height(4.dp))
-      Text(
-        text = thread.title,
-        fontWeight = weight,
-        color = titleColor,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-      )
+      RowTitle(thread, renaming, actions, weight, titleColor, Modifier.fillMaxWidth())
       Spacer(Modifier.height(2.dp))
       Row(
         modifier = Modifier.fillMaxWidth(),
@@ -676,8 +686,10 @@ private fun SlimRow(
   onClick: () -> Unit,
   onContextMenu: (x: Int, y: Int) -> Unit,
   actions: RowActions,
+  renaming: Boolean,
 ) {
-  Selectable(selected, onClick, onContextMenu) { hovered ->
+  val rename: (() -> Unit)? = actions.rename?.let { rename -> { rename(thread.id) } }
+  Selectable(selected, onClick, onContextMenu, onDoubleClick = rename) { hovered ->
     val lit: Boolean = selected || hovered
     val iconAlpha: Float by animateFloatAsState(if (lit) 1f else 0.4f, Transition)
     Row(
@@ -692,13 +704,13 @@ private fun SlimRow(
           Box(Modifier.size(16.dp))
         }
       }
-      Text(
-        text = thread.title,
-        modifier = Modifier.weight(1f),
-        fontWeight = if (thread.recedes(selected)) null else FontWeight.Medium,
+      RowTitle(
+        thread = thread,
+        renaming = renaming,
+        actions = actions,
+        weight = if (thread.recedes(selected)) null else FontWeight.Medium,
         color = if (lit) JewelTheme.globalColors.text.normal else JewelTheme.globalColors.text.info,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.weight(1f),
       )
       if (thread.pinned) Glyph("pin", subtle(0.65f), 12.dp)
       thread.pullRequestBadge()?.let { PullRequestBadgeView(it) }
@@ -725,6 +737,69 @@ private fun SlimRow(
       }
     }
   }
+}
+
+/**
+ * A row's title (Sidebar.tsx:1970 to 2016): faded while the server regenerates it, a text field
+ * while it's being renamed.
+ */
+@Composable
+private fun RowTitle(
+  thread: Thread,
+  renaming: Boolean,
+  actions: RowActions,
+  weight: FontWeight?,
+  color: Color,
+  modifier: Modifier = Modifier,
+) {
+  if (renaming) {
+    RenameField(thread.title, { typed -> actions.renamed(thread.id, typed) }, modifier)
+    return
+  }
+  Text(
+    text = thread.title,
+    modifier = modifier.alpha(if (thread.titleRegeneration != null) 0.55f else 1f),
+    fontWeight = weight,
+    color = color,
+    maxLines = 1,
+    overflow = TextOverflow.Ellipsis,
+  )
+}
+
+/**
+ * Upstream's inline rename input (Sidebar.tsx:1970): starts focused with the title selected.
+ * Enter and leaving it commit, Escape cancels, each once.
+ */
+@Composable
+private fun RenameField(title: String, onEnd: (typed: String?) -> Unit, modifier: Modifier) {
+  val state: TextFieldState = rememberTextFieldState(title, TextRange(0, title.length))
+  val focus: FocusRequester = remember { FocusRequester() }
+  var focused: Boolean by remember { mutableStateOf(false) }
+  var ended: Boolean by remember { mutableStateOf(false) }
+  fun end(typed: String?) {
+    if (ended) return
+    ended = true
+    onEnd(typed)
+  }
+  LaunchedEffect(Unit) { focus.requestFocus() }
+  TextField(
+    state = state,
+    modifier = modifier
+      .focusRequester(focus)
+      .onFocusChanged { change ->
+        if (focused && !change.isFocused) end(state.text.toString())
+        focused = change.isFocused
+      }
+      .onPreviewKeyEvent { event ->
+        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+        when (event.key) {
+          Key.Enter -> end(state.text.toString())
+          Key.Escape -> end(null)
+          else -> return@onPreviewKeyEvent false
+        }
+        true
+      },
+  )
 }
 
 /** "Show N more" (Sidebar.tsx:5044): a slim-height row, plus glyph, muted text. */
@@ -760,6 +835,7 @@ private fun Selectable(
   selected: Boolean,
   onClick: () -> Unit,
   onContextMenu: (x: Int, y: Int) -> Unit = { _, _ -> },
+  onDoubleClick: (() -> Unit)? = null,
   rest: Color = Color.Transparent,
   restAlpha: Float = 1f, // faded to fully opaque on hover
   modifier: Modifier = Modifier,
@@ -768,6 +844,10 @@ private fun Selectable(
   val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
   val hovered: Boolean by interactions.collectIsHoveredAsState()
   val menu: (x: Int, y: Int) -> Unit by rememberUpdatedState(onContextMenu)
+  val double: (() -> Unit)? by rememberUpdatedState(onDoubleClick)
+  // Upstream's `isTrailingDoubleClick` (Sidebar.tsx:3204): the second click doesn't open again,
+  // or the opened tab takes focus from the rename field it starts
+  var trailing: Boolean by remember { mutableStateOf(false) }
   val fill: Color = when {
     selected -> accent().copy(alpha = 0.2f)
     hovered -> subtle(0.08f)
@@ -796,11 +876,19 @@ private fun Selectable(
             menuGesture = menuGesture || trigger || secondary
             if (menuGesture) event.changes.forEach { change -> change.consume() }
             if (trigger && mouse != null) menu(mouse.xOnScreen, mouse.yOnScreen)
+            // The second click of a double-click, upstream's rename gesture
+            val released: Boolean = event.type == PointerEventType.Release && !menuGesture
+            if (released) trailing = (mouse?.clickCount ?: 1) >= 2
+            if (released && mouse?.clickCount == 2) double?.invoke()
           } while (event.changes.any { change -> change.pressed })
         }
       }
       .hoverable(interactions)
-      .clickable(interactionSource = interactions, indication = null, onClick = onClick),
+      .clickable(
+        interactionSource = interactions,
+        indication = null,
+        onClick = { if (!trailing) onClick() },
+      ),
   ) {
     content(hovered)
   }

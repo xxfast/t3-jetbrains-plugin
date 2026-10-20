@@ -50,6 +50,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
     val icons: ProjectIcons = ProjectIcons.get()
     val awareness: ProjectAwareness = ProjectAwareness.getInstance(project)
     val controller: ChatController = ChatController.getInstance(project)
+    val renamer: SidebarRename = SidebarRename.getInstance(project)
     val panel: JComponent = JewelComposePanel {
       val filter: ProjectFilter by awareness.filter.collectAsState()
       val connection by client.connection.collectAsState()
@@ -98,8 +99,11 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
           } else {
             null
           },
+          rename = if (operable) renamer::start else null,
+          renamed = renamer::end,
         )
       }
+      val renaming: String? by renamer.renaming.collectAsState()
       val shelves: Shelves by SidebarShelves.get().shelves.collectAsState()
       Sidebar(
         projects = projects,
@@ -119,6 +123,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         actions = actions,
         shelves = shelves,
         onShelvesChange = SidebarShelves.get()::change,
+        renaming = renaming,
       )
     }
     val content: Content = ContentFactory.getInstance().createContent(panel, null, false)

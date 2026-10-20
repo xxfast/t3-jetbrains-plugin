@@ -577,6 +577,31 @@ class FixtureClientTest {
   }
 
   @Test
+  fun `rename sets the title, regenerating marks it until the generator answers`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == IDLE } }
+
+    client.dispatch(Command.ThreadMetadataUpdate(commandId = "c1", threadId = IDLE, title = "New"))
+    client.threads.first { row(it).title == "New" }
+
+    client.dispatch(
+      Command.ThreadMetadataUpdate(commandId = "c2", threadId = IDLE, regenerateTitle = true),
+    )
+    client.threads.first { row(it).titleRegeneration?.requestId == "c2" }
+    val done: Thread = client.threads.first { row(it).titleRegeneration == null }.let(::row)
+    assertEquals("New (regenerated)", done.title)
+  }
+
+  @Test
+  fun `delete takes the thread off the list`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == IDLE } }
+
+    client.dispatch(Command.ThreadDelete(commandId = "c", threadId = IDLE))
+    client.threads.first { threads -> threads.none { it.id == IDLE } }
+  }
+
+  @Test
   fun `auto-settle opts out and back in`() = runTest {
     val client = FixtureClient(default, backgroundScope)
     client.threads.first { threads -> threads.any { it.id == IDLE } }
