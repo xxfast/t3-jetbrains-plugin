@@ -100,4 +100,11 @@ public data class ServerInfo(
    * ...). Upstream reads an absent flag as unsupported, so this only holds the ones that are on.
    */
   val capabilities: Set<String> = emptySet(),
+  /** `environment.label`, what the Sidebar's hover card calls the machine. */
+  val environmentLabel: String? = null,
+  /**
+   * `resolveEnvironmentMachineKind`, packages/contracts/src/server.ts:629: the user's
+   * `settings.environmentIcon`, else `environment.platform.machine`, else `server`.
+   */
+  val machine: String = "server",
 )

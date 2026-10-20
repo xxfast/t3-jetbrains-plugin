@@ -11,6 +11,9 @@ object T3DataKeys {
   /** Set when the action came from a Sidebar row, which renames in place instead of a dialog. */
   val FROM_SIDEBAR: DataKey<Boolean> = DataKey.create("T3Code.FromSidebar")
 
+  /** Which of [THREAD_ID]'s terminals to open, where the context names one. */
+  val TERMINAL_ID: DataKey<String> = DataKey.create("T3Code.TerminalId")
+
   /** The live view of [THREAD_ID] where a host holds one, so actions needn't subscribe again. */
   val THREAD_VIEW: DataKey<ThreadView> = DataKey.create("T3Code.ThreadView")
 

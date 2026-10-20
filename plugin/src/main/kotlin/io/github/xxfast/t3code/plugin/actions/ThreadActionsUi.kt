@@ -57,18 +57,34 @@ const val SETTLE_ACTION: String = "T3Code.ToggleSettle"
 const val SNOOZE_GROUP: String = "T3Code.Snooze"
 const val WAKE_ACTION: String = "T3Code.Wake"
 
-private fun threadContext(project: Project, threadId: String): DataContext =
+private fun threadContext(project: Project, threadId: String, terminalId: String? = null) =
   SimpleDataContext.builder()
     .add(CommonDataKeys.PROJECT, project)
     .add(T3DataKeys.THREAD_ID, threadId)
     .add(T3DataKeys.FROM_SIDEBAR, true)
+    .add(T3DataKeys.TERMINAL_ID, terminalId)
     .build()
 
-/** Runs the registered action [actionId] on [threadId], for a row's hover button. */
-fun performThreadAction(project: Project, threadId: String, actionId: String) {
-  val action: AnAction = ActionManager.getInstance().getAction(actionId) ?: return
-  ActionUtil.invokeAction(action, threadContext(project, threadId), SIDEBAR_PLACE, null, null)
+/**
+ * Runs the registered action [actionId] on [threadId], for a row's hover button. [terminalId]
+ * names the terminal for one that opens them. False when the action isn't registered, like
+ * the terminal's without the Terminal plugin.
+ */
+fun performThreadAction(
+  project: Project,
+  threadId: String,
+  actionId: String,
+  terminalId: String? = null,
+): Boolean {
+  val action: AnAction = ActionManager.getInstance().getAction(actionId) ?: return false
+  val context: DataContext = threadContext(project, threadId, terminalId)
+  ActionUtil.invokeAction(action, context, SIDEBAR_PLACE, null, null)
+  return true
 }
+
+/** The terminal module's action, `t3code-terminal.xml`. */
+const val OPEN_TERMINAL_ACTION: String = "T3Code.OpenTerminal"
+
 
 /**
  * The thread actions for [threadId] as the IDE's own popup, at [x], [y] on screen. [group] picks

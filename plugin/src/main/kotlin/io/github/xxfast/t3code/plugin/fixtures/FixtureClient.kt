@@ -34,6 +34,7 @@ import io.github.xxfast.t3code.protocol.generated.ServerProviderAuth
 import io.github.xxfast.t3code.protocol.generated.ServerProviderModel
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
+import io.github.xxfast.t3code.protocol.generated.TerminalMetadataStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TerminalSessionSnapshot
 import io.github.xxfast.t3code.protocol.generated.ThreadTitleRegeneration
 import io.github.xxfast.t3code.protocol.generated.TurnItem
@@ -695,6 +696,11 @@ class FixtureClient(
   ): MutableSharedFlow<TerminalAttachStreamEvent> = terminals
     .getOrPut("$threadId/$terminalId") { MutableSharedFlow(extraBufferCapacity = 64) }
 
+  /** The scenario's `terminals`, as one snapshot each time the directory reloads. */
+  override fun terminalMetadata(): Flow<TerminalMetadataStreamEvent> = loaded
+    .filterNotNull()
+    .map { scenario -> TerminalMetadataStreamEvent.Snapshot(terminals = scenario.terminals) }
+
   override fun vcsStatus(cwd: String): Flow<VcsStatusStreamEvent> = flow {
     val local = VcsStatusLocalResult(
       isRepo = true,
@@ -793,6 +799,8 @@ class FixtureClient(
       THREAD_SNOOZE,
       THREAD_TITLE_REGENERATION,
     ),
+    environmentLabel = "Fixture MacBook",
+    machine = "laptop",
   )
 
   override fun connect() {

@@ -11,6 +11,10 @@
         "instanceId": "codex",
         "model": "gpt-5"
       },
+      "providerInstanceHistory": [
+        "claude",
+        "codex"
+      ],
       "runtimeMode": "approval-required",
       "interactionMode": "default",
       "lineage": {
@@ -25,6 +29,34 @@
       "hasActionableProposedPlan": false,
       "createdAt": "2026-10-19T08:30:12.000Z",
       "updatedAt": "2026-10-19T08:43:30.000Z"
+    }
+  ],
+  "terminals": [
+    {
+      "threadId": "thr_01JC4A1F0QWMIGRATE",
+      "terminalId": "default",
+      "cwd": "/Users/xxfast/Developer/XXFAST/KMP/KStore",
+      "worktreePath": null,
+      "status": "running",
+      "pid": 48213,
+      "exitCode": null,
+      "exitSignal": null,
+      "hasRunningSubprocess": true,
+      "label": "./gradlew check",
+      "updatedAt": "2026-10-20T01:10:00.000Z"
+    },
+    {
+      "threadId": "thr_01JC4A1F0QWMIGRATE",
+      "terminalId": "terminal-2",
+      "cwd": "/Users/xxfast/Developer/XXFAST/KMP/KStore",
+      "worktreePath": null,
+      "status": "running",
+      "pid": 48290,
+      "exitCode": null,
+      "exitSignal": null,
+      "hasRunningSubprocess": false,
+      "label": "zsh",
+      "updatedAt": "2026-10-20T01:09:00.000Z"
     }
   ],
   "runs": {

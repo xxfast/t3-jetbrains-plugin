@@ -2104,6 +2104,21 @@ public data class TaskWorkflowPhase(
 )
 
 @Serializable
+public data class TerminalSummary(
+  val threadId: String,
+  val terminalId: String,
+  val cwd: String,
+  val worktreePath: String?,
+  val status: String,
+  val pid: Long?,
+  val exitCode: Long?,
+  val exitSignal: Long?,
+  val hasRunningSubprocess: Boolean,
+  val label: String,
+  val updatedAt: String,
+)
+
+@Serializable
 public data class ThreadLinkedPullRequest(
   val projectId: String,
   val repository: String,

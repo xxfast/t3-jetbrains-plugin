@@ -27,7 +27,9 @@ class OpenTerminalAction : DumbAwareAction() {
   override fun actionPerformed(event: AnActionEvent) {
     val project: Project = event.project ?: return
     val threadId: String = threadIdOf(event) ?: return
-    ThreadTerminals.getInstance(project).open(threadId)
+    val terminalId: String? = event.getData(T3DataKeys.TERMINAL_ID)
+    val terminals: ThreadTerminals = ThreadTerminals.getInstance(project)
+    if (terminalId == null) terminals.open(threadId) else terminals.open(threadId, terminalId)
   }
 
   private fun threadIdOf(event: AnActionEvent): String? {

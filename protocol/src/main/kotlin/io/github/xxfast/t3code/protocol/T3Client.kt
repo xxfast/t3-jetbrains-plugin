@@ -6,6 +6,7 @@ import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
+import io.github.xxfast.t3code.protocol.generated.TerminalMetadataStreamEvent
 import io.github.xxfast.t3code.protocol.generated.VcsStatusStreamEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -92,6 +93,12 @@ public interface T3Client {
 
   /** `terminal.resize`. */
   public suspend fun terminalResize(threadId: String, terminalId: String, cols: Int, rows: Int)
+
+  /**
+   * `subscribeTerminalMetadata`: every terminal on the server, a snapshot then upserts and
+   * removes. Needs `terminal:read`.
+   */
+  public fun terminalMetadata(): Flow<TerminalMetadataStreamEvent>
 
   /** `subscribeVcsStatus` for [cwd]. */
   public fun vcsStatus(cwd: String): Flow<VcsStatusStreamEvent>

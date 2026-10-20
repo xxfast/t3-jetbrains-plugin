@@ -46,6 +46,7 @@ export const CURATED: ReadonlyArray<readonly [name: string, module: string]> = [
   ["TerminalCloseInput", "terminal.ts"],
   ["TerminalSessionSnapshot", "terminal.ts"],
   ["TerminalAttachStreamEvent", "terminal.ts"],
+  ["TerminalMetadataStreamEvent", "terminal.ts"],
   ["VcsStatusSubscriptionInput", "git.ts"],
   ["VcsStatusStreamEvent", "git.ts"],
   ["AttachmentCreateUploadUrlInput", "assets.ts"],

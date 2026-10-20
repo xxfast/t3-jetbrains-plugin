@@ -11,6 +11,7 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
+import io.github.xxfast.t3code.plugin.actions.OPEN_TERMINAL_ACTION
 import io.github.xxfast.t3code.plugin.actions.SETTLE_ACTION
 import io.github.xxfast.t3code.plugin.actions.SNOOZE_GROUP
 import io.github.xxfast.t3code.plugin.actions.WAKE_ACTION
@@ -18,11 +19,15 @@ import io.github.xxfast.t3code.plugin.actions.blockedBy
 import io.github.xxfast.t3code.plugin.actions.performThreadAction
 import io.github.xxfast.t3code.plugin.actions.showThreadMenu
 import io.github.xxfast.t3code.plugin.ide.ProjectAwareness
+import io.github.xxfast.t3code.plugin.ide.RunningTerminals
 import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ide.ThreadVisits
+import io.github.xxfast.t3code.plugin.ide.VcsStatuses
 import io.github.xxfast.t3code.plugin.ui.ConnectionBanner
 import io.github.xxfast.t3code.plugin.ui.ProjectFilter
+import io.github.xxfast.t3code.plugin.ui.DETACHED
 import io.github.xxfast.t3code.plugin.ui.RowActions
+import io.github.xxfast.t3code.plugin.ui.RowDetails
 import io.github.xxfast.t3code.plugin.ui.Shelves
 import io.github.xxfast.t3code.plugin.ui.Sidebar
 import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
@@ -33,6 +38,7 @@ import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.T3Client
 import javax.swing.JComponent
+import kotlinx.coroutines.flow.map
 import org.jetbrains.jewel.bridge.JewelComposePanel
 
 /** "T3 Sidebar": T3's sidebar. Opening a thread is [T3Opener.openThread]'s business. */
@@ -51,6 +57,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
     val awareness: ProjectAwareness = ProjectAwareness.getInstance(project)
     val controller: ChatController = ChatController.getInstance(project)
     val renamer: SidebarRename = SidebarRename.getInstance(project)
+    val statuses: VcsStatuses = VcsStatuses.getInstance(project)
     val panel: JComponent = JewelComposePanel {
       val filter: ProjectFilter by awareness.filter.collectAsState()
       val connection by client.connection.collectAsState()
@@ -103,6 +110,20 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
           renamed = renamer::end,
         )
       }
+      val terminals: Map<String, List<String>> by RunningTerminals.get().byThread.collectAsState()
+      val details: RowDetails = remember(terminals, catalog) {
+        RowDetails(
+          terminals = terminals,
+          environmentLabel = catalog?.environmentLabel,
+          machine = catalog?.machine ?: "server",
+          checkout = { cwd ->
+            statuses.summary(cwd).map { summary -> summary?.branch?.takeIf { it != DETACHED } }
+          },
+          openTerminal = { threadId, terminalId ->
+            performThreadAction(project, threadId, OPEN_TERMINAL_ACTION, terminalId)
+          },
+        )
+      }
       val renaming: String? by renamer.renaming.collectAsState()
       val shelves: Shelves by SidebarShelves.get().shelves.collectAsState()
       Sidebar(
@@ -124,6 +145,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         shelves = shelves,
         onShelvesChange = SidebarShelves.get()::change,
         renaming = renaming,
+        details = details,
       )
     }
     val content: Content = ContentFactory.getInstance().createContent(panel, null, false)

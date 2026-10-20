@@ -10,6 +10,7 @@ import io.github.xxfast.t3code.protocol.ServerSession
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.generated.ServerAuthDescriptor
+import io.github.xxfast.t3code.protocol.generated.TerminalSummary
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -27,6 +28,7 @@ class ScenarioFile(
   val runtimeRequests: Map<String, List<RuntimeRequest>> = emptyMap(),
   val providerSessions: Map<String, List<ProviderSession>> = emptyMap(),
   val checkpoints: Map<String, List<Checkpoint>> = emptyMap(),
+  val terminals: List<TerminalSummary> = emptyList(),
 )
 
 @Serializable
@@ -52,6 +54,7 @@ class Scenario(
   val runtimeRequests: Map<String, List<RuntimeRequest>> = emptyMap(),
   val providerSessions: Map<String, List<ProviderSession>> = emptyMap(),
   val checkpoints: Map<String, List<Checkpoint>> = emptyMap(),
+  val terminals: List<TerminalSummary> = emptyList(), // what `subscribeTerminalMetadata` lists
 ) {
   companion object {
     fun decode(text: String): Scenario {
@@ -65,13 +68,14 @@ class Scenario(
         runtimeRequests = file.runtimeRequests,
         providerSessions = file.providerSessions,
         checkpoints = file.checkpoints,
+        terminals = file.terminals,
       )
     }
 
     /**
-     * One scenario out of a directory's files, in order. Projects and threads dedupe by id, first
-     * wins. Runs, items, requests, sessions and checkpoints append per thread. The last file that
-     * sets a connection wins, and a directory that sets none is connected.
+     * One scenario out of a directory's files, in order. Projects, threads and terminals dedupe
+     * by id, first wins. Runs, items, requests, sessions and checkpoints append per thread. The
+     * last file that sets a connection wins, and a directory that sets none is connected.
      */
     fun merge(parts: List<Scenario>): Scenario = Scenario(
       connection = parts.lastOrNull { it.connection != null }?.connection
@@ -83,6 +87,7 @@ class Scenario(
       runtimeRequests = parts.map { it.runtimeRequests }.fold(emptyMap(), ::append),
       providerSessions = parts.map { it.providerSessions }.fold(emptyMap(), ::append),
       checkpoints = parts.map { it.checkpoints }.fold(emptyMap(), ::append),
+      terminals = parts.flatMap { it.terminals }.distinctBy { it.threadId to it.terminalId },
     )
 
     fun failed(name: String, message: String): Scenario = Scenario(

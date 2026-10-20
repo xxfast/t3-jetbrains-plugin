@@ -11,6 +11,8 @@ import io.github.xxfast.t3code.protocol.pinned
 import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeParseException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 /** Thread and run statuses that mean work is in flight. */
 val RUNNING: Set<String> = setOf("preparing", "queued", "starting", "running")
@@ -42,6 +44,23 @@ class RowActions(
   val rename: ((threadId: String) -> Unit)? = null,
   /** Ends renaming in place: what was typed, or null for Escape. */
   val renamed: (threadId: String, typed: String?) -> Unit = { _, _ -> },
+)
+
+/**
+ * What rows show besides the thread: running terminals, the server's machine, and the branch a
+ * checkout is on, for the hover card's "checked out on another branch" warning.
+ */
+class RowDetails(
+  /** Running terminal ids by thread id, see `RunningTerminals`. */
+  val terminals: Map<String, List<String>> = emptyMap(),
+  /** The server's `environment.label`, the hover card's machine line. */
+  val environmentLabel: String? = null,
+  /** `resolveEnvironmentMachineKind`, the glyph next to it. */
+  val machine: String = "server",
+  /** The branch checked out at a cwd, null while unknown. Collected only while a card shows. */
+  val checkout: (cwd: String) -> Flow<String?> = { flowOf(null) },
+  /** Opens a running terminal of a thread. Null hides the row's terminal button's action. */
+  val openTerminal: ((threadId: String, terminalId: String) -> Unit)? = null,
 )
 
 /**

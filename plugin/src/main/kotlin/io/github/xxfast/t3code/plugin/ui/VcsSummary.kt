@@ -83,4 +83,4 @@ fun VcsSummary.text(): String {
   return listOfNotNull(branch, changes, sync).joinToString(" · ")
 }
 
-private const val DETACHED: String = "detached HEAD"
+const val DETACHED: String = "detached HEAD"

@@ -1,6 +1,18 @@
 package io.github.xxfast.t3code.plugin.ui
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.TooltipPlacement
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.unit.DpOffset
+import kotlinx.coroutines.flow.flowOf
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -113,6 +125,7 @@ fun Sidebar(
   shelves: Shelves = Shelves(),
   onShelvesChange: (Shelves) -> Unit = {},
   renaming: String? = null, // the row being renamed in place
+  details: RowDetails = RowDetails(), // terminals, machine and checkout, for the rows' extras
 ) {
   val search: TextFieldState = rememberTextFieldState()
   val query: String = search.text.toString()
@@ -130,7 +143,7 @@ fun Sidebar(
           sections.settled.isNotEmpty() ->
           Sections(
             projects, favicons, providers, sections, selectedThreadId, onOpenThread, onContextMenu,
-            actions, shelves, onShelvesChange, renaming,
+            actions, shelves, onShelvesChange, renaming, details,
           )
 
         else -> Hint(emptyHint(projects.isEmpty(), query, filter))
@@ -312,6 +325,7 @@ private fun Sections(
   shelves: Shelves,
   onShelvesChange: (Shelves) -> Unit,
   renaming: String?,
+  details: RowDetails,
 ) {
   val byId: Map<String, Project> = remember(projects) { projects.associateBy { it.id } }
   // Only the Working and Waiting clocks need seconds; everything else is happy with minutes
@@ -341,6 +355,7 @@ private fun Sections(
                 onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
                 actions = actions,
                 renaming = thread.id == renaming,
+                details = details,
               )
             },
           )
@@ -354,12 +369,14 @@ private fun Sections(
             shelf = shelf,
             project = byId[thread.projectId],
             favicon = favicons[thread.projectId],
+            providers = providers,
             now = now,
             selected = thread.id == selectedThreadId,
             onClick = { onOpenThread(thread.id) },
             onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
             actions = actions,
             renaming = thread.id == renaming,
+            details = details,
           )
         }
         if (sections.snoozed.isNotEmpty()) {
@@ -414,6 +431,7 @@ private fun InboxCard(
   onContextMenu: (x: Int, y: Int) -> Unit,
   actions: RowActions,
   renaming: Boolean,
+  details: RowDetails,
 ) {
   val status: ThreadStatus = thread.sidebarStatus()
   val woke: Boolean = thread.woke(now)
@@ -437,6 +455,7 @@ private fun InboxCard(
     // A receding working card sits at 70% until hovered
     restAlpha = if (recede && status == ThreadStatus.Working) 0.7f else 1f,
     modifier = Modifier.padding(vertical = 2.dp), // the list item's `py-0.5`
+    card = { RowHoverCard(thread, project, favicon, providers, details) },
   ) { hovered ->
     Column(Modifier.height(CARD_HEIGHT).padding(horizontal = 10.dp, vertical = 8.dp)) {
       Row(
@@ -505,6 +524,7 @@ private fun InboxCard(
         } else {
           Spacer(Modifier.weight(1f))
         }
+        TerminalButton(thread, details, onClick)
         thread.pullRequestBadge()?.let { PullRequestBadgeView(it) }
         ProviderStack(thread, providers)
       }
@@ -681,15 +701,23 @@ private fun SlimRow(
   shelf: Shelf,
   project: Project?,
   favicon: ImageBitmap?,
+  providers: Map<String, ServerProvider>,
   now: Instant,
   selected: Boolean,
   onClick: () -> Unit,
   onContextMenu: (x: Int, y: Int) -> Unit,
   actions: RowActions,
   renaming: Boolean,
+  details: RowDetails,
 ) {
   val rename: (() -> Unit)? = actions.rename?.let { rename -> { rename(thread.id) } }
-  Selectable(selected, onClick, onContextMenu, onDoubleClick = rename) { hovered ->
+  Selectable(
+    selected = selected,
+    onClick = onClick,
+    onContextMenu = onContextMenu,
+    onDoubleClick = rename,
+    card = { RowHoverCard(thread, project, favicon, providers, details) },
+  ) { hovered ->
     val lit: Boolean = selected || hovered
     val iconAlpha: Float by animateFloatAsState(if (lit) 1f else 0.4f, Transition)
     Row(
@@ -713,6 +741,7 @@ private fun SlimRow(
         modifier = Modifier.weight(1f),
       )
       if (thread.pinned) Glyph("pin", subtle(0.65f), 12.dp)
+      TerminalButton(thread, details, onClick)
       thread.pullRequestBadge()?.let { PullRequestBadgeView(it) }
       val settle: ((String) -> Unit)? = actions.settle
       val wake: ((String) -> Unit)? = actions.wake
@@ -829,7 +858,12 @@ private fun success(): Color =
 @Composable
 private fun indigo(): Color = if (JewelTheme.isDark) Color(0xFFA5B4FC) else Color(0xFF4F46E5)
 
-/** A rounded, full-width clickable surface: accent tint when selected, a light fill on hover. */
+/**
+ * A rounded, full-width clickable surface: accent tint when selected, a light fill on hover. It
+ * takes keyboard focus and opens on Enter or Space, as a row's `handleKeyDown` (Sidebar.tsx:1782),
+ * with upstream's inset focus ring. [card] is the row's hover card, shown to its right.
+ */
+@OptIn(ExperimentalFoundationApi::class) // TooltipPlacement.ComponentRect
 @Composable
 private fun Selectable(
   selected: Boolean,
@@ -839,10 +873,22 @@ private fun Selectable(
   rest: Color = Color.Transparent,
   restAlpha: Float = 1f, // faded to fully opaque on hover
   modifier: Modifier = Modifier,
+  card: (@Composable () -> Unit)? = null,
   content: @Composable (hovered: Boolean) -> Unit,
 ) {
+  if (card != null) {
+    Tooltip(tooltip = card, tooltipPlacement = HOVER_CARD_PLACEMENT, modifier = modifier) {
+      Selectable(
+        selected, onClick, onContextMenu, onDoubleClick, rest, restAlpha, content = content,
+      )
+    }
+    return
+  }
   val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
   val hovered: Boolean by interactions.collectIsHoveredAsState()
+  // Only the row itself, not the rename field inside it: upstream checks the event's target
+  var focused: Boolean by remember { mutableStateOf(false) }
+  val open: () -> Unit by rememberUpdatedState(onClick)
   val menu: (x: Int, y: Int) -> Unit by rememberUpdatedState(onContextMenu)
   val double: (() -> Unit)? by rememberUpdatedState(onDoubleClick)
   // Upstream's `isTrailingDoubleClick` (Sidebar.tsx:3204): the second click doesn't open again,
@@ -861,6 +907,9 @@ private fun Selectable(
       .alpha(alpha)
       .clip(RoundedCornerShape(6.dp))
       .background(fill)
+      .then(
+        if (focused) Modifier.border(2.dp, accent(), RoundedCornerShape(6.dp)) else Modifier,
+      )
       // Ahead of clickable, so a menu gesture never also opens the thread. The platform says
       // which event opens it: the press on macOS and Linux (Ctrl+click too), the release on
       // Windows. A secondary press is swallowed either way.
@@ -884,6 +933,13 @@ private fun Selectable(
         }
       }
       .hoverable(interactions)
+      .onFocusChanged { state -> focused = state.isFocused }
+      .onKeyEvent { event ->
+        val activates: Boolean = event.key == Key.Enter || event.key == Key.Spacebar
+        if (!focused || !activates || event.type != KeyEventType.KeyDown) return@onKeyEvent false
+        open()
+        true
+      }
       .clickable(
         interactionSource = interactions,
         indication = null,
@@ -893,3 +949,141 @@ private fun Selectable(
     content(hovered)
   }
 }
+
+/** `ThreadHoverCardPopup`'s `side="right" align="start"`, 4px off the row. */
+@OptIn(ExperimentalFoundationApi::class)
+private val HOVER_CARD_PLACEMENT: TooltipPlacement = TooltipPlacement.ComponentRect(
+  anchor = Alignment.TopEnd,
+  alignment = Alignment.BottomEnd,
+  offset = DpOffset(4.dp, 0.dp),
+)
+
+/**
+ * `SidebarThreadTooltip` (Sidebar.tsx:929): the title, then project, machine, branch with the
+ * "checked out on another branch" warning, model, earlier providers, running terminals and the
+ * last error, each only when there's something to say. The pull request list in its footer
+ * comes with #18.
+ */
+@Composable
+private fun RowHoverCard(
+  thread: Thread,
+  project: Project?,
+  favicon: ImageBitmap?,
+  providers: Map<String, ServerProvider>,
+  details: RowDetails,
+) {
+  val muted: Color = JewelTheme.globalColors.text.info
+  val body: Color = JewelTheme.globalColors.text.normal.copy(alpha = 0.75f)
+  // Upstream's `gitCwd`, asked only where a mismatch can be: the project's own checkout
+  val cwd: String? = project?.workspaceRoot?.takeIf { thread.worktreePath == null }
+  val current: String? by remember(cwd) { cwd?.let(details.checkout) ?: flowOf(null) }
+    .collectAsState(null)
+  Column(
+    modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 4.dp, vertical = 8.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+  ) {
+    Text(
+      text = thread.title,
+      style = small(),
+      fontWeight = FontWeight.Medium,
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis,
+    )
+    Column(
+      modifier = Modifier.padding(start = 2.dp),
+      verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+      if (project != null) {
+        CardLine(project.title, body) { ProjectIcon(project, favicon, size = 12.dp) }
+      }
+      details.environmentLabel?.let { label ->
+        CardLine(label, body) { Glyph(machineGlyph(details.machine), muted, 12.dp) }
+      }
+      thread.branch?.let { branch ->
+        CardLine(branch, body, TextOverflow.MiddleEllipsis) { Glyph("git-branch", muted, 12.dp) }
+      }
+      if (branchMismatch(thread, current) != null) {
+        val warning: Color = JewelTheme.globalColors.text.warning
+        CardLine("You're currently checked out on another branch.", warning, wraps = true) {
+          Glyph("circle-alert", warning, 12.dp)
+        }
+      }
+      providers[thread.modelInstanceId()]?.let { provider ->
+        CardLine(hoverModelLabel(thread, providers), body) {
+          ProviderIcon(provider, size = 12.dp, alpha = 0.6f, muted = true)
+        }
+      }
+      handedOffFrom(thread, providers).takeIf { it.isNotEmpty() }?.let { names ->
+        CardLine("Handed off from ${names.joinToString(", ")}", body) {
+          Glyph("arrow-right-left", muted, 12.dp)
+        }
+      }
+      details.terminals[thread.id]?.takeIf { it.isNotEmpty() }?.let { running ->
+        CardLine(terminalProcessLabel(running.size), body) { Glyph("terminal", teal(), 12.dp) }
+      }
+      thread.rowError()?.let { error ->
+        val tone: Color = if (error.limited) {
+          JewelTheme.globalColors.text.warning
+        } else {
+          JewelTheme.globalColors.text.error
+        }
+        CardLine(error.text, tone) { Glyph("circle-alert", tone, 12.dp) }
+      }
+    }
+  }
+}
+
+/** One of the hover card's lines: a 12px glyph, then the text. */
+@Composable
+private fun CardLine(
+  text: String,
+  color: Color,
+  overflow: TextOverflow = TextOverflow.Ellipsis,
+  wraps: Boolean = false,
+  icon: @Composable () -> Unit,
+) {
+  Row(
+    horizontalArrangement = Arrangement.spacedBy(8.dp),
+    verticalAlignment = if (wraps) Alignment.Top else Alignment.CenterVertically,
+  ) {
+    Box(Modifier.padding(top = if (wraps) 2.dp else 0.dp)) { icon() }
+    Text(
+      text = text,
+      style = small(),
+      color = color,
+      maxLines = if (wraps) Int.MAX_VALUE else 1,
+      overflow = overflow,
+    )
+  }
+}
+
+/**
+ * `ThreadTerminalStatusButton` (ThreadStatusIndicators.tsx:728): a pulsing terminal glyph while a
+ * terminal of the thread runs a process. Pressing it opens the first one and the thread.
+ */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip sits on Compose's TooltipArea
+@Composable
+private fun TerminalButton(thread: Thread, details: RowDetails, onOpenThread: () -> Unit) {
+  val running: List<String> = details.terminals[thread.id].orEmpty()
+  val first: String = running.firstOrNull() ?: return
+  // Upstream's `animate-status-pulse`
+  val pulse: Float by rememberInfiniteTransition()
+    .animateFloat(1f, 0.4f, infiniteRepeatable(tween(1_000), RepeatMode.Reverse))
+  Tooltip(tooltip = { Text(terminalButtonLabel(running.size)) }) {
+    Box(
+      Modifier
+        .clip(RoundedCornerShape(4.dp))
+        .clickable {
+          details.openTerminal?.invoke(thread.id, first)
+          onOpenThread()
+        },
+    ) {
+      Glyph("terminal", teal().copy(alpha = teal().alpha * pulse), 14.dp)
+    }
+  }
+}
+
+/** Upstream's `text-teal-600 dark:text-teal-300/90`. */
+@Composable
+private fun teal(): Color =
+  if (JewelTheme.isDark) Color(0xFF5EEAD4).copy(alpha = 0.9f) else Color(0xFF0D9488)

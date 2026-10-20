@@ -8,6 +8,7 @@ import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
+import io.github.xxfast.t3code.protocol.generated.TerminalMetadataStreamEvent
 import io.github.xxfast.t3code.protocol.generated.VcsStatusStreamEvent
 import java.io.IOException
 import java.net.URI
@@ -185,6 +186,12 @@ public class WebSocketT3Client internal constructor(
     call("terminal.resize", payload)
   }
 
+  override fun terminalMetadata(): Flow<TerminalMetadataStreamEvent> = resubscribing(
+    "subscribeTerminalMetadata",
+    JsonObject(emptyMap()),
+    TerminalMetadataStreamEvent.serializer(),
+  )
+
   override fun vcsStatus(cwd: String): Flow<VcsStatusStreamEvent> {
     val payload: JsonObject = buildJsonObject {
       put("cwd", cwd)
@@ -228,8 +235,10 @@ public class WebSocketT3Client internal constructor(
     info?.takeIf { (connection, _) -> connection === rpc }?.let { (_, cached) -> return cached }
     val config: JsonObject = call("server.getConfig", JsonObject(emptyMap()), rpc) as? JsonObject
       ?: throw T3Exception.Transport("No config from server.getConfig")
-    val capabilities: JsonObject? =
-      (config["environment"] as? JsonObject)?.get("capabilities") as? JsonObject
+    val environment: JsonObject? = config["environment"] as? JsonObject
+    val capabilities: JsonObject? = environment?.get("capabilities") as? JsonObject
+    val platform: JsonObject? = environment?.get("platform") as? JsonObject
+    val settings: JsonObject? = config["settings"] as? JsonObject
     val resolved: Boolean? =
       (capabilities?.get("serverResolvedCommandContext") as? JsonPrimitive)?.booleanOrNull
     val fresh = ServerInfo(
@@ -238,6 +247,8 @@ public class WebSocketT3Client internal constructor(
       capabilities = capabilities.orEmpty()
         .filterValues { flag -> (flag as? JsonPrimitive)?.booleanOrNull == true }
         .keys,
+      environmentLabel = environment?.string("label"),
+      machine = settings?.string("environmentIcon") ?: platform?.string("machine") ?: "server",
     )
     info = rpc to fresh
     return fresh
