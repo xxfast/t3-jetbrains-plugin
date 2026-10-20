@@ -6,13 +6,8 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.TooltipPlacement
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.unit.DpOffset
-import kotlinx.coroutines.flow.flowOf
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -369,7 +364,6 @@ private fun Sections(
             shelf = shelf,
             project = byId[thread.projectId],
             favicon = favicons[thread.projectId],
-            providers = providers,
             now = now,
             selected = thread.id == selectedThreadId,
             onClick = { onOpenThread(thread.id) },
@@ -455,7 +449,6 @@ private fun InboxCard(
     // A receding working card sits at 70% until hovered
     restAlpha = if (recede && status == ThreadStatus.Working) 0.7f else 1f,
     modifier = Modifier.padding(vertical = 2.dp), // the list item's `py-0.5`
-    card = { RowHoverCard(thread, project, favicon, providers, details) },
   ) { hovered ->
     Column(Modifier.height(CARD_HEIGHT).padding(horizontal = 10.dp, vertical = 8.dp)) {
       Row(
@@ -701,7 +694,6 @@ private fun SlimRow(
   shelf: Shelf,
   project: Project?,
   favicon: ImageBitmap?,
-  providers: Map<String, ServerProvider>,
   now: Instant,
   selected: Boolean,
   onClick: () -> Unit,
@@ -716,7 +708,6 @@ private fun SlimRow(
     onClick = onClick,
     onContextMenu = onContextMenu,
     onDoubleClick = rename,
-    card = { RowHoverCard(thread, project, favicon, providers, details) },
   ) { hovered ->
     val lit: Boolean = selected || hovered
     val iconAlpha: Float by animateFloatAsState(if (lit) 1f else 0.4f, Transition)
@@ -861,9 +852,8 @@ private fun indigo(): Color = if (JewelTheme.isDark) Color(0xFFA5B4FC) else Colo
 /**
  * A rounded, full-width clickable surface: accent tint when selected, a light fill on hover. It
  * takes keyboard focus and opens on Enter or Space, as a row's `handleKeyDown` (Sidebar.tsx:1782),
- * with upstream's inset focus ring. [card] is the row's hover card, shown to its right.
+ * with upstream's inset focus ring.
  */
-@OptIn(ExperimentalFoundationApi::class) // TooltipPlacement.ComponentRect
 @Composable
 private fun Selectable(
   selected: Boolean,
@@ -873,17 +863,8 @@ private fun Selectable(
   rest: Color = Color.Transparent,
   restAlpha: Float = 1f, // faded to fully opaque on hover
   modifier: Modifier = Modifier,
-  card: (@Composable () -> Unit)? = null,
   content: @Composable (hovered: Boolean) -> Unit,
 ) {
-  if (card != null) {
-    Tooltip(tooltip = card, tooltipPlacement = HOVER_CARD_PLACEMENT, modifier = modifier) {
-      Selectable(
-        selected, onClick, onContextMenu, onDoubleClick, rest, restAlpha, content = content,
-      )
-    }
-    return
-  }
   val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
   val hovered: Boolean by interactions.collectIsHoveredAsState()
   // Only the row itself, not the rename field inside it: upstream checks the event's target
@@ -947,113 +928,6 @@ private fun Selectable(
       ),
   ) {
     content(hovered)
-  }
-}
-
-/** `ThreadHoverCardPopup`'s `side="right" align="start"`, 4px off the row. */
-@OptIn(ExperimentalFoundationApi::class)
-private val HOVER_CARD_PLACEMENT: TooltipPlacement = TooltipPlacement.ComponentRect(
-  anchor = Alignment.TopEnd,
-  alignment = Alignment.BottomEnd,
-  offset = DpOffset(4.dp, 0.dp),
-)
-
-/**
- * `SidebarThreadTooltip` (Sidebar.tsx:929): the title, then project, machine, branch with the
- * "checked out on another branch" warning, model, earlier providers, running terminals and the
- * last error, each only when there's something to say. The pull request list in its footer
- * comes with #18.
- */
-@Composable
-private fun RowHoverCard(
-  thread: Thread,
-  project: Project?,
-  favicon: ImageBitmap?,
-  providers: Map<String, ServerProvider>,
-  details: RowDetails,
-) {
-  val muted: Color = JewelTheme.globalColors.text.info
-  val body: Color = JewelTheme.globalColors.text.normal.copy(alpha = 0.75f)
-  // Upstream's `gitCwd`, asked only where a mismatch can be: the project's own checkout
-  val cwd: String? = project?.workspaceRoot?.takeIf { thread.worktreePath == null }
-  val current: String? by remember(cwd) { cwd?.let(details.checkout) ?: flowOf(null) }
-    .collectAsState(null)
-  Column(
-    modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 4.dp, vertical = 8.dp),
-    verticalArrangement = Arrangement.spacedBy(8.dp),
-  ) {
-    Text(
-      text = thread.title,
-      style = small(),
-      fontWeight = FontWeight.Medium,
-      maxLines = 1,
-      overflow = TextOverflow.Ellipsis,
-    )
-    Column(
-      modifier = Modifier.padding(start = 2.dp),
-      verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-      if (project != null) {
-        CardLine(project.title, body) { ProjectIcon(project, favicon, size = 12.dp) }
-      }
-      details.environmentLabel?.let { label ->
-        CardLine(label, body) { Glyph(machineGlyph(details.machine), muted, 12.dp) }
-      }
-      thread.branch?.let { branch ->
-        CardLine(branch, body, TextOverflow.MiddleEllipsis) { Glyph("git-branch", muted, 12.dp) }
-      }
-      if (branchMismatch(thread, current) != null) {
-        val warning: Color = JewelTheme.globalColors.text.warning
-        CardLine("You're currently checked out on another branch.", warning, wraps = true) {
-          Glyph("circle-alert", warning, 12.dp)
-        }
-      }
-      providers[thread.modelInstanceId()]?.let { provider ->
-        CardLine(hoverModelLabel(thread, providers), body) {
-          ProviderIcon(provider, size = 12.dp, alpha = 0.6f, muted = true)
-        }
-      }
-      handedOffFrom(thread, providers).takeIf { it.isNotEmpty() }?.let { names ->
-        CardLine("Handed off from ${names.joinToString(", ")}", body) {
-          Glyph("arrow-right-left", muted, 12.dp)
-        }
-      }
-      details.terminals[thread.id]?.takeIf { it.isNotEmpty() }?.let { running ->
-        CardLine(terminalProcessLabel(running.size), body) { Glyph("terminal", teal(), 12.dp) }
-      }
-      thread.rowError()?.let { error ->
-        val tone: Color = if (error.limited) {
-          JewelTheme.globalColors.text.warning
-        } else {
-          JewelTheme.globalColors.text.error
-        }
-        CardLine(error.text, tone) { Glyph("circle-alert", tone, 12.dp) }
-      }
-    }
-  }
-}
-
-/** One of the hover card's lines: a 12px glyph, then the text. */
-@Composable
-private fun CardLine(
-  text: String,
-  color: Color,
-  overflow: TextOverflow = TextOverflow.Ellipsis,
-  wraps: Boolean = false,
-  icon: @Composable () -> Unit,
-) {
-  Row(
-    horizontalArrangement = Arrangement.spacedBy(8.dp),
-    verticalAlignment = if (wraps) Alignment.Top else Alignment.CenterVertically,
-  ) {
-    Box(Modifier.padding(top = if (wraps) 2.dp else 0.dp)) { icon() }
-    Text(
-      text = text,
-      style = small(),
-      color = color,
-      maxLines = if (wraps) Int.MAX_VALUE else 1,
-      overflow = overflow,
-    )
   }
 }
 

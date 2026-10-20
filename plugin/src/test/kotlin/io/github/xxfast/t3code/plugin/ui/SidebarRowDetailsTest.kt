@@ -1,9 +1,7 @@
 package io.github.xxfast.t3code.plugin.ui
 
 import io.github.xxfast.t3code.plugin.fixtures.Scenario
-import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
-import io.github.xxfast.t3code.protocol.generated.ServerProviderModel
 import io.github.xxfast.t3code.protocol.generated.TerminalMetadataStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TerminalSummary
 import java.nio.file.Path
@@ -13,7 +11,7 @@ import kotlin.test.assertNull
 import org.junit.jupiter.api.Test
 
 class SidebarRowDetailsTest {
-  // The running demo: on kotlinx-io-0.8 in the project's checkout, handed off from Claude
+  // The running demo: on kotlinx-io-0.8 in the project's checkout
   private val running: Scenario = Scenario.decode(
     Path.of(System.getProperty("t3code.scenarios"), "default", "running.json").readText(),
   )
@@ -40,7 +38,7 @@ class SidebarRowDetailsTest {
 
   @Test
   fun `terminal labels follow upstream`() {
-    assertEquals("1 terminal process running", terminalProcessLabel(1))
+    assertEquals("1 terminal process running. Open terminal", terminalButtonLabel(1))
     assertEquals("2 terminal processes running. Open terminal", terminalButtonLabel(2))
   }
 
@@ -51,38 +49,6 @@ class SidebarRowDetailsTest {
     assertNull(branchMismatch(row, null))
     assertNull(branchMismatch(row.copy(worktreePath = "/wt"), "main"))
     assertNull(branchMismatch(row.copy(branch = null), "main"))
-  }
-
-  @Test
-  fun `model labels prefer the short name without its sub-provider`() {
-    val model: ServerProviderModel = model(name = "Claude Opus 4", shortName = null, sub = "Claude")
-    assertEquals("Opus 4", triggerDisplayModelLabel(model))
-    assertEquals("Opus", triggerDisplayModelLabel(model.copy(shortName = "Opus")))
-    assertEquals("GPT-5", triggerDisplayModelLabel(model(name = "GPT-5", sub = null)))
-    assertEquals("Claude", stripLeadingQualifier("Claude", "Claude"))
-  }
-
-  @Test
-  fun `handed off from names every earlier instance`() {
-    assertEquals(listOf("claude"), handedOffFrom(row, emptyMap()))
-    assertEquals("codex", row.modelInstanceId())
-    assertEquals("gpt-5", hoverModelLabel(row, emptyMap()))
-  }
-
-  @Test
-  fun `a usage limit warns, anything else errors`() {
-    assertNull(row.rowError())
-    val limited: Thread = row.copy(lastError = "x", lastErrorClass = "usage_limit")
-    assertEquals(RowError("Usage limit reached", limited = true), limited.rowError())
-    val failed: Thread = row.copy(lastError = "x", lastErrorClass = "provider_error")
-    assertEquals(RowError("Error occurred", limited = false), failed.rowError())
-  }
-
-  @Test
-  fun `machine glyphs follow ICON_BY_KIND`() {
-    assertEquals("monitor", machineGlyph("desktop"))
-    assertEquals("mac-studio", machineGlyph("mac-studio"))
-    assertEquals("server", machineGlyph("something-new"))
   }
 }
 
@@ -100,9 +66,3 @@ private fun terminal(thread: String, id: String, running: Boolean = true): Termi
     label = id,
     updatedAt = "2026-10-20T00:00:00Z",
   )
-
-private fun model(name: String, shortName: String? = null, sub: String?): ServerProviderModel =
-  T3Json.decodeFromString(
-    ServerProviderModel.serializer(),
-    """{"slug": "m", "name": "$name", "isCustom": false, "capabilities": null}""",
-  ).copy(shortName = shortName, subProvider = sub)
