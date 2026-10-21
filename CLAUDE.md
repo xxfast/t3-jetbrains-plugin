@@ -226,6 +226,22 @@ Hard-won, so recorded here rather than rediscovered.
   as a draft too and sends it with the next message.
 - `LiveServerTest` (skipped unless `T3_LIVE_TOKEN` and `T3_LIVE_THREAD` are set) is how wire
   changes get checked against the real server. Last passed 2026-10-20 against the local desktop.
+- A Search Everywhere-shaped chooser is `com.intellij.ide.actions.BigPopupUI` (public, what
+  `SearchEverywhereUI` and `RunAnythingPopupUI` extend), shown with `createComponentPopupBuilder`
+  and `showCenteredInCurrentWindow`. Learned on the model picker, 2026-10-21:
+  - It measures itself without its list (`ViewType.SHORT`) until a subclass calls
+    `updateViewType(FULL)`; Search Everywhere does so when its list fills. Setting the popup's
+    size from outside loses to that, and a `setDimensionServiceKey` then remembers the short size.
+  - Its list pane asks for `BigPopup.maxListHeight()`; override `createListPane()` to cap it.
+  - The new-UI header is UI DSL's `tabbedPaneHeader` on a `JBTabbedPane` with
+    `ComplexPopup.HEADER_BACKGROUND`, `BigPopup.headerBorder()` and a bottom line in
+    `CustomFrameDecorations.separatorForeground()`. `JBTabbedPane` builds its own label per tab
+    and drops the icon; an icon-only tab is `setTabComponentAt(index, JBLabel(icon))`.
+  - `JBTextField.emptyText` hides while the field has focus unless
+    `TextComponentEmptyText.STATUS_VISIBLE_FUNCTION` says otherwise. `TextIcon` is 0x0 (and logs
+    SEVERE) until it has a font.
+  - `org.jetbrains.jewel.foundation.LocalComponent` (experimental, not internal) is the Swing
+    component hosting a composable, for anchoring a `JBPopup` to Compose content.
 
 ## Style
 
