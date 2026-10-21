@@ -16,6 +16,8 @@ import io.github.xxfast.t3code.plugin.ui.DraftAttachment
 import io.github.xxfast.t3code.plugin.ui.DraftExtras
 import io.github.xxfast.t3code.plugin.ui.PASTED_IMAGE_NAME
 import io.github.xxfast.t3code.plugin.ui.ReviewCommentContext
+import io.github.xxfast.t3code.plugin.ui.WorkspaceDraft
+import io.github.xxfast.t3code.plugin.ui.launchThreadInput
 import io.github.xxfast.t3code.plugin.ui.encodePng
 import io.github.xxfast.t3code.plugin.ui.attachmentLimitError
 import io.github.xxfast.t3code.plugin.ui.classifyAttachment
@@ -46,6 +48,7 @@ import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.Command.MessageDispatch.DispatchMode
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.ProviderCapabilities
+import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.time.Instant
 import java.util.UUID
@@ -337,6 +340,18 @@ class ChatController(private val project: Project, private val scope: CoroutineS
     update(threadId) { pending -> pending.copy(error = reason) }
   }
 
+  /** The Workspace control changed for [threadId]: where its first turn runs. */
+  fun draftWorkspace(threadId: String, change: (WorkspaceDraft) -> WorkspaceDraft) {
+    update(threadId) { pending -> pending.draftedWorkspace(change) }
+  }
+
+  /** The setup card's Cancel, `cancelWorktreeSetup` in `useWorktreeSetup.ts:156`. */
+  fun cancelWorktreeSetup(threadId: String) {
+    scope.launchReporting(project, "Couldn't cancel the worktree setup") {
+      client.worktreeSetupCancel(threadId)
+    }
+  }
+
   /**
    * Fetches `server.getConfig` until it answers, backing off, for as long as the caller runs; a
    * send that fetches it refreshes it too. Call while connected, cancel when the connection goes.
@@ -428,6 +443,7 @@ class ChatController(private val project: Project, private val scope: CoroutineS
     text: String,
     mode: ComposerDispatchMode,
     compactFirst: Boolean = false,
+    worktree: WorktreeLaunch? = null,
   ) {
     val threadId: String = view.thread.id
     val messageId: String = UUID.randomUUID().toString()
@@ -443,13 +459,17 @@ class ChatController(private val project: Project, private val scope: CoroutineS
         .copy(context = context, attachments = attachments)
     // A model picked mid-run rides on this message
     val model: ModelSelection? = _outboxes.value[threadId]?.modelDraft
-    update(threadId) { pending -> pending.sent(message, model) }
+    update(threadId) { pending -> pending.sent(message, model).copy(launching = worktree != null) }
     draft(threadId).clearText()
     updateExtras(threadId) { DraftExtras() }
     scope.launch {
       try {
         val info: ServerInfo = client.serverInfo()
         _catalog.value = info
+        if (worktree != null) {
+          launch(view, worktree, messageId, outgoing, context, attachments, model, text, extras)
+          return@launch
+        }
         val run: Run? = activeRun(view.runs)
         val capabilities: ProviderCapabilities? =
           activeCapabilities(run, view.providerThreads, view.providerSessions)
@@ -497,7 +517,9 @@ class ChatController(private val project: Project, private val scope: CoroutineS
       } catch (e: Exception) {
         LOG.info("Couldn't send to $threadId", e)
         val reason: String = e.message ?: e.javaClass.simpleName
-        update(threadId) { pending -> pending.failed(messageId, "Couldn't send: $reason") }
+        update(threadId) { pending ->
+          pending.failed(messageId, "Couldn't send: $reason").copy(launching = false)
+        }
         updateExtras(threadId) { current -> current.restored(extras) }
         withContext(Dispatchers.EDT) {
           val draft: TextFieldState = draft(threadId)
@@ -506,6 +528,61 @@ class ChatController(private val project: Project, private val scope: CoroutineS
       }
     }
   }
+
+  /**
+   * The first message of a thread that wants a new worktree: `orchestration.launchThread`
+   * with `reuseExistingThread`, the way upstream's `startThreadTurn` goes when the send
+   * carries `bootstrap.prepareWorktree` (`commands.ts:634`). The worktree's progress streams
+   * on `subscribeWorktreeSetup`; the hosts show it. The answer carries no command sequence,
+   * so the optimistic message retires only once the thread stream acknowledges it.
+   */
+  private suspend fun launch(
+    view: ThreadView,
+    worktree: WorktreeLaunch,
+    messageId: String,
+    outgoing: String,
+    context: MessageContext?,
+    attachments: List<ChatAttachment>,
+    model: ModelSelection?,
+    text: String,
+    extras: DraftExtras,
+  ) {
+    val threadId: String = view.thread.id
+    val input: ThreadLaunchInput = launchThreadInput(
+      view = view,
+      commandId = UUID.randomUUID().toString(),
+      messageId = messageId,
+      text = outgoing,
+      context = context,
+      attachments = attachments,
+      modelSelection = model,
+      runtimeMode = worktree.runtimeMode,
+      interactionMode = worktree.interactionMode,
+      baseBranch = worktree.baseBranch,
+      startFromOrigin = worktree.startFromOrigin,
+      titleSeed = titleSeed(text, extras),
+    )
+    try {
+      client.launchThread(input)
+    } finally {
+      update(threadId) { pending -> pending.copy(launching = false) }
+    }
+    update(threadId) { pending ->
+      pending.delivered(messageId, Long.MAX_VALUE).copy(workspace = WorkspaceDraft())
+    }
+    extras.attachments.forEach { transfers.remove(it.id) }
+  }
+
+  /**
+   * What a first send in worktree mode prepares: `prepareWorktree` plus the thread settings
+   * `launchThread` takes along (`ChatView.tsx:6942`).
+   */
+  class WorktreeLaunch(
+    val baseBranch: String,
+    val startFromOrigin: Boolean,
+    val runtimeMode: String,
+    val interactionMode: String,
+  )
 
   private fun update(threadId: String, change: (PendingMessages) -> PendingMessages) {
     _outboxes.update { all ->

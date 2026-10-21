@@ -40,7 +40,12 @@ import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
+import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
+import io.github.xxfast.t3code.protocol.generated.ThreadLaunchResult
+import io.github.xxfast.t3code.protocol.generated.ThreadLaunchWorkspaceStrategy
 import io.github.xxfast.t3code.protocol.generated.TurnItem
+import io.github.xxfast.t3code.protocol.generated.VcsListRefsInput
+import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
 import io.github.xxfast.t3code.protocol.generated.UserInputQuestion
 import io.github.xxfast.t3code.protocol.has
 import io.github.xxfast.t3code.protocol.pinned
@@ -67,6 +72,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.transformWhile
@@ -117,12 +123,12 @@ class FixtureClientTest {
     val scenario: Scenario = Scenario.merge(parts)
     val connected: ConnectionState.Connected = assertIs(scenario.connection)
     assertTrue(connected.session.has("orchestration:operate"), "Thread actions work in default")
-    assertEquals(26, scenario.threads.size)
+    assertEquals(27, scenario.threads.size)
     val demos: Set<String> = scenario.threads
       .filter { it.title.startsWith("Demo: ") }
       .map { it.id }
       .toSet()
-    assertEquals(setOf(THREAD, WAITING, QUESTION, UNKNOWN, MANY), demos)
+    assertEquals(setOf(THREAD, WAITING, QUESTION, UNKNOWN, MANY, WORKTREE), demos)
   }
 
   @Test
@@ -688,6 +694,120 @@ class FixtureClientTest {
 
   private fun row(threads: List<Thread>, id: String = IDLE): Thread = threads.single { it.id == id }
 
+  @Test
+  fun `a launch for a new worktree streams the setup, lands the row, then sends`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == IDLE } }
+    val before: Thread = client.threads.value.first { it.id == IDLE }
+    val input = ThreadLaunchInput(
+      commandId = "cmd_launch",
+      threadId = IDLE,
+      reuseExistingThread = true,
+      projectId = before.projectId,
+      title = "Try a worktree",
+      generateTitle = true,
+      modelSelection = before.modelSelection,
+      runtimeMode = before.runtimeMode,
+      interactionMode = before.interactionMode,
+      workspaceStrategy = ThreadLaunchWorkspaceStrategy.Worktree(baseRef = "main"),
+      initialMessage = ThreadLaunchInput.InitialMessage(
+        messageId = "m1",
+        text = "hello from a worktree",
+        attachments = emptyList(),
+      ),
+    )
+
+    val result: ThreadLaunchResult = client.launchThread(input)
+
+    assertEquals(IDLE, result.threadId)
+    assertTrue(result.resumed)
+    assertEquals("Try a worktree", result.projection.thread.title)
+    val phases: List<String> = client.worktreeSetup(IDLE)
+      .filterNotNull()
+      .transformWhile { snapshot ->
+        emit(snapshot.phase)
+        snapshot.phase == "running"
+      }
+      .toList()
+    assertEquals("running", phases.first())
+    assertEquals("done", phases.last())
+    val landed: Thread = client.threads.first { threads ->
+      threads.first { it.id == IDLE }.worktreePath != null
+    }.first { it.id == IDLE }
+    assertEquals("main", client.worktreeSetup(IDLE).first { it != null }?.baseRef)
+    assertTrue(landed.worktreePath!!.contains("/.t3/worktrees/"))
+    assertEquals("t3/", landed.branch!!.take(3))
+    val sent: ThreadView = client.thread(IDLE).first { view -> view.items.isNotEmpty() }
+    val user: TurnItem.UserMessage = assertIs(sent.items.first())
+    assertEquals("hello from a worktree", user.text)
+    assertEquals("m1", user.messageId)
+  }
+
+  @Test
+  fun `cancelling a running setup marks it cancelled and no message goes out`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == IDLE } }
+    val before: Thread = client.threads.value.first { it.id == IDLE }
+    client.launchThread(
+      ThreadLaunchInput(
+        commandId = "cmd_cancel",
+        threadId = IDLE,
+        reuseExistingThread = true,
+        projectId = before.projectId,
+        title = "Cancel me",
+        modelSelection = before.modelSelection,
+        runtimeMode = before.runtimeMode,
+        interactionMode = before.interactionMode,
+        workspaceStrategy = ThreadLaunchWorkspaceStrategy.Worktree(baseRef = "main"),
+        initialMessage = ThreadLaunchInput.InitialMessage(
+          messageId = "m2",
+          text = "never",
+          attachments = emptyList(),
+        ),
+      ),
+    )
+    client.worktreeSetup(IDLE).first { it?.phase == "running" }
+
+    assertTrue(client.worktreeSetupCancel(IDLE))
+
+    val cancelled: WorktreeSetupSnapshot = client.worktreeSetup(IDLE).first { it?.phase == "cancelled" }!!
+    assertTrue(cancelled.stages.any { it.status == "failed" })
+    assertFalse(client.worktreeSetupCancel(IDLE), "Nothing left to cancel")
+    assertTrue(client.thread(IDLE).first().items.isEmpty())
+    assertNull(client.threads.value.first { it.id == IDLE }.worktreePath)
+  }
+
+  @Test
+  fun `thread create lists a fresh idle row that can be opened`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { it.isNotEmpty() }
+    val project: String = client.projects.value.first().id
+
+    client.dispatch(
+      Command.ThreadCreate(
+        createdBy = "user",
+        creationSource = "web",
+        commandId = "cmd_create",
+        threadId = "thr_created",
+        projectId = project,
+        title = "New thread",
+        modelSelection = ModelSelection(instanceId = JsonPrimitive("codex"), model = JsonPrimitive("gpt-5")),
+        runtimeMode = "full-access",
+        interactionMode = "default",
+        branch = null,
+        worktreePath = null,
+      ),
+    )
+
+    val row: Thread = client.threads.first { threads -> threads.any { it.id == "thr_created" } }
+      .last()
+    assertEquals("New thread", row.title)
+    assertEquals("idle", row.status)
+    val view: ThreadView = client.thread("thr_created").first()
+    assertTrue(view.items.isEmpty())
+    assertEquals(listOf("main", "develop"), client.listRefs(VcsListRefsInput(cwd = "/x")).refs.take(2).map { it.name })
+  }
+
   private fun message(threadId: String, messageId: String, text: String) =
     Command.MessageDispatch(
       createdBy = "user",
@@ -727,6 +847,7 @@ class FixtureClientTest {
     const val UNKNOWN = "thr_01JC4C0X1UNKNOWN"
     const val MANY = "thr_01JC5D0M4NYITEMS"
     const val IDLE = "thr_01JC3QX81VIDLE001"
+    const val WORKTREE = "thr_01JC5W0RKTREE001"
     const val PINNED = "thr_01JC4B2W5RROUTER1"
     const val SETTLED = "thr_01JC1A2B3CSETTLE01"
     const val RUN = "run_fixture_m1"

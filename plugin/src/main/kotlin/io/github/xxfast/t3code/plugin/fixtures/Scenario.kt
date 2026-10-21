@@ -13,6 +13,7 @@ import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.generated.ServerAuthDescriptor
 import io.github.xxfast.t3code.protocol.generated.TerminalSummary
 import io.github.xxfast.t3code.protocol.generated.TurnItem
+import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -31,6 +32,8 @@ class ScenarioFile(
   val checkpoints: Map<String, List<Checkpoint>> = emptyMap(),
   val providerThreads: Map<String, List<ProviderThread>> = emptyMap(),
   val terminals: List<TerminalSummary> = emptyList(),
+  /** A worktree setup in flight per thread, what `subscribeWorktreeSetup` answers at once. */
+  val worktreeSetups: Map<String, WorktreeSetupSnapshot> = emptyMap(),
 )
 
 @Serializable
@@ -59,6 +62,7 @@ class Scenario(
   // Each thread's provider threads, for the composer's context window meter
   val providerThreads: Map<String, List<ProviderThread>> = emptyMap(),
   val terminals: List<TerminalSummary> = emptyList(), // what `subscribeTerminalMetadata` lists
+  val worktreeSetups: Map<String, WorktreeSetupSnapshot> = emptyMap(),
 ) {
   companion object {
     fun decode(text: String): Scenario {
@@ -74,6 +78,7 @@ class Scenario(
         checkpoints = file.checkpoints,
         providerThreads = file.providerThreads,
         terminals = file.terminals,
+        worktreeSetups = file.worktreeSetups,
       )
     }
 
@@ -95,6 +100,7 @@ class Scenario(
       checkpoints = parts.map { it.checkpoints }.fold(emptyMap(), ::append),
       providerThreads = parts.map { it.providerThreads }.fold(emptyMap(), ::append),
       terminals = parts.flatMap { it.terminals }.distinctBy { it.threadId to it.terminalId },
+      worktreeSetups = parts.map { it.worktreeSetups }.fold(emptyMap()) { into, from -> from + into },
     )
 
     fun failed(name: String, message: String): Scenario = Scenario(

@@ -2594,6 +2594,16 @@ public data class UserInputAttachmentAnswerPayload(
 }
 
 @Serializable
+public data class VcsRef(
+  val name: String,
+  val isRemote: Boolean? = null,
+  val remoteName: String? = null,
+  val current: Boolean,
+  val isDefault: Boolean,
+  val worktreePath: String?,
+)
+
+@Serializable
 public data class VcsStatusLocalResult(
   val isRepo: Boolean,
   val sourceControlProvider: SourceControlProviderInfo? = null,
@@ -2646,3 +2656,14 @@ public data class VcsStatusRemoteResult(
     val updatedAt: String? = null,
   )
 }
+
+@Serializable
+public data class WorktreeSetupStage(
+  val id: String,
+  val status: String,
+  val startedAt: String?,
+  val endedAt: String?,
+  val percent: Long?,
+  val detail: String?,
+  val tail: List<String>,
+)

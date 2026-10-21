@@ -3,6 +3,7 @@ package io.github.xxfast.t3code.plugin.ui
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.generated.CheckpointFileSummary
 import io.github.xxfast.t3code.protocol.generated.TurnItem
+import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -637,7 +638,19 @@ sealed interface TimelineRow {
   data class Plan(val item: TurnItem.ProposedPlan) : TimelineRow {
     override val id: String = item.id
   }
+
+  /**
+   * The worktree being prepared for the thread's first turn, upstream's `WorktreeSetupCard`.
+   * [embedded] once the agent has the worktree: the card folds to one line under the work.
+   */
+  data class WorktreeSetup(val snapshot: WorktreeSetupSnapshot, val embedded: Boolean) :
+    TimelineRow {
+    override val id: String = WORKTREE_SETUP_ROW_ID
+  }
 }
+
+/** `WORKTREE_SETUP_ROW_ID`, MessagesTimeline.logic.ts:1968. */
+const val WORKTREE_SETUP_ROW_ID: String = "worktree-setup-row"
 
 /** Upstream's `TurnDiffSummary`, as far as the changed files card needs it. */
 data class ChangedFiles(val run: Run, val files: List<CheckpointFileSummary>)
@@ -831,6 +844,7 @@ fun deriveMessagesTimelineRows(
   expansion: TimelineExpansion = TimelineExpansion(),
   checkpointFiles: (Run) -> List<CheckpointFileSummary>? = { null },
   revertTarget: (Run) -> Run? = { null },
+  worktreeSetup: WorktreeSetupSnapshot? = null,
 ): List<TimelineRow> {
   val entries: List<TimelineEntry> = settleSupersededReasoning(timelineEntries)
   val isWorking: Boolean = runningRun != null
@@ -1022,7 +1036,41 @@ fun deriveMessagesTimelineRows(
   }
   if (isWorking && headerIndex >= entries.size) rows += TimelineRow.Working(runningRun?.workStart())
   if (isWorking && !hasActivityRow && !hasActiveCompaction) rows += TimelineRow.Thinking
+  placeWorktreeSetup(rows, worktreeSetup, latestRun)
   return attachTrailingToolGroupsToAssistant(rows)
+}
+
+/**
+ * MessagesTimeline.logic.ts:1818: the setup card goes after the working row while the setup
+ * owns it, else right after the first prompt (or last, without one). Once the agent has the
+ * worktree and the turn runs, the card is embedded; a running setup then isn't shown at all.
+ */
+private fun placeWorktreeSetup(
+  rows: MutableList<TimelineRow>,
+  setup: WorktreeSetupSnapshot?,
+  latestRun: Run?,
+) {
+  if (setup == null) return
+  val handedOff: Boolean = worktreeSetupAgentStarted(setup) && latestRun?.startedAt != null
+  val ownsWorkingSlot: Boolean = !handedOff && (setup.phase == "running" || setup.phase == "done")
+  if (handedOff && setup.phase == "running") return
+  // Nothing thinks before the agent has the worktree
+  if (ownsWorkingSlot) rows.remove(TimelineRow.Thinking)
+  val setupRow = TimelineRow.WorktreeSetup(setup, embedded = handedOff)
+  val firstUserRowIndex: Int =
+    rows.indexOfFirst { it is TimelineRow.Message && it.entry.user }
+  val workingRowIndex: Int =
+    if (ownsWorkingSlot) rows.indexOfFirst { it is TimelineRow.Working } else -1
+  if (workingRowIndex >= 0) {
+    rows.add(workingRowIndex + 1, setupRow)
+    return
+  }
+  val insertAt: Int = if (firstUserRowIndex >= 0) firstUserRowIndex + 1 else rows.size
+  if (ownsWorkingSlot) {
+    rows.addAll(insertAt, listOf(TimelineRow.Working(setup.startedAt), setupRow))
+  } else {
+    rows.add(insertAt, setupRow)
+  }
 }
 
 /** `expandedWorkGroupRow`: an open group's entries, one line each. */

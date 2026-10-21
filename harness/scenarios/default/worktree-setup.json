@@ -1,0 +1,105 @@
+{
+  "threads": [
+    {
+      "id": "thr_01JC5W0RKTREE001",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Demo: preparing a worktree",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "full-access",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC5W0RKTREE001"
+      },
+      "status": "running",
+      "branch": "t3/kstore-io-0-8",
+      "latestRunId": "run_01JC5W0RKTREE1",
+      "activeRunId": "run_01JC5W0RKTREE1",
+      "activityRunStatus": "preparing",
+      "itemCount": 1,
+      "visibleItemCount": 1,
+      "latestUserMessageAt": "2026-10-20T23:12:00.000Z",
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-20T23:11:40.000Z",
+      "updatedAt": "2026-10-20T23:12:00.000Z"
+    }
+  ],
+  "runs": {
+    "thr_01JC5W0RKTREE001": [
+      {
+        "id": "run_01JC5W0RKTREE1",
+        "threadId": "thr_01JC5W0RKTREE001",
+        "ordinal": 1,
+        "providerInstanceId": "codex",
+        "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC5W0RKTREEU1",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "status": "preparing",
+        "requestedAt": "2026-10-20T23:12:00.000Z",
+        "startedAt": null,
+        "completedAt": null,
+        "checkpointId": null,
+        "contextHandoffId": null
+      }
+    ]
+  },
+  "items": {
+    "thr_01JC5W0RKTREE001": [
+      {
+        "type": "user_message",
+        "id": "item_01JC5W0RKTREEU1",
+        "threadId": "thr_01JC5W0RKTREE001",
+        "runId": "run_01JC5W0RKTREE1",
+        "nodeId": null,
+        "providerThreadId": null,
+        "providerTurnId": null,
+        "nativeItemRef": null,
+        "parentItemId": null,
+        "ordinal": 1,
+        "status": "completed",
+        "title": null,
+        "startedAt": "2026-10-20T23:12:00.000Z",
+        "completedAt": "2026-10-20T23:12:00.000Z",
+        "updatedAt": "2026-10-20T23:12:00.000Z",
+        "createdBy": "user",
+        "creationSource": "web",
+        "messageId": "msg_01JC5W0RKTREEU1",
+        "inputIntent": "turn_start",
+        "text": "Bump kotlinx-io to 0.8 in a worktree and run the full test suite.",
+        "attachments": []
+      }
+    ]
+  },
+  "worktreeSetups": {
+    "thr_01JC5W0RKTREE001": {
+      "threadId": "thr_01JC5W0RKTREE001",
+      "phase": "running",
+      "startedAt": "2026-10-20T23:12:00.000Z",
+      "endedAt": null,
+      "branch": "t3/kstore-io-0-8",
+      "baseRef": "main",
+      "worktreePath": "/Users/xxfast/Developer/XXFAST/KMP/KStore/.t3/worktrees/kstore-io-0-8",
+      "setupScript": {
+        "name": "Install",
+        "command": "./gradlew --offline help",
+        "terminalId": "setup-script"
+      },
+      "stages": [
+        { "id": "fetch", "status": "done", "startedAt": "2026-10-20T23:12:00.000Z", "endedAt": "2026-10-20T23:12:01.200Z", "percent": null, "detail": "main", "tail": [] },
+        { "id": "checkout", "status": "done", "startedAt": "2026-10-20T23:12:01.200Z", "endedAt": "2026-10-20T23:12:03.900Z", "percent": 100, "detail": "1,284 files", "tail": [] },
+        { "id": "submodules", "status": "skipped", "startedAt": "2026-10-20T23:12:03.900Z", "endedAt": "2026-10-20T23:12:03.900Z", "percent": null, "detail": "none", "tail": [] },
+        { "id": "setup-script", "status": "running", "startedAt": "2026-10-20T23:12:03.900Z", "endedAt": null, "percent": null, "detail": null, "tail": ["> Task :buildSrc:compileKotlin UP-TO-DATE", "> Task :help", "Welcome to Gradle 9.1."] },
+        { "id": "agent", "status": "pending", "startedAt": null, "endedAt": null, "percent": null, "detail": null, "tail": [] }
+      ],
+      "error": null,
+      "sequence": 7
+    }
+  }
+}

@@ -9,7 +9,13 @@ import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TerminalMetadataStreamEvent
+import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
+import io.github.xxfast.t3code.protocol.generated.ThreadLaunchResult
+import io.github.xxfast.t3code.protocol.generated.VcsListRefsInput
+import io.github.xxfast.t3code.protocol.generated.VcsListRefsResult
 import io.github.xxfast.t3code.protocol.generated.VcsStatusStreamEvent
+import io.github.xxfast.t3code.protocol.generated.WorktreeSetupCancelResult
+import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
 import java.io.IOException
 import java.net.URI
 import java.net.http.HttpRequest
@@ -28,11 +34,13 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -133,6 +141,32 @@ public class WebSocketT3Client internal constructor(
       T3JsonOut.encodeToJsonElement(OrchestrationV2Command.serializer(), command)
     val result: JsonElement = call("orchestration.dispatchCommand", payload)
     return decode(DispatchCommandResult.serializer(), result).sequence
+  }
+
+  override suspend fun launchThread(input: ThreadLaunchInput): ThreadLaunchResult {
+    val payload: JsonElement = T3JsonOut.encodeToJsonElement(ThreadLaunchInput.serializer(), input)
+    val result: JsonElement = call("orchestration.launchThread", payload)
+    return decode(ThreadLaunchResult.serializer(), result)
+  }
+
+  override fun worktreeSetup(threadId: String): Flow<WorktreeSetupSnapshot?> {
+    val payload: JsonObject = buildJsonObject { put("threadId", threadId) }
+    // The event is `NullOr(snapshot)`, so null is a value here, not a decode failure
+    return resubscribing("subscribeWorktreeSetup", payload, JsonElement.serializer())
+      .map { element ->
+        if (element is JsonNull) null else decodeOrNull(WorktreeSetupSnapshot.serializer(), element)
+      }
+  }
+
+  override suspend fun worktreeSetupCancel(threadId: String): Boolean {
+    val payload: JsonObject = buildJsonObject { put("threadId", threadId) }
+    val result: JsonElement = call("worktreeSetup.cancel", payload)
+    return decode(WorktreeSetupCancelResult.serializer(), result).cancelled
+  }
+
+  override suspend fun listRefs(input: VcsListRefsInput): VcsListRefsResult {
+    val payload: JsonElement = T3JsonOut.encodeToJsonElement(VcsListRefsInput.serializer(), input)
+    return decode(VcsListRefsResult.serializer(), call("vcs.listRefs", payload))
   }
 
   override fun terminal(input: TerminalAttachInput): Flow<TerminalAttachStreamEvent> {

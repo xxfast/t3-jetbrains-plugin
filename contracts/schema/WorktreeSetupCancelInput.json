@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "WorktreeSetupCancelInput",
+  "title": "WorktreeSetupCancelInput",
+  "type": "object",
+  "properties": {
+    "threadId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "threadId"
+  ],
+  "additionalProperties": true
+}

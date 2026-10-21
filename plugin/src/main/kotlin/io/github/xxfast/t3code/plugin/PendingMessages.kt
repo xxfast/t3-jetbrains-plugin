@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin
 
+import io.github.xxfast.t3code.plugin.ui.WorkspaceDraft
 import io.github.xxfast.t3code.plugin.ui.deliveredIds
 import io.github.xxfast.t3code.protocol.ConversationMessage
 import io.github.xxfast.t3code.protocol.generated.Command
@@ -27,9 +28,23 @@ data class PendingMessages(
   val modelDraft: ModelSelection? = null,
   /** The message carrying [modelDraft], once one is on its way. */
   val modelDraftCarrier: String? = null,
+  /**
+   * Where the first turn runs, picked in the composer's Workspace control before the first
+   * message: upstream's pending server thread env mode, branch and start-from-origin entries.
+   */
+  val workspace: WorkspaceDraft = WorkspaceDraft(),
+  /**
+   * An `orchestration.launchThread` on its way for a new worktree, upstream's `localPreparing`:
+   * the setup card shows from the send until the first snapshot arrives.
+   */
+  val launching: Boolean = false,
   val error: String? = null,
 ) {
   val sending: Boolean get() = inFlight.isNotEmpty()
+
+  /** The Workspace control changed. The draft stays until the server takes the first message. */
+  fun draftedWorkspace(change: (WorkspaceDraft) -> WorkspaceDraft): PendingMessages =
+    copy(workspace = change(workspace), error = null)
 
   /**
    * [message] is on its way, carrying [model] when it's the drafted one. A new send clears the

@@ -28,6 +28,8 @@ data class Overlay(
   val messages: Map<String, List<ConversationMessage>> = emptyMap(),
   /** Threads `thread.delete` removed, as the server's `thread.removed` would. */
   val deleted: Set<String> = emptySet(),
+  /** Threads `thread.create` or `orchestration.launchThread` added; their rows are in [threads]. */
+  val created: List<String> = emptyList(),
   /** The fixture server's sequence as of the last `message.dispatch`, what every view reports. */
   val sequence: Long = 0,
 ) {

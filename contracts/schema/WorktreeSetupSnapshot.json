@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "WorktreeSetupSnapshot",
+  "title": "WorktreeSetupSnapshot",
+  "type": "object",
+  "properties": {
+    "threadId": {
+      "type": "string"
+    },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "running",
+        "done",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "startedAt": {
+      "type": "string"
+    },
+    "endedAt": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "branch": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "baseRef": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "worktreePath": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "setupScript": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "command": {
+              "type": "string"
+            },
+            "terminalId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "command",
+            "terminalId"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/WorktreeSetupStage"
+      }
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 1000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": [
+    "threadId",
+    "phase",
+    "startedAt",
+    "endedAt",
+    "branch",
+    "baseRef",
+    "worktreePath",
+    "setupScript",
+    "stages",
+    "error",
+    "sequence"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "WorktreeSetupStage": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "enum": [
+            "fetch",
+            "checkout",
+            "submodules",
+            "setup-script",
+            "agent"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "running",
+            "done",
+            "skipped",
+            "warning",
+            "failed"
+          ]
+        },
+        "startedAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "endedAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "percent": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tail": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 400
+          }
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "startedAt",
+        "endedAt",
+        "percent",
+        "detail",
+        "tail"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

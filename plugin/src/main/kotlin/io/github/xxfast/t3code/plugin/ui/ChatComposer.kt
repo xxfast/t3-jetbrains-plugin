@@ -123,7 +123,20 @@ fun ChatComposer(
       when (pending) {
         null -> ComposerBody(
           motion = motion,
-          chips = { ComposerChips(extras, state.enabled, attachmentActions) },
+          chips = {
+            Column {
+              // Upstream's context strip, above the chips: where the first turn runs
+              footer?.workspace?.let { workspace ->
+                WorkspaceStrip(
+                  state = workspace,
+                  enabled = state.enabled,
+                  actions = footerActions,
+                  modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
+                )
+              }
+              ComposerChips(extras, state.enabled, attachmentActions)
+            }
+          },
           prompt = {
             ComposerPromptEditor(
               state = state,

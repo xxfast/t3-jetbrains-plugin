@@ -44,6 +44,21 @@ import io.github.xxfast.t3code.plugin.ui.ComposerFooterState
 import io.github.xxfast.t3code.plugin.ui.ComposerState
 import io.github.xxfast.t3code.plugin.ui.ContextWindowSnapshot
 import io.github.xxfast.t3code.plugin.ui.DraftExtras
+import io.github.xxfast.t3code.plugin.ui.EnvMode
+import io.github.xxfast.t3code.plugin.ui.SELECT_BASE_BRANCH_ERROR
+import io.github.xxfast.t3code.plugin.ui.WorkspaceControlState
+import io.github.xxfast.t3code.plugin.ui.WorktreeSetupProgress
+import io.github.xxfast.t3code.plugin.ui.activeMessageCount
+import io.github.xxfast.t3code.plugin.ui.canOverrideServerThreadEnvMode
+import io.github.xxfast.t3code.plugin.ui.holdWorktreeSetup
+import io.github.xxfast.t3code.plugin.ui.latestRun
+import io.github.xxfast.t3code.plugin.ui.resolveSendEnvMode
+import io.github.xxfast.t3code.plugin.ui.resolveVisibleWorktreeSetup
+import io.github.xxfast.t3code.plugin.ui.resolveWorktreeSetupProgress
+import io.github.xxfast.t3code.plugin.ui.shouldCreateWorktree
+import io.github.xxfast.t3code.plugin.ui.workspaceControlState
+import io.github.xxfast.t3code.plugin.ui.worktreeSetupBlocksSend
+import io.github.xxfast.t3code.plugin.terminal.ThreadTerminals
 import io.github.xxfast.t3code.plugin.ui.Hint
 import io.github.xxfast.t3code.plugin.ui.ModelChangeBlock
 import io.github.xxfast.t3code.plugin.ui.modelDisabledReason
@@ -96,6 +111,11 @@ import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import io.github.xxfast.t3code.protocol.generated.UserInputQuestion
+import io.github.xxfast.t3code.protocol.generated.VcsListRefsInput
+import io.github.xxfast.t3code.protocol.generated.VcsListRefsResult
+import io.github.xxfast.t3code.protocol.generated.VcsRef
+import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
+import kotlin.coroutines.cancellation.CancellationException
 import java.time.Instant
 import java.util.UUID
 import javax.swing.JComponent
@@ -159,10 +179,17 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
       current.copy(items = mergeOptimistic(current.items, current.messages, pending.messages))
     }
   }
+  val projectId: String? = view?.thread?.projectId
+  // One subscription per checkout, shared by every tab showing it
+  val cwd: String? = threadCwd(view?.thread, projects)
+  val vcs: VcsSummary? by remember(cwd) { VcsStatuses.getInstance(project).summary(cwd) }
+    .collectAsState()
+  val setup: WorktreeSetupState = rememberWorktreeSetup(view, pending, client)
   val composer: ComposerState = composerState(
     connection = connection,
     running = view?.let { activeRun(it.runs) } != null,
-    sending = pending.sending,
+    // A worktree being prepared holds the composer, upstream's `blocksSend`
+    sending = pending.sending || setup.blocksSend,
     error = pending.error,
     // Upstream's `followUpBehavior` default; Ctrl/Cmd sends the other
     queue = false,
@@ -171,14 +198,9 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
   val (request: PendingRequest?, actions: PendingActions) =
     rememberPendingRequest(view, requests, pending.responding, controller)
   val (footer: ComposerFooterState?, footerActions: ComposerFooterActions) =
-    rememberComposerFooter(project, view, pending, connection, controller)
+    rememberComposerFooter(project, view, pending, connection, controller, cwd, vcs, setup)
   val contextWindow: ComposerContextWindow =
     rememberContextWindow(view, footer, composer, connection, controller)
-  val projectId: String? = view?.thread?.projectId
-  // One subscription per checkout, shared by every tab showing it
-  val cwd: String? = threadCwd(view?.thread, projects)
-  val vcs: VcsSummary? by remember(cwd) { VcsStatuses.getInstance(project).summary(cwd) }
-    .collectAsState()
   ChatView(
     view = shown,
     error = load.error,
@@ -194,12 +216,31 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
     onRollback = { run ->
       view?.let { current -> confirmRollback(project, controller, current, run) { latest } }
     },
-    onSend = { text, mode ->
+    onSend = onSend@{ text, mode ->
+      val current: ThreadView = view ?: return@onSend
       // `compactBeforeSend`, ChatView.tsx:6370: a `/compact` of its own doesn't compact twice
       val compactFirst: Boolean = contextWindow.compactBeforeSendTokens != null &&
         !contextWindow.keepFullHistory &&
         text.lowercase() != COMPACT_COMMAND
-      view?.let { controller.send(it, text, mode, compactFirst) }
+      // `shouldCreateWorktree`, ChatView.tsx:6324: the first message in New worktree mode
+      // goes out as a launch, and refuses without a base branch
+      val workspace: WorkspaceControlState? = footer?.workspace
+      val sendEnvMode: EnvMode =
+        resolveSendEnvMode(workspace?.envMode ?: EnvMode.LOCAL, isGitRepo = workspace != null)
+      val worktree: ChatController.WorktreeLaunch? =
+        if (workspace != null && footer != null && shouldCreateWorktree(current, sendEnvMode)) {
+          val base: String = workspace.baseBranch
+            ?: return@onSend controller.blocked(current.thread.id, SELECT_BASE_BRANCH_ERROR)
+          ChatController.WorktreeLaunch(
+            baseBranch = base,
+            startFromOrigin = workspace.startFromOrigin,
+            runtimeMode = footer.runtimeMode,
+            interactionMode = footer.interactionMode,
+          )
+        } else {
+          null
+        }
+      controller.send(current, text, mode, compactFirst, worktree)
     },
     onInterrupt = {
       view?.let { current ->
@@ -215,6 +256,69 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
     extras = extras[threadId] ?: DraftExtras(),
     attachmentActions = rememberAttachmentActions(project, threadId, controller),
     contextWindow = contextWindow,
+    worktreeSetup = setup.visible,
+    onCancelWorktreeSetup = { controller.cancelWorktreeSetup(threadId) },
+    onOpenSetupTerminal = { terminalId -> ThreadTerminals.getInstance(project).open(threadId, terminalId) },
+  )
+}
+
+/** What [rememberWorktreeSetup] works out for the thread on screen. */
+class WorktreeSetupState(
+  /** The snapshot the timeline shows, [resolveVisibleWorktreeSetup]. */
+  val visible: WorktreeSetupSnapshot?,
+  /** `isPreparingWorktree`: the worktree isn't ready for the agent yet. */
+  val preparing: Boolean,
+  /** `blocksSend`: the composer waits on the setup. */
+  val blocksSend: Boolean,
+)
+
+/**
+ * Upstream's `useWorktreeSetup` (`apps/web/src/components/chat/useWorktreeSetup.ts`):
+ * `subscribeWorktreeSetup` for the thread while a launch is in flight, its run is preparing, or
+ * it has a worktree, holding the last snapshot across the server's null after a finished
+ * setup. A follow-up message hides a finished card.
+ */
+@Composable
+private fun rememberWorktreeSetup(
+  view: ThreadView?,
+  pending: PendingMessages,
+  client: T3Client,
+): WorktreeSetupState {
+  val threadId: String? = view?.thread?.id
+  val run: Run? = view?.let { latestRun(it.runs) }
+  // `startedSetup`: a launch sent from here keeps the stream open after it answers, until the
+  // thread's row or run says the setup is on, as `begin()` records it before the server knows
+  var started: Boolean by remember(threadId) { mutableStateOf(false) }
+  if (pending.launching) started = true
+  val subscribe: Boolean = threadId != null &&
+    (started || run?.status == "preparing" || view.thread.worktreePath != null)
+  var held: WorktreeSetupSnapshot? by remember(threadId) { mutableStateOf(null) }
+  var latest: WorktreeSetupSnapshot? by remember(threadId) { mutableStateOf(null) }
+  LaunchedEffect(threadId, subscribe) {
+    if (threadId == null || !subscribe) return@LaunchedEffect
+    client.worktreeSetup(threadId).collect { snapshot ->
+      latest = snapshot
+      held = holdWorktreeSetup(held, snapshot)
+    }
+  }
+  if (threadId == null) return WorktreeSetupState(null, preparing = false, blocksSend = false)
+  val progress: WorktreeSetupProgress = resolveWorktreeSetupProgress(
+    threadId = threadId,
+    localPreparing = pending.launching,
+    runStatus = run?.status,
+    latest = latest,
+    held = held,
+  )
+  val visible: WorktreeSetupSnapshot? = resolveVisibleWorktreeSetup(
+    live = progress.snapshot,
+    recorded = null,
+    turnStarted = run?.startedAt != null,
+    followUpSent = activeMessageCount(view!!) > 1,
+  )
+  return WorktreeSetupState(
+    visible = visible,
+    preparing = progress.preparing,
+    blocksSend = worktreeSetupBlocksSend(visible, progress.preparing),
   )
 }
 
@@ -356,6 +460,9 @@ private fun rememberComposerFooter(
   pending: PendingMessages,
   connection: ConnectionState,
   controller: ChatController,
+  cwd: String?,
+  vcs: VcsSummary?,
+  setup: WorktreeSetupState,
 ): Pair<ComposerFooterState?, ComposerFooterActions> {
   val connected: Boolean = connection is ConnectionState.Connected
   LaunchedEffect(connected) {
@@ -368,6 +475,9 @@ private fun rememberComposerFooter(
   val instanceId: String? = selection?.instance ?: thread?.providerInstanceId
   // The settings aren't observable, so the picker's favourites are mirrored here per toggle
   var favorites: Set<String> by remember { mutableStateOf(T3Settings.get().modelFavorites) }
+  var refsQuery: String by remember(thread?.id) { mutableStateOf("") }
+  val workspace: WorkspaceControlState? =
+    rememberWorkspaceControl(view, pending, cwd, vcs, setup, refsQuery, T3.get().client)
   val footer: ComposerFooterState? = info?.let { catalog ->
     if (thread == null) return@let null
     composerFooter(
@@ -379,7 +489,7 @@ private fun rememberComposerFooter(
       selection = selection,
       reported = view?.let(::deriveReportedModelSelection),
       favorites = favorites,
-    )
+    ).copy(workspace = workspace)
   }
 
   fun commandId(): String = UUID.randomUUID().toString()
@@ -459,9 +569,76 @@ private fun rememberComposerFooter(
         controller.dispatchForThread(view, command)
       }
     },
+    // `onEnvModeChange`, `setPendingServerThreadBranch` and the origin toggle, ChatView.tsx:4620:
+    // composer-side until the first message, which launches with them
+    onEnvMode = { mode ->
+      thread?.let { controller.draftWorkspace(it.id) { draft -> draft.copy(envMode = mode) } }
+    },
+    onBaseBranch = { branch ->
+      thread?.let { controller.draftWorkspace(it.id) { draft -> draft.copy(branch = branch) } }
+    },
+    onStartFromOrigin = { on ->
+      thread?.let { controller.draftWorkspace(it.id) { draft -> draft.copy(startFromOrigin = on) } }
+    },
+    onRefsQuery = { query -> refsQuery = query },
   )
   return footer to actions
 }
+
+/**
+ * The Workspace control's state for [view]'s thread: the draft over the thread's row, the
+ * checkout's branch from [vcs], and the refs `vcs.listRefs` lists for what's typed, asked
+ * again per query while the control is a choice. Null off a git repo.
+ */
+@Composable
+private fun rememberWorkspaceControl(
+  view: ThreadView?,
+  pending: PendingMessages,
+  cwd: String?,
+  vcs: VcsSummary?,
+  setup: WorktreeSetupState,
+  query: String, // what the base branch picker is searching for
+  client: T3Client,
+): WorkspaceControlState? {
+  if (view == null) return null
+  val isGitRepo: Boolean = vcs != null
+  val choosing: Boolean = isGitRepo && canOverrideServerThreadEnvMode(view) && !setup.preparing &&
+    (pending.workspace.envMode ?: EnvMode.LOCAL) == EnvMode.WORKTREE
+  var refs: List<VcsRef> by remember(cwd) { mutableStateOf(emptyList()) }
+  var refsStatus: String? by remember(cwd) { mutableStateOf(null) }
+  LaunchedEffect(cwd, choosing, query) {
+    if (cwd == null || !choosing) return@LaunchedEffect
+    refsStatus = "Loading refs..."
+    try {
+      val input = VcsListRefsInput(cwd = cwd, query = query.ifBlank { null }, limit = REFS_PAGE)
+      val result: VcsListRefsResult = client.listRefs(input)
+      refs = result.refs
+      refsStatus = if (result.nextCursor != null) {
+        "Showing ${result.refs.size} of ${result.totalCount} refs"
+      } else {
+        null
+      }
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      LOG.info("Couldn't list refs in $cwd", e)
+      refsStatus = e.message ?: "Couldn't list refs"
+    }
+  }
+  return workspaceControlState(
+    view = view,
+    draft = pending.workspace,
+    currentGitBranch = vcs?.branch,
+    isGitRepo = isGitRepo,
+    preparingWorktree = setup.preparing,
+    refs = refs,
+    refsQuery = query,
+    refsStatus = refsStatus,
+  )
+}
+
+/** `usePaginatedBranches`'s page, enough for a picker without paging. */
+private const val REFS_PAGE: Long = 100
 
 private val LOG: Logger = Logger.getInstance(ChatViewToolWindowFactory::class.java)
 

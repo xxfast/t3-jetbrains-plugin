@@ -32,6 +32,13 @@ class ComposerFooterActions(
   val onModelOptions: (List<ProviderOptionSelection>?) -> Unit = {},
   val onRuntimeMode: (mode: String) -> Unit = {},
   val onToggleInteractionMode: () -> Unit = {},
+  /** The Workspace select, `onEnvModeChange`. */
+  val onEnvMode: (EnvMode) -> Unit = {},
+  /** A base branch picked for a new worktree, `onActiveThreadBranchOverrideChange`. */
+  val onBaseBranch: (branch: String) -> Unit = {},
+  val onStartFromOrigin: (Boolean) -> Unit = {},
+  /** What's typed in the base branch picker; the host asks `vcs.listRefs` for it. */
+  val onRefsQuery: (query: String) -> Unit = {},
 )
 
 /**

@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "VcsListRefsResult",
+  "title": "VcsListRefsResult",
+  "type": "object",
+  "properties": {
+    "refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/VcsRef"
+      }
+    },
+    "isRepo": {
+      "type": "boolean"
+    },
+    "hasPrimaryRemote": {
+      "type": "boolean"
+    },
+    "nextCursor": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "totalCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": [
+    "refs",
+    "isRepo",
+    "hasPrimaryRemote",
+    "nextCursor",
+    "totalCount"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "VcsRef": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "isRemote": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "remoteName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "current": {
+          "type": "boolean"
+        },
+        "isDefault": {
+          "type": "boolean"
+        },
+        "worktreePath": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "current",
+        "isDefault",
+        "worktreePath"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

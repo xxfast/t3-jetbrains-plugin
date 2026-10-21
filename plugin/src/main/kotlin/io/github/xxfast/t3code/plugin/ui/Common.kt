@@ -39,6 +39,10 @@ fun rememberNow(periodMillis: Long): State<Instant> = produceState(Instant.now()
 @Composable
 fun subtle(alpha: Float): Color = JewelTheme.globalColors.text.normal.copy(alpha = alpha)
 
+/** Upstream's `text-muted-foreground`, what secondary text and tool rows use. */
+@Composable
+fun muted(): Color = JewelTheme.globalColors.text.info
+
 /** The accent: the focus outline, since the bridge theme's focused border is transparent. */
 @Composable
 fun accent(): Color = JewelTheme.globalColors.outlines.focused

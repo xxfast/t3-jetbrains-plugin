@@ -3,6 +3,8 @@ package io.github.xxfast.t3code.plugin.ui
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.generated.TurnItem
+import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
+import io.github.xxfast.t3code.protocol.generated.WorktreeSetupStage
 import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.test.assertEquals
@@ -178,6 +180,73 @@ class MessagesTimelineLogicTest {
   ): TurnItem = item(
     """{"type":"command_execution","input":"ls -la","exitCode":0,"status":"$status"}""",
     id, runId, time,
+  )
+
+  @Test
+  fun `a running setup takes the working slot after the first prompt, nothing thinks yet`() {
+    val preparing: Run = run("r1", 1, started = "10:00", completed = null, status = "preparing")
+    val rows: List<TimelineRow> = deriveMessagesTimelineRows(
+      timelineEntries = deriveTimelineEntries(listOf(user("u", "r1", "10:00"))),
+      runs = listOf(preparing),
+      runningRun = preparing,
+      worktreeSetup = setup("running", agent = "pending"),
+    )
+    assertEquals(listOf("u", "working-indicator-row", "worktree-setup-row"), rows.map { it.id })
+    assertFalse(assertIs<TimelineRow.WorktreeSetup>(rows[2]).embedded)
+  }
+
+  @Test
+  fun `once the agent runs the turn, the setup folds in after the prompt`() {
+    val running: Run = run("r1", 1, started = "10:00", completed = null, status = "running")
+    val rows: List<TimelineRow> = deriveMessagesTimelineRows(
+      timelineEntries = deriveTimelineEntries(listOf(user("u", "r1", "10:00"))),
+      runs = listOf(running),
+      runningRun = running,
+      worktreeSetup = setup("done", agent = "done"),
+    )
+    // The handed-off card no longer owns the working slot, so it sits right under the prompt
+    assertEquals(
+      listOf("u", "worktree-setup-row", "working-indicator-row", "thinking-row"),
+      rows.map { it.id },
+    )
+    assertTrue(assertIs<TimelineRow.WorktreeSetup>(rows[1]).embedded)
+  }
+
+  @Test
+  fun `a setup still running after the handoff isn't a row`() {
+    val running: Run = run("r1", 1, started = "10:00", completed = null, status = "running")
+    val rows: List<TimelineRow> = deriveMessagesTimelineRows(
+      timelineEntries = deriveTimelineEntries(listOf(user("u", "r1", "10:00"))),
+      runs = listOf(running),
+      runningRun = running,
+      worktreeSetup = setup("running", agent = "done"),
+    )
+    assertEquals(listOf("u", "working-indicator-row", "thinking-row"), rows.map { it.id })
+  }
+
+  @Test
+  fun `a failed setup sits after the prompt without a working row`() {
+    val rows: List<TimelineRow> = deriveMessagesTimelineRows(
+      timelineEntries = deriveTimelineEntries(listOf(user("u", "r1", "10:00"))),
+      runs = emptyList(),
+      runningRun = null,
+      worktreeSetup = setup("failed", agent = "pending"),
+    )
+    assertEquals(listOf("u", "worktree-setup-row"), rows.map { it.id })
+  }
+
+  private fun setup(phase: String, agent: String): WorktreeSetupSnapshot = WorktreeSetupSnapshot(
+    threadId = "t",
+    phase = phase,
+    startedAt = at("10:00"),
+    endedAt = null,
+    branch = null,
+    baseRef = "main",
+    worktreePath = null,
+    setupScript = null,
+    stages = listOf(WorktreeSetupStage("agent", agent, null, null, null, null, emptyList())),
+    error = null,
+    sequence = 1,
   )
 
   /** A turn item from [json] plus the fields every item requires. */

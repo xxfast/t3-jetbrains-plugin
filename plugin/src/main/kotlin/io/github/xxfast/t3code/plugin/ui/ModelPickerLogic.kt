@@ -383,6 +383,8 @@ data class ComposerFooterState(
   val pickerEntries: List<ModelPickerEntry> = emptyList(),
   /** The favourite models, keyed by [providerModelKey]. */
   val favorites: Set<String> = emptySet(),
+  /** The Workspace and base branch controls, upstream's `BranchToolbar`; null off a git repo. */
+  val workspace: WorkspaceControlState? = null,
 )
 
 /**

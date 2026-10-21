@@ -50,8 +50,9 @@ How it fits together:
 - A scenario is a folder in `harness/scenarios/`; the fixture client merges every `*.json` in it.
   `default/` is the thread list plus one demo thread per thread-level state (`running.json`,
   `waiting-approval.json`, `waiting-question.json`, `unknown-items.json`, `many-items.json`,
-  `unread.json`, `snoozed.json` with one sleeping and one woken), and its `connection.json` grants the operate and terminal scopes so every
-  action is live. `disconnected/`, `pairing/`, `auth-error/`, `read-only/` (no operate) and
+  `unread.json`, `snoozed.json` with one sleeping and one woken, `worktree-setup.json` with a
+  first turn whose worktree is still being prepared), and its `connection.json` grants the
+  operate and terminal scopes so every action is live. `disconnected/`, `pairing/`, `auth-error/`, `read-only/` (no operate) and
   `empty-server/` cover connection-level states; the ones with threads carry a byte-for-byte copy
   of `default/list.json`. Shapes are the same `:protocol` types the real client decodes, so
   scenarios double as test fixtures.
@@ -224,6 +225,17 @@ Hard-won, so recorded here rather than rediscovered.
   `Fail` ends the flow, so the UI hosts wrap `thread()` in `threadLoad()` to show it with Retry.
 - Upstream's model pick is a composer draft applied on the next turn. Mid-run the plugin keeps it
   as a draft too and sends it with the next message.
+- A new thread's workspace (current checkout or a new worktree) is picked in the composer, not
+  on creation, as upstream's `BranchToolbar` does: `canOverrideServerThreadEnvMode`
+  (`ChatView.tsx:4611`) lets a server thread with no message and no worktree choose until its
+  first send. That send goes through `orchestration.launchThread` with `reuseExistingThread`
+  and a `worktree` strategy (`commands.ts:634`), not `message.dispatch`. The server claims the
+  thread with `thread.metadata.update { expectedEmpty: true }` and refuses one that has
+  messages. The answer has no command sequence, so the optimistic message only retires once
+  the thread stream acknowledges it. `subscribeWorktreeSetup` streams whole snapshots and
+  answers `null` once a finished setup's grace period passes; hold the last one, as upstream's
+  `useWorktreeSetup` does. `vcs.listRefs` lists the base branches; the fixture client answers
+  a canned set and plays a fake setup over a few seconds.
 - `LiveServerTest` (skipped unless `T3_LIVE_TOKEN` and `T3_LIVE_THREAD` are set) is how wire
   changes get checked against the real server. Last passed 2026-10-20 against the local desktop.
 - A Search Everywhere-shaped chooser is `com.intellij.ide.actions.BigPopupUI` (public, what

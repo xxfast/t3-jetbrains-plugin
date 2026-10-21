@@ -20,6 +20,7 @@ import io.github.xxfast.t3code.protocol.T3Exception
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
+import io.github.xxfast.t3code.protocol.generated.AppThreadLineage
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
 import io.github.xxfast.t3code.protocol.generated.BooleanProviderOptionDescriptor
@@ -41,6 +42,13 @@ import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TerminalMetadataStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TerminalSessionSnapshot
+import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
+import io.github.xxfast.t3code.protocol.generated.ThreadLaunchResult
+import io.github.xxfast.t3code.protocol.generated.ThreadLaunchWorkspaceStrategy
+import io.github.xxfast.t3code.protocol.generated.ThreadProjection
+import io.github.xxfast.t3code.protocol.generated.VcsListRefsInput
+import io.github.xxfast.t3code.protocol.generated.VcsListRefsResult
+import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
 import io.github.xxfast.t3code.protocol.generated.ThreadTitleRegeneration
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import io.github.xxfast.t3code.protocol.generated.UserInputAttachmentAnswerPayload
@@ -71,6 +79,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
@@ -119,6 +128,13 @@ class FixtureClient(
   private val terminals: ConcurrentHashMap<String, MutableSharedFlow<TerminalAttachStreamEvent>> =
     ConcurrentHashMap()
 
+  /** Each thread's worktree setup as `subscribeWorktreeSetup` would stream it, by thread id. */
+  private val setups: ConcurrentHashMap<String, MutableStateFlow<WorktreeSetupSnapshot?>> =
+    ConcurrentHashMap()
+
+  /** The fake setups in flight, by thread id, so a cancel can stop one. */
+  private val setupJobs: ConcurrentHashMap<String, Job> = ConcurrentHashMap()
+
   override val connection: StateFlow<ConnectionState> = combine(loaded, online) { scenario, on ->
     if (!on) ConnectionState.Disconnected else scenario?.connection ?: ConnectionState.Connecting
   }.stateIn(scope, SharingStarted.Eagerly, ConnectionState.Connecting)
@@ -128,7 +144,8 @@ class FixtureClient(
     .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
   override val threads: StateFlow<List<Thread>> = combine(loaded, overlay) { scenario, overlay ->
-    scenario?.threads.orEmpty().filter { it.id !in overlay.deleted }.map(overlay::row)
+    val created: List<Thread> = overlay.created.mapNotNull { overlay.threads[it] }
+    (scenario?.threads.orEmpty() + created).filter { it.id !in overlay.deleted }.map(overlay::row)
   }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
   init {
@@ -140,10 +157,13 @@ class FixtureClient(
     }
   }
 
-  override fun thread(id: String): Flow<ThreadView> = loaded
-    .filterNotNull()
-    .flatMapLatest { scenario ->
-      val thread: Thread? = scenario.threads.find { it.id == id }
+  override fun thread(id: String): Flow<ThreadView> = combine(
+    loaded.filterNotNull(),
+    // A created thread's row only has to exist; its changes come through the overlay below
+    overlay.map { it.threads[id]?.takeIf { _ -> id in it.created } }.distinctUntilChanged(),
+  ) { scenario, created -> scenario to created }
+    .flatMapLatest { (scenario, created) ->
+      val thread: Thread? = scenario.threads.find { it.id == id } ?: created
       if (thread == null) emptyFlow()
       else combine(replay(thread, scenario), overlay) { base, overlay -> overlay.over(base) }
     }
@@ -223,6 +243,9 @@ class FixtureClient(
           .copy(detachedSessions = overlay.detachedSessions + command.providerSessionId)
           .withRow(command.threadId) { row -> row.copy(status = "idle") }
       }
+
+      // Orchestrator.ts's `thread.create`: a fresh idle row, listed last as the newest
+      is Command.ThreadCreate -> create(command, now)
 
       // The thread.* rows below port apps/server/src/orchestration-v2/Orchestrator.ts at the
       // pinned tag, line for line. The shell row has no lastSnoozeWakeAt, so pin can't set it.
@@ -411,6 +434,173 @@ class FixtureClient(
     }
     return at
   }
+
+  private fun create(command: Command.ThreadCreate, now: String) {
+    val row = Thread(
+      createdBy = command.createdBy,
+      creationSource = command.creationSource,
+      id = command.threadId,
+      projectId = command.projectId,
+      title = command.title,
+      providerInstanceId = command.modelSelection.instance ?: "codex",
+      modelSelection = command.modelSelection,
+      runtimeMode = command.runtimeMode,
+      interactionMode = command.interactionMode,
+      branch = command.branch,
+      worktreePath = command.worktreePath,
+      lineage = AppThreadLineage(
+        parentThreadId = null,
+        relationshipToParent = null,
+        rootThreadId = command.threadId,
+      ),
+      forkedFrom = null,
+      activeProviderThreadId = null,
+      latestRunId = null,
+      activeRunId = null,
+      status = "idle",
+      pendingRuntimeRequest = null,
+      latestVisibleMessage = null,
+      latestUserMessageAt = null,
+      hasActionableProposedPlan = false,
+      itemCount = 0,
+      visibleItemCount = 0,
+      createdAt = now,
+      updatedAt = now,
+      archivedAt = null,
+      settledOverride = null,
+      settledAt = null,
+      deletedAt = null,
+    )
+    overlay.update { overlay ->
+      if (rowOf(overlay, row.id) != null) return@update overlay
+      overlay.copy(threads = overlay.threads + (row.id to row), created = overlay.created + row.id)
+    }
+  }
+
+  /**
+   * `orchestration.launchThread` as the fixture server: the thread is created (or, reused,
+   * must already be there), a `worktree` strategy plays a fake setup over a few seconds on
+   * [worktreeSetup] and lands the row on a worktree path, then the initial message goes out as
+   * a `message.dispatch` would. The answer's projection is the row as it stands after the
+   * claim, which is all the plugin reads from it.
+   */
+  override suspend fun launchThread(input: ThreadLaunchInput): ThreadLaunchResult {
+    val now: String = Instant.now().toString()
+    val threadId: String = input.threadId ?: "thr_fixture_${input.commandId}"
+    if (input.reuseExistingThread != true) {
+      create(
+        Command.ThreadCreate(
+          createdBy = "user",
+          creationSource = input.creationSource ?: "web",
+          commandId = input.commandId,
+          threadId = threadId,
+          projectId = input.projectId,
+          title = input.title,
+          modelSelection = input.modelSelection,
+          runtimeMode = input.runtimeMode,
+          interactionMode = input.interactionMode,
+          branch = input.workspaceStrategy.branch,
+          worktreePath =
+            (input.workspaceStrategy as? ThreadLaunchWorkspaceStrategy.ExistingWorktree)?.worktreePath,
+        ),
+        now,
+      )
+    }
+    val row: Thread = rowOf(overlay.value, threadId)
+      ?: throw T3Exception.Rpc("OrchestrationV2ThreadLaunchError", "Thread not found.")
+    if (input.reuseExistingThread == true && itemsOf(overlay.value, threadId).isNotEmpty()) {
+      throw T3Exception.Rpc("OrchestrationV2ThreadLaunchError", "Thread already has messages.")
+    }
+    updateRow(threadId) { it.copy(title = input.title, updatedAt = now) }
+    val message: Command.MessageDispatch? = input.initialMessage?.let { initial ->
+      Command.MessageDispatch(
+        createdBy = "user",
+        creationSource = input.creationSource ?: "web",
+        commandId = "${input.commandId}:initial-message",
+        threadId = threadId,
+        messageId = initial.messageId ?: "msg_fixture_${input.commandId}",
+        text = initial.text,
+        attachments = initial.attachments,
+        dispatchMode = Command.MessageDispatch.DispatchMode.StartImmediately(),
+        context = initial.context,
+        modelSelection = input.modelSelection,
+      )
+    }
+    val strategy: ThreadLaunchWorkspaceStrategy = input.workspaceStrategy
+    if (strategy is ThreadLaunchWorkspaceStrategy.Worktree) {
+      val branch: String = strategy.branch ?: "t3/${threadId.takeLast(6).lowercase()}"
+      val root: String = loaded.value?.projects?.find { it.id == row.projectId }?.workspaceRoot
+        ?: directory.toString()
+      val path: String = fixtureWorktreePath(root, branch)
+      val steps: List<FixtureSetupStep> =
+        fixtureSetupSteps(threadId, strategy.baseRef, branch, path, Instant.now())
+      val stream: MutableStateFlow<WorktreeSetupSnapshot?> = setupOf(threadId)
+      updateRow(threadId) { it.copy(status = "running", updatedAt = now) }
+      setupJobs[threadId]?.cancel()
+      setupJobs[threadId] = scope.launch {
+        for (step in steps) {
+          delay(step.after)
+          stream.value = step.snapshot
+        }
+        val done: String = Instant.now().toString()
+        updateRow(threadId) { it.copy(branch = branch, worktreePath = path, updatedAt = done) }
+        if (message != null) send(message, done, sequence.incrementAndGet())
+        // The server drops a finished snapshot after a grace period and answers null
+        delay(SETUP_GRACE_MILLIS)
+        stream.value = null
+      }
+    } else if (message != null) {
+      send(message, now, sequence.incrementAndGet())
+    }
+    val claimed: Thread = rowOf(overlay.value, threadId) ?: row
+    return ThreadLaunchResult(
+      threadId = threadId,
+      projection = ThreadProjection(
+        thread = appThread(claimed),
+        runs = runsOf(overlay.value, threadId),
+        attempts = emptyList(),
+        nodes = emptyList(),
+        subagents = emptyList(),
+        providerSessions = emptyList(),
+        providerThreads = emptyList(),
+        providerTurns = emptyList(),
+        runtimeRequests = emptyList(),
+        messages = overlay.value.messages[threadId].orEmpty(),
+        plans = emptyList(),
+        turnItems = itemsOf(overlay.value, threadId),
+        checkpointScopes = emptyList(),
+        checkpoints = emptyList(),
+        contextHandoffs = emptyList(),
+        contextTransfers = emptyList(),
+        visibleTurnItems = emptyList(),
+        updatedAt = claimed.updatedAt,
+      ),
+      resumed = input.reuseExistingThread == true,
+    )
+  }
+
+  override fun worktreeSetup(threadId: String): Flow<WorktreeSetupSnapshot?> = setupOf(threadId)
+
+  override suspend fun worktreeSetupCancel(threadId: String): Boolean {
+    val job: Job = setupJobs.remove(threadId) ?: return false
+    job.cancel()
+    val stream: MutableStateFlow<WorktreeSetupSnapshot?> = setupOf(threadId)
+    val running: WorktreeSetupSnapshot = stream.value?.takeIf { it.phase == "running" }
+      ?: return false
+    val now: Instant = Instant.now()
+    stream.value = cancelledSetup(running, now)
+    updateRow(threadId) { it.copy(status = "idle", updatedAt = now.toString()) }
+    return true
+  }
+
+  override suspend fun listRefs(input: VcsListRefsInput): VcsListRefsResult =
+    fixtureListRefs(input)
+
+  /** The setup stream for [threadId], seeded from the scenario's `worktreeSetups` if it has one. */
+  private fun setupOf(threadId: String): MutableStateFlow<WorktreeSetupSnapshot?> =
+    setups.computeIfAbsent(threadId) {
+      MutableStateFlow(loaded.value?.worktreeSetups?.get(threadId))
+    }
 
   /** The user's message now, a streaming reply after 600 ms, done 600 ms after that. */
   private fun send(command: Command.MessageDispatch, now: String, at: Long) {
@@ -869,6 +1059,9 @@ class FixtureClient(
 }
 
 private const val REPLY_STEP_MILLIS: Long = 600
+
+/** How long the fixture keeps a finished worktree setup before answering null. */
+private const val SETUP_GRACE_MILLIS: Long = 30_000
 
 /** How long the fixture's title generator takes, and the mark it leaves on the title. */
 private val TITLE_REGENERATION: Duration = 2.seconds

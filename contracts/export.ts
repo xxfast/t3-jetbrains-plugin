@@ -55,6 +55,14 @@ export const CURATED: ReadonlyArray<readonly [name: string, module: string]> = [
   ["PersistChatAttachmentsResult", "chatAttachment.ts"],
   ["ServerProvider", "server.ts"],
   ["OrchestrationMessageContext", "composerContext.ts"],
+  ["OrchestrationV2ThreadLaunchInput", "orchestrationV2.ts"],
+  ["OrchestrationV2ThreadLaunchResult", "orchestrationV2.ts"],
+  ["WorktreeSetupSubscribeInput", "worktreeSetup.ts"],
+  ["WorktreeSetupSnapshot", "worktreeSetup.ts"],
+  ["WorktreeSetupCancelInput", "worktreeSetup.ts"],
+  ["WorktreeSetupCancelResult", "worktreeSetup.ts"],
+  ["VcsListRefsInput", "git.ts"],
+  ["VcsListRefsResult", "git.ts"],
 ];
 
 const UPSTREAM_REPO = "https://github.com/pingdotgg/t3code.git";

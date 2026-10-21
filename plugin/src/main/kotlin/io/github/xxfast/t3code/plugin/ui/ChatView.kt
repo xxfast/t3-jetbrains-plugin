@@ -66,6 +66,7 @@ import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.TurnItem
+import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
 import java.awt.datatransfer.StringSelection
 import java.time.Instant
 import kotlinx.serialization.json.JsonObject
@@ -115,6 +116,9 @@ fun ChatView(
   extras: DraftExtras = DraftExtras(), // the draft's attachments and context
   attachmentActions: AttachmentActions = AttachmentActions(),
   contextWindow: ComposerContextWindow = ComposerContextWindow(usage = null),
+  worktreeSetup: WorktreeSetupSnapshot? = null, // the first turn's worktree being prepared
+  onCancelWorktreeSetup: (() -> Unit)? = null, // the card's Cancel, null when it can't
+  onOpenSetupTerminal: ((terminalId: String) -> Unit)? = null, // the setup script's terminal
 ) {
   val threadId: String? = view?.thread?.id
   val timeline: LazyListState = remember(threadId) { LazyListState() }
@@ -159,7 +163,15 @@ fun ChatView(
               state = timeline,
               processor = processor,
               operateReason = composer.disabledReason,
-              actions = TimelineActions(onOpenFile, onDiffFile, onDiffRun, onRollback),
+              actions = TimelineActions(
+                onOpenFile = onOpenFile,
+                onDiffFile = onDiffFile,
+                onDiffRun = onDiffRun,
+                onRollback = onRollback,
+                onCancelWorktreeSetup = onCancelWorktreeSetup,
+                onOpenSetupTerminal = onOpenSetupTerminal,
+              ),
+              worktreeSetup = worktreeSetup,
               bottomInset = with(LocalDensity.current) { inset.toDp() },
               modifier = Modifier.timelineWheel(timeline, scrollCollapse, collapseEligible),
             )
@@ -204,6 +216,8 @@ private class TimelineActions(
   val onDiffFile: (TurnItem.FileChange) -> Unit,
   val onDiffRun: (Run) -> Unit,
   val onRollback: (Run) -> Unit,
+  val onCancelWorktreeSetup: (() -> Unit)? = null,
+  val onOpenSetupTerminal: ((String) -> Unit)? = null,
 )
 
 @Composable
@@ -302,6 +316,7 @@ private fun MessagesTimeline(
   processor: MarkdownProcessor,
   operateReason: String?, // why nothing can change the thread, when it can't
   actions: TimelineActions,
+  worktreeSetup: WorktreeSetupSnapshot?,
   bottomInset: Dp,
   modifier: Modifier = Modifier,
 ) {
@@ -311,7 +326,13 @@ private fun MessagesTimeline(
     mutableStateOf(TimelineExpansion())
   }
   val entries: List<TimelineEntry> = remember(view.items) { deriveTimelineEntries(view.items) }
-  val rows: List<TimelineRow> = remember(entries, view.runs, view.checkpoints, expansion) {
+  val rows: List<TimelineRow> = remember(
+    entries,
+    view.runs,
+    view.checkpoints,
+    expansion,
+    worktreeSetup,
+  ) {
     deriveMessagesTimelineRows(
       timelineEntries = entries,
       runs = view.runs,
@@ -323,6 +344,7 @@ private fun MessagesTimeline(
           .firstOrNull { it.ordinal == run.ordinal - 1 }
           ?.takeIf { checkpointForRun(view, it) != null }
       },
+      worktreeSetup = worktreeSetup,
     )
   }
   val requests: Map<String, RuntimeRequest> =
@@ -416,7 +438,7 @@ private fun TimelineRow.bottomPadding(continuesWorkLog: Boolean): Dp = when (thi
   is TimelineRow.TurnFold, is TimelineRow.Working -> 6.dp
   is TimelineRow.Message -> if (entry.user || showMeta) 16.dp else 8.dp
   is TimelineRow.AssistantMeta, is TimelineRow.Plan, is TimelineRow.ContextCompaction -> 16.dp
-  is TimelineRow.Event -> 8.dp
+  is TimelineRow.Event, is TimelineRow.WorktreeSetup -> 8.dp
   is TimelineRow.Work -> if (continuesWorkLog) 0.dp else if (expandedGroup) 4.dp else 8.dp
   is TimelineRow.WorkToggle, is TimelineRow.WorkLive, TimelineRow.Thinking ->
     if (continuesWorkLog) 0.dp else 8.dp
@@ -465,6 +487,13 @@ private fun TimelineRowContent(row: TimelineRow, context: RowContext) {
     is TimelineRow.ContextCompaction -> ContextCompactionRow(row.label)
     is TimelineRow.Event -> EventRow(row.item, context)
     is TimelineRow.Plan -> PlanCard(row.item, context.processor)
+    is TimelineRow.WorktreeSetup -> WorktreeSetupCard(
+      snapshot = row.snapshot,
+      embedded = row.embedded,
+      now = context.now,
+      onCancel = if (row.embedded) null else context.actions.onCancelWorktreeSetup,
+      onOpenTerminal = context.actions.onOpenSetupTerminal,
+    )
   }
 }
 
@@ -1115,8 +1144,6 @@ private fun Modifier.bottomHairline(): Modifier {
   }
 }
 
-@Composable
-private fun muted(): Color = JewelTheme.globalColors.text.info
 
 @Composable
 private fun MarkdownText(text: String, processor: MarkdownProcessor, fill: Boolean = true) {

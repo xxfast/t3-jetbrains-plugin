@@ -19,9 +19,11 @@ const val NEW_THREAD_TITLE: String = "New thread"
 /**
  * `createThread`, packages/client-runtime/src/operations/commands.ts:386: a `thread.create` on
  * the current checkout, no worktree. Upstream's picker is draft-first and only creates the thread
- * on the first send through `orchestration.launchThread`, which the plugin's protocol doesn't
- * have; this mirrors the direct builder "implement plan in new thread" uses instead. Null when
- * no provider can run it.
+ * on the first send; the plugin has no local drafts, so it creates the row at once, the way
+ * "implement plan in new thread" does. The provider, model, runtime mode and workspace are
+ * then the composer's: its footer changes them on the row, and a New worktree pick sends the
+ * first message as an `orchestration.launchThread` that reuses the thread ([launchThreadInput]).
+ * Null when no provider can run it.
  */
 fun createThread(
   project: Project,

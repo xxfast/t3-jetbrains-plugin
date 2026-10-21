@@ -7,7 +7,12 @@ import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TerminalMetadataStreamEvent
+import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
+import io.github.xxfast.t3code.protocol.generated.ThreadLaunchResult
+import io.github.xxfast.t3code.protocol.generated.VcsListRefsInput
+import io.github.xxfast.t3code.protocol.generated.VcsListRefsResult
 import io.github.xxfast.t3code.protocol.generated.VcsStatusStreamEvent
+import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -69,6 +74,27 @@ public interface T3Client {
 
   /** `orchestration.dispatchCommand`. Returns the server's sequence. */
   public suspend fun dispatch(command: OrchestrationV2Command): Long
+
+  /**
+   * `orchestration.launchThread`: creates a thread, or with `reuseExistingThread` claims an
+   * empty one, prepares its workspace (a new worktree streams on [worktreeSetup]) and sends
+   * `initialMessage` as its first turn. What upstream's `startThreadTurn` calls when a send
+   * carries a `bootstrap` (`packages/client-runtime/src/operations/commands.ts:662`).
+   */
+  public suspend fun launchThread(input: ThreadLaunchInput): ThreadLaunchResult
+
+  /**
+   * `subscribeWorktreeSetup` for [threadId]: the setup's progress, a whole snapshot per
+   * change. `null` is the server having nothing for the thread, or having dropped a finished
+   * snapshot after its grace period; hold the last one across it.
+   */
+  public fun worktreeSetup(threadId: String): Flow<WorktreeSetupSnapshot?>
+
+  /** `worktreeSetup.cancel`: stops a running setup. True once the server cancelled it. */
+  public suspend fun worktreeSetupCancel(threadId: String): Boolean
+
+  /** `vcs.listRefs`: branches and tags of the checkout at `input.cwd`, paged by `cursor`. */
+  public suspend fun listRefs(input: VcsListRefsInput): VcsListRefsResult
 
   /**
    * `terminal.attach`: a snapshot first (replay its `history`), then live events. Cancelling
