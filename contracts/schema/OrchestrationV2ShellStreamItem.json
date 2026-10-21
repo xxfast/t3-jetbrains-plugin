@@ -361,26 +361,6 @@
       ],
       "additionalProperties": true
     },
-    "OrchestrationV2DelegatedFrom": {
-      "type": "object",
-      "properties": {
-        "environmentId": {
-          "type": "string"
-        },
-        "threadId": {
-          "type": "string"
-        },
-        "title": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "environmentId",
-        "threadId",
-        "title"
-      ],
-      "additionalProperties": true
-    },
     "OrchestrationV2LatestVisibleMessageSummary": {
       "type": "object",
       "properties": {
@@ -447,22 +427,6 @@
         "runId",
         "resetAt",
         "autoResume"
-      ],
-      "additionalProperties": true
-    },
-    "OrchestrationV2LinkOrigin": {
-      "type": "object",
-      "properties": {
-        "sessionId": {
-          "type": "string"
-        },
-        "label": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "sessionId",
-        "label"
       ],
       "additionalProperties": true
     },
@@ -709,6 +673,16 @@
         },
         "createdAt": {
           "type": "string"
+        },
+        "blocking": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1083,26 +1057,6 @@
             }
           ]
         },
-        "linkOrigin": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/OrchestrationV2LinkOrigin"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "delegatedFrom": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/OrchestrationV2DelegatedFrom"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "latestRunId": {
           "anyOf": [
             {
@@ -1208,6 +1162,16 @@
                   "type": "null"
                 }
               ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "blockedOnThreadWait": {
+          "anyOf": [
+            {
+              "type": "boolean"
             },
             {
               "type": "null"
@@ -2027,6 +1991,16 @@
         "url": {
           "type": "string"
         },
+        "repositoryWebUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "source": {
           "type": "string",
           "enum": [
@@ -2061,6 +2035,16 @@
           ]
         },
         "watch": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadPullRequestWatch"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "endedWatch": {
           "anyOf": [
             {
               "$ref": "#/$defs/ThreadPullRequestWatch"

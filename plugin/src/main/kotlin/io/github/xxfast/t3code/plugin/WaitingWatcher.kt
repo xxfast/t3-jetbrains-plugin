@@ -121,9 +121,8 @@ fun waitingLabel(kind: String?): String = when (kind) {
 
 /** The threads T3 Sidebar lists, not archived and not under a parent, that wait on you. */
 fun waitingThreads(threads: List<Thread>): List<Thread> {
-  val ids: Set<String> = threads.mapTo(mutableSetOf()) { it.id }
   return threads.filter { thread ->
-    !thread.archived && !thread.shownUnderParent(ids) && thread.waitsOnComposer
+    !thread.archived && !thread.shownUnderParent && thread.waitsOnComposer
   }
 }
 

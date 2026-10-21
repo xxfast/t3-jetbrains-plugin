@@ -72,12 +72,8 @@ val Thread.waitingOnYou: Boolean get() = pendingRuntimeRequest != null || status
 /** Settled is the server's own verdict (`thread.settle`, auto-settle); `settledAt` alone isn't. */
 val Thread.settled: Boolean get() = settledOverride == "settled"
 
-/**
- * Subagents and delegated tasks live under their parent, not in the list. A delegated task whose
- * parent this client can't see stays listed, so its work is never out of reach.
- */
-fun Thread.shownUnderParent(ids: Set<String>): Boolean =
-  lineage.relationshipToParent == "subagent" || delegatedFrom?.threadId?.let { it in ids } == true
+/** Subagents live under their parent, not in the list (`navigationThreadShellsAtom`). */
+val Thread.shownUnderParent: Boolean get() = lineage.relationshipToParent == "subagent"
 
 /** What an inbox row's time label shows. */
 fun Thread.inboxAt(): Instant = (latestUserMessageAt ?: updatedAt).toInstant()
@@ -168,10 +164,9 @@ fun sections(
   now: Instant = Instant.now(),
 ): ThreadSections {
   val needle: String = query.trim()
-  val ids: Set<String> = threads.mapTo(HashSet()) { it.id }
   val visible: List<Thread> = threads.filter {
     !it.archived &&
-      !it.shownUnderParent(ids) &&
+      !it.shownUnderParent &&
       filter.allows(it.projectId) &&
       it.title.contains(needle, ignoreCase = true)
   }

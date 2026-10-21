@@ -1,4 +1,4 @@
-// Generated from v0.1.1-preview.20261019.3339 by contracts/generate.ts, do not edit.
+// Generated from v0.1.1-preview.20261021.3449 by contracts/generate.ts, do not edit.
 
 @file:OptIn(ExperimentalSerializationApi::class)
 
@@ -93,6 +93,7 @@ public sealed interface TurnItem {
     val messageId: String,
     val scheduledTaskId: String? = null,
     val senderThreadId: String? = null,
+    val workflowScript: Boolean? = null,
     val inputIntent: String,
     val text: String,
     val context: MessageContext? = null,
@@ -709,40 +710,6 @@ public sealed interface TurnItem {
   ) : TurnItem
 
   @Serializable
-  public data class LinkRequest(
-    override val toolNonExecutionKind: String? = null,
-    override val toolSurface: String? = null,
-    val toolIcon: ToolActivityIcon? = null,
-    val toolSource: ToolActivitySource? = null,
-    override val id: String,
-    override val threadId: String,
-    override val runId: String?,
-    override val nodeId: String?,
-    override val providerThreadId: String?,
-    override val providerTurnId: String?,
-    val nativeItemRef: ProviderRef?,
-    override val parentItemId: String?,
-    override val ordinal: Long,
-    override val status: String,
-    override val title: String?,
-    override val startedAt: String?,
-    override val completedAt: String?,
-    override val updatedAt: String,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "link_request",
-    val url: String? = null,
-    val reason: String,
-    val environmentId: String? = null,
-    val label: String? = null,
-    val hint: String? = null,
-    val requestedAccess: String? = null,
-    val linkStatus: String,
-    val linkedEnvironmentId: String? = null,
-    val linkedLabel: String? = null,
-    val linkedAccess: String? = null,
-    val failure: String? = null,
-  ) : TurnItem
-
-  @Serializable
   public data class TurnItemSubagent(
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
@@ -768,7 +735,6 @@ public sealed interface TurnItem {
     val driver: String,
     val providerInstanceId: String,
     val childThreadId: String?,
-    val remoteChild: RemoteTaskChild? = null,
     val prompt: String,
     val progress: String? = null,
     val result: String?,
@@ -854,7 +820,6 @@ public object TurnItemSerializer : KSerializer<TurnItem> {
       "fork" -> TurnItem.Fork.serializer()
       "thread_created" -> TurnItem.ThreadCreated.serializer()
       "secret_request" -> TurnItem.SecretRequest.serializer()
-      "link_request" -> TurnItem.LinkRequest.serializer()
       "subagent" -> TurnItem.TurnItemSubagent.serializer()
       "dynamic_tool" -> TurnItem.DynamicTool.serializer()
       else -> TurnItem.Unknown.serializer()
@@ -901,7 +866,6 @@ public object TurnItemSerializer : KSerializer<TurnItem> {
       is TurnItem.Fork -> TurnItem.Fork.serializer().serialize(encoder, value)
       is TurnItem.ThreadCreated -> TurnItem.ThreadCreated.serializer().serialize(encoder, value)
       is TurnItem.SecretRequest -> TurnItem.SecretRequest.serializer().serialize(encoder, value)
-      is TurnItem.LinkRequest -> TurnItem.LinkRequest.serializer().serialize(encoder, value)
       is TurnItem.TurnItemSubagent ->
         TurnItem.TurnItemSubagent.serializer().serialize(encoder, value)
       is TurnItem.DynamicTool -> TurnItem.DynamicTool.serializer().serialize(encoder, value)

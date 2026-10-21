@@ -1,4 +1,4 @@
-// Generated from v0.1.1-preview.20261019.3339 by contracts/generate.ts, do not edit.
+// Generated from v0.1.1-preview.20261021.3449 by contracts/generate.ts, do not edit.
 
 @file:OptIn(ExperimentalSerializationApi::class)
 
@@ -39,8 +39,6 @@ public data class ThreadShell(
   val forkedFrom: ThreadShell.ForkedFrom?,
   val activeProviderThreadId: String?,
   val historyOrigin: String? = null,
-  val linkOrigin: LinkOrigin? = null,
-  val delegatedFrom: DelegatedFrom? = null,
   val latestRunId: String?,
   val latestRunRequestedAt: String? = null,
   val latestRunStartedAt: String? = null,
@@ -48,6 +46,7 @@ public data class ThreadShell(
   val activeRunId: String?,
   val activityRunStartedAt: String? = null,
   val activityRunStatus: String? = null,
+  val blockedOnThreadWait: Boolean? = null,
   val status: String,
   val lastError: String? = null,
   val lastErrorClass: String? = null,

@@ -1,4 +1,4 @@
-// Generated from v0.1.1-preview.20261019.3339 by contracts/generate.ts, do not edit.
+// Generated from v0.1.1-preview.20261021.3449 by contracts/generate.ts, do not edit.
 
 @file:OptIn(ExperimentalSerializationApi::class)
 
@@ -186,8 +186,6 @@ public data class AppThread(
   val branchPullRequest: ThreadLinkedPullRequest? = null,
   val activeProviderThreadId: String?,
   val historyOrigin: String? = null,
-  val linkOrigin: LinkOrigin? = null,
-  val delegatedFrom: DelegatedFrom? = null,
   val lineage: AppThreadLineage,
   val forkedFrom: AppThread.ForkedFrom?,
   val createdAt: String,
@@ -446,6 +444,7 @@ public data class ContextTransfer(
   val sourcePoint: ContextSourcePoint,
   val basePoint: ContextSourcePoint?,
   val sourceProviderInstanceId: String?,
+  val sourceTokenUsage: ProviderTurnTokenUsage? = null,
   val targetProviderInstanceId: String?,
   val targetRunId: String?,
   val status: String,
@@ -565,6 +564,7 @@ public data class ConversationMessage(
   val creationSource: String,
   val scheduledTaskId: String? = null,
   val senderThreadId: String? = null,
+  val workflowScript: Boolean? = null,
   val id: String,
   val threadId: String,
   val runId: String?,
@@ -604,13 +604,6 @@ public data class DelegatedCompletionDelivery(
 public data class DelegatedCompletionTaskDelivery(
   val state: String,
   val observedByRunId: String?,
-)
-
-@Serializable
-public data class DelegatedFrom(
-  val environmentId: String,
-  val threadId: String,
-  val title: String,
 )
 
 @Serializable
@@ -693,12 +686,6 @@ public data class LimitRecoveryUpdate(
   val resetAt: String,
   val autoResume: Boolean? = null,
   val snooze: Boolean? = null,
-)
-
-@Serializable
-public data class LinkOrigin(
-  val sessionId: String,
-  val label: String,
 )
 
 @Serializable
@@ -940,6 +927,7 @@ public data class PendingRuntimeRequestSummary(
   val id: String,
   val kind: String,
   val createdAt: String,
+  val blocking: Boolean? = null,
 )
 
 @Serializable(with = PlanArtifactSerializer::class)
@@ -1172,6 +1160,7 @@ public data class ProviderThreadNativeMetadata(
   val title: String? = null,
   val updatedAt: String? = null,
   val itemIdentityVersion: Long? = null,
+  val forkHeadMessageId: String? = null,
 )
 
 @Serializable
@@ -1198,17 +1187,9 @@ public data class ProviderTurnTokenUsage(
   val outputTokens: Long? = null,
   val reasoningOutputTokens: Long? = null,
   val promptCacheTtlMs: Long? = null,
+  val autoCompactThreshold: Long? = null,
+  val promptCacheExpiresAt: String? = null,
   val updatedAt: String,
-)
-
-@Serializable
-public data class RemoteTaskChild(
-  val environmentId: String,
-  val threadId: String,
-  val label: String,
-  val runId: String? = null,
-  val stoppedThere: Boolean? = null,
-  val stopCount: Long? = null,
 )
 
 @Serializable
@@ -1284,7 +1265,6 @@ public data class Subagent(
   val providerInstanceId: String,
   val providerThreadId: String?,
   val childThreadId: String?,
-  val remoteChild: RemoteTaskChild? = null,
   val nativeTaskRef: ProviderRef?,
   val prompt: String,
   val title: String?,
@@ -1542,6 +1522,7 @@ public data class UserInputQuestion(
     val label: String,
     val description: String,
     val value: String? = null,
+    val preview: String? = null,
   )
 }
 
@@ -1568,6 +1549,7 @@ public data class WorkflowAgent(
   val durationMs: Long? = null,
   val queuedAt: Long? = null,
   val startedAt: Long? = null,
+  val completedAt: Long? = null,
   val prompt: String? = null,
   val result: String? = null,
 )
@@ -1878,6 +1860,7 @@ public data class ServerProviderWorkspaceSnapshot(
   val slashCommands: List<ServerProviderSlashCommand>,
   val slashCommandsPending: Boolean? = null,
   val skills: List<ServerProviderSkill>,
+  val optionDescriptors: List<ProviderOptionDescriptor>? = null,
 )
 
 @Serializable(with = SnapShotAccessibilitySerializer::class)
@@ -2132,11 +2115,13 @@ public data class ThreadPullRequestLink(
   val repository: String,
   val number: Long,
   val url: String,
+  val repositoryWebUrl: String? = null,
   val source: String,
   val linkedAt: String,
   val snapshot: ThreadPullRequestSnapshot?,
   val stack: ThreadPullRequestStack?,
   val watch: ThreadPullRequestWatch? = null,
+  val endedWatch: ThreadPullRequestWatch? = null,
 )
 
 @Serializable
@@ -2598,6 +2583,7 @@ public data class VcsRef(
   val name: String,
   val isRemote: Boolean? = null,
   val remoteName: String? = null,
+  val upstreamRef: String? = null,
   val current: Boolean,
   val isDefault: Boolean,
   val worktreePath: String?,
@@ -2616,6 +2602,7 @@ public data class VcsStatusLocalResult(
 ) {
   @Serializable
   public data class WorkingTree(
+    val rootPath: String? = null,
     val files: List<VcsStatusLocalResult.WorkingTree.File>,
     val insertions: Long,
     val deletions: Long,

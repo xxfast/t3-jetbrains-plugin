@@ -4,6 +4,16 @@
   "title": "VcsListRefsResult",
   "type": "object",
   "properties": {
+    "isAtRepositoryRoot": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "refs": {
       "type": "array",
       "items": {
@@ -60,6 +70,16 @@
           ]
         },
         "remoteName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "upstreamRef": {
           "anyOf": [
             {
               "type": "string"

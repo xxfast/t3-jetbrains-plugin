@@ -9,6 +9,16 @@
     },
     "relativePath": {
       "type": "string"
+    },
+    "allowMissing": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [

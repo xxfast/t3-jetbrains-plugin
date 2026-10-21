@@ -9,6 +9,39 @@
         "type": {
           "type": "string",
           "enum": [
+            "thread.stop"
+          ]
+        },
+        "commandId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "commandId",
+        "threadId"
+      ],
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
             "thread.create"
           ]
         },
@@ -75,26 +108,6 @@
           "anyOf": [
             {
               "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "linkOrigin": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/OrchestrationV2LinkOrigin"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "delegatedFrom": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/OrchestrationV2DelegatedFrom"
             },
             {
               "type": "null"
@@ -773,6 +786,16 @@
             "stack",
             "stack-dismissed"
           ]
+        },
+        "repositoryWebUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -921,6 +944,16 @@
                     "agent",
                     "stack",
                     "stack-dismissed"
+                  ]
+                },
+                "repositoryWebUrl": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 }
               },
@@ -2724,26 +2757,6 @@
       ],
       "additionalProperties": true
     },
-    "OrchestrationV2DelegatedFrom": {
-      "type": "object",
-      "properties": {
-        "environmentId": {
-          "type": "string"
-        },
-        "threadId": {
-          "type": "string"
-        },
-        "title": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "environmentId",
-        "threadId",
-        "title"
-      ],
-      "additionalProperties": true
-    },
     "OrchestrationV2LimitRecoveryUpdate": {
       "type": "object",
       "properties": {
@@ -2777,22 +2790,6 @@
       "required": [
         "runId",
         "resetAt"
-      ],
-      "additionalProperties": true
-    },
-    "OrchestrationV2LinkOrigin": {
-      "type": "object",
-      "properties": {
-        "sessionId": {
-          "type": "string"
-        },
-        "label": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "sessionId",
-        "label"
       ],
       "additionalProperties": true
     },
@@ -3134,6 +3131,16 @@
               "enum": [
                 2
               ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "forkHeadMessageId": {
+          "anyOf": [
+            {
+              "type": "string"
             },
             {
               "type": "null"

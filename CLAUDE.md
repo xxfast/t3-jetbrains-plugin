@@ -113,8 +113,9 @@ Hard-won, so recorded here rather than rediscovered.
   one-time token or pairing link minted in the desktop app, exchanged at `/oauth/token`. Bearer
   clients fetch a short-lived ticket from `/api/auth/websocket-ticket` for the socket upgrade; the
   token never goes in the URL. Every RPC declares a required scope and the server checks it per call.
-- Upstream tags are `v0.1.1-preview.*` and `v0.1.1-nightly.*` as of Oct 2026. `T3CODE_VERSION` still
-  says `v0.1.0`. Bump before generating contracts.
+- Upstream preview tags aren't a linear history. `v0.1.1-preview.20261021.3449` isn't a
+  descendant of `.20261019.3339`, and it dropped remote delegation (`delegatedFrom`, `linkOrigin`,
+  the `link_request` item). Bumping can remove fields as well as add them; diff the schema first.
 - The IntelliJ Platform Gradle Plugin can build against an installed IDE: `local(path)` instead of
   `intellijIdea(version)`. Read the path from a Gradle property (`t3.localIde`) or
   `local.properties`, fall back to the download when unset. An installed 2026.3 is fine for the
@@ -161,8 +162,7 @@ Hard-won, so recorded here rather than rediscovered.
     state with them empties the thread list. Seen live on 2026-10-19 with `schemaVersion: 2`.
   - Sidebar rules (`apps/web/src/components/Sidebar.tsx`, `client-runtime/state/threadShell.ts`,
     `threadSort.ts`): settled is `settledOverride == "settled"`, not `settledAt`. Hidden rows are
-    `lineage.relationshipToParent == "subagent"` and delegated tasks whose `delegatedFrom.threadId`
-    is listed. Pinned sort by `pinOrderKey`; active by `activeOrderKey`, keyless first by
+    `lineage.relationshipToParent == "subagent"` (`navigationThreadShellsAtom`). Pinned sort by `pinOrderKey`; active by `activeOrderKey`, keyless first by
     `max(createdAt, unsettledAt)`; settled by `settledAt` then last activity. Inbox row time is
     `latestUserMessageAt ?: updatedAt`.
   - Row icons (`apps/web/src/components/ProjectFavicon.tsx`): `projectIcon` override first
@@ -221,8 +221,9 @@ Hard-won, so recorded here rather than rediscovered.
   stays locked with a tooltip until the plugin is paired again.
 - Generated union discriminators carry `@EncodeDefault(ALWAYS)` because `T3Json` drops defaults,
   and the server rejects a command without `type`.
-- `thread.stop` is in upstream's internal command union. Clients detach provider sessions
-  instead, upstream's `stopThreadSession`.
+- `thread.stop` is a client command from `.20261021.3449`, sent by upstream's interrupt when
+  the server advertises `capabilities.threadStop` and there's no run id (`commands.ts:786`).
+  The plugin hasn't adopted it yet; stop session still detaches, upstream's `stopThreadSession`.
 - Streams only wait for a reconnect when `RpcConnection.closed` is complete. A server `Die` or
   `Fail` ends the flow, so the UI hosts wrap `thread()` in `threadLoad()` to show it with Retry.
 - Upstream's model pick is a composer draft applied on the next turn. Mid-run the plugin keeps it

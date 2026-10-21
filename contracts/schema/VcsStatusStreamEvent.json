@@ -138,6 +138,17 @@
         "workingTree": {
           "type": "object",
           "properties": {
+            "rootPath": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "files": {
               "type": "array",
               "items": {

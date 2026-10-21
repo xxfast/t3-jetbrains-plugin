@@ -17,6 +17,16 @@
     },
     "truncated": {
       "type": "boolean"
+    },
+    "exists": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [

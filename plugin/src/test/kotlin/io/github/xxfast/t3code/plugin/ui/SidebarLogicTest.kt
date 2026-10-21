@@ -3,7 +3,6 @@ package io.github.xxfast.t3code.plugin.ui
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
-import io.github.xxfast.t3code.protocol.generated.DelegatedFrom
 import io.github.xxfast.t3code.protocol.generated.PendingRuntimeRequestSummary
 import io.github.xxfast.t3code.protocol.generated.ThreadLinkedPullRequest
 import io.github.xxfast.t3code.protocol.generated.ThreadPullRequestLink
@@ -41,14 +40,9 @@ class SidebarLogicTest {
   }
 
   @Test
-  fun `subagents and delegated children with a listed parent are hidden`() {
-    val threads: List<Thread> = listOf(
-      thread("parent"),
-      thread("sub", relationship = "subagent"),
-      thread("task", delegatedFrom = "parent"),
-      thread("orphan", delegatedFrom = "elsewhere"),
-    )
-    assertEquals(listOf("orphan", "parent"), sections(threads, "").inbox.map { it.id })
+  fun `subagents are hidden`() {
+    val threads: List<Thread> = listOf(thread("parent"), thread("sub", relationship = "subagent"))
+    assertEquals(listOf("parent"), sections(threads, "").inbox.map { it.id })
   }
 
   @Test
@@ -431,7 +425,6 @@ class SidebarLogicTest {
     settledOverride: String? = null,
     latestUserMessageAt: String? = null,
     relationship: String? = null,
-    delegatedFrom: String? = null,
     pending: Boolean = false,
     pullRequests: List<ThreadPullRequestLink>? = null,
     completedAt: String? = null,
@@ -454,7 +447,6 @@ class SidebarLogicTest {
     settledOverride = settledOverride,
     latestUserMessageAt = latestUserMessageAt,
     lineage = BASE_THREAD.lineage.copy(relationshipToParent = relationship),
-    delegatedFrom = delegatedFrom?.let { DelegatedFrom("env", it, "parent") },
     createdAt = createdAt,
     pullRequests = pullRequests,
     pendingRuntimeRequest =

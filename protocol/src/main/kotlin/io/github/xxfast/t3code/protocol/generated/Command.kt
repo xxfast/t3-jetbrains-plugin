@@ -1,4 +1,4 @@
-// Generated from v0.1.1-preview.20261019.3339 by contracts/generate.ts, do not edit.
+// Generated from v0.1.1-preview.20261021.3449 by contracts/generate.ts, do not edit.
 
 @file:OptIn(ExperimentalSerializationApi::class)
 
@@ -26,6 +26,14 @@ public sealed interface Command {
   public val commandId: String
 
   @Serializable
+  public data class ThreadStop(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "thread.stop",
+    override val commandId: String,
+    val threadId: String,
+    val reason: String? = null,
+  ) : Command
+
+  @Serializable
   public data class ThreadCreate(
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "thread.create",
     val createdBy: String,
@@ -39,8 +47,6 @@ public sealed interface Command {
     val interactionMode: String,
     val branch: String?,
     val worktreePath: String?,
-    val linkOrigin: LinkOrigin? = null,
-    val delegatedFrom: DelegatedFrom? = null,
     val importedNativeThread: Command.ThreadCreate.ImportedNativeThread? = null,
   ) : Command {
     @Serializable
@@ -200,6 +206,7 @@ public sealed interface Command {
     val number: Long,
     val url: String,
     val source: String,
+    val repositoryWebUrl: String? = null,
   ) : Command
 
   @Serializable
@@ -242,6 +249,7 @@ public sealed interface Command {
     public data class Link(
       val url: String,
       val source: String,
+      val repositoryWebUrl: String? = null,
     )
   }
 
@@ -774,6 +782,7 @@ public object CommandSerializer : KSerializer<Command> {
 
   private fun select(element: JsonObject): DeserializationStrategy<Command> =
     when (element["type"]?.jsonPrimitive?.contentOrNull) {
+      "thread.stop" -> Command.ThreadStop.serializer()
       "thread.create" -> Command.ThreadCreate.serializer()
       "thread.archive" -> Command.ThreadArchive.serializer()
       "thread.unarchive" -> Command.ThreadUnarchive.serializer()
@@ -842,6 +851,7 @@ public object CommandSerializer : KSerializer<Command> {
 
   override fun serialize(encoder: Encoder, value: Command) {
     when (value) {
+      is Command.ThreadStop -> Command.ThreadStop.serializer().serialize(encoder, value)
       is Command.ThreadCreate -> Command.ThreadCreate.serializer().serialize(encoder, value)
       is Command.ThreadArchive -> Command.ThreadArchive.serializer().serialize(encoder, value)
       is Command.ThreadUnarchive -> Command.ThreadUnarchive.serializer().serialize(encoder, value)

@@ -1,4 +1,4 @@
-// Generated from v0.1.1-preview.20261019.3339 by contracts/generate.ts, do not edit.
+// Generated from v0.1.1-preview.20261021.3449 by contracts/generate.ts, do not edit.
 
 package io.github.xxfast.t3code.protocol.generated
 
@@ -26,6 +26,7 @@ public data class ServerProvider(
   val enabled: Boolean,
   val installed: Boolean,
   val version: String?,
+  val installedVersion: String? = null,
   val status: String,
   val auth: ServerProviderAuth,
   val checkedAt: String,

@@ -92,6 +92,16 @@
           "type": "null"
         }
       ]
+    },
+    "resume": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [

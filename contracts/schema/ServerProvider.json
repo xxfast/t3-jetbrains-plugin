@@ -248,6 +248,16 @@
         }
       ]
     },
+    "installedVersion": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "status": {
       "type": "string",
       "enum": [
@@ -1380,6 +1390,19 @@
           "items": {
             "$ref": "#/$defs/ServerProviderSkill"
           }
+        },
+        "optionDescriptors": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ProviderOptionDescriptor"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [

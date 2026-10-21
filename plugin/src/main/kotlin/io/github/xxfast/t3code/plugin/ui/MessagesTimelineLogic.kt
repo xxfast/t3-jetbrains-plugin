@@ -88,10 +88,9 @@ sealed interface TimelineEntry {
   }
 }
 
-/** `STANDALONE_V2_ITEM_TYPES`, session-logic.ts:320. */
+/** `STANDALONE_V2_ITEM_TYPES`, session-logic.ts:363. */
 private val STANDALONE: Set<String> = setOf(
-  "fork", "handoff", "run_interrupt_request", "run_interrupt_result", "secret_request",
-  "link_request", "subagent",
+  "fork", "handoff", "run_interrupt_request", "run_interrupt_result", "secret_request", "subagent",
 )
 
 /** `deriveTimelineEntriesFromVisibleTurnItems`, session-logic.ts:582. */
@@ -676,7 +675,7 @@ private fun terminalAssistantMessageIds(entries: List<TimelineEntry>): Set<Strin
 }
 
 private fun TimelineEntry.isPersistentResourceCard(): Boolean = this is TimelineEntry.Event &&
-  item.type in setOf("fork", "thread_created", "secret_request", "link_request")
+  item.type in setOf("fork", "thread_created", "secret_request")
 
 /** `timelineEntryFoldRunId`. */
 private fun TimelineEntry.foldRunId(runlessKey: String?): String? = when {

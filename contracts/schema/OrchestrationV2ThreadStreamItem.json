@@ -492,26 +492,6 @@
             }
           ]
         },
-        "linkOrigin": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/OrchestrationV2LinkOrigin"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "delegatedFrom": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/OrchestrationV2DelegatedFrom"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "lineage": {
           "$ref": "#/$defs/OrchestrationV2AppThreadLineage"
         },
@@ -1619,6 +1599,16 @@
             }
           ]
         },
+        "sourceTokenUsage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrchestrationV2ProviderTurnTokenUsage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "targetProviderInstanceId": {
           "anyOf": [
             {
@@ -1865,6 +1855,16 @@
             }
           ]
         },
+        "workflowScript": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "id": {
           "type": "string"
         },
@@ -2062,26 +2062,6 @@
       "required": [
         "state",
         "observedByRunId"
-      ],
-      "additionalProperties": true
-    },
-    "OrchestrationV2DelegatedFrom": {
-      "type": "object",
-      "properties": {
-        "environmentId": {
-          "type": "string"
-        },
-        "threadId": {
-          "type": "string"
-        },
-        "title": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "environmentId",
-        "threadId",
-        "title"
       ],
       "additionalProperties": true
     },
@@ -4452,22 +4432,6 @@
       ],
       "additionalProperties": true
     },
-    "OrchestrationV2LinkOrigin": {
-      "type": "object",
-      "properties": {
-        "sessionId": {
-          "type": "string"
-        },
-        "label": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "sessionId",
-        "label"
-      ],
-      "additionalProperties": true
-    },
     "OrchestrationV2Notification": {
       "type": "object",
       "properties": {
@@ -5856,6 +5820,16 @@
               "type": "null"
             }
           ]
+        },
+        "forkHeadMessageId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": true
@@ -6049,29 +6023,19 @@
             }
           ]
         },
-        "updatedAt": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "usedTokens",
-        "updatedAt"
-      ],
-      "additionalProperties": true
-    },
-    "OrchestrationV2RemoteTaskChild": {
-      "type": "object",
-      "properties": {
-        "environmentId": {
-          "type": "string"
+        "autoCompactThreshold": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
-        "threadId": {
-          "type": "string"
-        },
-        "label": {
-          "type": "string"
-        },
-        "runId": {
+        "promptCacheExpiresAt": {
           "anyOf": [
             {
               "type": "string"
@@ -6081,33 +6045,13 @@
             }
           ]
         },
-        "stoppedThere": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "stopCount": {
-          "anyOf": [
-            {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            },
-            {
-              "type": "null"
-            }
-          ]
+        "updatedAt": {
+          "type": "string"
         }
       },
       "required": [
-        "environmentId",
-        "threadId",
-        "label"
+        "usedTokens",
+        "updatedAt"
       ],
       "additionalProperties": true
     },
@@ -6799,16 +6743,6 @@
           "anyOf": [
             {
               "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "remoteChild": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/OrchestrationV2RemoteTaskChild"
             },
             {
               "type": "null"
@@ -7888,6 +7822,16 @@
               "anyOf": [
                 {
                   "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "workflowScript": {
+              "anyOf": [
+                {
+                  "type": "boolean"
                 },
                 {
                   "type": "null"
@@ -12515,315 +12459,6 @@
             "type": {
               "type": "string",
               "enum": [
-                "link_request"
-              ]
-            },
-            "url": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "reason": {
-              "type": "string"
-            },
-            "environmentId": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "label": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "hint": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "requestedAccess": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "enum": [
-                    "read-only",
-                    "approval-required",
-                    "auto-accept-edits",
-                    "auto",
-                    "full-access"
-                  ]
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "linkStatus": {
-              "type": "string",
-              "enum": [
-                "pending",
-                "linked",
-                "declined",
-                "cancelled",
-                "failed"
-              ]
-            },
-            "linkedEnvironmentId": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "linkedLabel": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "linkedAccess": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "enum": [
-                    "read-only",
-                    "approval-required",
-                    "auto-accept-edits",
-                    "auto",
-                    "full-access"
-                  ]
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "failure": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            }
-          },
-          "required": [
-            "id",
-            "threadId",
-            "runId",
-            "nodeId",
-            "providerThreadId",
-            "providerTurnId",
-            "nativeItemRef",
-            "parentItemId",
-            "ordinal",
-            "status",
-            "title",
-            "startedAt",
-            "completedAt",
-            "updatedAt",
-            "type",
-            "reason",
-            "linkStatus"
-          ],
-          "additionalProperties": true
-        },
-        {
-          "type": "object",
-          "properties": {
-            "toolNonExecutionKind": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "toolSurface": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "enum": [
-                    "browser",
-                    "computer"
-                  ]
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "toolIcon": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/ToolActivityIcon"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "toolSource": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/ToolActivitySource"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "id": {
-              "type": "string"
-            },
-            "threadId": {
-              "type": "string"
-            },
-            "runId": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "nodeId": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "providerThreadId": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "providerTurnId": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "nativeItemRef": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/OrchestrationV2ProviderRef"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "parentItemId": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "ordinal": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            },
-            "status": {
-              "type": "string",
-              "enum": [
-                "idle",
-                "pending",
-                "running",
-                "waiting",
-                "completed",
-                "failed",
-                "cancelled",
-                "interrupted"
-              ]
-            },
-            "title": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "startedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "completedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "updatedAt": {
-              "type": "string"
-            },
-            "type": {
-              "type": "string",
-              "enum": [
                 "subagent"
               ]
             },
@@ -12847,16 +12482,6 @@
               "anyOf": [
                 {
                   "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "remoteChild": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/OrchestrationV2RemoteTaskChild"
                 },
                 {
                   "type": "null"
@@ -13178,6 +12803,16 @@
                     "type": "null"
                   }
                 ]
+              },
+              "preview": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
@@ -13405,6 +13040,18 @@
           ]
         },
         "startedAt": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "completedAt": {
           "anyOf": [
             {
               "type": "integer",
@@ -13940,6 +13587,16 @@
         "url": {
           "type": "string"
         },
+        "repositoryWebUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "source": {
           "type": "string",
           "enum": [
@@ -13974,6 +13631,16 @@
           ]
         },
         "watch": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadPullRequestWatch"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "endedWatch": {
           "anyOf": [
             {
               "$ref": "#/$defs/ThreadPullRequestWatch"
