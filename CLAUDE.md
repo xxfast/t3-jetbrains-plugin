@@ -5,7 +5,8 @@ Guidance for Claude Code when working in this repository.
 ## What this is
 
 A native JetBrains plugin that is a client for T3 Code's server. Nothing is built yet; this repo holds
-the design and the decisions so far. Read `README.md` first, then `contracts/README.md`. Work items are
+the design and the decisions so far. Read `GOALS.md` first (what the project is for and how to
+settle a faithful-versus-native call), then `README.md`, then `contracts/README.md`. Work items are
 GitHub issues; `ROADMAP.md` has the order. When asked to do an issue, its **Done when** is the
 acceptance test.
 
