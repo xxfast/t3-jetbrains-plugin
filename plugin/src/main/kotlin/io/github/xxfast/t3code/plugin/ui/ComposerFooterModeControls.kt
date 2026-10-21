@@ -27,7 +27,8 @@ import org.jetbrains.jewel.ui.component.Tooltip
 
 /** What the footer's controls do. The host turns these into thread commands. */
 class ComposerFooterActions(
-  val onModel: (instanceId: String, model: String) -> Unit = { _, _ -> },
+  /** Opens the model picker, the host's `BigPopupUI`. */
+  val onOpenModelPicker: () -> Unit = {},
   val onModelOptions: (List<ProviderOptionSelection>?) -> Unit = {},
   val onRuntimeMode: (mode: String) -> Unit = {},
   val onToggleInteractionMode: () -> Unit = {},
@@ -49,7 +50,7 @@ fun ComposerControls(
     horizontalArrangement = Arrangement.spacedBy(4.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    ProviderModelPicker(state, enabled, actions.onModel)
+    ProviderModelPicker(state, enabled, actions)
     TraitsPicker(state, enabled, prompt, actions.onModelOptions)
     ComposerFooterModeControls(state, enabled, actions)
   }
@@ -57,58 +58,24 @@ fun ComposerControls(
 
 /**
  * `ProviderModelPicker.tsx`'s trigger: the provider's icon, the model's name and a chevron, as a
- * [ComposerControl]. The popup is a plain menu of every provider's models, not upstream's
- * `ModelPickerContent`.
+ * [ComposerControl]. Opens the IDE's chooser (`showModelPicker`), centred like Search
+ * Everywhere rather than anchored here.
  */
 @Composable
 fun ProviderModelPicker(
   state: ComposerFooterState,
   enabled: Boolean,
-  onModel: (instanceId: String, model: String) -> Unit,
+  actions: ComposerFooterActions,
 ) {
-  var open: Boolean by remember { mutableStateOf(false) }
-  Box {
-    ComposerControl(onClick = { open = !open }, enabled = enabled && state.models.isNotEmpty()) {
-      val xs: Boolean = LocalComposerControlSize.current == ComposerControlSize.XS
-      val icon: Dp = if (xs) 12.dp else 16.dp
-      state.provider?.let { provider: ServerProvider -> ProviderIcon(provider, icon) }
-      ComposerControlLabel(state.modelLabel, maxWidth = 192.dp)
-      ComposerControlChevron()
-    }
-    if (open) {
-      PopupMenu(
-        onDismissRequest = {
-          open = false
-          return@PopupMenu true
-        },
-        horizontalAlignment = Alignment.Start,
-      ) {
-        state.models.forEach { group ->
-          passiveItem {
-            Text(group.displayName, style = small(), color = JewelTheme.globalColors.text.info)
-          }
-          group.models.forEach { item ->
-            selectableItem(
-              selected = item.selected,
-              onClick = {
-                open = false
-                if (!item.selected) onModel(item.instanceId, item.slug)
-              },
-            ) {
-              Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-              ) {
-                Text(item.name)
-                if (item.isNew) {
-                  Text("new", style = small(), color = JewelTheme.globalColors.text.info)
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+  ComposerControl(
+    onClick = actions.onOpenModelPicker,
+    enabled = enabled && state.pickerEntries.isNotEmpty(),
+  ) {
+    val xs: Boolean = LocalComposerControlSize.current == ComposerControlSize.XS
+    val icon: Dp = if (xs) 12.dp else 16.dp
+    state.provider?.let { provider: ServerProvider -> ProviderIcon(provider, icon) }
+    ComposerControlLabel(state.modelLabel, maxWidth = 192.dp)
+    ComposerControlChevron()
   }
 }
 

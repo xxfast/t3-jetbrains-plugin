@@ -33,6 +33,7 @@ import io.github.xxfast.t3code.plugin.ide.notify
 import io.github.xxfast.t3code.plugin.ide.threadCwd
 import io.github.xxfast.t3code.plugin.review.checkpointForRun
 import io.github.xxfast.t3code.plugin.review.rollbackBlockReason
+import io.github.xxfast.t3code.plugin.settings.T3Settings
 import io.github.xxfast.t3code.plugin.ui.Advance
 import io.github.xxfast.t3code.plugin.ui.COMPACT_COMMAND
 import io.github.xxfast.t3code.plugin.ui.ChatView
@@ -45,6 +46,8 @@ import io.github.xxfast.t3code.plugin.ui.ContextWindowSnapshot
 import io.github.xxfast.t3code.plugin.ui.DraftExtras
 import io.github.xxfast.t3code.plugin.ui.Hint
 import io.github.xxfast.t3code.plugin.ui.ModelChangeBlock
+import io.github.xxfast.t3code.plugin.ui.modelDisabledReason
+import io.github.xxfast.t3code.plugin.ui.providerModelKey
 import io.github.xxfast.t3code.plugin.ui.PendingActions
 import io.github.xxfast.t3code.plugin.ui.PendingRequest
 import io.github.xxfast.t3code.plugin.ui.PendingThreadRequests
@@ -168,7 +171,7 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
   val (request: PendingRequest?, actions: PendingActions) =
     rememberPendingRequest(view, requests, pending.responding, controller)
   val (footer: ComposerFooterState?, footerActions: ComposerFooterActions) =
-    rememberComposerFooter(view, pending, connection, controller)
+    rememberComposerFooter(project, view, pending, connection, controller)
   val contextWindow: ComposerContextWindow =
     rememberContextWindow(view, footer, composer, connection, controller)
   val projectId: String? = view?.thread?.projectId
@@ -348,6 +351,7 @@ private fun rememberPendingRequest(
  */
 @Composable
 private fun rememberComposerFooter(
+  project: Project,
   view: ThreadView?,
   pending: PendingMessages,
   connection: ConnectionState,
@@ -362,6 +366,8 @@ private fun rememberComposerFooter(
   val selection: ModelSelection? =
     thread?.let { pending.modelDraft ?: pending.settings.modelSelection(it) }
   val instanceId: String? = selection?.instance ?: thread?.providerInstanceId
+  // The settings aren't observable, so the picker's favourites are mirrored here per toggle
+  var favorites: Set<String> by remember { mutableStateOf(T3Settings.get().modelFavorites) }
   val footer: ComposerFooterState? = info?.let { catalog ->
     if (thread == null) return@let null
     composerFooter(
@@ -372,42 +378,67 @@ private fun rememberComposerFooter(
       interactionMode = pending.settings.interactionMode(thread),
       selection = selection,
       reported = view?.let(::deriveReportedModelSelection),
+      favorites = favorites,
     )
   }
 
   fun commandId(): String = UUID.randomUUID().toString()
 
-  val actions = ComposerFooterActions(
-    onModel = onModel@{ pickedInstance, model ->
-      val current: ThreadView = view ?: return@onModel
-      val row: Thread = current.thread
-      val block: ModelChangeBlock? = getStartedThreadModelChangeBlockReason(
-        providers = info?.providers.orEmpty(),
-        hasStartedSession = current.runs.isNotEmpty(),
-        supportsProviderSwitchingViaHandoff = threadSupportsProviderHandoff(current),
-        currentInstance = row.providerInstanceId,
-        currentModel = row.modelSelection.slug,
-        nextInstance = pickedInstance,
-        nextModel = model,
-      )
-      val next: ModelSelection = nextModelSelection(selection, pickedInstance, model)
-      when {
-        block != null -> controller.blocked(row.id, block.toString())
+  fun blockReason(current: ThreadView, nextInstance: String, nextModel: String): ModelChangeBlock? =
+    getStartedThreadModelChangeBlockReason(
+      providers = info?.providers.orEmpty(),
+      hasStartedSession = current.runs.isNotEmpty(),
+      supportsProviderSwitchingViaHandoff = threadSupportsProviderHandoff(current),
+      currentInstance = current.thread.providerInstanceId,
+      currentModel = current.thread.modelSelection.slug,
+      nextInstance = nextInstance,
+      nextModel = nextModel,
+    )
 
-        // Mid-run, the pick rides on the next message instead
-        activeRun(current.runs) != null -> controller.draftModel(row.id, next)
+  fun pickModel(pickedInstance: String, model: String) {
+    val current: ThreadView = view ?: return
+    val row: Thread = current.thread
+    val block: ModelChangeBlock? = blockReason(current, pickedInstance, model)
+    val next: ModelSelection = nextModelSelection(selection, pickedInstance, model)
+    when {
+      block != null -> controller.blocked(row.id, block.toString())
 
-        else -> {
-          val command: Command = updateThreadModelSelection(
-            threadId = row.id,
-            selection = next,
-            rowInstance = row.providerInstanceId,
-            serverResolved = info?.serverResolvedCommandContext ?: false,
-            commandId = commandId(),
-          )
-          controller.dispatchForThread(current, command)
-        }
+      // Mid-run, the pick rides on the next message instead
+      activeRun(current.runs) != null -> controller.draftModel(row.id, next)
+
+      else -> {
+        val command: Command = updateThreadModelSelection(
+          threadId = row.id,
+          selection = next,
+          rowInstance = row.providerInstanceId,
+          serverResolved = info?.serverResolvedCommandContext ?: false,
+          commandId = commandId(),
+        )
+        controller.dispatchForThread(current, command)
       }
+    }
+  }
+
+  val actions = ComposerFooterActions(
+    onOpenModelPicker = onOpenModelPicker@{
+      val current: ThreadView = view ?: return@onOpenModelPicker
+      val state: ComposerFooterState = footer ?: return@onOpenModelPicker
+      val request = ModelPickerRequest(
+        entries = state.pickerEntries,
+        activeInstanceId = state.provider?.instanceId,
+        activeModel = state.selection?.slug,
+        favorites = favorites,
+        disabledReason = { pickedInstance, model ->
+          modelDisabledReason(blockReason(current, pickedInstance, model))
+        },
+        onToggleFavorite = { pickedInstance, model ->
+          val key: String = providerModelKey(pickedInstance, model)
+          favorites = if (key in favorites) favorites - key else favorites + key
+          T3Settings.get().modelFavorites = favorites
+        },
+        onPick = { pickedInstance, model -> pickModel(pickedInstance, model) },
+      )
+      showModelPicker(project, request)
     },
     // Upstream keeps a trait as a composer draft, so it goes with the next message
     onModelOptions = onModelOptions@{ options ->

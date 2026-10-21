@@ -379,6 +379,10 @@ data class ComposerFooterState(
   val selection: ModelSelection? = null,
   /** What the provider says it runs, [deriveReportedModelSelection]. Display only. */
   val reported: ModelSelection? = null,
+  /** The picker's sidebar, [modelPickerEntries]. */
+  val pickerEntries: List<ModelPickerEntry> = emptyList(),
+  /** The favourite models, keyed by [providerModelKey]. */
+  val favorites: Set<String> = emptySet(),
 )
 
 /**
@@ -393,6 +397,7 @@ fun composerFooter(
   interactionMode: String,
   selection: ModelSelection? = null,
   reported: ModelSelection? = null,
+  favorites: Set<String> = emptySet(),
 ): ComposerFooterState {
   val provider: ServerProvider? = selectedProvider(providers, instanceId)
   val modes: List<RuntimeModeOption> = compatibleRuntimeModeOptions(provider)
@@ -409,5 +414,7 @@ fun composerFooter(
     capabilities = provider?.let { getProviderModelCapabilities(it.models, model, it.driver) },
     selection = selection,
     reported = reported,
+    pickerEntries = modelPickerEntries(providers),
+    favorites = favorites,
   )
 }

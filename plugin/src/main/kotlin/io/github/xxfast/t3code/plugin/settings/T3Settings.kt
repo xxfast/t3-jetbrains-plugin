@@ -28,6 +28,9 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
     // Upstream's client settings of the same names and defaults, packages/contracts/src/settings.ts
     var confirmThreadArchive: Boolean by property(false)
     var confirmThreadDelete: Boolean by property(true)
+
+    // Upstream's `favorites` (`ModelFavorites`, settings.ts:277), as `instanceId:slug` keys
+    var modelFavorites: MutableList<String> by list()
   }
 
   var serverUrl: String
@@ -53,6 +56,13 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
     get() = state.confirmThreadDelete
     set(value) {
       state.confirmThreadDelete = value
+    }
+
+  /** The favourite models in the picker, keyed by `providerModelKey`. */
+  var modelFavorites: Set<String>
+    get() = state.modelFavorites.toSet()
+    set(value) {
+      state.modelFavorites = value.toMutableList()
     }
 
   companion object {

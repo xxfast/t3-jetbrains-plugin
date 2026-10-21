@@ -787,7 +787,9 @@ class FixtureClient(
         models = listOf(
           model("gpt-5", "GPT-5", capabilities = CODEX_TRAITS),
           model("gpt-5-mini", "GPT-5 mini", badge = "new", capabilities = CODEX_TRAITS),
+          model("gpt-5-codex", "GPT-5 Codex", shortName = "Codex", capabilities = CODEX_TRAITS),
           model("gpt-4.1", "GPT-4.1", isLegacy = true),
+          model("o3", "o3", isLegacy = true),
         ),
       ),
       // Claude can `/compact`, so its threads offer "Compact context" and compact-before-send
@@ -801,6 +803,16 @@ class FixtureClient(
           model("sonnet", "Sonnet", capabilities = CLAUDE_TRAITS),
         ),
         slashCommands = listOf(ServerProviderSlashCommand("compact", "Summarize the history")),
+      ),
+      // Not signed in, so the picker's sidebar dims it and lists none of its models
+      provider(
+        instanceId = "cursor",
+        driver = "cursor",
+        displayName = "Cursor",
+        showInteractionModeToggle = false,
+        status = "error",
+        message = "Run `cursor-agent login` to sign in.",
+        models = listOf(model("composer-1", "Composer 1")),
       ),
     ),
     serverResolvedCommandContext = true,
@@ -912,6 +924,8 @@ private fun provider(
   supportedRuntimeModes: List<String>? = null,
   models: List<ServerProviderModel>,
   slashCommands: List<ServerProviderSlashCommand>? = null,
+  status: String = "ready",
+  message: String? = null,
 ): ServerProvider = ServerProvider(
   instanceId = instanceId,
   driver = driver,
@@ -921,9 +935,10 @@ private fun provider(
   enabled = true,
   installed = true,
   version = "fixture",
-  status = "ready",
+  status = status,
   auth = ServerProviderAuth(status = "authenticated"),
   checkedAt = "2026-10-19T06:00:00.000Z",
+  message = message,
   models = models,
   slashCommands = slashCommands,
 )
@@ -934,9 +949,11 @@ private fun model(
   badge: String? = null,
   isLegacy: Boolean? = null,
   capabilities: ModelCapabilities? = null,
+  shortName: String? = null,
 ): ServerProviderModel = ServerProviderModel(
   slug = slug,
   name = name,
+  shortName = shortName,
   badge = badge,
   isCustom = false,
   isLegacy = isLegacy,
