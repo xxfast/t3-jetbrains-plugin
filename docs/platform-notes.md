@@ -117,7 +117,7 @@ No, not for code running inside an IntelliJ plugin, as of 2026.
   standalone Compose Desktop window with `IntUiTheme`, which CLAUDE.md rules out. Don't bring it in.
 
 ### 1.5 Installing a built zip into the running 2026.3 EAP
-- Build: `./gradlew :plugin:buildPlugin` -> `plugin/build/distributions/plugin-0.1.0-SNAPSHOT.zip`
+- Build: `./gradlew :plugin:buildPlugin` -> `plugin/build/distributions/t3-code-<version>.zip`
   (named after the Gradle project, not the plugin name as [TASKS] implies) [local].
 - Install: Settings | Plugins | gear | **Install Plugin from Disk...**, pick the zip, restart only if
   prompted. https://www.jetbrains.com/help/idea/managing-plugins.html Dynamic plugins install,

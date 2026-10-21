@@ -6,14 +6,16 @@ permission prompts in a tool window; files, diffs and terminals in the IDE you a
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="docs/screenshot-light.png">
-  <img alt="T3 Code tool window" src="docs/screenshot-light.png">
+  <img alt="T3 Sidebar and T3 Chat View tool windows" src="docs/screenshot-light.png">
 </picture>
 
 Unofficial, built for my own use. Will publish if it turns out useful to others.
 
 ## Status
 
-Not released. What works today:
+0.1.0 is the first release. Built and tested on IntelliJ IDEA, against T3 Code
+`v0.1.1-preview.20261021.3449`. Other IDEs on IntelliJ Platform 2025.3 and later should work but
+haven't had a pass. What works:
 
 - Pair with a T3 server, browse its threads in the Sidebar, read a thread live as it runs.
 - Open the files and diffs a thread touches, in the IDE's own editor and diff viewer.
@@ -46,10 +48,10 @@ See the roadmap for what's next.
 
 1. Download the zip from [Releases](https://github.com/xxfast/t3-jetbrains-plugin/releases).
 2. Settings > Plugins > gear > Install Plugin from Disk, pick the zip.
-3. Settings > Tools > T3 Code, set the server URL (the desktop app listens on
-   `http://127.0.0.1:3773`).
-4. In T3's desktop app, Settings > Connections, make a pairing code or link. Paste it into the
-   banner in the T3 Code tool window.
+3. In T3's desktop app, Settings > Connections, make a pairing code or link. Paste it into the
+   banner in the T3 Sidebar tool window, or Settings > Tools > T3 Code > Pair.
+4. The server URL defaults to the desktop app's `http://127.0.0.1:3773`. Change it in
+   Settings > Tools > T3 Code for any other server.
 
 ## Why
 

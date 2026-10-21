@@ -22,6 +22,12 @@ see `Later`.
   `harness/scenarios`, design against it, then wire the real client. The PR carries a screenshot
   from the harness. See "Design harness" in `CLAUDE.md`.
 
+## Release 0.1
+
+What's on `main` today, released as a signed zip on GitHub (#8). The Marketplace waits for 0.2.
+Blockers, in order: `verifyPlugin` green on CI, contracts at the newest preview (#42), version and
+listing metadata, signing secrets on the repo, then tag `v0.1.0`.
+
 ## Phase 1: it connects, it shows threads
 
 Open the tool window, pair with the local desktop server, see your threads, click a file or diff and
@@ -89,8 +95,7 @@ commands are already generated in `Command.kt`. Independent of phase 3 except wh
 
 Not scheduled and not fleshed out. When one gets picked up it becomes an issue.
 
-- Public release (#8). Signed zip on a GitHub release, then the Marketplace. Not until the
-  plugin's ready for people other than me, whichever phase that lands in.
+- Marketplace listing, after 0.1 has been on GitHub releases for a while.
 - Android Studio and Rider specific testing. Same platform, different bundled modules, worth a
   pass before saying "supported".
 - Usage and cost summary from `server.getUsageSummary` on the thread header.

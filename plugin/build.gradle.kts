@@ -14,7 +14,7 @@ plugins {
 }
 
 group = "io.github.xxfast"
-version = "0.1.0-SNAPSHOT"
+version = "0.1.0"
 
 repositories {
   mavenCentral()
@@ -99,15 +99,19 @@ intellijPlatform {
     version = project.version.toString()
     description = """
       Unofficial native client for <a href="https://github.com/pingdotgg/t3code">T3 Code</a>.
-      Pair with a running T3 server, browse its threads in a tool window, and open the files and
-      diffs they touch in the IDE.
+      Pair with a running T3 server, work its threads from the T3 Sidebar and T3 Chat View tool
+      windows, and open the files, diffs and terminals they touch in the IDE.
     """.trimIndent()
     changeNotes = """
-      <b>0.1</b>
+      <b>0.1.0</b>
       <ul>
         <li>Pair with a T3 Code server using a pairing code or link.</li>
-        <li>Thread list and thread view in the T3 Code tool window.</li>
-        <li>Open files and diffs from a thread in the IDE.</li>
+        <li>The Sidebar and the ChatView as tool windows, live as threads run.</li>
+        <li>Send, steer and stop. Answer approvals and questions from the composer.</li>
+        <li>Start threads, in the current checkout or a new worktree.</li>
+        <li>The desktop's thread menu: pin, settle, snooze, rename, archive, delete.</li>
+        <li>Files, diffs, review comments and the thread's terminal open in the IDE.</li>
+        <li>Attach files, images and editor selections.</li>
       </ul>
     """.trimIndent()
     vendor {
