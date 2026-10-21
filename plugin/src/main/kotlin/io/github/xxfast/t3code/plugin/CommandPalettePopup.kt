@@ -5,11 +5,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.awt.ComposePanel
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtil
 import io.github.xxfast.t3code.plugin.ide.ProjectAwareness
 import io.github.xxfast.t3code.plugin.settings.T3Settings
 import io.github.xxfast.t3code.plugin.ui.CommandPalette
@@ -19,7 +21,6 @@ import java.awt.Dimension
 import java.net.URI
 import javax.swing.JComponent
 import org.jetbrains.jewel.bridge.JewelComposePanel
-import org.jetbrains.jewel.bridge.JewelComposePanelWrapper
 
 /**
  * Opens the "New thread in..." picker centred on [project]'s window. [onPick] gets the T3
@@ -62,8 +63,9 @@ fun showNewThreadIn(project: Project, onPick: (projectId: String?) -> Unit) {
   }
   panel.preferredSize = Dimension(JBUI.scale(640), JBUI.scale(paletteHeight(client)))
   // The wrapper isn't focusable; Swing focus has to land on the ComposePanel inside it for
-  // Compose to see keys at all, else nothing works until a click inside
-  val focusable: JComponent = (panel as? JewelComposePanelWrapper)?.composePanel ?: panel
+  // Compose to see keys at all, else nothing works until a click inside. Found by type, since
+  // the wrapper's own `composePanel` getter is internal Jewel API and fails `verifyPlugin`
+  val focusable: JComponent = UIUtil.findComponentOfType(panel, ComposePanel::class.java) ?: panel
   popup = JBPopupFactory.getInstance()
     .createComponentPopupBuilder(panel, focusable)
     .setRequestFocus(true)
