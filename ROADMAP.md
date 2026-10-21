@@ -61,9 +61,10 @@ and anything administrative.
 1. #17 New thread
 2. #18 Pull requests
 3. #19 Subagents and delegated tasks
-4. #20 Multiple servers
-5. #21 Scheduled tasks, read-only
-6. #22 JCEF escape hatch
+4. #41 Thread details tool window: relationships and automations
+5. #20 Multiple servers
+6. #21 Scheduled tasks, read-only
+7. #22 JCEF escape hatch
 
 ## Sidebar parity
 
