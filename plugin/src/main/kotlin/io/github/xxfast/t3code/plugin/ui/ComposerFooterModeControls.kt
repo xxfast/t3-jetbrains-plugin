@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
+import io.github.xxfast.t3code.protocol.generated.VcsRef
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.PopupMenu
 import org.jetbrains.jewel.ui.component.Text
@@ -37,8 +38,12 @@ class ComposerFooterActions(
   /** A base branch picked for a new worktree, `onActiveThreadBranchOverrideChange`. */
   val onBaseBranch: (branch: String) -> Unit = {},
   val onStartFromOrigin: (Boolean) -> Unit = {},
-  /** What's typed in the base branch picker; the host asks `vcs.listRefs` for it. */
+  /** What's typed in the branch picker; the host asks `vcs.listRefs` for it. */
   val onRefsQuery: (query: String) -> Unit = {},
+  /** A ref picked in local mode: check it out, or use its worktree (`selectRef`). */
+  val onPickRef: (VcsRef) -> Unit = {},
+  /** A branch typed that doesn't exist yet, `createRef`. */
+  val onCreateRef: (name: String) -> Unit = {},
 )
 
 /**

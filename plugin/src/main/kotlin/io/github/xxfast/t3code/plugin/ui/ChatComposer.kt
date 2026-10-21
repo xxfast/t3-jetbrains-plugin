@@ -111,6 +111,13 @@ fun ChatComposer(
     verticalArrangement = Arrangement.spacedBy(4.dp),
   ) {
     if (state.reviewComments > 0) ReviewBanner(state.reviewComments, onClearReview)
+    // The context strip is a drawer tucked under the box, `ComposerSurface.ContextStrip`
+    val strip: WorkspaceControlState? = footer?.workspace?.takeIf { pending == null }
+    ComposerWithDrawer(
+      drawer = strip?.let { workspace ->
+        { ComposerContextStrip(workspace, state.enabled, footerActions) }
+      },
+    ) {
     ComposerSurface(
       modifier = Modifier
         .fillMaxWidth()
@@ -123,20 +130,7 @@ fun ChatComposer(
       when (pending) {
         null -> ComposerBody(
           motion = motion,
-          chips = {
-            Column {
-              // Upstream's context strip, above the chips: where the first turn runs
-              footer?.workspace?.let { workspace ->
-                WorkspaceStrip(
-                  state = workspace,
-                  enabled = state.enabled,
-                  actions = footerActions,
-                  modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
-                )
-              }
-              ComposerChips(extras, state.enabled, attachmentActions)
-            }
-          },
+          chips = { ComposerChips(extras, state.enabled, attachmentActions) },
           prompt = {
             ComposerPromptEditor(
               state = state,
@@ -180,11 +174,34 @@ fun ChatComposer(
         }
       }
     }
+    }
     state.disabledReason?.let { reason ->
       Text(reason, style = JewelTheme.typography.small, color = JewelTheme.globalColors.text.info)
     }
     state.error?.let { error ->
       Text(error, style = JewelTheme.typography.small, color = JewelTheme.globalColors.text.error)
+    }
+  }
+}
+
+/**
+ * The box with its [drawer] hanging under it: the drawer's top [CONTEXT_STRIP_OVERLAP] sits
+ * behind the box (upstream's `-mt-4`), the box draws on top.
+ */
+@Composable
+private fun ComposerWithDrawer(
+  drawer: (@Composable () -> Unit)?,
+  surface: @Composable () -> Unit,
+) {
+  if (drawer == null) return surface()
+  Layout(contents = listOf(drawer, surface)) { (strip, box), constraints ->
+    val boxPlaceable: Placeable = box.first().measure(constraints)
+    val stripPlaceable: Placeable = strip.first().measure(constraints.copy(minHeight = 0))
+    val overlap: Int = CONTEXT_STRIP_OVERLAP.roundToPx()
+    val height: Int = boxPlaceable.height + (stripPlaceable.height - overlap).coerceAtLeast(0)
+    layout(boxPlaceable.width, height) {
+      stripPlaceable.placeRelative(0, boxPlaceable.height - overlap)
+      boxPlaceable.placeRelative(0, 0)
     }
   }
 }

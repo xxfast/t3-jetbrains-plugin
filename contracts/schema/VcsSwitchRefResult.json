@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "VcsSwitchRefResult",
+  "title": "VcsSwitchRefResult",
+  "type": "object",
+  "properties": {
+    "refName": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "refName"
+  ],
+  "additionalProperties": true
+}

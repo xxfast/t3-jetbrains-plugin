@@ -216,7 +216,9 @@ Hard-won, so recorded here rather than rediscovered.
 - Pairing grants the requested scopes intersected with the code's grant, and only fails when
   that's empty. `T3Auth.PLUGIN_SCOPES` is what the plugin asks for, so a read-only code still
   pairs. The "IntelliJ IDEA" client under the desktop's Settings > Connections shows how many
-  scopes it got.
+  scopes it got. `source-control:write` joined the list on 2026-10-21 for the composer's branch
+  picker (`vcs.switchRef`, `vcs.createRef`); a pairing from before lacks it and the picker
+  stays locked with a tooltip until the plugin is paired again.
 - Generated union discriminators carry `@EncodeDefault(ALWAYS)` because `T3Json` drops defaults,
   and the server rejects a command without `type`.
 - `thread.stop` is in upstream's internal command union. Clients detach provider sessions
@@ -235,7 +237,12 @@ Hard-won, so recorded here rather than rediscovered.
   the thread stream acknowledges it. `subscribeWorktreeSetup` streams whole snapshots and
   answers `null` once a finished setup's grace period passes; hold the last one, as upstream's
   `useWorktreeSetup` does. `vcs.listRefs` lists the base branches; the fixture client answers
-  a canned set and plays a fake setup over a few seconds.
+  a canned set and plays a fake setup over a few seconds. The strip only shows in the draft
+  hero state (`shouldShowComposerContextStrip`, `persistComposerContextStrip` off), as a
+  drawer under the composer box (`ComposerSurface.ContextStrip`). In local mode a branch pick
+  is `vcs.switchRef` on the checkout and a `thread.metadata.update { branch }` ahead of the
+  next send (`resolveThreadMetadataUpdateForNextTurn`); a ref that has a worktree only sets
+  the branch on a server thread, which is upstream's `setThreadBranch` path too.
 - `LiveServerTest` (skipped unless `T3_LIVE_TOKEN` and `T3_LIVE_THREAD` are set) is how wire
   changes get checked against the real server. Last passed 2026-10-20 against the local desktop.
 - A Search Everywhere-shaped chooser is `com.intellij.ide.actions.BigPopupUI` (public, what

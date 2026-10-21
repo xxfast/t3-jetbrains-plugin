@@ -39,10 +39,19 @@ val FIXTURE_REFS: List<VcsRef> = listOf(
   ),
 )
 
-/** `vcs.listRefs` over [FIXTURE_REFS]: a substring filter on the query, as the server does. */
-fun fixtureListRefs(input: VcsListRefsInput): VcsListRefsResult {
+/**
+ * `vcs.listRefs` over [refs]: a substring filter on the query, as the server does, with
+ * [current] marked as checked out.
+ */
+fun fixtureListRefs(
+  input: VcsListRefsInput,
+  refs: List<VcsRef> = FIXTURE_REFS,
+  current: String = "main",
+): VcsListRefsResult {
   val query: String = input.query.orEmpty().lowercase()
-  val refs: List<VcsRef> = FIXTURE_REFS.filter { query.isEmpty() || query in it.name.lowercase() }
+  val refs: List<VcsRef> = refs
+    .filter { query.isEmpty() || query in it.name.lowercase() }
+    .map { it.copy(current = it.name == current) }
   return VcsListRefsResult(
     refs = refs,
     isRepo = true,

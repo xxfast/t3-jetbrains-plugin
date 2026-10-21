@@ -77,6 +77,9 @@ public class T3Auth(
       "terminal:read",
       "terminal:operate",
       "filesystem:read",
+      // The composer's branch picker switches and creates branches, `vcs.switchRef` and
+      // `vcs.createRef` (packages/contracts/src/clientRpcPermissions.ts:41)
+      "source-control:write",
     )
   }
 

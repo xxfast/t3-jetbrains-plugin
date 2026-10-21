@@ -9,6 +9,9 @@ import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchWorkspaceStrategy
 import io.github.xxfast.t3code.protocol.generated.VcsRef
+import io.github.xxfast.t3code.protocol.ServerSession
+import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.has
 
 /**
  * Where a thread's first turn runs, upstream's `EnvMode` (`apps/web/src/types.ts`): the
@@ -105,9 +108,100 @@ fun activeMessageCount(view: ThreadView): Int = view.messages.size
 fun canOverrideServerThreadEnvMode(view: ThreadView): Boolean =
   activeMessageCount(view) == 0 && view.thread.worktreePath == null && !envLocked(view)
 
+/**
+ * `shouldShowComposerContextStrip`, `BranchToolbar.logic.ts:63`, with upstream's defaults: the
+ * strip shows in the draft hero state and nowhere else (`persistComposerContextStrip` is off).
+ * The plugin's draft hero state is a server thread that can still choose its workspace, since
+ * its row exists from the start. A setup in flight means a message is out, so no strip.
+ */
+fun shouldShowComposerContextStrip(view: ThreadView, isGitRepo: Boolean): Boolean =
+  isGitRepo && canOverrideServerThreadEnvMode(view)
+
 /** `resolveSendEnvMode`, `ChatView.logic.ts:792`: outside a git repo everything runs locally. */
 fun resolveSendEnvMode(requestedEnvMode: EnvMode, isGitRepo: Boolean): EnvMode =
   if (isGitRepo) requestedEnvMode else EnvMode.LOCAL
+
+/** `AuthSourceControlWriteScope`, `packages/contracts/src/auth.ts:39`. */
+const val SOURCE_CONTROL_WRITE_SCOPE: String = "source-control:write"
+
+/**
+ * `canChangeThreadBranch`, `BranchToolbarBranchSelector.tsx:159`: the pairing can write source
+ * control and operate the thread. Without it the refs list but can't be picked.
+ */
+fun canChangeThreadBranch(session: ServerSession?): Boolean =
+  session != null && session.has(SOURCE_CONTROL_WRITE_SCOPE) && session.has(OPERATE_SCOPE)
+
+/** Why a branch can't be picked, for the control's tooltip. */
+const val BRANCH_LOCKED_REASON: String =
+  "This pairing can't switch branches. Pair again to grant source-control:write."
+
+/** `deriveLocalBranchNameFromRemoteRef`, `packages/shared/src/git.ts:95`: `origin/x` to `x`. */
+fun deriveLocalBranchNameFromRemoteRef(branchName: String): String {
+  val separator: Int = branchName.indexOf('/')
+  if (separator <= 0 || separator == branchName.length - 1) return branchName
+  return branchName.substring(separator + 1)
+}
+
+/** `sanitizeNewRefName`, `git.ts:270`: trimmed, whitespace runs to a dash. */
+fun sanitizeNewRefName(rawName: String): String =
+  rawName.trim().replace(Regex("[ \\t\\n\\r\\f\\u000B]+"), "-")
+
+/** What picking a ref targets, `resolveBranchSelectionTarget`'s answer. */
+data class BranchSelectionTarget(
+  val checkoutCwd: String,
+  val nextWorktreePath: String?,
+  /** The ref already has a worktree: use it rather than check the ref out here. */
+  val reuseExistingWorktree: Boolean,
+)
+
+/** `resolveBranchSelectionTarget`, `BranchToolbar.logic.ts:250`. */
+fun resolveBranchSelectionTarget(
+  activeProjectCwd: String,
+  activeWorktreePath: String?,
+  ref: VcsRef,
+): BranchSelectionTarget {
+  ref.worktreePath?.let { path ->
+    return BranchSelectionTarget(
+      checkoutCwd = path,
+      nextWorktreePath = if (path == activeProjectCwd) null else path,
+      reuseExistingWorktree = true,
+    )
+  }
+  val nextWorktreePath: String? =
+    if (activeWorktreePath != null && ref.isDefault) null else activeWorktreePath
+  return BranchSelectionTarget(
+    checkoutCwd = nextWorktreePath ?: activeProjectCwd,
+    nextWorktreePath = nextWorktreePath,
+    reuseExistingWorktree = false,
+  )
+}
+
+/**
+ * `resolveThreadMetadataUpdateForNextTurn`'s branch half, `ChatView.logic.ts:472`: the
+ * `thread.metadata.update` a send puts out first when the picked branch isn't the row's. The
+ * model half rides on the message itself in the plugin.
+ */
+fun threadBranchUpdateForNextTurn(
+  thread: Thread,
+  nextBranch: String?,
+  commandId: String,
+): Command.ThreadMetadataUpdate? {
+  if (nextBranch == null || nextBranch == thread.branch) return null
+  return Command.ThreadMetadataUpdate(
+    commandId = commandId,
+    threadId = thread.id,
+    branch = nextBranch,
+    worktreePath = null,
+  )
+}
+
+/** The "create branch" row the picker offers for [query], `createBranchItemValue`: none when
+ * blank or when a listed ref already has that exact name. */
+fun createBranchName(query: String, refs: List<VcsRef>): String? {
+  val name: String = sanitizeNewRefName(query)
+  if (name.isEmpty() || refs.any { it.name == name }) return null
+  return name
+}
 
 /** What the composer's Workspace control shows and allows for one thread. */
 data class WorkspaceControlState(
@@ -126,6 +220,8 @@ data class WorkspaceControlState(
   val refsQuery: String = "",
   /** "Loading refs...", an error, or null when the list is complete. */
   val refsStatus: String? = null,
+  /** [canChangeThreadBranch]: the local-mode picker switches branches. */
+  val canChangeBranch: Boolean = false,
 ) {
   /** `isSelectingWorktreeBase`, `BranchToolbarBranchSelector.tsx:241`. */
   val selectingWorktreeBase: Boolean
@@ -165,6 +261,7 @@ fun workspaceControlState(
   refsQuery: String = "",
   refsStatus: String? = null,
   defaultStartFromOrigin: Boolean = false,
+  canChangeBranch: Boolean = false,
 ): WorkspaceControlState? {
   if (!isGitRepo) return null
   val thread: Thread = view.thread
@@ -195,6 +292,7 @@ fun workspaceControlState(
     refs = refs,
     refsQuery = refsQuery,
     refsStatus = refsStatus,
+    canChangeBranch = canChangeBranch,
   )
 }
 

@@ -44,7 +44,10 @@ import io.github.xxfast.t3code.plugin.ui.ComposerFooterState
 import io.github.xxfast.t3code.plugin.ui.ComposerState
 import io.github.xxfast.t3code.plugin.ui.ContextWindowSnapshot
 import io.github.xxfast.t3code.plugin.ui.DraftExtras
+import io.github.xxfast.t3code.plugin.ui.BranchSelectionTarget
 import io.github.xxfast.t3code.plugin.ui.EnvMode
+import io.github.xxfast.t3code.plugin.ui.canChangeThreadBranch
+import io.github.xxfast.t3code.plugin.ui.resolveBranchSelectionTarget
 import io.github.xxfast.t3code.plugin.ui.SELECT_BASE_BRANCH_ERROR
 import io.github.xxfast.t3code.plugin.ui.WorkspaceControlState
 import io.github.xxfast.t3code.plugin.ui.WorktreeSetupProgress
@@ -55,6 +58,7 @@ import io.github.xxfast.t3code.plugin.ui.latestRun
 import io.github.xxfast.t3code.plugin.ui.resolveSendEnvMode
 import io.github.xxfast.t3code.plugin.ui.resolveVisibleWorktreeSetup
 import io.github.xxfast.t3code.plugin.ui.resolveWorktreeSetupProgress
+import io.github.xxfast.t3code.plugin.ui.shouldShowComposerContextStrip
 import io.github.xxfast.t3code.plugin.ui.shouldCreateWorktree
 import io.github.xxfast.t3code.plugin.ui.workspaceControlState
 import io.github.xxfast.t3code.plugin.ui.worktreeSetupBlocksSend
@@ -240,7 +244,10 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
         } else {
           null
         }
-      controller.send(current, text, mode, compactFirst, worktree)
+      // In local mode a picked branch lands on the row with the send
+      val nextBranch: String? =
+        if (worktree == null && workspace != null) pending.workspace.branch else null
+      controller.send(current, text, mode, compactFirst, worktree, nextBranch)
     },
     onInterrupt = {
       view?.let { current ->
@@ -476,8 +483,11 @@ private fun rememberComposerFooter(
   // The settings aren't observable, so the picker's favourites are mirrored here per toggle
   var favorites: Set<String> by remember { mutableStateOf(T3Settings.get().modelFavorites) }
   var refsQuery: String by remember(thread?.id) { mutableStateOf("") }
+  val workspaceRoot: String? = thread?.let { row ->
+    T3.get().client.projects.value.find { it.id == row.projectId }?.workspaceRoot
+  }
   val workspace: WorkspaceControlState? =
-    rememberWorkspaceControl(view, pending, cwd, vcs, setup, refsQuery, T3.get().client)
+    rememberWorkspaceControl(view, pending, cwd, vcs, setup, refsQuery, connection, T3.get().client)
   val footer: ComposerFooterState? = info?.let { catalog ->
     if (thread == null) return@let null
     composerFooter(
@@ -581,6 +591,19 @@ private fun rememberComposerFooter(
       thread?.let { controller.draftWorkspace(it.id) { draft -> draft.copy(startFromOrigin = on) } }
     },
     onRefsQuery = { query -> refsQuery = query },
+    onPickRef = { ref ->
+      val current: ThreadView? = view
+      val root: String? = workspaceRoot
+      if (current != null && root != null) {
+        val target: BranchSelectionTarget =
+          resolveBranchSelectionTarget(root, current.thread.worktreePath, ref)
+        controller.pickRef(current.thread.id, cwd ?: root, ref, target)
+      }
+    },
+    onCreateRef = { name ->
+      val current: ThreadView? = view
+      if (current != null && cwd != null) controller.createRef(current.thread.id, cwd, name)
+    },
   )
   return footer to actions
 }
@@ -597,17 +620,18 @@ private fun rememberWorkspaceControl(
   cwd: String?,
   vcs: VcsSummary?,
   setup: WorktreeSetupState,
-  query: String, // what the base branch picker is searching for
+  query: String, // what the branch picker is searching for
+  connection: ConnectionState,
   client: T3Client,
 ): WorkspaceControlState? {
   if (view == null) return null
   val isGitRepo: Boolean = vcs != null
-  val choosing: Boolean = isGitRepo && canOverrideServerThreadEnvMode(view) && !setup.preparing &&
-    (pending.workspace.envMode ?: EnvMode.LOCAL) == EnvMode.WORKTREE
+  // Upstream's strip is the draft hero state's; a started thread has none
+  if (!shouldShowComposerContextStrip(view, isGitRepo) || setup.preparing) return null
   var refs: List<VcsRef> by remember(cwd) { mutableStateOf(emptyList()) }
   var refsStatus: String? by remember(cwd) { mutableStateOf(null) }
-  LaunchedEffect(cwd, choosing, query) {
-    if (cwd == null || !choosing) return@LaunchedEffect
+  LaunchedEffect(cwd, query) {
+    if (cwd == null) return@LaunchedEffect
     refsStatus = "Loading refs..."
     try {
       val input = VcsListRefsInput(cwd = cwd, query = query.ifBlank { null }, limit = REFS_PAGE)
@@ -634,6 +658,8 @@ private fun rememberWorkspaceControl(
     refs = refs,
     refsQuery = query,
     refsStatus = refsStatus,
+    canChangeBranch =
+      canChangeThreadBranch((connection as? ConnectionState.Connected)?.session),
   )
 }
 

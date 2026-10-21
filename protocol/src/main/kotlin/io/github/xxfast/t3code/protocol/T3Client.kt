@@ -11,6 +11,10 @@ import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchResult
 import io.github.xxfast.t3code.protocol.generated.VcsListRefsInput
 import io.github.xxfast.t3code.protocol.generated.VcsListRefsResult
+import io.github.xxfast.t3code.protocol.generated.VcsCreateRefInput
+import io.github.xxfast.t3code.protocol.generated.VcsCreateRefResult
+import io.github.xxfast.t3code.protocol.generated.VcsSwitchRefInput
+import io.github.xxfast.t3code.protocol.generated.VcsSwitchRefResult
 import io.github.xxfast.t3code.protocol.generated.VcsStatusStreamEvent
 import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
 import kotlinx.coroutines.flow.Flow
@@ -95,6 +99,15 @@ public interface T3Client {
 
   /** `vcs.listRefs`: branches and tags of the checkout at `input.cwd`, paged by `cursor`. */
   public suspend fun listRefs(input: VcsListRefsInput): VcsListRefsResult
+
+  /**
+   * `vcs.switchRef` (`source-control:write`): checks `refName` out in `cwd`. A remote ref
+   * gets a local branch; the answer names what's checked out now.
+   */
+  public suspend fun switchRef(input: VcsSwitchRefInput): VcsSwitchRefResult
+
+  /** `vcs.createRef` (`source-control:write`): a new branch in `cwd`, checked out with `switchRef`. */
+  public suspend fun createRef(input: VcsCreateRefInput): VcsCreateRefResult
 
   /**
    * `terminal.attach`: a snapshot first (replay its `history`), then live events. Cancelling

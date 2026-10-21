@@ -13,6 +13,10 @@ import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchResult
 import io.github.xxfast.t3code.protocol.generated.VcsListRefsInput
 import io.github.xxfast.t3code.protocol.generated.VcsListRefsResult
+import io.github.xxfast.t3code.protocol.generated.VcsCreateRefInput
+import io.github.xxfast.t3code.protocol.generated.VcsCreateRefResult
+import io.github.xxfast.t3code.protocol.generated.VcsSwitchRefInput
+import io.github.xxfast.t3code.protocol.generated.VcsSwitchRefResult
 import io.github.xxfast.t3code.protocol.generated.VcsStatusStreamEvent
 import io.github.xxfast.t3code.protocol.generated.WorktreeSetupCancelResult
 import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
@@ -167,6 +171,16 @@ public class WebSocketT3Client internal constructor(
   override suspend fun listRefs(input: VcsListRefsInput): VcsListRefsResult {
     val payload: JsonElement = T3JsonOut.encodeToJsonElement(VcsListRefsInput.serializer(), input)
     return decode(VcsListRefsResult.serializer(), call("vcs.listRefs", payload))
+  }
+
+  override suspend fun switchRef(input: VcsSwitchRefInput): VcsSwitchRefResult {
+    val payload: JsonElement = T3JsonOut.encodeToJsonElement(VcsSwitchRefInput.serializer(), input)
+    return decode(VcsSwitchRefResult.serializer(), call("vcs.switchRef", payload))
+  }
+
+  override suspend fun createRef(input: VcsCreateRefInput): VcsCreateRefResult {
+    val payload: JsonElement = T3JsonOut.encodeToJsonElement(VcsCreateRefInput.serializer(), input)
+    return decode(VcsCreateRefResult.serializer(), call("vcs.createRef", payload))
   }
 
   override fun terminal(input: TerminalAttachInput): Flow<TerminalAttachStreamEvent> {

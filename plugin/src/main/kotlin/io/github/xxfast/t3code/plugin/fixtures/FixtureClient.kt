@@ -48,6 +48,11 @@ import io.github.xxfast.t3code.protocol.generated.ThreadLaunchWorkspaceStrategy
 import io.github.xxfast.t3code.protocol.generated.ThreadProjection
 import io.github.xxfast.t3code.protocol.generated.VcsListRefsInput
 import io.github.xxfast.t3code.protocol.generated.VcsListRefsResult
+import io.github.xxfast.t3code.protocol.generated.VcsCreateRefInput
+import io.github.xxfast.t3code.protocol.generated.VcsCreateRefResult
+import io.github.xxfast.t3code.protocol.generated.VcsRef
+import io.github.xxfast.t3code.protocol.generated.VcsSwitchRefInput
+import io.github.xxfast.t3code.protocol.generated.VcsSwitchRefResult
 import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
 import io.github.xxfast.t3code.protocol.generated.ThreadTitleRegeneration
 import io.github.xxfast.t3code.protocol.generated.TurnItem
@@ -134,6 +139,12 @@ class FixtureClient(
 
   /** The fake setups in flight, by thread id, so a cancel can stop one. */
   private val setupJobs: ConcurrentHashMap<String, Job> = ConcurrentHashMap()
+
+  /** The fixture checkout's branch, what `vcs.switchRef` and `vcs.createRef` move. */
+  private val currentRef: MutableStateFlow<String> = MutableStateFlow("fixture/phase-2")
+
+  /** The refs the fixture checkout has, grown by `vcs.createRef`. */
+  private val refs: MutableStateFlow<List<VcsRef>> = MutableStateFlow(FIXTURE_REFS)
 
   override val connection: StateFlow<ConnectionState> = combine(loaded, online) { scenario, on ->
     if (!on) ConnectionState.Disconnected else scenario?.connection ?: ConnectionState.Connecting
@@ -594,7 +605,30 @@ class FixtureClient(
   }
 
   override suspend fun listRefs(input: VcsListRefsInput): VcsListRefsResult =
-    fixtureListRefs(input)
+    fixtureListRefs(input, refs.value, currentRef.value)
+
+  override suspend fun switchRef(input: VcsSwitchRefInput): VcsSwitchRefResult {
+    val ref: VcsRef = refs.value.find { it.name == input.refName }
+      ?: throw T3Exception.Rpc("GitCommandError", "No ref ${input.refName}")
+    // A remote ref gets a local branch of the same short name, as the server does
+    val local: String = if (ref.isRemote == true) ref.name.substringAfter('/') else ref.name
+    if (refs.value.none { it.name == local }) {
+      refs.update { it + VcsRef(name = local, current = false, isDefault = false, worktreePath = null) }
+    }
+    currentRef.value = local
+    return VcsSwitchRefResult(refName = local)
+  }
+
+  override suspend fun createRef(input: VcsCreateRefInput): VcsCreateRefResult {
+    if (refs.value.any { it.name == input.refName }) {
+      throw T3Exception.Rpc("GitCommandError", "Ref ${input.refName} exists")
+    }
+    refs.update {
+      it + VcsRef(name = input.refName, current = false, isDefault = false, worktreePath = null)
+    }
+    if (input.switchRef == true) currentRef.value = input.refName
+    return VcsCreateRefResult(refName = input.refName)
+  }
 
   /** The setup stream for [threadId], seeded from the scenario's `worktreeSetups` if it has one. */
   private fun setupOf(threadId: String): MutableStateFlow<WorktreeSetupSnapshot?> =
@@ -897,12 +931,12 @@ class FixtureClient(
     .filterNotNull()
     .map { scenario -> TerminalMetadataStreamEvent.Snapshot(terminals = scenario.terminals) }
 
-  override fun vcsStatus(cwd: String): Flow<VcsStatusStreamEvent> = flow {
+  override fun vcsStatus(cwd: String): Flow<VcsStatusStreamEvent> = currentRef.map { ref ->
     val local = VcsStatusLocalResult(
       isRepo = true,
       hasPrimaryRemote = true,
-      isDefaultRef = false,
-      refName = "fixture/phase-2",
+      isDefaultRef = ref == "main",
+      refName = ref,
       hasWorkingTreeChanges = true,
       workingTree = VcsStatusLocalResult.WorkingTree(
         files = listOf(
@@ -915,9 +949,8 @@ class FixtureClient(
     )
     val remote =
       VcsStatusRemoteResult(hasUpstream = true, aheadCount = 2, behindCount = 1, pr = null)
-    emit(VcsStatusStreamEvent.Snapshot(local = local, remote = remote))
-    // A live subscription stays open
-    awaitCancellation()
+    // A snapshot per switch; the flow never ends, like a live subscription
+    VcsStatusStreamEvent.Snapshot(local = local, remote = remote) as VcsStatusStreamEvent
   }
 
   override suspend fun createUploadUrl(

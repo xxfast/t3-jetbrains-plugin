@@ -1,6 +1,8 @@
 package io.github.xxfast.t3code.plugin.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -20,8 +23,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.xxfast.t3code.protocol.generated.VcsRef
 import org.jetbrains.jewel.foundation.theme.JewelTheme
@@ -32,36 +38,50 @@ import org.jetbrains.jewel.ui.component.TextField
 import org.jetbrains.jewel.ui.component.Tooltip
 import org.jetbrains.jewel.ui.component.separator
 
+/** How far the strip tucks under the box, upstream's `-mt-4` on `ContextStrip`. */
+val CONTEXT_STRIP_OVERLAP: Dp = 16.dp
+
 /**
- * Upstream's `BranchToolbar` (`apps/web/src/components/BranchToolbar.tsx`) as far as a server
- * thread needs it: the Workspace select (`RunContextSelector`, Current checkout or New
- * worktree) on the left and, while a new worktree's base is being picked, the base branch
- * picker (`WorktreeBaseBranchPicker`) on the right. It is upstream's `ComposerSurface.
- * ContextStrip`, the `xs` row above the prompt, so the footer keeps its room. The checkout's
- * own branch is on the ChatView header, which is why the branch control only shows when it's a
- * choice. Nothing when the thread isn't on a git repo (`showGitControls`).
+ * Upstream's `BranchToolbar` on `ComposerSurface.ContextStrip`: the drawer under the composer
+ * box, 22dp in from each side, a bordered tab with 16dp bottom corners, its `xs` controls in
+ * one row. Left, `RunContextSelector`: Current checkout or New worktree. Right, the branch
+ * (`BranchToolbarBranchSelector`): the checkout's branch, or in worktree mode the base to
+ * start from with its ref picker (`WorktreeBaseBranchPicker`). Shown in the draft hero state
+ * only, see [shouldShowComposerContextStrip]. In local mode a pick switches the checkout's
+ * branch (`vcs.switchRef`), which needs the `source-control:write` scope; without it the
+ * control is locked, see [RefPicker].
  */
 @Composable
-fun WorkspaceStrip(
+fun ComposerContextStrip(
   state: WorkspaceControlState,
   enabled: Boolean,
   actions: ComposerFooterActions,
-  modifier: Modifier = Modifier,
 ) {
+  val dark: Boolean = JewelTheme.isDark
+  val outline: Color =
+    if (dark) Color.White.copy(alpha = 0.07f) else Color.Black.copy(alpha = 0.08f)
+  val shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
   CompositionLocalProvider(LocalComposerControlSize provides ComposerControlSize.XS) {
     Row(
-      modifier = modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.spacedBy(4.dp),
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = CONTEXT_STRIP_INSET)
+        .clip(shape)
+        .background(composerGlassSurface())
+        .border(1.dp, outline, shape)
+        .padding(start = 8.dp, end = 8.dp, top = CONTEXT_STRIP_OVERLAP + 4.dp, bottom = 4.dp),
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
       WorkspaceSelect(state, enabled, actions.onEnvMode)
       Spacer(Modifier.weight(1f))
-      if (state.selectingWorktreeBase) {
-        BaseBranchPicker(state, enabled, actions)
-      }
+      RefPicker(state, enabled, actions)
     }
   }
 }
+
+/** `--chat-composer-drawer-inset`, 1.375rem. */
+private val CONTEXT_STRIP_INSET: Dp = 22.dp
 
 /** The Workspace menu, `RunContextSelector`'s `MenuRadioGroup` (`BranchToolbar.tsx:361`). */
 @OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip
@@ -73,7 +93,7 @@ private fun WorkspaceSelect(
 ) {
   var open: Boolean by remember { mutableStateOf(false) }
   Box {
-    Tooltip(tooltip = { Text(if (state.locked) "Workspace" else "Choose a workspace") }) {
+    Tooltip(tooltip = { Text("Choose a workspace") }) {
       ComposerControl(onClick = { open = !open }, enabled = enabled && !state.locked) {
         ComposerControlIcon(state.workspaceIcon)
         ComposerControlLabel(state.workspaceLabel, maxWidth = 160.dp)
@@ -116,53 +136,84 @@ private fun WorkspaceSelect(
 }
 
 /**
- * `WorktreeBaseBranchPicker.tsx`: "From <ref>", opening a searchable list of the checkout's
- * refs with the "Start from origin" switch under it. The query goes to the host, which asks
- * `vcs.listRefs`; the rows are whatever it answered.
+ * `BranchToolbarBranchSelector.tsx`: "From <ref>" while a new worktree's base is being picked
+ * (`WorktreeBaseBranchPicker`, with the "Start from origin" switch), else the checkout's
+ * branch, a pick checking that ref out (`selectRef`) or using the worktree it already has. A
+ * typed name no ref carries offers "Create branch", `createRef`. Opening lists the refs
+ * `vcs.listRefs` answers for what's typed. Locked, with the reason as its tooltip, when the
+ * pairing can't write source control (`canChangeThreadBranch`); the worktree base needs no
+ * such scope.
  */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip
 @Composable
-private fun BaseBranchPicker(
+private fun RefPicker(
   state: WorkspaceControlState,
   enabled: Boolean,
   actions: ComposerFooterActions,
 ) {
+  val base: Boolean = state.selectingWorktreeBase
+  val canPick: Boolean = base || state.canChangeBranch
   var open: Boolean by remember { mutableStateOf(false) }
   Box {
-    ComposerControl(onClick = { open = !open }, enabled = enabled) {
-      ComposerControlIcon("git-branch")
-      ComposerControlLabel(state.branchLabel, maxWidth = 192.dp)
-      ComposerControlChevron()
+    Tooltip(tooltip = { Text(if (canPick) "Branch" else BRANCH_LOCKED_REASON) }) {
+      ComposerControl(onClick = { open = !open }, enabled = enabled && canPick) {
+        ComposerControlIcon("git-branch")
+        ComposerControlLabel(state.branchLabel, maxWidth = 192.dp)
+        if (canPick) ComposerControlChevron()
+      }
     }
     if (open) {
       val query: TextFieldState = remember { TextFieldState(state.refsQuery) }
       LaunchedEffect(query) {
         snapshotFlow { query.text.toString() }.collect { actions.onRefsQuery(it) }
       }
+      fun close() {
+        open = false
+        actions.onRefsQuery("")
+      }
       PopupMenu(
         onDismissRequest = {
-          open = false
-          actions.onRefsQuery("")
+          close()
           return@PopupMenu true
         },
-        horizontalAlignment = Alignment.Start,
+        horizontalAlignment = Alignment.End,
       ) {
         passiveItem {
           TextField(
             state = query,
             modifier = Modifier.width(280.dp).padding(horizontal = 8.dp, vertical = 4.dp),
-            placeholder = { Text("Search refs") },
+            placeholder = { Text(if (base) "Search refs" else "Search or create a branch") },
           )
         }
         state.refs.forEach { ref ->
           selectableItem(
             selected = ref.name == state.baseBranch,
             onClick = {
-              open = false
-              actions.onRefsQuery("")
-              actions.onBaseBranch(ref.name)
+              close()
+              if (base) actions.onBaseBranch(ref.name) else actions.onPickRef(ref)
             },
           ) {
             RefRow(ref)
+          }
+        }
+        // `createBranchItemValue`: only in local mode, as a worktree starts from what exists
+        val create: String? = if (base) null else createBranchName(state.refsQuery, state.refs)
+        if (create != null) {
+          selectableItem(
+            selected = false,
+            onClick = {
+              close()
+              actions.onCreateRef(create)
+            },
+          ) {
+            Row(
+              modifier = Modifier.widthIn(min = 240.dp, max = 280.dp),
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Glyph("git-branch", JewelTheme.globalColors.text.info, 12.dp)
+              Text("Create branch \"$create\"", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
           }
         }
         state.refsStatus?.let { status ->
@@ -175,15 +226,17 @@ private fun BaseBranchPicker(
             )
           }
         }
-        separator()
-        passiveItem {
-          // `originControl`, BranchPicker.tsx: a new worktree can start from the remote branch
-          CheckboxRow(
-            text = "Start from origin",
-            checked = state.startFromOrigin,
-            onCheckedChange = actions.onStartFromOrigin,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-          )
+        if (base) {
+          separator()
+          passiveItem {
+            // `originControl`, BranchPicker.tsx: a new worktree can start from the remote branch
+            CheckboxRow(
+              text = "Start from origin",
+              checked = state.startFromOrigin,
+              onCheckedChange = actions.onStartFromOrigin,
+              modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            )
+          }
         }
       }
     }

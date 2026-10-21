@@ -35,8 +35,9 @@ Not released. What works today:
 - A thread timeline laid out like the desktop's: finished turns fold behind "Worked for", tool
   calls group into one line, and a turn's changed files sit under its last reply.
 - Start a thread from the IDE: "New T3 thread" picks the project (yours by default), then the
-  composer picks the provider, model, runtime mode and workspace. "New worktree" from a base
-  branch prepares one on the first send, with the desktop's setup card showing each stage.
+  composer picks the provider, model, runtime mode and workspace. Switch or create the branch
+  from the composer; "New worktree" from a base branch prepares one on the first send, with
+  the desktop's setup card showing each stage.
 
 See the roadmap for what's next.
 

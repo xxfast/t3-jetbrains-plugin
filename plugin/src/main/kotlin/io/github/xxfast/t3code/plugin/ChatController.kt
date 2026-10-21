@@ -16,7 +16,10 @@ import io.github.xxfast.t3code.plugin.ui.DraftAttachment
 import io.github.xxfast.t3code.plugin.ui.DraftExtras
 import io.github.xxfast.t3code.plugin.ui.PASTED_IMAGE_NAME
 import io.github.xxfast.t3code.plugin.ui.ReviewCommentContext
+import io.github.xxfast.t3code.plugin.ui.BranchSelectionTarget
 import io.github.xxfast.t3code.plugin.ui.WorkspaceDraft
+import io.github.xxfast.t3code.plugin.ui.deriveLocalBranchNameFromRemoteRef
+import io.github.xxfast.t3code.plugin.ui.threadBranchUpdateForNextTurn
 import io.github.xxfast.t3code.plugin.ui.launchThreadInput
 import io.github.xxfast.t3code.plugin.ui.encodePng
 import io.github.xxfast.t3code.plugin.ui.attachmentLimitError
@@ -49,6 +52,11 @@ import io.github.xxfast.t3code.protocol.generated.Command.MessageDispatch.Dispat
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.ProviderCapabilities
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
+import io.github.xxfast.t3code.protocol.generated.VcsCreateRefInput
+import io.github.xxfast.t3code.protocol.generated.VcsCreateRefResult
+import io.github.xxfast.t3code.protocol.generated.VcsRef
+import io.github.xxfast.t3code.protocol.generated.VcsSwitchRefInput
+import io.github.xxfast.t3code.protocol.generated.VcsSwitchRefResult
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.time.Instant
 import java.util.UUID
@@ -345,6 +353,63 @@ class ChatController(private val project: Project, private val scope: CoroutineS
     update(threadId) { pending -> pending.draftedWorkspace(change) }
   }
 
+  /**
+   * A ref picked in the composer's branch control, `selectRef` in
+   * `BranchToolbarBranchSelector.tsx:384`: a ref that has a worktree only becomes the thread's
+   * branch (upstream's server-thread path records the branch and keeps the checkout); any other
+   * is checked out in [cwd] with `vcs.switchRef`, a remote one as its local name, and the
+   * answer becomes the branch for the next turn. A refusal says so under the composer.
+   */
+  fun pickRef(threadId: String, cwd: String, ref: VcsRef, target: BranchSelectionTarget) {
+    if (target.reuseExistingWorktree) {
+      draftWorkspace(threadId) { draft -> draft.copy(branch = ref.name) }
+      return
+    }
+    val local: String =
+      if (ref.isRemote == true) deriveLocalBranchNameFromRemoteRef(ref.name) else ref.name
+    draftWorkspace(threadId) { draft -> draft.copy(branch = local) }
+    scope.launch {
+      try {
+        val result: VcsSwitchRefResult =
+          client.switchRef(VcsSwitchRefInput(cwd = target.checkoutCwd, refName = ref.name))
+        val name: String = result.refName ?: local
+        draftWorkspace(threadId) { draft -> draft.copy(branch = name) }
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        LOG.info("Couldn't switch to ${ref.name} in $cwd", e)
+        update(threadId) { pending ->
+          pending.copy(
+            workspace = pending.workspace.copy(branch = null),
+            error = "Failed to switch ref: ${e.message ?: e.javaClass.simpleName}",
+          )
+        }
+      }
+    }
+  }
+
+  /** `createRef` in `BranchToolbarBranchSelector.tsx:441`: a new branch, checked out at once. */
+  fun createRef(threadId: String, cwd: String, name: String) {
+    draftWorkspace(threadId) { draft -> draft.copy(branch = name) }
+    scope.launch {
+      try {
+        val result: VcsCreateRefResult =
+          client.createRef(VcsCreateRefInput(cwd = cwd, refName = name, switchRef = true))
+        draftWorkspace(threadId) { draft -> draft.copy(branch = result.refName) }
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        LOG.info("Couldn't create $name in $cwd", e)
+        update(threadId) { pending ->
+          pending.copy(
+            workspace = pending.workspace.copy(branch = null),
+            error = "Failed to create branch: ${e.message ?: e.javaClass.simpleName}",
+          )
+        }
+      }
+    }
+  }
+
   /** The setup card's Cancel, `cancelWorktreeSetup` in `useWorktreeSetup.ts:156`. */
   fun cancelWorktreeSetup(threadId: String) {
     scope.launchReporting(project, "Couldn't cancel the worktree setup") {
@@ -444,6 +509,7 @@ class ChatController(private val project: Project, private val scope: CoroutineS
     mode: ComposerDispatchMode,
     compactFirst: Boolean = false,
     worktree: WorktreeLaunch? = null,
+    nextBranch: String? = null, // the branch picked for this turn, `persistThreadSettingsForNextTurn`
   ) {
     val threadId: String = view.thread.id
     val messageId: String = UUID.randomUUID().toString()
@@ -470,6 +536,12 @@ class ChatController(private val project: Project, private val scope: CoroutineS
           launch(view, worktree, messageId, outgoing, context, attachments, model, text, extras)
           return@launch
         }
+        // `resolveThreadMetadataUpdateForNextTurn`: the picked branch lands on the row first
+        threadBranchUpdateForNextTurn(view.thread, nextBranch, UUID.randomUUID().toString())
+          ?.let { command ->
+            client.dispatch(command)
+            update(threadId) { pending -> pending.copy(workspace = WorkspaceDraft()) }
+          }
         val run: Run? = activeRun(view.runs)
         val capabilities: ProviderCapabilities? =
           activeCapabilities(run, view.providerThreads, view.providerSessions)

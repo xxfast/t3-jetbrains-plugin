@@ -76,6 +76,61 @@ class WorkspaceLogicTest {
   }
 
   @Test
+  fun `the strip shows in the draft hero state only, as upstream's default`() {
+    assertTrue(shouldShowComposerContextStrip(view(), isGitRepo = true))
+    assertFalse(shouldShowComposerContextStrip(view(), isGitRepo = false))
+    assertFalse(shouldShowComposerContextStrip(view(messages = 1), isGitRepo = true))
+    assertFalse(shouldShowComposerContextStrip(view(worktreePath = "/wt"), isGitRepo = true))
+  }
+
+  @Test
+  fun `a remote ref's local name drops the remote`() {
+    assertEquals("main", deriveLocalBranchNameFromRemoteRef("origin/main"))
+    assertEquals("feature/x", deriveLocalBranchNameFromRemoteRef("origin/feature/x"))
+    assertEquals("main", deriveLocalBranchNameFromRemoteRef("main"))
+    assertEquals("origin/", deriveLocalBranchNameFromRemoteRef("origin/"))
+  }
+
+  @Test
+  fun `a typed branch name is trimmed and dashed, and offered only when new`() {
+    assertEquals("fix-the-thing", sanitizeNewRefName("  fix the\tthing "))
+    val refs: List<VcsRef> =
+      listOf(VcsRef(name = "main", current = true, isDefault = true, worktreePath = null))
+    assertEquals("feature/x", createBranchName("feature/x", refs))
+    assertNull(createBranchName("main", refs))
+    assertNull(createBranchName("   ", refs))
+  }
+
+  @Test
+  fun `picking a ref targets its worktree when it has one, else the checkout`() {
+    val root = "/p"
+    val inWorktree = VcsRef(name = "wt", current = false, isDefault = false, worktreePath = "/p/.t3/wt")
+    val target: BranchSelectionTarget = resolveBranchSelectionTarget(root, null, inWorktree)
+    assertTrue(target.reuseExistingWorktree)
+    assertEquals("/p/.t3/wt", target.checkoutCwd)
+    assertEquals("/p/.t3/wt", target.nextWorktreePath)
+    val plain = VcsRef(name = "dev", current = false, isDefault = false, worktreePath = null)
+    val local: BranchSelectionTarget = resolveBranchSelectionTarget(root, null, plain)
+    assertFalse(local.reuseExistingWorktree)
+    assertEquals(root, local.checkoutCwd)
+    assertNull(local.nextWorktreePath)
+    // The default branch from a worktree goes back to the root
+    val main = VcsRef(name = "main", current = false, isDefault = true, worktreePath = null)
+    assertNull(resolveBranchSelectionTarget(root, "/p/.t3/other", main).nextWorktreePath)
+    assertEquals("/p/.t3/other", resolveBranchSelectionTarget(root, "/p/.t3/other", plain).checkoutCwd)
+  }
+
+  @Test
+  fun `a picked branch lands on the row before the turn, only when it differs`() {
+    val thread: Thread = thread(null)
+    assertNull(threadBranchUpdateForNextTurn(thread, null, "c"))
+    assertNull(threadBranchUpdateForNextTurn(thread.copy(branch = "dev"), "dev", "c"))
+    val update = threadBranchUpdateForNextTurn(thread, "dev", "c")
+    assertEquals("dev", update?.branch)
+    assertEquals("t", update?.threadId)
+  }
+
+  @Test
   fun `outside a git repo a send runs locally whatever was picked`() {
     assertEquals(EnvMode.LOCAL, resolveSendEnvMode(EnvMode.WORKTREE, isGitRepo = false))
     assertEquals(EnvMode.WORKTREE, resolveSendEnvMode(EnvMode.WORKTREE, isGitRepo = true))

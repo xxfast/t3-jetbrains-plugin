@@ -48,7 +48,8 @@ class T3AuthTest {
     assertEquals("urn:t3:params:oauth:token-type:environment-bootstrap", form["subject_token_type"])
     assertEquals("ABCD2345EFGH", form["subject_token"])
     assertEquals(
-      "orchestration:read orchestration:operate terminal:read terminal:operate filesystem:read",
+      "orchestration:read orchestration:operate terminal:read terminal:operate filesystem:read " +
+        "source-control:write",
       form["scope"],
     )
     assertEquals("JetBrains", form["client_label"])

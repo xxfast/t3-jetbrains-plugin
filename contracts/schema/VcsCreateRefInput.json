@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "VcsCreateRefInput",
+  "title": "VcsCreateRefInput",
+  "type": "object",
+  "properties": {
+    "cwd": {
+      "type": "string"
+    },
+    "refName": {
+      "type": "string"
+    },
+    "switchRef": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "cwd",
+    "refName"
+  ],
+  "additionalProperties": true
+}
