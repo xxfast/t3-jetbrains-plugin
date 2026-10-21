@@ -29,7 +29,8 @@ class NewThread(private val project: Project, private val scope: CoroutineScope)
     showNewThreadIn(project) { projectId -> if (projectId != null) start(projectId) }
   }
 
-  fun start(projectId: String) {
+  /** Starts a thread in [projectId], on [branch] and [worktreePath] when given. */
+  fun start(projectId: String, branch: String? = null, worktreePath: String? = null) {
     scope.launchReporting(project, "Couldn't start a thread") {
       val controller: ChatController = ChatController.getInstance(project)
       if (controller.catalog.value == null) controller.loadCatalog()
@@ -40,7 +41,14 @@ class NewThread(private val project: Project, private val scope: CoroutineScope)
       val threadId: String = UUID.randomUUID().toString()
       val commandId: String = UUID.randomUUID().toString()
       val command: Command.ThreadCreate? =
-        createThread(target, catalog?.providers.orEmpty(), threadId, commandId)
+        createThread(
+          target,
+          catalog?.providers.orEmpty(),
+          threadId,
+          commandId,
+          branch,
+          worktreePath,
+        )
       if (command == null) {
         val hint = "No provider is ready. Set one up in the T3 Code desktop app."
         notify(project, hint, NotificationType.WARNING)

@@ -20,8 +20,9 @@ Not released. What works today:
 - Send messages, steer while a run is going (Ctrl/Cmd-click or Ctrl/Cmd+Enter queues), or stop it.
 - Answer approvals and questions from the composer. A balloon and a Sidebar badge say when a
   thread is waiting on you.
-- Interrupt, stop session, pin, mark unread and archive. On the thread's toolbar, the
-  "T3 Chat View" title and the Sidebar's right-click menu, all in Find Action and keymaps.
+- The desktop's thread menu: new thread on the branch, pin, settle, snooze, rename, mark
+  unread, copy, archive, delete. Click the thread title or right-click a Sidebar row.
+  Interrupt and stop session too, all in Find Action and keymaps.
 - The thread's terminal as a tab in the IDE's Terminal tool window.
 - A project picker that defaults to whatever this IDE window has open, worktrees included.
   "Open in IDE" when it isn't: focuses the window that has the thread's checkout, else opens one.

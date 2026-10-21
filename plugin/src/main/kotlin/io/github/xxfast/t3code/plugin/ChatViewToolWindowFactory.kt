@@ -24,7 +24,10 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
 import io.github.xxfast.t3code.plugin.actions.interruptCommand
-import io.github.xxfast.t3code.plugin.actions.threadActions
+import io.github.xxfast.t3code.plugin.actions.RENAME_ACTION
+import io.github.xxfast.t3code.plugin.actions.performThreadAction
+import io.github.xxfast.t3code.plugin.actions.showThreadMenu
+import io.github.xxfast.t3code.plugin.ui.ChatHeaderActions
 import io.github.xxfast.t3code.plugin.ide.ProjectAwareness
 import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ide.ThreadVisits
@@ -145,8 +148,6 @@ class ChatViewToolWindowFactory : ToolWindowFactory, DumbAware {
     }
     val content: Content = ContentFactory.getInstance().createContent(panel, null, false)
     toolWindow.contentManager.addContent(content)
-    // Thread actions act on the selection, which is what this window shows
-    toolWindow.setTitleActions(listOf(threadActions()))
     ThreadVisits.getInstance(project).follow(toolWindow)
     ProjectAwareness.getInstance(project) // selects this window's worktree thread, if it has one
   }
@@ -171,6 +172,7 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
   val view: ThreadView? = load.view
   // For a check after a modal dialog, which outlives this composition's view
   val latest: ThreadView? by rememberUpdatedState(view)
+  val operable: Boolean = operateBlockReason(connection) == null
   // Again when a dispatch answers: the view may already be past its sequence, or resolved
   val requests: PendingThreadRequests = remember(view?.runtimeRequests, view?.items) {
     derivePendingThreadRequests(view?.runtimeRequests.orEmpty(), view?.items.orEmpty())
@@ -260,6 +262,21 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
     onDiffFile = { change -> view?.let { opener.showDiff(it, change) } },
     onDiffRun = { run -> view?.let { opener.showRunDiff(it, run) } },
     vcs = vcs,
+    // Upstream's `ChatHeader`: the thread action menu from the title, rename on double-click,
+    // a new thread from the project. Each only with the operate scope, as `canOperateThread`
+    header = ChatHeaderActions(
+      onOpenMenu = { x, y -> showThreadMenu(project, threadId, x, y, view = latest) },
+      onRename = if (operable) {
+        { performThreadAction(project, threadId, RENAME_ACTION, fromSidebar = false) }
+      } else {
+        null
+      },
+      onNewThreadInProject = if (operable) {
+        { view?.let { current -> NewThread.getInstance(project).start(current.thread.projectId) } }
+      } else {
+        null
+      },
+    ),
     extras = extras[threadId] ?: DraftExtras(),
     attachmentActions = rememberAttachmentActions(project, threadId, controller),
     contextWindow = contextWindow,

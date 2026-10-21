@@ -32,13 +32,15 @@ const val NOT_SNOOZABLE: String = "Waiting on you, or about to start a turn"
 val INTERRUPTIBLE: Set<String> = setOf("preparing", "starting", "running", "waiting")
 
 enum class ThreadActionKind {
-  Stop, Interrupt, Archive, Pin, MarkUnread, Settle, AutoSettle, Snooze, Wake, Rename,
-  RegenerateTitle, Delete, FilterByProject, Copy,
+  Stop, Interrupt, NewThreadOnBranch, Archive, Pin, MarkUnread, Settle, AutoSettle, Snooze, Wake,
+  Rename, RegenerateTitle, Delete, FilterByProject, Copy,
 }
 
 /**
  * `threadActionRequiresOperate`, threadActionMenu.logic.ts:92: read markers and copying stay
  * available to a read-only pairing. Filter by project isn't on upstream's list, so it greys too.
+ * Upstream's new thread on a branch is a local draft until its first send; the plugin's is a
+ * `thread.create` at once, so it needs operate here.
  */
 val ThreadActionKind.requiresOperate: Boolean
   get() = this != ThreadActionKind.MarkUnread && this != ThreadActionKind.Copy
@@ -61,9 +63,10 @@ fun disabledReason(
   if (row == null) return NO_THREAD
   return when (kind) {
     // The shell row has no provider runtime, so Stop finds out from the thread itself
-    ThreadActionKind.Stop, ThreadActionKind.Pin, ThreadActionKind.Settle,
-    ThreadActionKind.AutoSettle, ThreadActionKind.Wake, ThreadActionKind.Rename,
-    ThreadActionKind.Delete, ThreadActionKind.FilterByProject, ThreadActionKind.Copy -> null
+    ThreadActionKind.Stop, ThreadActionKind.NewThreadOnBranch, ThreadActionKind.Pin,
+    ThreadActionKind.Settle, ThreadActionKind.AutoSettle, ThreadActionKind.Wake,
+    ThreadActionKind.Rename, ThreadActionKind.Delete, ThreadActionKind.FilterByProject,
+    ThreadActionKind.Copy -> null
     ThreadActionKind.RegenerateTitle ->
       if (row.titleRegeneration == null) null else "Already regenerating the title"
     // threadActionMenu.logic.ts's `canSnoozeNow`
@@ -93,6 +96,9 @@ private val ARCHIVE_BLOCKING: Set<String> = setOf("preparing", "starting", "runn
 /** Upstream's labels, threadActionMenu.logic.ts. */
 fun archiveText(row: Thread?): String =
   if (row?.archived == true) "Unarchive thread" else "Archive thread"
+
+/** `New thread on ${branch}`, threadActionMenu.logic.ts:106. Null without a branch. */
+fun newThreadOnBranchText(row: Thread?): String? = row?.branch?.let { "New thread on $it" }
 
 fun pinText(row: Thread?): String = if (row?.pinned == true) "Unpin thread" else "Pin thread"
 

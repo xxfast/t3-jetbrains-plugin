@@ -28,18 +28,17 @@ import kotlinx.coroutines.withTimeout
  * A thread lifecycle action. Acts on [T3DataKeys.THREAD_ID] from the context (the thread view, a
  * Sidebar row) and falls back to the selected thread, so Find Action and keymaps work anywhere.
  * Enablement is [disabledReason], and the reason is the description while disabled. Hidden when
- * the server doesn't advertise [capability], and on the thread view's toolbar when [menuOnly].
+ * the server doesn't advertise [capability].
  */
 abstract class ThreadAction(
   private val kind: ThreadActionKind,
   private val capability: String? = null,
-  private val menuOnly: Boolean = false,
 ) : AnAction(), DumbAware {
   override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
   override fun update(e: AnActionEvent) {
     val project: Project? = e.project
-    if (project == null || !e.shows(project, capability, menuOnly)) {
+    if (project == null || !e.shows(project, capability)) {
       e.presentation.isEnabledAndVisible = false
       return
     }
@@ -78,7 +77,7 @@ abstract class ThreadAction(
 
 /**
  * A submenu of thread actions, hidden like a [ThreadAction] when the server doesn't do
- * [capability] or this is the thread view's toolbar. Greyed on a pairing that can't operate,
+ * [capability]. Greyed on a pairing that can't operate,
  * unless its items don't need to.
  */
 abstract class ThreadActionGroup(
@@ -89,7 +88,7 @@ abstract class ThreadActionGroup(
 
   override fun update(e: AnActionEvent) {
     val project: Project? = e.project
-    e.presentation.isVisible = project != null && e.shows(project, capability, menuOnly = true)
+    e.presentation.isVisible = project != null && e.shows(project, capability)
     // Greyed with its items on a connection that can't operate, as upstream's menu does
     val blocked: Boolean = requiresOperate && blockedBy(T3.get().client.connection.value) != null
     e.presentation.isEnabled = e.presentation.isVisible && !blocked
@@ -97,8 +96,7 @@ abstract class ThreadActionGroup(
 }
 
 /** Whether an action needing [capability] shows here at all. */
-private fun AnActionEvent.shows(project: Project, capability: String?, menuOnly: Boolean): Boolean {
-  if (menuOnly && isFromActionToolbar) return false
+private fun AnActionEvent.shows(project: Project, capability: String?): Boolean {
   if (capability == null) return true
   return ChatController.getInstance(project).catalog.value.supports(capability)
 }

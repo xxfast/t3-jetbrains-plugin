@@ -13,6 +13,7 @@ import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.MessageDialogBuilder
 import com.intellij.openapi.ui.Messages
+import io.github.xxfast.t3code.plugin.NewThread
 import io.github.xxfast.t3code.plugin.SidebarRename
 import io.github.xxfast.t3code.plugin.T3
 import io.github.xxfast.t3code.plugin.ThreadSelection
@@ -77,6 +78,25 @@ class InterruptRunAction : ThreadAction(ThreadActionKind.Interrupt) {
       return
     }
     target.client.dispatch(command)
+  }
+}
+
+/**
+ * "New thread on <branch>", `useThreadActionMenu.ts:195`: a thread in the same project on this
+ * thread's branch and worktree. Upstream opens a draft and creates on the first send; the plugin
+ * has no drafts, so [NewThread] creates it now. Only on a thread with a branch.
+ */
+class NewThreadOnBranchAction : ThreadAction(ThreadActionKind.NewThreadOnBranch) {
+  override fun visible(row: Thread?): Boolean = row?.branch != null
+
+  override fun present(presentation: Presentation, row: Thread?) {
+    presentation.text = newThreadOnBranchText(row) ?: templateText
+  }
+
+  override suspend fun perform(target: ThreadTarget) {
+    val row: Thread = target.row
+    NewThread.getInstance(target.project)
+      .start(row.projectId, branch = row.branch, worktreePath = row.worktreePath)
   }
 }
 
@@ -154,7 +174,7 @@ class MarkUnreadAction : ThreadAction(ThreadActionKind.MarkUnread) {
  * "Filter by project" or "Show all projects" (threadActionMenu.logic.ts:162, Sidebar.tsx:4266):
  * the Sidebar's project filter, narrowed to the row's project or opened back up.
  */
-class FilterByProjectAction : ThreadAction(ThreadActionKind.FilterByProject, menuOnly = true) {
+class FilterByProjectAction : ThreadAction(ThreadActionKind.FilterByProject) {
   override fun update(e: AnActionEvent) {
     super.update(e)
     val project: Project = e.project ?: return
@@ -182,7 +202,7 @@ class FilterByProjectAction : ThreadAction(ThreadActionKind.FilterByProject, men
 class CopyGroup : ThreadActionGroup(capability = null, requiresOperate = false)
 
 /** One of [CopyGroup]'s items: [copied] onto the clipboard, then upstream's toast. */
-abstract class CopyAction : ThreadAction(ThreadActionKind.Copy, menuOnly = true) {
+abstract class CopyAction : ThreadAction(ThreadActionKind.Copy) {
   protected abstract fun copied(row: Thread, projects: List<T3Project>): Copied?
 
   override suspend fun perform(target: ThreadTarget) {
@@ -266,7 +286,7 @@ class AutoSettleGroup : ThreadActionGroup(THREAD_AUTO_SETTLE_OPT_OUT)
 
 /** One of [AutoSettleGroup]'s choices, `setThreadAutoSettle` with [enabled]. */
 abstract class AutoSettleAction(private val enabled: Boolean) :
-  ThreadAction(ThreadActionKind.AutoSettle, THREAD_AUTO_SETTLE_OPT_OUT, menuOnly = true),
+  ThreadAction(ThreadActionKind.AutoSettle, THREAD_AUTO_SETTLE_OPT_OUT),
   Toggleable {
   override fun present(presentation: Presentation, row: Thread?) {
     Toggleable.setSelected(presentation, row?.autoSettles == enabled)
@@ -355,7 +375,7 @@ class WakeThreadAction : ThreadAction(ThreadActionKind.Wake, THREAD_SNOOZE) {
  * "Rename thread": in place on a Sidebar row, as upstream's `startThreadRename` (Sidebar.tsx:3157),
  * or a dialog from anywhere else.
  */
-class RenameThreadAction : ThreadAction(ThreadActionKind.Rename, menuOnly = true) {
+class RenameThreadAction : ThreadAction(ThreadActionKind.Rename) {
   override suspend fun perform(target: ThreadTarget) {
     if (target.fromSidebar) {
       SidebarRename.getInstance(target.project).start(target.row.id)
@@ -381,7 +401,7 @@ suspend fun commitRename(project: Project, client: T3Client, row: Thread, typed:
 
 /** "Regenerate title" (Sidebar.tsx:4334): the server writes a new one from the conversation. */
 class RegenerateTitleAction :
-  ThreadAction(ThreadActionKind.RegenerateTitle, THREAD_TITLE_REGENERATION, menuOnly = true) {
+  ThreadAction(ThreadActionKind.RegenerateTitle, THREAD_TITLE_REGENERATION) {
   override fun present(presentation: Presentation, row: Thread?) {
     presentation.text = regenerateText(row)
   }
@@ -397,7 +417,7 @@ class RegenerateTitleAction :
  * off a deleted open thread; here its tab closes. Its offer to delete an orphaned worktree too
  * isn't ported.
  */
-class DeleteThreadAction : ThreadAction(ThreadActionKind.Delete, menuOnly = true) {
+class DeleteThreadAction : ThreadAction(ThreadActionKind.Delete) {
   override suspend fun perform(target: ThreadTarget) {
     val row: Thread = target.row
     val asks: Boolean = T3Settings.get().confirmThreadDelete

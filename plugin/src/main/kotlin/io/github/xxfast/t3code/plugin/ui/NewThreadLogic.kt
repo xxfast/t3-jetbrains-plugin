@@ -23,13 +23,16 @@ const val NEW_THREAD_TITLE: String = "New thread"
  * "implement plan in new thread" does. The provider, model, runtime mode and workspace are
  * then the composer's: its footer changes them on the row, and a New worktree pick sends the
  * first message as an `orchestration.launchThread` that reuses the thread ([launchThreadInput]).
- * Null when no provider can run it.
+ * [branch] and [worktreePath] carry over from "New thread on <branch>", as upstream's
+ * `handleNewThread` options do. Null when no provider can run it.
  */
 fun createThread(
   project: Project,
   providers: List<ServerProvider>,
   threadId: String,
   commandId: String,
+  branch: String? = null,
+  worktreePath: String? = null,
 ): Command.ThreadCreate? {
   val modelSelection: ModelSelection = defaultModelSelection(project, providers) ?: return null
   return Command.ThreadCreate(
@@ -42,8 +45,8 @@ fun createThread(
     modelSelection = modelSelection,
     runtimeMode = DEFAULT_RUNTIME_MODE,
     interactionMode = DEFAULT_PROVIDER_INTERACTION_MODE,
-    branch = null,
-    worktreePath = null,
+    branch = branch,
+    worktreePath = worktreePath,
   )
 }
 

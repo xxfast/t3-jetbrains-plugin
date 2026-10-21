@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -39,6 +40,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.awt.awtEventOrNull
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -46,10 +48,13 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -68,7 +73,9 @@ import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
 import java.awt.datatransfer.StringSelection
+import java.awt.event.MouseEvent
 import java.time.Instant
+import kotlin.math.roundToInt
 import kotlinx.serialization.json.JsonObject
 import org.jetbrains.jewel.bridge.toComposeColor
 import org.jetbrains.jewel.foundation.theme.JewelTheme
@@ -76,9 +83,11 @@ import org.jetbrains.jewel.intui.markdown.bridge.ProvideMarkdownStyling
 import org.jetbrains.jewel.markdown.Markdown
 import org.jetbrains.jewel.markdown.MarkdownBlock
 import org.jetbrains.jewel.markdown.processing.MarkdownProcessor
+import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.Link
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.Tooltip
+import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import org.jetbrains.jewel.ui.typography
 
 /** The editor scheme's background, read again whenever the theme changes. */
@@ -119,6 +128,7 @@ fun ChatView(
   worktreeSetup: WorktreeSetupSnapshot? = null, // the first turn's worktree being prepared
   onCancelWorktreeSetup: (() -> Unit)? = null, // the card's Cancel, null when it can't
   onOpenSetupTerminal: ((terminalId: String) -> Unit)? = null, // the setup script's terminal
+  header: ChatHeaderActions = ChatHeaderActions(), // the title's menu, rename and new thread
 ) {
   val threadId: String? = view?.thread?.id
   val timeline: LazyListState = remember(threadId) { LazyListState() }
@@ -145,7 +155,7 @@ fun ChatView(
 
   // Upstream's `bg-background` is the page, so the editor's background rather than the panel's
   Column(Modifier.fillMaxSize().background(editorBackground())) {
-    ChatHeader(view, project, favicon, vcs)
+    ChatHeader(view, project, favicon, vcs, header)
     // A stream that fails after rendering keeps the thread and says so on top
     if (error != null && view != null) ErrorLine(error, onRetry)
     // The composer floats over the timeline's bottom, as upstream's overlay does, so its fold
@@ -254,47 +264,112 @@ private fun ErrorLine(error: String, onRetry: () -> Unit) {
   }
 }
 
+/** What the ChatView's header can do, `ChatHeader.tsx`'s props. Null means not wired. */
+class ChatHeaderActions(
+  /** The thread action menu, at a point on screen: a click on the title, a right-click anywhere. */
+  val onOpenMenu: ((x: Int, y: Int) -> Unit)? = null,
+  /** A double-click on the title, upstream's `handleTitleDoubleClick`. */
+  val onRename: (() -> Unit)? = null,
+  /** A click on the project, upstream's `onNewThreadInProject`. */
+  val onNewThreadInProject: (() -> Unit)? = null,
+)
+
 /**
  * Upstream's `ChatHeader` and `WorkspaceBreadcrumb`: the project, muted, then the thread title,
- * in a flat bar with no border.
+ * in a flat bar with no border. The title is a button for the thread action menu, with a
+ * chevron that shows on hover, and the whole header opens it on right-click.
  */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip
 @Composable
 private fun ChatHeader(
   view: ThreadView?,
   project: Project?,
   favicon: ImageBitmap?,
   vcs: VcsSummary?,
+  actions: ChatHeaderActions,
 ) {
-  Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
+  val menu: ((x: Int, y: Int) -> Unit)? = actions.onOpenMenu?.takeIf { view != null }
+  Column(
+    Modifier
+      .fillMaxWidth()
+      .threadMenuGestures(menu, onDoubleClick = null, anchorBelow = false)
+      .padding(horizontal = 12.dp, vertical = 10.dp),
+  ) {
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.spacedBy(8.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
       if (project != null) {
-        Row(
-          horizontalArrangement = Arrangement.spacedBy(6.dp),
-          verticalAlignment = Alignment.CenterVertically,
-        ) {
-          ProjectIcon(project, favicon, 14.dp)
-          Text(
-            text = project.title,
-            color = muted(),
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 160.dp),
-          )
+        val projectHover: MutableInteractionSource = remember { MutableInteractionSource() }
+        val projectHovered: Boolean by projectHover.collectIsHoveredAsState()
+        val newThread: (() -> Unit)? = actions.onNewThreadInProject
+        Tooltip({ Text("New thread in ${project.title}") }, enabled = newThread != null) {
+          Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+              .hoverable(projectHover)
+              .then(
+                if (newThread != null) {
+                  Modifier.clickable(
+                    interactionSource = projectHover,
+                    indication = null,
+                    onClick = newThread,
+                  )
+                } else {
+                  Modifier
+                },
+              ),
+          ) {
+            ProjectIcon(project, favicon, 14.dp)
+            Text(
+              text = project.title,
+              // `text-muted-foreground hover:text-foreground`
+              color = if (projectHovered && newThread != null) {
+                JewelTheme.globalColors.text.normal
+              } else {
+                muted()
+              },
+              fontWeight = FontWeight.Medium,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+              modifier = Modifier.widthIn(max = 160.dp),
+            )
+          }
         }
         Text("/", color = muted())
       }
-      Text(
-        text = view?.thread?.title.orEmpty(),
-        fontWeight = FontWeight.Medium,
-        modifier = Modifier.weight(1f),
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-      )
+      val title: String = view?.thread?.title.orEmpty()
+      val titleHover: MutableInteractionSource = remember { MutableInteractionSource() }
+      val titleHovered: Boolean by titleHover.collectIsHoveredAsState()
+      Tooltip({ Text(title) }, enabled = title.isNotEmpty()) {
+        Row(
+          horizontalArrangement = Arrangement.spacedBy(4.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          modifier = Modifier
+            .hoverable(titleHover)
+            .threadMenuGestures(menu, actions.onRename, anchorBelow = true),
+        ) {
+          Text(
+            text = title,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+          )
+          // `ChevronDownIcon`: opacity 0 until the title is hovered
+          if (menu != null) {
+            Icon(
+              key = AllIconsKeys.General.ChevronDown,
+              contentDescription = null,
+              modifier = Modifier.size(14.dp).alpha(if (titleHovered) 1f else 0f),
+              tint = muted(),
+            )
+          }
+        }
+      }
+      Spacer(Modifier.weight(1f))
     }
     if (vcs != null) {
       Text(
@@ -305,6 +380,47 @@ private fun ChatHeader(
         overflow = TextOverflow.Ellipsis,
       )
     }
+  }
+}
+
+/**
+ * The header's menu gestures, as `ChatHeader.tsx`: a right-click opens [menu] at the pointer
+ * (`handleHeaderContextMenu`), and with [anchorBelow] a click opens it under the element's left
+ * edge, 4px down (`openMenuFromTitle`), unless the click doubles into [onDoubleClick]. The
+ * platform says which event is the context menu: the press on macOS and Linux, the release on
+ * Windows. Screen coordinates come from the AWT event, as the Sidebar's rows take them.
+ */
+private fun Modifier.threadMenuGestures(
+  menu: ((x: Int, y: Int) -> Unit)?,
+  onDoubleClick: (() -> Unit)?,
+  anchorBelow: Boolean,
+): Modifier = if (menu == null) this else pointerInput(menu, onDoubleClick, anchorBelow) {
+  awaitEachGesture {
+    var menuGesture = false
+    do {
+      val event: PointerEvent = awaitPointerEvent(PointerEventPass.Initial)
+      val mouse: MouseEvent? = event.awtEventOrNull
+      val trigger: Boolean = mouse?.isPopupTrigger == true
+      val secondary: Boolean =
+        event.type == PointerEventType.Press && event.buttons.isSecondaryPressed
+      menuGesture = menuGesture || trigger || secondary
+      if (menuGesture) event.changes.forEach { change -> change.consume() }
+      if (trigger && mouse != null) menu(mouse.xOnScreen, mouse.yOnScreen)
+      val released: Boolean = event.type == PointerEventType.Release && !menuGesture
+      if (released && anchorBelow && mouse != null) {
+        event.changes.forEach { change -> change.consume() }
+        when (mouse.clickCount) {
+          1 -> {
+            // The element's screen position: the pointer's, less where it is in the element
+            val local: Offset = event.changes.first().position
+            val left: Int = mouse.xOnScreen - local.x.roundToInt()
+            val bottom: Int = mouse.yOnScreen - local.y.roundToInt() + size.height
+            menu(left, bottom + 4)
+          }
+          2 -> onDoubleClick?.invoke()
+        }
+      }
+    } while (event.changes.any { change -> change.pressed })
   }
 }
 
