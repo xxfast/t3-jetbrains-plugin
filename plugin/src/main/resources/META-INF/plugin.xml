@@ -262,7 +262,9 @@
     </action>
 
     <!-- Upstream's composer keybindings (packages/shared/src/keybindings.ts:176 to 206) and their
-         default keys, mod being Cmd on macOS. Only while the composer has focus -->
+         default keys, mod being Cmd on macOS. Only while the composer has focus. Effort and Mode
+         deviate from upstream's keybindings.ts (mod+shift+e, mod+shift+a): those are Recent
+         Locations and Find Action in the IDE keymaps, so native wins and they move -->
     <action
       id="T3Code.Composer.ModelPicker"
       class="io.github.xxfast.t3code.plugin.actions.ComposerModelPickerAction"
@@ -277,18 +279,18 @@
       class="io.github.xxfast.t3code.plugin.actions.ComposerEffortAction"
       text="T3 Composer: Effort"
       description="Open the focused T3 composer&apos;s effort and traits picker">
-      <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift E"/>
-      <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift E"/>
-      <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift E"/>
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift Y"/>
+      <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift Y"/>
+      <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift Y"/>
     </action>
     <action
       id="T3Code.Composer.Mode"
       class="io.github.xxfast.t3code.plugin.actions.ComposerModeAction"
       text="T3 Composer: Mode"
       description="Open the focused T3 composer&apos;s runtime mode select">
-      <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift A"/>
-      <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift A"/>
-      <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift A"/>
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift Y"/>
+      <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt shift Y"/>
+      <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta alt shift Y"/>
     </action>
     <action
       id="T3Code.Composer.Workspace"

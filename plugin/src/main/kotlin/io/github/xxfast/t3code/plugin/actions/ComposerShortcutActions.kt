@@ -13,9 +13,9 @@ import io.github.xxfast.t3code.plugin.ui.ComposerShortcuts
  * Upstream's composer keybindings (`packages/shared/src/keybindings.ts:176` to 206) as IDE
  * actions with the same default keys, so they show in the keymap and can be rebound there.
  * Each is enabled only while the composer has focus and can act ([T3DataKeys.COMPOSER]), and
- * [ComposerShortcutPromoter] puts it ahead of the IDE's own action on the same key (Find Action
- * on Ctrl/Cmd+Shift+A, for one) for as long as that holds. Anywhere else the key does what it
- * always did.
+ * [ComposerShortcutPromoter] puts it ahead of the IDE's own action on the same key for as long
+ * as that holds. Anywhere else the key does what it always did. Keys that would shadow a global
+ * IDE action (Find Action, Recent Locations) deviate from upstream, see Effort and Mode.
  */
 abstract class ComposerShortcutAction : DumbAwareAction() {
   // Reads and changes Compose state, which lives on the EDT
@@ -57,10 +57,16 @@ abstract class ComposerControlAction(private val kind: ComposerControlKind) :
   }
 }
 
-/** `composer.effort`, mod+shift+e: the traits picker. */
+/**
+ * `composer.effort`: the traits picker. Deviates from upstream's mod+shift+e, which is Recent
+ * Locations in the IDE keymaps: mod+shift+y.
+ */
 class ComposerEffortAction : ComposerControlAction(ComposerControlKind.EFFORT)
 
-/** `composer.mode`, mod+shift+a: the runtime mode select. */
+/**
+ * `composer.mode`: the runtime mode select. Deviates from upstream's mod+shift+a, which is Find
+ * Action in the IDE keymaps: mod+alt+shift+y.
+ */
 class ComposerModeAction : ComposerControlAction(ComposerControlKind.MODE)
 
 /** `composer.workspace`, mod+shift+x: the Workspace select in the context strip. */
