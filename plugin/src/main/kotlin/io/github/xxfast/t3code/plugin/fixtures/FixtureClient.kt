@@ -69,6 +69,7 @@ import kotlin.io.path.extension
 import kotlin.io.path.getLastModifiedTime
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.name
+import kotlin.io.path.nameWithoutExtension
 import kotlin.io.path.readText
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -95,6 +96,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -125,6 +127,9 @@ class FixtureClient(
 
   /** Attachments minted by [createUploadUrl] and not deleted, by their number. */
   private val minted: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+  /** What [upload] received, by attachment id, so a sent image shows in the timeline. */
+  private val uploaded: ConcurrentHashMap<String, ByteArray> = ConcurrentHashMap()
 
   /** The fake assistant replies in flight, by thread id, so an interrupt can stop one. */
   private val replies: ConcurrentHashMap<String, Job> = ConcurrentHashMap()
@@ -974,10 +979,31 @@ class FixtureClient(
     if (bytes.size > UPLOAD_MAX_BYTES) {
       throw T3Exception.Transport("Upload rejected (413): the fixture server takes up to 1 MiB")
     }
+    uploaded["att_fixture_${relativeUrl.removePrefix(UPLOAD_PATH)}"] = bytes
   }
 
   override suspend fun deleteAttachment(attachmentId: String) {
     minted -= attachmentId.removePrefix("att_fixture_")
+    uploaded -= attachmentId
+  }
+
+  /**
+   * An attachment uploaded this session, else the scenario's `attachments/<id>.<ext>`, read on
+   * each call so a swapped picture shows on the next fetch.
+   */
+  override suspend fun attachment(attachmentId: String): ByteArray {
+    uploaded[attachmentId]?.let { return it }
+    val file: Path? = withContext(Dispatchers.IO) {
+      val folder: Path = directory.resolve(ATTACHMENTS_DIR)
+      if (!Files.isDirectory(folder)) return@withContext null
+      Files.list(folder).use { stream ->
+        stream.filter { it.isRegularFile() && it.nameWithoutExtension == attachmentId }
+          .findFirst()
+          .orElse(null)
+      }
+    }
+    file ?: throw T3Exception.Transport("Attachment not found (404): $attachmentId")
+    return withContext(Dispatchers.IO) { Files.readAllBytes(file) }
   }
 
   /** Whether [attachmentId] was minted and not deleted since. */
@@ -1141,6 +1167,9 @@ private const val UPLOAD_URL_TTL_MILLIS: Long = 10 * 60_000
 private const val UPLOAD_MILLIS: Long = 300
 private const val UPLOAD_MAX_BYTES: Int = 1024 * 1024
 private const val UPLOAD_PATH: String = "/api/attachments/fixture/"
+
+/** Where a scenario keeps the pictures its messages attach, named by attachment id. */
+private const val ATTACHMENTS_DIR: String = "attachments"
 
 private fun provider(
   instanceId: String,

@@ -1,13 +1,19 @@
 package io.github.xxfast.t3code.plugin.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,7 +30,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.awtTransferable
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.intellij.openapi.ide.CopyPasteManager
 import io.github.xxfast.t3code.plugin.actions.T3DataKeys
@@ -55,23 +65,39 @@ class AttachmentActions(
   val onPickFiles: () -> Unit = {},
   val onRemoveAttachment: (id: String) -> Unit = {},
   val onRetryAttachment: (id: String) -> Unit = {},
+  val onOpenAttachment: (id: String) -> Unit = {}, // an image tile's click, the full image
   val onRemoveContext: (contextId: String) -> Unit = {},
   val onRefused: (reason: String) -> Unit = {},
 )
 
 /**
- * The draft's review comments and attachments as chips above the text field, like upstream's
- * composer context chips: a comment by its label (`Paths.kt L10 to L20`), an attachment by name
- * and `formatAttachmentSize`, a spinner while it uploads, the error colour when it failed (click
- * to retry), and a remove button on each. Then why the last attach was refused, or why Send
- * waits.
+ * The draft's images as tiles, then its review comments and other files as chips, above the
+ * text field. Images are upstream's composer tiles (`ChatComposer.tsx:6763`): a wrapping row
+ * with `gap-2`, each `h-16 w-16 rounded-lg border` with the picture cropped to fill, a click to
+ * see it whole, an upload strip along the bottom, a retry when it failed and a remove button in
+ * the corner. The chips are like upstream's composer context chips: a comment by its label
+ * (`Paths.kt L10 to L20`), a file by name and `formatAttachmentSize`, a spinner while it uploads,
+ * the error colour when it failed (click to retry), and a remove button on each. Then why the
+ * last attach was refused, or why Send waits.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ComposerChips(extras: DraftExtras, enabled: Boolean, actions: AttachmentActions) {
   val note: String? = extras.notice ?: extras.blockReason
   if (extras.comments.isEmpty() && extras.attachments.isEmpty() && note == null) return
+  val (images: List<DraftAttachment>, files: List<DraftAttachment>) =
+    extras.attachments.partition { it.kind == AttachmentKind.IMAGE }
   Column(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
-    Row(
+    if (images.isNotEmpty()) {
+      FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        images.forEach { image -> ImageTile(image, enabled, actions) }
+      }
+    }
+    if (extras.comments.isNotEmpty() || files.isNotEmpty()) Row(
       modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
       horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -83,7 +109,7 @@ fun ComposerChips(extras: DraftExtras, enabled: Boolean, actions: AttachmentActi
           onRemove = { actions.onRemoveContext(comment.contextId) },
         )
       }
-      extras.attachments.forEach { attachment ->
+      files.forEach { attachment ->
         val failed: Upload.Failed? = attachment.upload as? Upload.Failed
         Chip(
           label = attachment.name,
@@ -107,6 +133,71 @@ fun ComposerChips(extras: DraftExtras, enabled: Boolean, actions: AttachmentActi
         JewelTheme.globalColors.text.info
       }
       Text(note, style = JewelTheme.typography.small, color = color)
+    }
+  }
+}
+
+/** Upstream's 64px composer image tile, see [ComposerChips]. */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip
+@Composable
+private fun ImageTile(attachment: DraftAttachment, enabled: Boolean, actions: AttachmentActions) {
+  val failed: Upload.Failed? = attachment.upload as? Upload.Failed
+  val shape: RoundedCornerShape = RoundedCornerShape(8.dp)
+  val outline: Color = if (failed != null) {
+    JewelTheme.globalColors.text.error
+  } else {
+    JewelTheme.globalColors.borders.normal
+  }
+  // `bg-background/85`, behind the strip and the buttons over the picture
+  val scrim: Color = JewelTheme.globalColors.panelBackground.copy(alpha = 0.85f)
+  Box(Modifier.size(64.dp).clip(shape).border(1.dp, outline, shape)) {
+    val preview: ImageBitmap? = attachment.preview
+    if (preview != null) {
+      Image(
+        bitmap = preview,
+        contentDescription = "Preview ${attachment.name}",
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+          .fillMaxSize()
+          .clickable { actions.onOpenAttachment(attachment.id) },
+      )
+    } else {
+      Text(
+        text = attachment.name,
+        style = JewelTheme.typography.small,
+        color = JewelTheme.globalColors.text.info,
+        textAlign = TextAlign.Center,
+        maxLines = 3,
+        modifier = Modifier.align(Alignment.Center).padding(horizontal = 4.dp),
+      )
+    }
+    if (attachment.upload is Upload.Uploading) {
+      Box(
+        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(scrim),
+        contentAlignment = Alignment.Center,
+      ) {
+        CircularProgressIndicator(Modifier.padding(vertical = 2.dp).size(10.dp))
+      }
+    }
+    if (failed != null) {
+      Box(Modifier.align(Alignment.BottomStart).padding(2.dp).background(scrim, shape)) {
+        Tooltip(tooltip = { Text(failed.reason) }) {
+          IconActionButton(
+            key = AllIconsKeys.Actions.Refresh,
+            contentDescription = "Retry upload for ${attachment.name}",
+            onClick = { actions.onRetryAttachment(attachment.id) },
+            enabled = enabled,
+          )
+        }
+      }
+    }
+    Box(Modifier.align(Alignment.TopEnd).padding(2.dp).background(scrim, shape)) {
+      IconActionButton(
+        key = AllIconsKeys.General.Close,
+        contentDescription = "Remove ${attachment.name}",
+        onClick = { actions.onRemoveAttachment(attachment.id) },
+        enabled = enabled,
+      )
     }
   }
 }

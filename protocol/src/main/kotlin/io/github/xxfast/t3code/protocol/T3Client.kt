@@ -70,6 +70,14 @@ public interface T3Client {
    */
   public suspend fun projectFavicon(cwd: String, path: String?): ByteArray?
 
+  /**
+   * A sent message's attachment as its bytes: `assets.createUrl` with
+   * `{_tag:"attachment", attachmentId}`, as upstream's `selectMessageImageResources`
+   * (`apps/web/src/session-logic.ts:840`) asks for, then a GET of the signed URL. Either
+   * failing throws.
+   */
+  public suspend fun attachment(attachmentId: String): ByteArray
+
   /** `orchestration.getTurnDiff`: a unified patch for runs [fromTurn] to [toTurn], exclusive. */
   public suspend fun turnDiff(threadId: String, fromTurn: Long, toTurn: Long): String
 

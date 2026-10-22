@@ -71,6 +71,7 @@ import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ThreadView
+import io.github.xxfast.t3code.protocol.generated.ChatAttachment
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
 import java.awt.datatransfer.StringSelection
@@ -701,8 +702,11 @@ private fun TurnFoldRow(row: TimelineRow.TurnFold, onToggle: () -> Unit) {
 private fun UserMessageRow(row: TimelineRow.Message, context: RowContext) {
   val message: TurnItem.UserMessage = row.entry.item as TurnItem.UserMessage
   val text: String = remember(message.text) { stripContextReferences(message.text) }
-  val extras: List<String> = remember(message.context, message.attachments) {
-    contextLabels(message.context) + message.attachments.map { it.name }
+  // Upstream's `userImages` go in the grid; files and unknown types stay names
+  val (images: List<ChatAttachment>, others: List<ChatAttachment>) =
+    remember(message.attachments) { message.attachments.partition(::isImageAttachment) }
+  val extras: List<String> = remember(message.context, others) {
+    contextLabels(message.context) + others.map { it.name }
   }
   val collapsible: Boolean = remember(text) { shouldCollapseUserMessage(text) }
   var showAll: Boolean by remember(row.id) { mutableStateOf(false) }
@@ -732,6 +736,8 @@ private fun UserMessageRow(row: TimelineRow.Message, context: RowContext) {
           .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
       ) {
+        // `mb-2` under the grid, less the column's own spacing
+        MessageImages(images, Modifier.padding(bottom = 6.dp))
         extras.forEach { line -> Text(line, style = small(), color = muted()) }
         if (text.isNotEmpty()) {
           val clip: Modifier =

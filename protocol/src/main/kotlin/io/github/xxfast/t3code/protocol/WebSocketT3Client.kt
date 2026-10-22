@@ -140,6 +140,19 @@ public class WebSocketT3Client internal constructor(
     return send(request, relative).takeIf { it.isNotEmpty() }
   }
 
+  override suspend fun attachment(attachmentId: String): ByteArray {
+    val payload: JsonObject = buildJsonObject {
+      putJsonObject("resource") {
+        put("_tag", "attachment")
+        put("attachmentId", attachmentId)
+      }
+    }
+    val relative: String = (call("assets.createUrl", payload) as? JsonObject)
+      ?.string("relativeUrl")
+      ?: throw T3Exception.Transport("No URL for attachment $attachmentId")
+    return send(asset(relative).GET().build(), relative)
+  }
+
   override suspend fun dispatch(command: OrchestrationV2Command): Long {
     val payload: JsonElement =
       T3JsonOut.encodeToJsonElement(OrchestrationV2Command.serializer(), command)

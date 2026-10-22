@@ -9,6 +9,7 @@ import io.github.xxfast.t3code.plugin.ui.answersResponse
 import io.github.xxfast.t3code.plugin.ui.derivePendingThreadRequests
 import io.github.xxfast.t3code.plugin.ui.dismissal
 import io.github.xxfast.t3code.plugin.ui.instance
+import io.github.xxfast.t3code.plugin.ui.isImageAttachment
 import io.github.xxfast.t3code.plugin.ui.settled
 import io.github.xxfast.t3code.plugin.ui.nextModelSelection
 import io.github.xxfast.t3code.plugin.ui.setThreadInteractionMode
@@ -345,6 +346,29 @@ class FixtureClientTest {
       client.upload(minted.relativeUrl, "image/png", ByteArray(10))
     }.exceptionOrNull()
     assertTrue(refused?.message.orEmpty().contains("404"))
+  }
+
+  @Test
+  fun `attachments come from the scenario folder or this session's uploads`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val shot: ByteArray = default.resolve("attachments/att_fixture_screenshot.png").readBytes()
+    assertContentEquals(shot, client.attachment("att_fixture_screenshot"))
+
+    val minted = client.createUploadUrl(image(3))
+    client.upload(minted.relativeUrl, "image/png", byteArrayOf(1, 2, 3))
+    assertContentEquals(byteArrayOf(1, 2, 3), client.attachment(minted.attachmentId))
+
+    val missing = runCatching { client.attachment("att_nope") }.exceptionOrNull()
+    assertIs<T3Exception.Transport>(missing)
+  }
+
+  @Test
+  fun `the running demo's prompt carries a picture and a file`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val running: ThreadView =
+      client.thread(THREAD).first { view -> view.items.any { it is TurnItem.UserMessage } }
+    val prompt = running.items.filterIsInstance<TurnItem.UserMessage>().first()
+    assertEquals(listOf(true, false), prompt.attachments.map(::isImageAttachment))
   }
 
   private fun image(size: Int) = AttachmentCreateUploadUrlInput.Image(

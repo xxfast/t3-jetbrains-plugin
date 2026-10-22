@@ -10,6 +10,7 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import io.github.xxfast.t3code.plugin.ide.launchReporting
 import io.github.xxfast.t3code.plugin.ui.AttachmentClass
+import io.github.xxfast.t3code.plugin.ui.AttachmentKind
 import io.github.xxfast.t3code.plugin.ui.COMPACT_COMMAND
 import io.github.xxfast.t3code.plugin.ui.ComposerDispatchMode
 import io.github.xxfast.t3code.plugin.ui.DraftAttachment
@@ -138,7 +139,8 @@ class ChatController(private val project: Project, private val scope: CoroutineS
   val extras: StateFlow<Map<String, DraftExtras>> = _extras
 
   /**
-   * One attachment's upload, by local id: the bytes until they're up, the job moving them, and
+   * One attachment's upload, by local id: the bytes until they're up (an image's for as long as
+   * it's in the draft), the job moving them, and
    * the id the server minted, so removing the chip can stop the job and release the id.
    */
   private class Transfer(@Volatile var bytes: ByteArray?) {
@@ -213,6 +215,8 @@ class ChatController(private val project: Project, private val scope: CoroutineS
       kind = accepted.kind,
       mimeType = accepted.mimeType,
       sizeBytes = bytes.size.toLong(),
+      // Upstream's `previewUrl`, an object URL over the local file (`ChatComposer.tsx:5558`)
+      preview = if (accepted.kind == AttachmentKind.IMAGE) decodePreview(bytes) else null,
     )
     // Before the chip shows, so a remove as fast as the eye can't miss it
     transfers[attachment.id] = Transfer(bytes)
@@ -259,6 +263,19 @@ class ChatController(private val project: Project, private val scope: CoroutineS
     transfer.minted = null
     updateExtras(threadId) { extras -> extras.retrying(id) }
     upload(threadId, attachment)
+  }
+
+  /**
+   * A draft image's full bytes in the IDE's image viewer, the composer tile's click
+   * (`buildExpandedImagePreview`, `ChatComposer.tsx:6810`).
+   */
+  fun openAttachment(threadId: String, id: String) {
+    val attachment: DraftAttachment =
+      extrasOf(threadId).attachments.find { it.id == id } ?: return
+    val bytes: ByteArray = transfers[id]?.bytes ?: return
+    scope.launchReporting(project, "Couldn't open ${attachment.name}") {
+      openImage(project, id, attachment.name, attachment.mimeType, bytes)
+    }
   }
 
   /** Drops the chip, stops its upload and releases what the server minted for it. */
@@ -310,7 +327,8 @@ class ChatController(private val project: Project, private val scope: CoroutineS
         updateExtras(threadId) { it.uploadFailed(attachment.id, reason) }
         return@launch
       }
-      transfer.bytes = null
+      // An image keeps its bytes for the tile's click, see [openAttachment]
+      if (attachment.kind != AttachmentKind.IMAGE) transfer.bytes = null
       val uploaded: ChatAttachment = uploadedAttachment(attachment, minted.attachmentId)
       updateExtras(threadId) { it.uploaded(attachment.id, uploaded) }
     }

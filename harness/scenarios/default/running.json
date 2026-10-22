@@ -228,7 +228,22 @@
         "createdBy": "user",
         "creationSource": "web",
         "inputIntent": "turn_start",
-        "attachments": [],
+        "attachments": [
+          {
+            "type": "image",
+            "id": "att_fixture_screenshot",
+            "name": "screenshot.png",
+            "mimeType": "image/png",
+            "sizeBytes": 1678
+          },
+          {
+            "type": "file",
+            "id": "att_fixture_build_log",
+            "name": "build.log",
+            "mimeType": "text/plain",
+            "sizeBytes": 4210
+          }
+        ],
         "text": "Bump kotlinx-io to 0.8 and fix whatever breaks in :kstore-file.",
         "startedAt": "2026-10-19T08:30:12.000Z",
         "completedAt": "2026-10-19T08:30:12.000Z",

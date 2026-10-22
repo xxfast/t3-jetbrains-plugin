@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import androidx.compose.ui.graphics.ImageBitmap
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.ChatAttachment
 import io.github.xxfast.t3code.protocol.generated.ChatFileAttachment
@@ -146,7 +147,10 @@ sealed interface Upload {
   data class Failed(val reason: String) : Upload
 }
 
-/** One attachment in a thread's draft. [id] is local; the server's id is in [Upload.Ready]. */
+/**
+ * One attachment in a thread's draft. [id] is local; the server's id is in [Upload.Ready].
+ * [preview] is an image's thumbnail, decoded from the local bytes, upstream's `previewUrl`.
+ */
 data class DraftAttachment(
   val id: String,
   val name: String,
@@ -154,6 +158,7 @@ data class DraftAttachment(
   val mimeType: String,
   val sizeBytes: Long,
   val upload: Upload = Upload.Uploading,
+  val preview: ImageBitmap? = null,
 )
 
 /** What `attachments.createUploadUrl` takes for [attachment]. */
@@ -208,4 +213,60 @@ fun attachmentBlockReason(attachments: List<DraftAttachment>): String? {
     return if (uploading == 1) "Attachment still uploading" else "Attachments still uploading"
   }
   return null
+}
+
+/** `GENERIC_MIME_TYPES`, packages/shared/src/image.ts:16. */
+private val GENERIC_MIME_TYPES: Set<String> =
+  setOf("application/octet-stream", "binary/octet-stream", "application/unknown")
+
+/**
+ * `imageMimeType`, packages/shared/src/image.ts:22: the picture type an attachment is, or null.
+ * A definite type answers; the name is only evidence when the type is empty or generic.
+ */
+fun imageMimeType(name: String, mimeType: String): String? {
+  val type: String = mimeType.substringBefore(';').trim().lowercase()
+  if (type in SUPPORTED_IMAGE_MIME_TYPES) return type
+  if (type.startsWith("image/")) return null
+  if (type.isNotEmpty() && type !in GENERIC_MIME_TYPES) return null
+  val dot: Int = name.lastIndexOf('.')
+  if (dot < 0) return null
+  return IMAGE_MIME_TYPE_BY_EXTENSION[name.substring(dot + 1).trim().lowercase()]
+}
+
+/**
+ * `isImageAttachment`, apps/web/src/types.ts:64: an `image`, or a legacy `file` that carries a
+ * picture. A type this build doesn't know is never a picture, whatever its name says.
+ */
+fun isImageAttachment(attachment: ChatAttachment): Boolean =
+  attachment.type == "image" ||
+    (attachment.type == "file" && imageMimeType(attachment.name, attachment.mimeType) != null)
+
+/**
+ * The longest side a decoded preview keeps. Upstream's message grid is 210px wide in two columns
+ * (`MessagesTimeline.tsx:2344`) and the composer's tiles 64px (`ChatComposer.tsx:6800`), so this
+ * is a grid tile on a 2x display with room to spare. The full image opens in the IDE instead.
+ */
+const val PREVIEW_MAX_SIDE: Int = 512
+
+/** [name] with the characters a file name can't carry on any OS replaced, never empty. */
+fun safeFileName(name: String): String =
+  name.replace(Regex("""[\\/:*?"<>|\u0000-\u001f]"""), "_").trim().ifEmpty { "attachment" }
+
+/**
+ * [name] as a file the IDE's image viewer opens: safe on disk, with an image extension. A name
+ * without one, a pasted `image` say, gets its type's (`image/jpeg` is `.jpeg`).
+ */
+fun imageFileName(name: String, mimeType: String): String {
+  val safe: String = safeFileName(name)
+  if (inferImageMimeTypeFromName(safe) != null) return safe
+  val type: String = imageMimeType(safe, mimeType) ?: "image/png"
+  return "$safe.${type.substringAfter('/')}"
+}
+
+/** [width] by [height] scaled down to fit [maxSide], never up and never below a pixel. */
+fun previewSize(width: Int, height: Int, maxSide: Int = PREVIEW_MAX_SIDE): Pair<Int, Int> {
+  val longest: Int = maxOf(width, height)
+  if (longest <= maxSide) return width to height
+  val scale: Double = maxSide.toDouble() / longest
+  return maxOf(1, (width * scale).toInt()) to maxOf(1, (height * scale).toInt())
 }

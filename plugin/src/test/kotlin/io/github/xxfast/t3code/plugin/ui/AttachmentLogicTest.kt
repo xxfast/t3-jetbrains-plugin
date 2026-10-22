@@ -1,12 +1,16 @@
 package io.github.xxfast.t3code.plugin.ui
 
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
+import io.github.xxfast.t3code.protocol.generated.ChatAttachment
 import io.github.xxfast.t3code.protocol.generated.ChatFileAttachment
 import io.github.xxfast.t3code.protocol.generated.ChatImageAttachment
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlinx.serialization.json.JsonObject
 
 class AttachmentLogicTest {
   @Test
@@ -132,6 +136,55 @@ internal fun draft(
   sizeBytes = size,
   upload = upload,
 )
+
+class ImageAttachmentTest {
+  @Test
+  fun imageMimeTypeTrustsADefiniteTypeOverTheName() {
+    assertEquals("image/png", imageMimeType("a.png", "image/png"))
+    assertEquals("image/jpeg", imageMimeType("a", "IMAGE/JPEG; charset=binary"))
+    assertNull(imageMimeType("a.png", "image/svg+xml"), "An image type the provider can't take")
+    assertNull(imageMimeType("a.png", "application/pdf"), "A .png on a PDF isn't a picture")
+    assertEquals("image/webp", imageMimeType("a.WEBP", "application/octet-stream"))
+    assertEquals("image/gif", imageMimeType("a.gif", ""))
+    assertNull(imageMimeType("png", ""), "No extension, no evidence")
+  }
+
+  @Test
+  fun imagesAndLegacyPictureFilesAreImages() {
+    fun file(name: String, mimeType: String): ChatAttachment =
+      ChatFileAttachment(id = "f", name = name, mimeType = mimeType, sizeBytes = 1)
+    val image = ChatImageAttachment(id = "i", name = "x", mimeType = "", sizeBytes = 1)
+    assertTrue(isImageAttachment(image), "The type says so, whatever the rest")
+    assertTrue(isImageAttachment(file("shot.png", "application/octet-stream")))
+    assertFalse(isImageAttachment(file("notes.txt", "text/plain")))
+    val unknown: ChatAttachment = ChatAttachment.Unknown(
+      type = "video",
+      id = "v",
+      name = "clip.png",
+      mimeType = "image/png",
+      sizeBytes = 1,
+      raw = JsonObject(emptyMap()),
+    )
+    assertFalse(isImageAttachment(unknown), "A type this build doesn't know is never a picture")
+  }
+
+  @Test
+  fun previewsShrinkToFitAndNeverGrow() {
+    assertEquals(512 to 320, previewSize(1920, 1200))
+    assertEquals(256 to 512, previewSize(1000, 2000))
+    assertEquals(64 to 48, previewSize(64, 48))
+    assertEquals(512 to 1, previewSize(10_000, 1))
+  }
+
+  @Test
+  fun openedImagesGetASafeNameWithAnImageExtension() {
+    assertEquals("shot.png", imageFileName("shot.png", "image/png"))
+    assertEquals("image.png", imageFileName("image", "image/png"))
+    assertEquals("photo.jpeg", imageFileName("photo", "image/jpeg"))
+    assertEquals("a_b.png", imageFileName("a/b.png", "image/png"))
+    assertEquals("attachment", safeFileName("  "))
+  }
+}
 
 internal fun ready(name: String): Upload.Ready = Upload.Ready(
   ChatFileAttachment(id = "att_$name", name = name, mimeType = "text/plain", sizeBytes = 1),

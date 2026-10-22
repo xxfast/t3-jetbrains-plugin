@@ -272,6 +272,12 @@ class WebSocketT3ClientTest {
     assertEquals("# hi", client.readFile("/repo", "README.md").contents)
     assertFailsWith<T3Exception.ScopeRequired> { client.turnDiff("thread-1", 0, 1) }
     assertFailsWith<T3Exception.ScopeRequired> { client.projectFavicon("/repo", null) }
+    assertFailsWith<T3Exception.ScopeRequired> { client.attachment("att_1") }
+    val payload: JsonObject = rpc.requests("assets.createUrl").last()["payload"]!!.jsonObject
+    assertEquals(
+      """{"resource":{"_tag":"attachment","attachmentId":"att_1"}}""",
+      payload.toString(),
+    )
   }
 
   @Test

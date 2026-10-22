@@ -2,6 +2,7 @@ package io.github.xxfast.t3code.plugin
 
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.MutableState
@@ -47,6 +48,8 @@ import io.github.xxfast.t3code.plugin.ui.ComposerFooterState
 import io.github.xxfast.t3code.plugin.ui.ComposerState
 import io.github.xxfast.t3code.plugin.ui.ContextWindowSnapshot
 import io.github.xxfast.t3code.plugin.ui.DraftExtras
+import io.github.xxfast.t3code.plugin.ui.LocalMessageImages
+import io.github.xxfast.t3code.plugin.ui.MessageImageState
 import io.github.xxfast.t3code.plugin.ui.BranchSelectionTarget
 import io.github.xxfast.t3code.plugin.ui.EnvMode
 import io.github.xxfast.t3code.plugin.ui.canChangeThreadBranch
@@ -207,83 +210,101 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
     rememberComposerFooter(project, view, pending, connection, controller, cwd, vcs, setup)
   val contextWindow: ComposerContextWindow =
     rememberContextWindow(view, footer, composer, connection, controller)
-  ChatView(
-    view = shown,
-    error = load.error,
-    project = projects.find { it.id == projectId },
-    favicon = favicons[projectId],
-    composer = composer,
-    draft = draft,
-    pending = request,
-    pendingActions = actions,
-    footer = footer,
-    footerActions = footerActions,
-    onClearReview = { comments.forEach { controller.removeContext(threadId, it.contextId) } },
-    onRollback = { run ->
-      view?.let { current -> confirmRollback(project, controller, current, run) { latest } }
-    },
-    onSend = onSend@{ text, mode ->
-      val current: ThreadView = view ?: return@onSend
-      // `compactBeforeSend`, ChatView.tsx:6370: a `/compact` of its own doesn't compact twice
-      val compactFirst: Boolean = contextWindow.compactBeforeSendTokens != null &&
-        !contextWindow.keepFullHistory &&
-        text.lowercase() != COMPACT_COMMAND
-      // `shouldCreateWorktree`, ChatView.tsx:6324: the first message in New worktree mode
-      // goes out as a launch, and refuses without a base branch
-      val workspace: WorkspaceControlState? = footer?.workspace
-      val sendEnvMode: EnvMode =
-        resolveSendEnvMode(workspace?.envMode ?: EnvMode.LOCAL, isGitRepo = workspace != null)
-      val worktree: ChatController.WorktreeLaunch? =
-        if (workspace != null && footer != null && shouldCreateWorktree(current, sendEnvMode)) {
-          val base: String = workspace.baseBranch
-            ?: return@onSend controller.blocked(current.thread.id, SELECT_BASE_BRANCH_ERROR)
-          ChatController.WorktreeLaunch(
-            baseBranch = base,
-            startFromOrigin = workspace.startFromOrigin,
-            runtimeMode = footer.runtimeMode,
-            interactionMode = footer.interactionMode,
-          )
+  val images: AttachmentImages = AttachmentImages.get()
+  val previews: Map<String, ImageBitmap> by images.previews.collectAsState()
+  val imageState: MessageImageState = remember(previews, project) {
+    MessageImageState(
+      previews = previews,
+      onShown = images::ensure,
+      onOpen = { attachment -> images.open(project, attachment) },
+    )
+  }
+  // The timeline's sent images, read by the user message row only
+  CompositionLocalProvider(LocalMessageImages provides imageState) {
+    ChatView(
+      view = shown,
+      error = load.error,
+      project = projects.find { it.id == projectId },
+      favicon = favicons[projectId],
+      composer = composer,
+      draft = draft,
+      pending = request,
+      pendingActions = actions,
+      footer = footer,
+      footerActions = footerActions,
+      onClearReview = { comments.forEach { controller.removeContext(threadId, it.contextId) } },
+      onRollback = { run ->
+        view?.let { current -> confirmRollback(project, controller, current, run) { latest } }
+      },
+      onSend = onSend@{ text, mode ->
+        val current: ThreadView = view ?: return@onSend
+        // `compactBeforeSend`, ChatView.tsx:6370: a `/compact` of its own doesn't compact twice
+        val compactFirst: Boolean = contextWindow.compactBeforeSendTokens != null &&
+          !contextWindow.keepFullHistory &&
+          text.lowercase() != COMPACT_COMMAND
+        // `shouldCreateWorktree`, ChatView.tsx:6324: the first message in New worktree mode
+        // goes out as a launch, and refuses without a base branch
+        val workspace: WorkspaceControlState? = footer?.workspace
+        val sendEnvMode: EnvMode =
+          resolveSendEnvMode(workspace?.envMode ?: EnvMode.LOCAL, isGitRepo = workspace != null)
+        val worktree: ChatController.WorktreeLaunch? =
+          if (workspace != null && footer != null && shouldCreateWorktree(current, sendEnvMode)) {
+            val base: String = workspace.baseBranch
+              ?: return@onSend controller.blocked(current.thread.id, SELECT_BASE_BRANCH_ERROR)
+            ChatController.WorktreeLaunch(
+              baseBranch = base,
+              startFromOrigin = workspace.startFromOrigin,
+              runtimeMode = footer.runtimeMode,
+              interactionMode = footer.interactionMode,
+            )
+          } else {
+            null
+          }
+        // In local mode a picked branch lands on the row with the send
+        val nextBranch: String? =
+          if (worktree == null && workspace != null) pending.workspace.branch else null
+        controller.send(current, text, mode, compactFirst, worktree, nextBranch)
+      },
+      onInterrupt = {
+        view?.let { current ->
+          interruptCommand(current, UUID.randomUUID().toString())
+            ?.let { command -> controller.dispatchForThread(current, command) }
+        }
+      },
+      onRetry = onRetry,
+      onOpenFile = { path -> view?.let { opener.openFile(it, path) } },
+      onDiffFile = { change -> view?.let { opener.showDiff(it, change) } },
+      onDiffRun = { run -> view?.let { opener.showRunDiff(it, run) } },
+      vcs = vcs,
+      // Upstream's `ChatHeader`: the thread action menu from the title, rename on double-click,
+      // a new thread from the project. Each only with the operate scope, as `canOperateThread`
+      header = ChatHeaderActions(
+        onOpenMenu = { x, y -> showThreadMenu(project, threadId, x, y, view = latest) },
+        onRename = if (operable) {
+          { performThreadAction(project, threadId, RENAME_ACTION, fromSidebar = false) }
         } else {
           null
-        }
-      // In local mode a picked branch lands on the row with the send
-      val nextBranch: String? =
-        if (worktree == null && workspace != null) pending.workspace.branch else null
-      controller.send(current, text, mode, compactFirst, worktree, nextBranch)
-    },
-    onInterrupt = {
-      view?.let { current ->
-        interruptCommand(current, UUID.randomUUID().toString())
-          ?.let { command -> controller.dispatchForThread(current, command) }
-      }
-    },
-    onRetry = onRetry,
-    onOpenFile = { path -> view?.let { opener.openFile(it, path) } },
-    onDiffFile = { change -> view?.let { opener.showDiff(it, change) } },
-    onDiffRun = { run -> view?.let { opener.showRunDiff(it, run) } },
-    vcs = vcs,
-    // Upstream's `ChatHeader`: the thread action menu from the title, rename on double-click,
-    // a new thread from the project. Each only with the operate scope, as `canOperateThread`
-    header = ChatHeaderActions(
-      onOpenMenu = { x, y -> showThreadMenu(project, threadId, x, y, view = latest) },
-      onRename = if (operable) {
-        { performThreadAction(project, threadId, RENAME_ACTION, fromSidebar = false) }
-      } else {
-        null
+        },
+        onNewThreadInProject = if (operable) {
+          {
+            view?.let { current ->
+              NewThread.getInstance(project).start(current.thread.projectId)
+            }
+          }
+        } else {
+          null
+        },
+      ),
+      extras = extras[threadId] ?: DraftExtras(),
+      attachmentActions = rememberAttachmentActions(project, threadId, controller),
+      contextWindow = contextWindow,
+      worktreeSetup = setup.visible,
+      onCancelWorktreeSetup = { controller.cancelWorktreeSetup(threadId) },
+      onOpenSetupTerminal = { terminalId ->
+        ThreadTerminals.getInstance(project).open(threadId, terminalId)
       },
-      onNewThreadInProject = if (operable) {
-        { view?.let { current -> NewThread.getInstance(project).start(current.thread.projectId) } }
-      } else {
-        null
-      },
-    ),
-    extras = extras[threadId] ?: DraftExtras(),
-    attachmentActions = rememberAttachmentActions(project, threadId, controller),
-    contextWindow = contextWindow,
-    worktreeSetup = setup.visible,
-    onCancelWorktreeSetup = { controller.cancelWorktreeSetup(threadId) },
-    onOpenSetupTerminal = { terminalId -> ThreadTerminals.getInstance(project).open(threadId, terminalId) },
-  )
+    )
+  }
 }
 
 /** What [rememberWorktreeSetup] works out for the thread on screen. */

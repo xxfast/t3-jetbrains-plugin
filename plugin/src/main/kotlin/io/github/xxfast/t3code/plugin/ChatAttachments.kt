@@ -21,6 +21,7 @@ fun rememberAttachmentActions(
     },
     onRemoveAttachment = { id -> controller.removeAttachment(threadId, id) },
     onRetryAttachment = { id -> controller.retryAttachment(threadId, id) },
+    onOpenAttachment = { id -> controller.openAttachment(threadId, id) },
     onRemoveContext = { contextId -> controller.removeContext(threadId, contextId) },
     onRefused = { reason -> controller.refuse(threadId, reason) },
   )
