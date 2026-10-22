@@ -40,8 +40,12 @@ private val ACTIVE_RUN_STATUSES: Set<String> = setOf("preparing", "starting", "r
 fun resolveActiveThreadRun(runs: List<Run>): Run? =
   runs.lastOrNull { run -> run.status in ACTIVE_RUN_STATUSES }
 
-/** `resolveThreadProviderSession`, threadWorkflows.ts:65, the stopped and errored fallback too. */
-private fun resolveThreadProviderSession(view: ThreadView): ProviderSession? {
+/**
+ * `resolveThreadProviderSession`, threadWorkflows.ts:65, the stopped and errored fallback too.
+ * Upstream keeps it private to the file; here the queue, the model picker and the Lineage's
+ * detach (`canDetachThreadProviderSession`) share this one.
+ */
+fun resolveThreadProviderSession(view: ThreadView): ProviderSession? {
   val activeRun: Run? = resolveActiveThreadRun(view.runs)
   val providerThreadId: String? =
     activeRun?.providerThreadId ?: view.thread.activeProviderThreadId

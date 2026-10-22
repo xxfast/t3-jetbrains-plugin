@@ -136,6 +136,26 @@ class WebSocketT3ClientTest {
   }
 
   @Test
+  fun threadFlowUpsertsSubagentsAndContextTransfers() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+    val views: List<ThreadView> = client.thread("thread-1").take(9).toList()
+
+    assertEquals(emptyList(), views[5].subagents)
+    assertEquals(emptyList(), views[5].contextTransfers)
+    val started: Subagent = views[6].subagents.single()
+    assertEquals("subagent-1", started.id)
+    assertEquals("running", started.status)
+    val finished: Subagent = views[7].subagents.single()
+    assertEquals("completed", finished.status, "The same subagent, updated in place")
+    assertEquals("thread-child-1", finished.childThreadId)
+    val transfer: ContextTransfer = views[8].contextTransfers.single()
+    assertEquals("thread-2", transfer.targetThreadId)
+    assertEquals(views[7].subagents, views[8].subagents)
+    assertEquals(107L, views[8].sequence)
+  }
+
+  @Test
   fun aDieOnALiveSocketFailsTheFlowInsteadOfHanging() = realTimeTest {
     val client: WebSocketT3Client = client()
     client.connect()

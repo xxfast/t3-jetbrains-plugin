@@ -212,6 +212,8 @@ class FixtureClient(
       providerThreads = scenario.providerThreads[thread.id].orEmpty(),
       providerTurns = scenario.providerTurns[thread.id].orEmpty(),
       messages = scenario.messages[thread.id].orEmpty(),
+      subagents = scenario.subagents[thread.id].orEmpty(),
+      contextTransfers = scenario.contextTransfers[thread.id].orEmpty(),
     )
     emit(view())
     entries.drop(snapshot).forEach { entry ->

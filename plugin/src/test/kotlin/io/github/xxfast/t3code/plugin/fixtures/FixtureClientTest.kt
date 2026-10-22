@@ -128,12 +128,12 @@ class FixtureClientTest {
     val scenario: Scenario = Scenario.merge(parts)
     val connected: ConnectionState.Connected = assertIs(scenario.connection)
     assertTrue(connected.session.has("orchestration:operate"), "Thread actions work in default")
-    assertEquals(28, scenario.threads.size)
+    assertEquals(42, scenario.threads.size)
     val demos: Set<String> = scenario.threads
       .filter { it.title.startsWith("Demo: ") }
       .map { it.id }
       .toSet()
-    assertEquals(setOf(THREAD, WAITING, QUESTION, UNKNOWN, MANY, WORKTREE, QUEUED), demos)
+    assertEquals(setOf(THREAD, WAITING, QUESTION, UNKNOWN, MANY, WORKTREE, QUEUED, LINEAGE), demos)
   }
 
   @Test
@@ -903,6 +903,7 @@ class FixtureClientTest {
     const val IDLE = "thr_01JC3QX81VIDLE001"
     const val WORKTREE = "thr_01JC5W0RKTREE001"
     const val QUEUED = "thr_01JC4C3Q8UQUEUED1"
+    const val LINEAGE = "thr_01JC5L1N1LINEAG1"
     const val PINNED = "thr_01JC4B2W5RROUTER1"
     const val SETTLED = "thr_01JC1A2B3CSETTLE01"
     const val RUN = "run_fixture_m1"

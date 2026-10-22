@@ -1,0 +1,99 @@
+{
+  "_tag": "Chunk",
+  "requestId": "0",
+  "values": [
+    {
+      "kind": "event",
+      "sequence": 105,
+      "event": {
+        "id": "event-105",
+        "threadId": "thread-1",
+        "runId": "run-1",
+        "occurredAt": "2026-10-19T06:00:09.000Z",
+        "type": "subagent.updated",
+        "payload": {
+          "id": "subagent-1",
+          "threadId": "thread-1",
+          "runId": "run-1",
+          "parentNodeId": "node-1",
+          "origin": "app_owned",
+          "createdBy": "agent",
+          "driver": "codex",
+          "providerInstanceId": "codex",
+          "providerThreadId": null,
+          "childThreadId": "thread-child-1",
+          "nativeTaskRef": null,
+          "prompt": "Read the docs",
+          "title": "Docs reader",
+          "model": "gpt-5",
+          "status": "running",
+          "result": null,
+          "startedAt": "2026-10-19T06:00:09.000Z",
+          "completedAt": null,
+          "updatedAt": "2026-10-19T06:00:09.000Z"
+        }
+      }
+    },
+    {
+      "kind": "event",
+      "sequence": 106,
+      "event": {
+        "id": "event-106",
+        "threadId": "thread-1",
+        "runId": "run-1",
+        "occurredAt": "2026-10-19T06:00:30.000Z",
+        "type": "subagent.updated",
+        "payload": {
+          "id": "subagent-1",
+          "threadId": "thread-1",
+          "runId": "run-1",
+          "parentNodeId": "node-1",
+          "origin": "app_owned",
+          "createdBy": "agent",
+          "driver": "codex",
+          "providerInstanceId": "codex",
+          "providerThreadId": null,
+          "childThreadId": "thread-child-1",
+          "nativeTaskRef": null,
+          "prompt": "Read the docs",
+          "title": "Docs reader",
+          "model": "gpt-5",
+          "status": "completed",
+          "result": "Done",
+          "startedAt": "2026-10-19T06:00:09.000Z",
+          "completedAt": "2026-10-19T06:00:30.000Z",
+          "updatedAt": "2026-10-19T06:00:30.000Z"
+        }
+      }
+    },
+    {
+      "kind": "event",
+      "sequence": 107,
+      "event": {
+        "id": "event-107",
+        "threadId": "thread-1",
+        "runId": null,
+        "occurredAt": "2026-10-19T06:00:31.000Z",
+        "type": "context-transfer.created",
+        "payload": {
+          "id": "transfer-1",
+          "type": "fork",
+          "sourceThreadId": "thread-1",
+          "targetThreadId": "thread-2",
+          "sourcePoint": { "threadId": "thread-1", "runId": "run-1" },
+          "basePoint": null,
+          "sourceProviderInstanceId": "codex",
+          "targetProviderInstanceId": "codex",
+          "targetRunId": null,
+          "status": "pending",
+          "resolution": null,
+          "createdBy": "user",
+          "error": null,
+          "createdAt": "2026-10-19T06:00:31.000Z",
+          "updatedAt": "2026-10-19T06:00:31.000Z",
+          "consumedAt": null
+        }
+      }
+    }
+  ]
+}

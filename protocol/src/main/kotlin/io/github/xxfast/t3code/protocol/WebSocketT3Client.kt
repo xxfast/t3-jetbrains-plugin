@@ -476,6 +476,9 @@ public class WebSocketT3Client internal constructor(
         providerThreads = decodeEach(ProviderThread.serializer(), projection["providerThreads"]),
         providerTurns = decodeEach(ProviderTurn.serializer(), projection["providerTurns"]),
         messages = decodeEach(ConversationMessage.serializer(), projection["messages"]),
+        subagents = decodeEach(Subagent.serializer(), projection["subagents"]),
+        contextTransfers =
+          decodeEach(ContextTransfer.serializer(), projection["contextTransfers"]),
         sequence = maxOf(view?.sequence ?: 0, item.long("snapshotSequence") ?: 0),
       )
     }
@@ -523,6 +526,16 @@ public class WebSocketT3Client internal constructor(
       type == "message.updated" -> decodeOrNull(ConversationMessage.serializer(), payload)
         ?.let { message ->
           view.copy(messages = view.messages.upsert(message, ConversationMessage::id))
+        }
+
+      type == "subagent.updated" -> decodeOrNull(Subagent.serializer(), payload)
+        ?.let { subagent -> view.copy(subagents = view.subagents.upsert(subagent, Subagent::id)) }
+
+      type == "context-transfer.created" || type == "context-transfer.updated" ->
+        decodeOrNull(ContextTransfer.serializer(), payload)?.let { transfer ->
+          view.copy(
+            contextTransfers = view.contextTransfers.upsert(transfer, ContextTransfer::id),
+          )
         }
 
       type == "checkpoint.captured" -> decodeOrNull(Checkpoint.serializer(), payload)

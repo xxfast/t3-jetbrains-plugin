@@ -133,6 +133,7 @@ class FakeRpcServer : WebSocketServer(InetSocketAddress("127.0.0.1", 0)), AutoCl
           "message-and-provider-thread-updated-event.json",
           // A resubscription's snapshot, older than the events before it
           "thread-snapshot-chunk.json",
+          "subagent-and-context-transfer-updated-event.json",
         )
 
         "terminal.attach", "terminal.observe" ->

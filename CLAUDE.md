@@ -53,6 +53,8 @@ How it fits together:
   `unread.json`, `snoozed.json` with one sleeping and one woken, `worktree-setup.json` with a
   first turn whose worktree is still being prepared, `skills.json` with provider skills and a
   workspace snapshot for the `$` menu, `files.json` with the files and folders `@` searches,
+  `lineage.json` with a fork that has a parent, a fork of its own, running, finished and failed
+  subagents and context transfers for T3 Thread Details (its fork merges back),
   `pull-requests.json` with KStore's pull requests for `#`, listed and older ones only
   `pullRequests.detail` finds; KStore has a repository identity, Decompose-Router doesn't, so
   its `#` says pull requests aren't available), and its `connection.json` grants the

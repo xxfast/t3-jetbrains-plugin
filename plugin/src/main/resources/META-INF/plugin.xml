@@ -31,6 +31,12 @@
       anchor="right"
       doNotActivateOnStart="true"
       factoryClass="io.github.xxfast.t3code.plugin.ChatViewToolWindowFactory"/>
+    <toolWindow
+      id="T3 Thread Details"
+      anchor="right"
+      doNotActivateOnStart="true"
+      icon="AllIcons.Toolwindows.ToolWindowHierarchy"
+      factoryClass="io.github.xxfast.t3code.plugin.ThreadDetailsToolWindowFactory"/>
     <fileEditorProvider
       implementation="io.github.xxfast.t3code.plugin.ide.ThreadFileEditorProvider"/>
     <applicationConfigurable

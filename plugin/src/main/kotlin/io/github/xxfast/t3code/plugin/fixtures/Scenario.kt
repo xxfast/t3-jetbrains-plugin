@@ -2,6 +2,7 @@ package io.github.xxfast.t3code.plugin.fixtures
 
 import io.github.xxfast.t3code.protocol.Checkpoint
 import io.github.xxfast.t3code.protocol.ConnectionState
+import io.github.xxfast.t3code.protocol.ContextTransfer
 import io.github.xxfast.t3code.protocol.ConversationMessage
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.ProviderSession
@@ -10,6 +11,7 @@ import io.github.xxfast.t3code.protocol.ProviderTurn
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ServerSession
+import io.github.xxfast.t3code.protocol.Subagent
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.generated.ProjectEntry
@@ -48,6 +50,10 @@ class ScenarioFile(
   val messages: Map<String, List<ConversationMessage>> = emptyMap(),
   /** The projection's provider turns per thread, what says a run can be steered. */
   val providerTurns: Map<String, List<ProviderTurn>> = emptyMap(),
+  /** The projection's subagents per thread, what its Lineage lists. */
+  val subagents: Map<String, List<Subagent>> = emptyMap(),
+  /** The projection's context transfers per thread. */
+  val contextTransfers: Map<String, List<ContextTransfer>> = emptyMap(),
   /** Files and folders `projects.searchEntries` searches, relative to any cwd. */
   val projectEntries: List<ProjectEntry> = emptyList(),
   /** Pull requests `pullRequests.list` answers with. */
@@ -87,6 +93,8 @@ class Scenario(
   val providerWorkspaceSnapshots: Map<String, List<ServerProviderWorkspaceSnapshot>> = emptyMap(),
   val messages: Map<String, List<ConversationMessage>> = emptyMap(),
   val providerTurns: Map<String, List<ProviderTurn>> = emptyMap(),
+  val subagents: Map<String, List<Subagent>> = emptyMap(),
+  val contextTransfers: Map<String, List<ContextTransfer>> = emptyMap(),
   val projectEntries: List<ProjectEntry> = emptyList(),
   val pullRequests: List<PullRequestListEntry> = emptyList(),
   val olderPullRequests: List<PullRequestListEntry> = emptyList(),
@@ -110,6 +118,8 @@ class Scenario(
         providerWorkspaceSnapshots = file.providerWorkspaceSnapshots,
         messages = file.messages,
         providerTurns = file.providerTurns,
+        subagents = file.subagents,
+        contextTransfers = file.contextTransfers,
         projectEntries = file.projectEntries,
         pullRequests = file.pullRequests,
         olderPullRequests = file.olderPullRequests,
@@ -140,6 +150,8 @@ class Scenario(
         parts.map { it.providerWorkspaceSnapshots }.fold(emptyMap(), ::append),
       messages = parts.map { it.messages }.fold(emptyMap(), ::append),
       providerTurns = parts.map { it.providerTurns }.fold(emptyMap(), ::append),
+      subagents = parts.map { it.subagents }.fold(emptyMap(), ::append),
+      contextTransfers = parts.map { it.contextTransfers }.fold(emptyMap(), ::append),
       projectEntries = parts.flatMap { it.projectEntries }.distinctBy { it.path },
       pullRequests = parts.flatMap { it.pullRequests }.distinctBy { it.url },
       olderPullRequests = parts.flatMap { it.olderPullRequests }.distinctBy { it.url },

@@ -1,7 +1,6 @@
 package io.github.xxfast.t3code.plugin.ui
 
 import io.github.xxfast.t3code.protocol.ProviderSession
-import io.github.xxfast.t3code.protocol.ProviderThread
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.ModelCapabilities
@@ -288,19 +287,6 @@ fun threadSupportsProviderHandoff(view: ThreadView): Boolean {
       thread.providerInstanceId == view.thread.modelSelection.instance &&
       thread.nativeThreadRef != null
   }
-}
-
-/** `resolveThreadProviderSession`, `threadWorkflows.ts:65`. */
-private fun resolveThreadProviderSession(view: ThreadView): ProviderSession? {
-  val providerThreadId: String? =
-    activeRun(view.runs)?.providerThreadId ?: view.thread.activeProviderThreadId
-  val active: ProviderThread? =
-    providerThreadId?.let { id -> view.providerThreads.find { it.id == id } }
-  val attached: ProviderThread? = active ?: view.providerThreads.find { thread ->
-    thread.appThreadId == view.thread.id && thread.providerSessionId != null
-  }
-  val sessionId: String = attached?.providerSessionId ?: return null
-  return view.providerSessions.find { it.id == sessionId }
 }
 
 /** `setThreadRuntimeMode`, `packages/client-runtime/src/operations/commands.ts:598`. */

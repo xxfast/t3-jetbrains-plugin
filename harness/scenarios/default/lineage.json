@@ -1,0 +1,896 @@
+{
+  "threads": [
+    {
+      "id": "thr_01JC5L1N0PARENT1",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Plan the KStore 1.0 release",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC5L1N0PARENT1"
+      },
+      "status": "idle",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T07:00:00.000Z",
+      "updatedAt": "2026-10-21T07:00:00.000Z",
+      "latestRunId": "run_01JC5L1R0PARENT",
+      "latestRunCompletedAt": "2026-10-21T07:20:00.000Z"
+    },
+    {
+      "id": "thr_01JC5L1N1LINEAG1",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Demo: lineage, a fork with subagents and transfers",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC5L1N0PARENT1",
+        "parentThreadId": "thr_01JC5L1N0PARENT1",
+        "relationshipToParent": "fork"
+      },
+      "status": "running",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T07:30:00.000Z",
+      "updatedAt": "2026-10-21T07:30:00.000Z",
+      "forkedFrom": {
+        "type": "run",
+        "threadId": "thr_01JC5L1N0PARENT1",
+        "runId": "run_01JC5L1R0PARENT"
+      },
+      "latestRunId": "run_01JC5L1R2MAIN",
+      "activeRunId": "run_01JC5L1R2MAIN",
+      "activityRunStatus": "running",
+      "activityRunStartedAt": "2026-10-21T07:45:00.000Z"
+    },
+    {
+      "id": "thr_01JC5L1N2FORKED1",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Try the IndexedDB codec in a fork",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC5L1N0PARENT1",
+        "parentThreadId": "thr_01JC5L1N1LINEAG1",
+        "relationshipToParent": "fork"
+      },
+      "status": "idle",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T07:40:00.000Z",
+      "updatedAt": "2026-10-21T07:40:00.000Z",
+      "forkedFrom": {
+        "type": "run",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R1MAIN"
+      },
+      "latestRunId": "run_01JC5L1R3FORK",
+      "latestRunCompletedAt": "2026-10-21T07:55:00.000Z"
+    },
+    {
+      "id": "thr_01JC5L1N3XFERTO1",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Hand the migration guide to Claude",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "claude",
+      "modelSelection": {
+        "instanceId": "claude",
+        "model": "opus"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC5L1N0PARENT1"
+      },
+      "status": "idle",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T07:50:00.000Z",
+      "updatedAt": "2026-10-21T07:50:00.000Z"
+    },
+    {
+      "id": "thr_01JC5L1S0RUNAPP1",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Subagent: /root/review/code_reviewer",
+      "createdBy": "agent",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC5L1N0PARENT1",
+        "parentThreadId": "thr_01JC5L1N1LINEAG1",
+        "relationshipToParent": "subagent"
+      },
+      "status": "running",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T07:46:00.000Z",
+      "updatedAt": "2026-10-21T07:46:00.000Z",
+      "latestRunId": "run_01JC5L1R4SUBRUN",
+      "activeRunId": "run_01JC5L1R4SUBRUN"
+    },
+    {
+      "id": "thr_01JC5L1S1RUNCLD1",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Write the migration guide",
+      "createdBy": "agent",
+      "creationSource": "web",
+      "providerInstanceId": "claude",
+      "modelSelection": {
+        "instanceId": "claude",
+        "model": "sonnet"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC5L1N0PARENT1",
+        "parentThreadId": "thr_01JC5L1N1LINEAG1",
+        "relationshipToParent": "subagent"
+      },
+      "status": "running",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T07:47:00.000Z",
+      "updatedAt": "2026-10-21T07:47:00.000Z"
+    },
+    {
+      "id": "thr_01JC5L1S2DONE001",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Subagent: Survey the open issues",
+      "createdBy": "agent",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC5L1N0PARENT1",
+        "parentThreadId": "thr_01JC5L1N1LINEAG1",
+        "relationshipToParent": "subagent"
+      },
+      "status": "completed",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T07:31:00.000Z",
+      "updatedAt": "2026-10-21T07:31:00.000Z",
+      "latestRunId": "run_01JC5L1R5SUBDONE",
+      "latestRunRequestedAt": "2026-10-21T07:31:00.000Z",
+      "latestRunStartedAt": "2026-10-21T07:31:02.000Z",
+      "latestRunCompletedAt": "2026-10-21T07:35:12.000Z"
+    },
+    {
+      "id": "thr_01JC5L1S3FAILED1",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Run the iOS simulator tests",
+      "createdBy": "agent",
+      "creationSource": "web",
+      "providerInstanceId": "claude",
+      "modelSelection": {
+        "instanceId": "claude",
+        "model": "sonnet"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC5L1N0PARENT1",
+        "parentThreadId": "thr_01JC5L1N1LINEAG1",
+        "relationshipToParent": "subagent"
+      },
+      "status": "failed",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T07:32:00.000Z",
+      "updatedAt": "2026-10-21T07:32:00.000Z",
+      "latestRunId": "run_01JC5L1R6SUBFAIL",
+      "latestRunRequestedAt": "2026-10-21T07:32:00.000Z",
+      "latestRunStartedAt": "2026-10-21T07:32:01.000Z",
+      "latestRunCompletedAt": "2026-10-21T07:38:40.000Z"
+    },
+    {
+      "id": "thr_01JC5L1S4OLD000",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Check the Wasm target",
+      "createdBy": "agent",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC5L1N0PARENT1",
+        "parentThreadId": "thr_01JC5L1N1LINEAG1",
+        "relationshipToParent": "subagent"
+      },
+      "status": "completed",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T07:10:00.000Z",
+      "updatedAt": "2026-10-21T07:10:00.000Z",
+      "latestRunId": "run_01JC5L1ROLD0",
+      "latestRunRequestedAt": "2026-10-21T07:10:00.000Z",
+      "latestRunCompletedAt": "2026-10-21T07:10:50.000Z"
+    },
+    {
+      "id": "thr_01JC5L1S5OLD001",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Audit the README",
+      "createdBy": "agent",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC5L1N0PARENT1",
+        "parentThreadId": "thr_01JC5L1N1LINEAG1",
+        "relationshipToParent": "subagent"
+      },
+      "status": "completed",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T07:11:00.000Z",
+      "updatedAt": "2026-10-21T07:11:00.000Z",
+      "latestRunId": "run_01JC5L1ROLD1",
+      "latestRunRequestedAt": "2026-10-21T07:11:00.000Z",
+      "latestRunCompletedAt": "2026-10-21T07:11:50.000Z"
+    },
+    {
+      "id": "thr_01JC5L1S6OLD002",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Profile the file codec",
+      "createdBy": "agent",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC5L1N0PARENT1",
+        "parentThreadId": "thr_01JC5L1N1LINEAG1",
+        "relationshipToParent": "subagent"
+      },
+      "status": "completed",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T07:12:00.000Z",
+      "updatedAt": "2026-10-21T07:12:00.000Z",
+      "latestRunId": "run_01JC5L1ROLD2",
+      "latestRunRequestedAt": "2026-10-21T07:12:00.000Z",
+      "latestRunCompletedAt": "2026-10-21T07:12:50.000Z"
+    },
+    {
+      "id": "thr_01JC5L1S7OLD003",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "List breaking changes",
+      "createdBy": "agent",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC5L1N0PARENT1",
+        "parentThreadId": "thr_01JC5L1N1LINEAG1",
+        "relationshipToParent": "subagent"
+      },
+      "status": "completed",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T07:13:00.000Z",
+      "updatedAt": "2026-10-21T07:13:00.000Z",
+      "latestRunId": "run_01JC5L1ROLD3",
+      "latestRunRequestedAt": "2026-10-21T07:13:00.000Z",
+      "latestRunCompletedAt": "2026-10-21T07:13:50.000Z"
+    },
+    {
+      "id": "thr_01JC5L1S8OLD004",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Draft the changelog",
+      "createdBy": "agent",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC5L1N0PARENT1",
+        "parentThreadId": "thr_01JC5L1N1LINEAG1",
+        "relationshipToParent": "subagent"
+      },
+      "status": "completed",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T07:14:00.000Z",
+      "updatedAt": "2026-10-21T07:14:00.000Z",
+      "latestRunId": "run_01JC5L1ROLD4",
+      "latestRunRequestedAt": "2026-10-21T07:14:00.000Z",
+      "latestRunCompletedAt": "2026-10-21T07:14:50.000Z"
+    },
+    {
+      "id": "thr_01JC5L1S9OLD005",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Bump kotlinx-io",
+      "createdBy": "agent",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC5L1N0PARENT1",
+        "parentThreadId": "thr_01JC5L1N1LINEAG1",
+        "relationshipToParent": "subagent"
+      },
+      "status": "completed",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T07:15:00.000Z",
+      "updatedAt": "2026-10-21T07:15:00.000Z",
+      "latestRunId": "run_01JC5L1ROLD5",
+      "latestRunRequestedAt": "2026-10-21T07:15:00.000Z",
+      "latestRunCompletedAt": "2026-10-21T07:15:50.000Z"
+    }
+  ],
+  "runs": {
+    "thr_01JC5L1N0PARENT1": [
+      {
+        "id": "run_01JC5L1R0PARENT",
+        "threadId": "thr_01JC5L1N0PARENT1",
+        "ordinal": 1,
+        "status": "completed",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC5L1R0PARENT",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-21T07:00:00.000Z",
+        "startedAt": "2026-10-21T07:00:02.000Z",
+        "completedAt": "2026-10-21T07:20:00.000Z",
+        "checkpointId": null,
+        "contextHandoffId": null
+      }
+    ],
+    "thr_01JC5L1N1LINEAG1": [
+      {
+        "id": "run_01JC5L1R1MAIN",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "ordinal": 1,
+        "status": "completed",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC5L1R1MAIN",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-21T07:30:00.000Z",
+        "startedAt": "2026-10-21T07:30:02.000Z",
+        "completedAt": "2026-10-21T07:39:00.000Z",
+        "checkpointId": null,
+        "contextHandoffId": null
+      },
+      {
+        "id": "run_01JC5L1R2MAIN",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "ordinal": 2,
+        "status": "running",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC5L1R2MAIN",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-21T07:45:00.000Z",
+        "startedAt": "2026-10-21T07:45:01.000Z",
+        "completedAt": null,
+        "checkpointId": null,
+        "contextHandoffId": null
+      }
+    ],
+    "thr_01JC5L1N2FORKED1": [
+      {
+        "id": "run_01JC5L1R3FORK",
+        "threadId": "thr_01JC5L1N2FORKED1",
+        "ordinal": 1,
+        "status": "completed",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC5L1R3FORK",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-21T07:40:00.000Z",
+        "startedAt": "2026-10-21T07:40:02.000Z",
+        "completedAt": "2026-10-21T07:55:00.000Z",
+        "checkpointId": null,
+        "contextHandoffId": null
+      }
+    ],
+    "thr_01JC5L1S0RUNAPP1": [
+      {
+        "id": "run_01JC5L1R4SUBRUN",
+        "threadId": "thr_01JC5L1S0RUNAPP1",
+        "ordinal": 1,
+        "status": "running",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC5L1R4SUBRUN",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-21T07:46:00.000Z",
+        "startedAt": "2026-10-21T07:46:01.000Z",
+        "completedAt": null,
+        "checkpointId": null,
+        "contextHandoffId": null
+      }
+    ]
+  },
+  "providerSessions": {
+    "thr_01JC5L1N1LINEAG1": [
+      {
+        "id": "psn_01JC5L1P0MAIN",
+        "driver": "codex",
+        "providerInstanceId": "codex",
+        "status": "running",
+        "cwd": "/Users/xxfast/Developer/XXFAST/KMP/KStore",
+        "model": "gpt-5",
+        "capabilities": {
+          "sessions": {
+            "supportsMultipleProviderThreadsPerSession": false,
+            "supportsModelSwitchInSession": true,
+            "supportsProviderSwitchingViaHandoff": true,
+            "supportsRuntimeModeSwitchInSession": true,
+            "pendingRequestsSurviveRestart": false
+          },
+          "threads": {
+            "canCreateEmptyThread": true,
+            "canReadThreadSnapshot": true,
+            "canRollbackThread": true,
+            "canForkThread": true,
+            "canForkFromTurn": true,
+            "canForkFromSubagentThread": false,
+            "exposesNativeThreadId": true
+          },
+          "turns": {
+            "exposesNativeTurnId": true,
+            "emitsTurnStarted": true,
+            "emitsTurnCompleted": true,
+            "supportsInterrupt": true,
+            "supportsActiveSteering": true,
+            "supportsSteeringByInterruptRestart": false,
+            "supportsQueuedMessages": true,
+            "terminalStatusQuality": "exact"
+          },
+          "streaming": {
+            "streamsAssistantText": true,
+            "streamsReasoning": true,
+            "streamsToolOutput": true,
+            "streamsPlanText": true,
+            "emitsMessageCompleted": true
+          },
+          "tools": {
+            "exposesToolItemIds": true,
+            "emitsToolStarted": true,
+            "emitsToolCompleted": true,
+            "emitsToolOutput": true,
+            "supportsMcpTools": true,
+            "supportsDynamicToolCallbacks": false
+          },
+          "approvals": {
+            "supportsCommandApproval": true,
+            "supportsFileReadApproval": false,
+            "supportsFileChangeApproval": true,
+            "supportsApplyPatchApproval": true,
+            "approvalsHaveNativeRequestIds": true,
+            "approvalCallbacksAreLiveOnly": true,
+            "approvalsCanOriginateFromSubagents": false
+          },
+          "planning": {
+            "emitsPlanUpdated": true,
+            "emitsTodoList": true,
+            "emitsProposedPlan": true,
+            "supportsStructuredQuestions": true,
+            "planDeltasHaveItemIds": true
+          },
+          "subagents": {
+            "supportsSubagents": false,
+            "exposesSubagentThreadIds": false,
+            "emitsSubagentLifecycle": false,
+            "canWaitForSubagents": false,
+            "canCloseSubagents": false,
+            "canForkSubagentThread": false
+          },
+          "context": {
+            "acceptsSystemContext": true,
+            "acceptsDeveloperContext": true,
+            "acceptsSyntheticUserContext": true,
+            "canGenerateSummaries": true,
+            "canConsumeHandoffSummaries": true,
+            "supportsDeltaHandoff": false,
+            "supportsFullThreadHandoff": true,
+            "maxRecommendedHandoffChars": null
+          },
+          "checkpointing": {
+            "appCanCheckpointFilesystem": true,
+            "supportsNestedCheckpointScopes": false,
+            "providerCanRollbackConversation": true,
+            "providerRollbackReturnsSnapshot": false,
+            "providerCanReadConversationSnapshot": true
+          },
+          "identity": {
+            "nativeThreadIds": "stable",
+            "nativeTurnIds": "stable",
+            "nativeItemIds": "stable",
+            "nativeRequestIds": "stable"
+          }
+        },
+        "createdAt": "2026-10-21T07:30:00.000Z",
+        "updatedAt": "2026-10-21T07:45:00.000Z",
+        "lastError": null
+      }
+    ]
+  },
+  "subagents": {
+    "thr_01JC5L1N1LINEAG1": [
+      {
+        "id": "sub_01JC5L1A0RUNAPP",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "parentNodeId": "nod_01JC5L1MAIN",
+        "origin": "app_owned",
+        "createdBy": "agent",
+        "driver": "codex",
+        "providerInstanceId": "codex",
+        "providerThreadId": null,
+        "childThreadId": "thr_01JC5L1S0RUNAPP1",
+        "nativeTaskRef": null,
+        "prompt": "Code reviewer",
+        "title": "Code reviewer",
+        "model": "gpt-5",
+        "status": "running",
+        "result": null,
+        "startedAt": "2026-10-21T07:46:00.000Z",
+        "completedAt": null,
+        "updatedAt": "2026-10-21T07:46:00.000Z"
+      },
+      {
+        "id": "sub_01JC5L1A1RUNCLD",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "parentNodeId": "nod_01JC5L1MAIN",
+        "origin": "provider_native",
+        "createdBy": "provider",
+        "driver": "claudeAgent",
+        "providerInstanceId": "claude",
+        "providerThreadId": null,
+        "childThreadId": "thr_01JC5L1S1RUNCLD1",
+        "nativeTaskRef": {
+          "driver": "claudeAgent",
+          "nativeId": "task_7f3a",
+          "strength": "strong"
+        },
+        "prompt": "Write the migration guide",
+        "title": "Write the migration guide",
+        "model": "sonnet",
+        "status": "running",
+        "result": null,
+        "startedAt": "2026-10-21T07:47:00.000Z",
+        "completedAt": null,
+        "updatedAt": "2026-10-21T07:47:00.000Z"
+      },
+      {
+        "id": "sub_01JC5L1A2NOCHLD",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "parentNodeId": "nod_01JC5L1MAIN",
+        "origin": "provider_native",
+        "createdBy": "provider",
+        "driver": "claudeAgent",
+        "providerInstanceId": "claude",
+        "providerThreadId": null,
+        "childThreadId": null,
+        "nativeTaskRef": null,
+        "prompt": "Explore how other stores version their files",
+        "title": "Explore",
+        "model": "sonnet",
+        "status": "running",
+        "result": null,
+        "startedAt": "2026-10-21T07:48:00.000Z",
+        "completedAt": null,
+        "updatedAt": "2026-10-21T07:48:00.000Z"
+      },
+      {
+        "id": "sub_01JC5L1A3DONE",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "parentNodeId": "nod_01JC5L1MAIN",
+        "origin": "app_owned",
+        "createdBy": "agent",
+        "driver": "codex",
+        "providerInstanceId": "codex",
+        "providerThreadId": null,
+        "childThreadId": "thr_01JC5L1S2DONE001",
+        "nativeTaskRef": null,
+        "prompt": "Survey the open issues",
+        "title": "Survey the open issues",
+        "model": "gpt-5",
+        "status": "completed",
+        "result": "Done",
+        "startedAt": "2026-10-21T07:31:02.000Z",
+        "completedAt": "2026-10-21T07:35:12.000Z",
+        "updatedAt": "2026-10-21T07:35:12.000Z"
+      },
+      {
+        "id": "sub_01JC5L1A4FAILED",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "parentNodeId": "nod_01JC5L1MAIN",
+        "origin": "app_owned",
+        "createdBy": "agent",
+        "driver": "claudeAgent",
+        "providerInstanceId": "claude",
+        "providerThreadId": null,
+        "childThreadId": "thr_01JC5L1S3FAILED1",
+        "nativeTaskRef": null,
+        "prompt": "Run the iOS simulator tests",
+        "title": "Run the iOS simulator tests",
+        "model": "sonnet",
+        "status": "failed",
+        "result": "Tests failed on iOS",
+        "startedAt": "2026-10-21T07:32:01.000Z",
+        "completedAt": "2026-10-21T07:38:40.000Z",
+        "updatedAt": "2026-10-21T07:38:40.000Z"
+      },
+      {
+        "id": "sub_01JC5L1A5OLD",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "parentNodeId": "nod_01JC5L1MAIN",
+        "origin": "app_owned",
+        "createdBy": "agent",
+        "driver": "codex",
+        "providerInstanceId": "codex",
+        "providerThreadId": null,
+        "childThreadId": "thr_01JC5L1S4OLD000",
+        "nativeTaskRef": null,
+        "prompt": "Check the Wasm target",
+        "title": "Check the Wasm target",
+        "model": "gpt-5",
+        "status": "completed",
+        "result": "Done",
+        "startedAt": "2026-10-21T07:10:00.000Z",
+        "completedAt": "2026-10-21T07:10:50.000Z",
+        "updatedAt": "2026-10-21T07:10:50.000Z"
+      },
+      {
+        "id": "sub_01JC5L1A6OLD",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "parentNodeId": "nod_01JC5L1MAIN",
+        "origin": "app_owned",
+        "createdBy": "agent",
+        "driver": "codex",
+        "providerInstanceId": "codex",
+        "providerThreadId": null,
+        "childThreadId": "thr_01JC5L1S5OLD001",
+        "nativeTaskRef": null,
+        "prompt": "Audit the README",
+        "title": "Audit the README",
+        "model": "gpt-5",
+        "status": "completed",
+        "result": "Done",
+        "startedAt": "2026-10-21T07:11:00.000Z",
+        "completedAt": "2026-10-21T07:11:50.000Z",
+        "updatedAt": "2026-10-21T07:11:50.000Z"
+      },
+      {
+        "id": "sub_01JC5L1A7OLD",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "parentNodeId": "nod_01JC5L1MAIN",
+        "origin": "app_owned",
+        "createdBy": "agent",
+        "driver": "codex",
+        "providerInstanceId": "codex",
+        "providerThreadId": null,
+        "childThreadId": "thr_01JC5L1S6OLD002",
+        "nativeTaskRef": null,
+        "prompt": "Profile the file codec",
+        "title": "Profile the file codec",
+        "model": "gpt-5",
+        "status": "completed",
+        "result": "Done",
+        "startedAt": "2026-10-21T07:12:00.000Z",
+        "completedAt": "2026-10-21T07:12:50.000Z",
+        "updatedAt": "2026-10-21T07:12:50.000Z"
+      },
+      {
+        "id": "sub_01JC5L1A8OLD",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "parentNodeId": "nod_01JC5L1MAIN",
+        "origin": "app_owned",
+        "createdBy": "agent",
+        "driver": "codex",
+        "providerInstanceId": "codex",
+        "providerThreadId": null,
+        "childThreadId": "thr_01JC5L1S7OLD003",
+        "nativeTaskRef": null,
+        "prompt": "List breaking changes",
+        "title": "List breaking changes",
+        "model": "gpt-5",
+        "status": "completed",
+        "result": "Done",
+        "startedAt": "2026-10-21T07:13:00.000Z",
+        "completedAt": "2026-10-21T07:13:50.000Z",
+        "updatedAt": "2026-10-21T07:13:50.000Z"
+      },
+      {
+        "id": "sub_01JC5L1A9OLD",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "parentNodeId": "nod_01JC5L1MAIN",
+        "origin": "app_owned",
+        "createdBy": "agent",
+        "driver": "codex",
+        "providerInstanceId": "codex",
+        "providerThreadId": null,
+        "childThreadId": "thr_01JC5L1S8OLD004",
+        "nativeTaskRef": null,
+        "prompt": "Draft the changelog",
+        "title": "Draft the changelog",
+        "model": "gpt-5",
+        "status": "completed",
+        "result": "Done",
+        "startedAt": "2026-10-21T07:14:00.000Z",
+        "completedAt": "2026-10-21T07:14:50.000Z",
+        "updatedAt": "2026-10-21T07:14:50.000Z"
+      },
+      {
+        "id": "sub_01JC5L1A10OLD",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "parentNodeId": "nod_01JC5L1MAIN",
+        "origin": "app_owned",
+        "createdBy": "agent",
+        "driver": "codex",
+        "providerInstanceId": "codex",
+        "providerThreadId": null,
+        "childThreadId": "thr_01JC5L1S9OLD005",
+        "nativeTaskRef": null,
+        "prompt": "Bump kotlinx-io",
+        "title": "Bump kotlinx-io",
+        "model": "gpt-5",
+        "status": "completed",
+        "result": "Done",
+        "startedAt": "2026-10-21T07:15:00.000Z",
+        "completedAt": "2026-10-21T07:15:50.000Z",
+        "updatedAt": "2026-10-21T07:15:50.000Z"
+      }
+    ]
+  },
+  "contextTransfers": {
+    "thr_01JC5L1N1LINEAG1": [
+      {
+        "id": "ctx_01JC5L1X0HANDOFF",
+        "type": "provider_handoff",
+        "sourceThreadId": "thr_01JC5L1N1LINEAG1",
+        "targetThreadId": "thr_01JC5L1N3XFERTO1",
+        "sourcePoint": {
+          "threadId": "thr_01JC5L1N1LINEAG1",
+          "runId": "run_01JC5L1R1MAIN"
+        },
+        "basePoint": null,
+        "sourceProviderInstanceId": "codex",
+        "targetProviderInstanceId": "claude",
+        "targetRunId": null,
+        "status": "consumed",
+        "resolution": null,
+        "createdBy": "user",
+        "error": null,
+        "createdAt": "2026-10-21T07:50:00.000Z",
+        "updatedAt": "2026-10-21T07:50:00.000Z",
+        "consumedAt": null
+      },
+      {
+        "id": "ctx_01JC5L1X1GONE",
+        "type": "fork",
+        "sourceThreadId": "thr_01JC5L1N1LINEAG1",
+        "targetThreadId": "thr_01JC5L1N4GONE001",
+        "sourcePoint": {
+          "threadId": "thr_01JC5L1N1LINEAG1",
+          "runId": "run_01JC5L1R1MAIN"
+        },
+        "basePoint": null,
+        "sourceProviderInstanceId": "codex",
+        "targetProviderInstanceId": "claude",
+        "targetRunId": null,
+        "status": "superseded",
+        "resolution": null,
+        "createdBy": "user",
+        "error": null,
+        "createdAt": "2026-10-21T07:52:00.000Z",
+        "updatedAt": "2026-10-21T07:52:00.000Z",
+        "consumedAt": null
+      }
+    ]
+  }
+}

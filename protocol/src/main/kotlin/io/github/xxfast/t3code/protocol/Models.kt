@@ -44,6 +44,12 @@ public typealias ConversationMessage =
 
 public typealias Checkpoint = io.github.xxfast.t3code.protocol.generated.Checkpoint
 
+/** A subagent the thread started, `OrchestrationV2Subagent`. */
+public typealias Subagent = io.github.xxfast.t3code.protocol.generated.Subagent
+
+/** Context carried from one thread to another, `OrchestrationV2ContextTransfer`. */
+public typealias ContextTransfer = io.github.xxfast.t3code.protocol.generated.ContextTransfer
+
 /** What `projects.readFile` answers. */
 public typealias FileContents = ProjectReadFileResult
 
@@ -69,8 +75,9 @@ public data class Credential(
 
 /**
  * One open thread: the row, its runs and the items to render, in order, plus the projection's
- * pending requests, attached provider sessions and threads, captured checkpoints, and its
- * conversation messages (queued ones have a message long before they have an item).
+ * pending requests, attached provider sessions and threads, captured checkpoints, its
+ * conversation messages (queued ones have a message long before they have an item), and its
+ * subagents and context transfers.
  */
 public data class ThreadView(
   val thread: Thread,
@@ -83,6 +90,10 @@ public data class ThreadView(
   /** Each provider turn, carrying the live context window usage while one runs. */
   val providerTurns: List<ProviderTurn> = emptyList(),
   val messages: List<ConversationMessage> = emptyList(),
+  /** The subagents this thread started, what its Lineage lists. */
+  val subagents: List<Subagent> = emptyList(),
+  /** Context transfers into or out of this thread. */
+  val contextTransfers: List<ContextTransfer> = emptyList(),
   /**
    * How far into the server's command log this view is: the last event's `sequence`, or a
    * snapshot's `snapshotSequence`, whichever is later. Compare with what `dispatch` returned.
