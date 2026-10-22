@@ -23,19 +23,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -479,7 +480,7 @@ private fun MessagesTimeline(
       expansion = expansion.copy(workGroupIds = expansion.workGroupIds.toggle(groupId))
     },
   )
-  FollowTail(state, rows, view.items.lastOrNull())
+  FollowTail(state)
 
   BoxWithConstraints(modifier.fillMaxSize()) {
     // `.messages-timeline-scroll`: 12px a side when narrow, 48px from 640px up
@@ -560,15 +561,39 @@ private fun TimelineRow.bottomPadding(continuesWorkLog: Boolean): Dp = when (thi
     if (continuesWorkLog) 0.dp else 8.dp
 }
 
-/** Scrolls to the end when rows change, but only if the user was already looking at the end. */
+/**
+ * Keeps the timeline at its true end, the composer's inset included, while the user is there:
+ * after every layout, so rows arriving, the last row streaming and the composer growing all
+ * follow. Scrolling up unpins it until the user comes back to the end. Upstream's
+ * `maintainScrollAtEnd` with `TIMELINE_MAINTAIN_SCROLL_AT_END` (MessagesTimeline.tsx).
+ */
 @Composable
-private fun FollowTail(state: LazyListState, rows: List<TimelineRow>, last: TurnItem?) {
-  val previousCount: MutableIntState = remember { mutableIntStateOf(0) }
-  LaunchedEffect(rows.size, last) {
-    val lastVisible: Int? = state.layoutInfo.visibleItemsInfo.lastOrNull()?.index
-    val follow: Boolean = wasAtBottom(lastVisible, previousCount.intValue)
-    previousCount.intValue = rows.size
-    if (follow && rows.isNotEmpty()) state.scrollToItem(rows.lastIndex, Int.MAX_VALUE)
+private fun FollowTail(state: LazyListState) {
+  val threshold: Int = with(LocalDensity.current) {
+    TIMELINE_FOLLOW_REARM_THRESHOLD_DP.dp.roundToPx()
+  }
+  LaunchedEffect(state, threshold) {
+    var pinned: Boolean = true
+    var previous: TimelineScrollPosition = TimelineScrollPosition(0, 0)
+    snapshotFlow { state.layoutInfo }.collect { info ->
+      val last: LazyListItemInfo? = info.visibleItemsInfo.lastOrNull()
+      val gap: Int? = timelineEndGap(
+        lastVisibleIndex = last?.index,
+        lastVisibleEnd = last?.let { it.offset + it.size } ?: 0,
+        totalItems = info.totalItemsCount,
+        afterContentPadding = info.afterContentPadding,
+        viewportEnd = info.viewportEndOffset,
+      )
+      val position: TimelineScrollPosition = TimelineScrollPosition(
+        state.firstVisibleItemIndex,
+        state.firstVisibleItemScrollOffset,
+      )
+      pinned = resolveTimelinePinned(pinned, isTimelineAtEnd(gap, threshold), previous, position)
+      previous = position
+      if (shouldFollowTimelineEnd(pinned, gap)) {
+        state.scrollToItem(info.totalItemsCount - 1, Int.MAX_VALUE)
+      }
+    }
   }
 }
 

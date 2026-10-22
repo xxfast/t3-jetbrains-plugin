@@ -21,11 +21,43 @@ class ChatViewLogicTest {
   }
 
   @Test
-  fun `follow the tail only when the last row was visible`() {
-    assertTrue(wasAtBottom(lastVisibleIndex = null, previousCount = 0))
-    assertTrue(wasAtBottom(lastVisibleIndex = 9, previousCount = 10))
-    assertFalse(wasAtBottom(lastVisibleIndex = 5, previousCount = 10))
-    assertFalse(wasAtBottom(lastVisibleIndex = null, previousCount = 10))
+  fun `end gap counts the bottom inset`() {
+    // last row ends at 900 in a 1000px viewport, with a 300px composer inset below it
+    assertEquals(200, timelineEndGap(9, 900, 10, afterContentPadding = 300, viewportEnd = 1000))
+    assertEquals(0, timelineEndGap(9, 700, 10, afterContentPadding = 300, viewportEnd = 1000))
+    assertEquals(null, timelineEndGap(5, 900, 10, afterContentPadding = 300, viewportEnd = 1000))
+    assertEquals(0, timelineEndGap(null, 0, 0, afterContentPadding = 300, viewportEnd = 1000))
+  }
+
+  @Test
+  fun `at end within the re-arm band`() {
+    assertTrue(isTimelineAtEnd(gap = 0, thresholdPx = 40))
+    assertTrue(isTimelineAtEnd(gap = 40, thresholdPx = 40))
+    assertFalse(isTimelineAtEnd(gap = 41, thresholdPx = 40))
+    assertFalse(isTimelineAtEnd(gap = null, thresholdPx = 40))
+  }
+
+  @Test
+  fun `only moving up the timeline unpins it`() {
+    val here = TimelineScrollPosition(index = 4, offset = 100)
+    val up = TimelineScrollPosition(index = 4, offset = 20)
+    val down = TimelineScrollPosition(index = 5, offset = 0)
+    // the composer grew or the last row streamed: position unchanged, still pinned
+    assertTrue(resolveTimelinePinned(pinned = true, atEnd = false, here, here))
+    assertFalse(resolveTimelinePinned(pinned = true, atEnd = false, here, up))
+    assertTrue(resolveTimelinePinned(pinned = true, atEnd = false, here, down))
+    assertFalse(resolveTimelinePinned(pinned = false, atEnd = false, here, down))
+    // the end clamping up after something shrank keeps it pinned
+    assertTrue(resolveTimelinePinned(pinned = false, atEnd = true, here, up))
+  }
+
+  @Test
+  fun `follow the end only when pinned and it's off screen`() {
+    assertTrue(shouldFollowTimelineEnd(pinned = true, gap = 200))
+    assertTrue(shouldFollowTimelineEnd(pinned = true, gap = null))
+    assertFalse(shouldFollowTimelineEnd(pinned = true, gap = 0))
+    assertFalse(shouldFollowTimelineEnd(pinned = true, gap = -50))
+    assertFalse(shouldFollowTimelineEnd(pinned = false, gap = 200))
   }
 
   @Test

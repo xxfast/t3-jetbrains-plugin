@@ -24,12 +24,62 @@ fun TurnItem.json(): JsonObject = when (this) {
   else -> FullJson.encodeToJsonElement(TurnItem.serializer(), this).jsonObject
 }
 
+/** `TIMELINE_FOLLOW_REARM_THRESHOLD_PX`, MessagesTimeline.logic.ts. */
+const val TIMELINE_FOLLOW_REARM_THRESHOLD_DP: Int = 40
+
+/** Where the timeline is scrolled to, its first visible row and how far into it. */
+data class TimelineScrollPosition(val index: Int, val offset: Int) {
+  /** Whether this is further up the timeline than [other]. */
+  fun isAbove(other: TimelineScrollPosition): Boolean =
+    index < other.index || (index == other.index && offset < other.offset)
+}
+
 /**
- * Whether to keep following the tail after rows changed. The user was at the bottom if the last
- * row before the change was on screen.
+ * How far the timeline's true end, bottom padding included, sits below the viewport's end, in
+ * pixels. The padding is the composer's inset, which hides the same amount of viewport, so this
+ * is the gap between the last row and the composer's top, as upstream's `resolveTimelineIsAtEnd`
+ * (MessagesTimeline.logic.ts) measures it. `null` when the last row isn't laid out.
  */
-fun wasAtBottom(lastVisibleIndex: Int?, previousCount: Int): Boolean =
-  previousCount == 0 || (lastVisibleIndex != null && lastVisibleIndex >= previousCount - 1)
+fun timelineEndGap(
+  lastVisibleIndex: Int?,
+  lastVisibleEnd: Int, // offset plus size of the last visible row
+  totalItems: Int,
+  afterContentPadding: Int,
+  viewportEnd: Int,
+): Int? = when {
+  totalItems == 0 -> 0
+  lastVisibleIndex != totalItems - 1 -> null
+  else -> lastVisibleEnd + afterContentPadding - viewportEnd
+}
+
+/** `resolveTimelineIsAtEnd`, MessagesTimeline.logic.ts: within the re-arm band of the end. */
+fun isTimelineAtEnd(gap: Int?, thresholdPx: Int): Boolean = gap != null && gap <= thresholdPx
+
+/**
+ * Whether the timeline stays pinned to its end after a layout. Reaching the end band pins it,
+ * moving up the timeline unpins it, and anything else (the composer growing, the last row
+ * streaming, rows arriving) keeps what it was. Upstream's live follow (ChatView.tsx), which only
+ * a user's navigation away from the end breaks; content growth leaves the scroll position alone
+ * here, so only the user moves it up.
+ */
+fun resolveTimelinePinned(
+  pinned: Boolean,
+  atEnd: Boolean,
+  previous: TimelineScrollPosition,
+  current: TimelineScrollPosition,
+): Boolean = when {
+  atEnd -> true
+  current.isAbove(previous) -> false
+  else -> pinned
+}
+
+/**
+ * Whether to scroll to the true end after a layout: pinned and the end isn't on screen yet.
+ * `TIMELINE_MAINTAIN_SCROLL_AT_END` (MessagesTimeline.tsx) does it on data change, item layout
+ * and layout; every layout here covers all three.
+ */
+fun shouldFollowTimelineEnd(pinned: Boolean, gap: Int?): Boolean =
+  pinned && (gap == null || gap > 0)
 
 /** `+3 -1`, either side left out when absent. */
 fun diffStat(additions: Long?, deletions: Long?): String =
