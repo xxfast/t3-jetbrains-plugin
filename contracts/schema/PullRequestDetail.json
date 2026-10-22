@@ -1,0 +1,791 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "PullRequestDetail",
+  "title": "PullRequestDetail",
+  "type": "object",
+  "properties": {
+    "provider": {
+      "type": "string"
+    },
+    "capabilities": {
+      "$ref": "#/$defs/PullRequestCapabilities"
+    },
+    "viewerPermissions": {
+      "$ref": "#/$defs/PullRequestViewerPermissions"
+    },
+    "projectId": {
+      "type": "string"
+    },
+    "projectTitle": {
+      "type": "string"
+    },
+    "workspaceRoot": {
+      "type": "string"
+    },
+    "repository": {
+      "type": "string"
+    },
+    "number": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "title": {
+      "type": "string"
+    },
+    "body": {
+      "type": "string"
+    },
+    "url": {
+      "type": "string"
+    },
+    "author": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PullRequestActor"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "open",
+        "closed",
+        "merged"
+      ]
+    },
+    "isDraft": {
+      "type": "boolean"
+    },
+    "mergeability": {
+      "type": "string",
+      "enum": [
+        "mergeable",
+        "conflicting",
+        "unknown"
+      ]
+    },
+    "additions": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "deletions": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "changedFiles": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "headBranch": {
+      "type": "string"
+    },
+    "headRepositoryNameWithOwner": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "headSha": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "baseBranch": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "type": "string"
+    },
+    "observedAt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "mergedAt": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "closedAt": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "reviewers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PullRequestActor"
+      }
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PullRequestLabel"
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PullRequestCheck"
+      }
+    },
+    "mergeCapabilities": {
+      "$ref": "#/$defs/PullRequestMergeCapabilities"
+    },
+    "viewer": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "baseComparison": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "up-to-date",
+            "behind",
+            "unknown"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "behindBy": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "autoMergeEnabled": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "autoMergeMethod": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "merge",
+            "squash",
+            "rebase"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "workflowApprovalsRequired": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "provider",
+    "capabilities",
+    "viewerPermissions",
+    "projectId",
+    "projectTitle",
+    "workspaceRoot",
+    "repository",
+    "number",
+    "title",
+    "body",
+    "url",
+    "author",
+    "state",
+    "isDraft",
+    "mergeability",
+    "additions",
+    "deletions",
+    "changedFiles",
+    "headBranch",
+    "baseBranch",
+    "createdAt",
+    "updatedAt",
+    "mergedAt",
+    "closedAt",
+    "reviewers",
+    "labels",
+    "checks",
+    "mergeCapabilities"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "PullRequestActor": {
+      "type": "object",
+      "properties": {
+        "isBot": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "login": {
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "avatarUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "login",
+        "name",
+        "avatarUrl"
+      ],
+      "additionalProperties": true
+    },
+    "PullRequestCapabilities": {
+      "type": "object",
+      "properties": {
+        "diff": {
+          "type": "boolean"
+        },
+        "comment": {
+          "type": "boolean"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "merge",
+                  "ready",
+                  "draft",
+                  "close",
+                  "reopen",
+                  "delete-branch",
+                  "update-branch",
+                  "enable-auto-merge",
+                  "disable-auto-merge",
+                  "revert",
+                  "approve-workflows"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "mergeMethods": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "merge",
+                  "squash",
+                  "rebase"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "deleteBranch": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updateMethods": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "merge",
+                      "rebase"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "search": {
+          "type": "boolean"
+        },
+        "reactions": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "viewedFiles": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "host",
+                "environment"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "review": {
+          "$ref": "#/$defs/PullRequestReviewCapabilities"
+        },
+        "reviewers": {
+          "$ref": "#/$defs/PullRequestReviewerCapabilities"
+        },
+        "edit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PullRequestEditCapabilities"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stacks": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stackActions": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "labels": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "diff",
+        "comment",
+        "actions",
+        "mergeMethods",
+        "search",
+        "review",
+        "reviewers"
+      ],
+      "additionalProperties": true
+    },
+    "PullRequestCheck": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "action-required",
+            "success",
+            "failure",
+            "skipped",
+            "neutral",
+            "cancelled"
+          ]
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "required": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "status",
+        "description",
+        "url"
+      ],
+      "additionalProperties": true
+    },
+    "PullRequestEditCapabilities": {
+      "type": "object",
+      "properties": {
+        "changeRequest": {
+          "type": "boolean"
+        },
+        "comment": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "changeRequest",
+        "comment"
+      ],
+      "additionalProperties": true
+    },
+    "PullRequestLabel": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "color"
+      ],
+      "additionalProperties": true
+    },
+    "PullRequestMergeCapabilities": {
+      "type": "object",
+      "properties": {
+        "merge": {
+          "type": "boolean"
+        },
+        "squash": {
+          "type": "boolean"
+        },
+        "rebase": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "merge",
+        "squash",
+        "rebase"
+      ],
+      "additionalProperties": true
+    },
+    "PullRequestReviewCapabilities": {
+      "type": "object",
+      "properties": {
+        "inlineComment": {
+          "type": "boolean"
+        },
+        "reply": {
+          "type": "boolean"
+        },
+        "resolve": {
+          "type": "boolean"
+        },
+        "verdicts": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "comment",
+                  "approve",
+                  "request-changes"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "inlineComment",
+        "reply",
+        "resolve",
+        "verdicts"
+      ],
+      "additionalProperties": true
+    },
+    "PullRequestReviewerCapabilities": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "type": "boolean"
+        },
+        "listCandidates": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "request",
+        "listCandidates"
+      ],
+      "additionalProperties": true
+    },
+    "PullRequestViewerPermissions": {
+      "type": "object",
+      "properties": {
+        "stackRebase": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "merge",
+                  "ready",
+                  "draft",
+                  "close",
+                  "reopen",
+                  "delete-branch",
+                  "update-branch",
+                  "enable-auto-merge",
+                  "disable-auto-merge",
+                  "revert",
+                  "approve-workflows"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "comment": {
+          "type": "boolean"
+        },
+        "resolve": {
+          "type": "boolean"
+        },
+        "verdicts": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "comment",
+                  "approve",
+                  "request-changes"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "requestReviewers": {
+          "type": "boolean"
+        },
+        "updateMethods": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "merge",
+                      "rebase"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "labels": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "editChangeRequest": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "actions",
+        "comment",
+        "resolve",
+        "verdicts",
+        "requestReviewers"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

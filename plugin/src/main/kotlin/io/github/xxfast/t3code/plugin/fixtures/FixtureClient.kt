@@ -1,6 +1,7 @@
 package io.github.xxfast.t3code.plugin.fixtures
 
 import com.intellij.openapi.diagnostic.Logger
+import io.github.xxfast.t3code.plugin.ui.PULL_REQUESTS
 import io.github.xxfast.t3code.plugin.ui.THREAD_AUTO_SETTLE_OPT_OUT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SNOOZE
@@ -34,6 +35,11 @@ import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesResult
+import io.github.xxfast.t3code.protocol.generated.PullRequestDetail
+import io.github.xxfast.t3code.protocol.generated.PullRequestListEntry
+import io.github.xxfast.t3code.protocol.generated.PullRequestListInput
+import io.github.xxfast.t3code.protocol.generated.PullRequestListResult
+import io.github.xxfast.t3code.protocol.generated.PullRequestRef
 import io.github.xxfast.t3code.protocol.generated.ProviderOptionChoice
 import io.github.xxfast.t3code.protocol.generated.SelectProviderOptionDescriptor
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
@@ -226,6 +232,21 @@ class FixtureClient(
   ): ProjectSearchEntriesResult {
     delay(SEARCH_ENTRIES_MILLIS)
     return fixtureSearchEntries(loaded.value?.projectEntries.orEmpty(), input)
+  }
+
+  /** The scenario's `pullRequests`, after a moment so the menu shows its loading line. */
+  override suspend fun pullRequests(input: PullRequestListInput): PullRequestListResult {
+    delay(PULL_REQUEST_LOOKUP_MILLIS)
+    return fixtureListPullRequests(loaded.value?.pullRequests.orEmpty(), input)
+  }
+
+  /** One of the scenario's `pullRequests` or `olderPullRequests`. */
+  override suspend fun pullRequestDetail(ref: PullRequestRef): PullRequestDetail {
+    delay(PULL_REQUEST_LOOKUP_MILLIS)
+    val scenario: Scenario? = loaded.value
+    val known: List<PullRequestListEntry> =
+      scenario?.pullRequests.orEmpty() + scenario?.olderPullRequests.orEmpty()
+    return fixturePullRequestDetail(known, ref)
   }
 
   override suspend fun projectFavicon(cwd: String, path: String?): ByteArray? = null
@@ -1301,6 +1322,7 @@ class FixtureClient(
       THREAD_AUTO_SETTLE_OPT_OUT,
       THREAD_SNOOZE,
       THREAD_TITLE_REGENERATION,
+      PULL_REQUESTS,
     ),
     environmentLabel = "Fixture MacBook",
     environmentId = FIXTURE_ENVIRONMENT_ID,
@@ -1394,6 +1416,9 @@ private const val REPLY_STEP_MILLIS: Long = 600
 
 /** How long the fixture's provider rescan takes. */
 private const val PROVIDER_SCAN_MILLIS: Long = 400
+
+/** How long the fake `pullRequests.list` and `pullRequests.detail` take. */
+private const val PULL_REQUEST_LOOKUP_MILLIS: Long = 250
 
 /** How long the fake `projects.searchEntries` takes. */
 private const val SEARCH_ENTRIES_MILLIS: Long = 150

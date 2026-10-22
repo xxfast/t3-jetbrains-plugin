@@ -7,6 +7,10 @@ import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesResult
+import io.github.xxfast.t3code.protocol.generated.PullRequestDetail
+import io.github.xxfast.t3code.protocol.generated.PullRequestListInput
+import io.github.xxfast.t3code.protocol.generated.PullRequestListResult
+import io.github.xxfast.t3code.protocol.generated.PullRequestRef
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
@@ -189,6 +193,17 @@ public class WebSocketT3Client internal constructor(
     val payload: JsonElement =
       T3JsonOut.encodeToJsonElement(ProjectSearchEntriesInput.serializer(), input)
     return decode(ProjectSearchEntriesResult.serializer(), call("projects.searchEntries", payload))
+  }
+
+  override suspend fun pullRequests(input: PullRequestListInput): PullRequestListResult {
+    val payload: JsonElement =
+      T3JsonOut.encodeToJsonElement(PullRequestListInput.serializer(), input)
+    return decode(PullRequestListResult.serializer(), call("pullRequests.list", payload))
+  }
+
+  override suspend fun pullRequestDetail(ref: PullRequestRef): PullRequestDetail {
+    val payload: JsonElement = T3JsonOut.encodeToJsonElement(PullRequestRef.serializer(), ref)
+    return decode(PullRequestDetail.serializer(), call("pullRequests.detail", payload))
   }
 
   override suspend fun listRefs(input: VcsListRefsInput): VcsListRefsResult {

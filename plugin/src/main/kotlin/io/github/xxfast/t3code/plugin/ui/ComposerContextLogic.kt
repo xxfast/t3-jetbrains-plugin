@@ -59,6 +59,8 @@ data class ReviewCommentContext(
   val text: String,
   val diff: String,
   val fenceLanguage: String? = null,
+  /** The pull request a `#` reference or a hand-off is about. */
+  val pullRequest: PullRequestContextMetadata? = null,
 )
 
 /**
@@ -126,8 +128,12 @@ private val fileCommentSequence: AtomicLong = AtomicLong()
 fun nextFileCommentId(now: Long = System.currentTimeMillis()): String =
   "file-comment-$now-${fileCommentSequence.incrementAndGet()}"
 
-/** `reviewCommentContextLabel`, for comments that aren't pull request summaries. */
+/** `reviewCommentContextLabel`: `#<number>` for a pull request summary, else file and range. */
 fun reviewCommentContextLabel(comment: ReviewCommentContext): String {
+  val pullRequestNumber: Long? = pullRequestContextNumber(comment)
+  if (isPullRequestSummaryContext(comment) && pullRequestNumber != null) {
+    return "#$pullRequestNumber"
+  }
   val range: MatchResult? = DIFF_RANGE.find(comment.rangeLabel)
   val label: String = if (range == null) {
     comment.rangeLabel
@@ -138,6 +144,22 @@ fun reviewCommentContextLabel(comment: ReviewCommentContext): String {
     "L$from$upTo$before"
   }
   return "${basename(comment.filePath)} $label"
+}
+
+private val LEGACY_PULL_REQUEST_PATH: Regex = Regex("^PR #(\\d+)$")
+
+/** `isPullRequestSummaryContext`, apps/web/src/lib/composerContextRecords.ts:77. */
+fun isPullRequestSummaryContext(comment: ReviewCommentContext): Boolean {
+  if (comment.pullRequest != null) return true
+  return comment.sectionId.startsWith("pull-request:") &&
+    comment.diff.trim().isEmpty() &&
+    LEGACY_PULL_REQUEST_PATH.matches(comment.filePath)
+}
+
+/** `pullRequestContextNumber`, composerContextRecords.ts:86. */
+private fun pullRequestContextNumber(comment: ReviewCommentContext): Long? {
+  comment.pullRequest?.let { return it.number }
+  return LEGACY_PULL_REQUEST_PATH.find(comment.filePath)?.groupValues?.get(1)?.toLongOrNull()
 }
 
 private fun basename(filePath: String): String = filePath.split('/', '\\').last()
@@ -205,6 +227,7 @@ fun ReviewCommentContext.toRecord(): JsonObject = buildJsonObject {
   put("text", clampContextText(text, COMPOSER_CONTEXT_REVIEW_TEXT_MAX_CHARS))
   put("diff", clampContextText(diff, COMPOSER_CONTEXT_REVIEW_DIFF_MAX_CHARS))
   if (fenceLanguage != null) put("fenceLanguage", fenceLanguage)
+  if (pullRequest != null) put("pullRequest", pullRequest.toJson())
 }
 
 /** `buildMessageContext`'s envelope: null when there's nothing to carry. */

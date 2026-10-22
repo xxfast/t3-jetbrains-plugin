@@ -13,6 +13,7 @@ import io.github.xxfast.t3code.protocol.ServerSession
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.generated.ProjectEntry
+import io.github.xxfast.t3code.protocol.generated.PullRequestListEntry
 import io.github.xxfast.t3code.protocol.generated.ServerAuthDescriptor
 import io.github.xxfast.t3code.protocol.generated.ServerProviderSkill
 import io.github.xxfast.t3code.protocol.generated.ServerProviderWorkspaceSnapshot
@@ -49,6 +50,10 @@ class ScenarioFile(
   val providerTurns: Map<String, List<ProviderTurn>> = emptyMap(),
   /** Files and folders `projects.searchEntries` searches, relative to any cwd. */
   val projectEntries: List<ProjectEntry> = emptyList(),
+  /** Pull requests `pullRequests.list` answers with. */
+  val pullRequests: List<PullRequestListEntry> = emptyList(),
+  /** Pull requests only `pullRequests.detail` finds, past what the list shows. */
+  val olderPullRequests: List<PullRequestListEntry> = emptyList(),
 )
 
 @Serializable
@@ -83,6 +88,8 @@ class Scenario(
   val messages: Map<String, List<ConversationMessage>> = emptyMap(),
   val providerTurns: Map<String, List<ProviderTurn>> = emptyMap(),
   val projectEntries: List<ProjectEntry> = emptyList(),
+  val pullRequests: List<PullRequestListEntry> = emptyList(),
+  val olderPullRequests: List<PullRequestListEntry> = emptyList(),
 ) {
   companion object {
     fun decode(text: String): Scenario {
@@ -104,6 +111,8 @@ class Scenario(
         messages = file.messages,
         providerTurns = file.providerTurns,
         projectEntries = file.projectEntries,
+        pullRequests = file.pullRequests,
+        olderPullRequests = file.olderPullRequests,
       )
     }
 
@@ -132,6 +141,8 @@ class Scenario(
       messages = parts.map { it.messages }.fold(emptyMap(), ::append),
       providerTurns = parts.map { it.providerTurns }.fold(emptyMap(), ::append),
       projectEntries = parts.flatMap { it.projectEntries }.distinctBy { it.path },
+      pullRequests = parts.flatMap { it.pullRequests }.distinctBy { it.url },
+      olderPullRequests = parts.flatMap { it.olderPullRequests }.distinctBy { it.url },
     )
 
     fun failed(name: String, message: String): Scenario = Scenario(

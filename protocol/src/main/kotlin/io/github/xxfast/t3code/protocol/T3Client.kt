@@ -6,6 +6,10 @@ import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesResult
+import io.github.xxfast.t3code.protocol.generated.PullRequestDetail
+import io.github.xxfast.t3code.protocol.generated.PullRequestListInput
+import io.github.xxfast.t3code.protocol.generated.PullRequestListResult
+import io.github.xxfast.t3code.protocol.generated.PullRequestRef
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
@@ -72,6 +76,15 @@ public interface T3Client {
    * `input.query`, in the server's order.
    */
   public suspend fun searchEntries(input: ProjectSearchEntriesInput): ProjectSearchEntriesResult
+
+  /**
+   * `pullRequests.list` (`orchestration:read`): pull requests across the server's projects,
+   * filtered by `input`. Hosts that couldn't be read land in `errors`, not as a failure.
+   */
+  public suspend fun pullRequests(input: PullRequestListInput): PullRequestListResult
+
+  /** `pullRequests.detail` (`orchestration:read`): one pull request by number. */
+  public suspend fun pullRequestDetail(ref: PullRequestRef): PullRequestDetail
 
   /**
    * The project's favicon as encoded image bytes, or null when the server has none for it.

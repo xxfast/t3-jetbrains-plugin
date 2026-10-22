@@ -1,0 +1,209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "PullRequestListInput",
+  "title": "PullRequestListInput",
+  "type": "object",
+  "properties": {
+    "state": {
+      "type": "string",
+      "enum": [
+        "all",
+        "open",
+        "closed",
+        "merged"
+      ]
+    },
+    "involvement": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "all",
+            "reviewing",
+            "authored"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "filters": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PullRequestListFilters"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "projectId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "projectIds": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "host": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "limit": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "cursors": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "query": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "state"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "PullRequestListFilters": {
+      "type": "object",
+      "properties": {
+        "draft": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "only",
+                "hide"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "review": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "approved",
+                "changes-requested",
+                "review-required",
+                "none"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checks": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "passing",
+                "failing"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "labels": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 10
+              },
+              "maxItems": 10
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "excludedLabels": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 10
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "author": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

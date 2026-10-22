@@ -1681,6 +1681,144 @@ public data class PullRequestActor(
 )
 
 @Serializable
+public data class PullRequestCapabilities(
+  val diff: Boolean,
+  val comment: Boolean,
+  val actions: List<String?>,
+  val mergeMethods: List<String?>,
+  val deleteBranch: Boolean? = null,
+  val updateMethods: List<String?>? = null,
+  val search: Boolean,
+  val reactions: Boolean? = null,
+  val viewedFiles: String? = null,
+  val review: PullRequestReviewCapabilities,
+  val reviewers: PullRequestReviewerCapabilities,
+  val edit: PullRequestEditCapabilities? = null,
+  val stacks: Boolean? = null,
+  val stackActions: Boolean? = null,
+  val labels: Boolean? = null,
+)
+
+@Serializable
+public data class PullRequestCheck(
+  val name: String,
+  val status: String,
+  val description: String?,
+  val url: String?,
+  val required: Boolean? = null,
+)
+
+@Serializable
+public data class PullRequestEditCapabilities(
+  val changeRequest: Boolean,
+  val comment: Boolean,
+)
+
+@Serializable
+public data class PullRequestLabel(
+  val name: String,
+  val color: String?,
+)
+
+@Serializable
+public data class PullRequestListEntry(
+  val stack: PullRequestStackMembership? = null,
+  val provider: String,
+  val host: String,
+  val projectId: String,
+  val projectTitle: String,
+  val repository: String,
+  val number: Long,
+  val title: String,
+  val url: String,
+  val author: PullRequestActor?,
+  val headBranch: String,
+  val baseBranch: String,
+  val state: String,
+  val isDraft: Boolean,
+  val mergeability: String,
+  val additions: Long,
+  val deletions: Long,
+  val createdAt: String,
+  val updatedAt: String,
+  val observedAt: Double? = null,
+  val viewerReviewRequested: Boolean,
+  val labels: List<PullRequestLabel>,
+  val reviewDecision: String? = null,
+  val checksState: String? = null,
+)
+
+@Serializable
+public data class PullRequestListFilters(
+  val draft: String? = null,
+  val review: String? = null,
+  val checks: String? = null,
+  val labels: List<List<String>>? = null,
+  val excludedLabels: List<String>? = null,
+  val author: String? = null,
+)
+
+@Serializable
+public data class PullRequestListProjectError(
+  val projectId: String,
+  val projectTitle: String,
+  val message: String,
+)
+
+@Serializable
+public data class PullRequestMergeCapabilities(
+  val merge: Boolean,
+  val squash: Boolean,
+  val rebase: Boolean,
+)
+
+@Serializable
+public data class PullRequestProviderSummary(
+  val host: String,
+  val kind: String,
+  val searchesOnHost: Boolean,
+  val actions: List<String?>? = null,
+  val projectCount: Long,
+  val configured: Boolean,
+  val detail: String?,
+)
+
+@Serializable
+public data class PullRequestReviewCapabilities(
+  val inlineComment: Boolean,
+  val reply: Boolean,
+  val resolve: Boolean,
+  val verdicts: List<String?>,
+)
+
+@Serializable
+public data class PullRequestReviewerCapabilities(
+  val request: Boolean,
+  val listCandidates: Boolean,
+)
+
+@Serializable
+public data class PullRequestStackMembership(
+  val number: Long,
+  val position: Long,
+  val size: Long,
+  val base: String,
+)
+
+@Serializable
+public data class PullRequestViewerPermissions(
+  val stackRebase: Boolean? = null,
+  val actions: List<String?>,
+  val comment: Boolean,
+  val resolve: Boolean,
+  val verdicts: List<String?>,
+  val requestReviewers: Boolean,
+  val updateMethods: List<String?>? = null,
+  val labels: Boolean? = null,
+  val editChangeRequest: Boolean? = null,
+)
+
+@Serializable
 public data class RepositoryIdentity(
   val canonicalKey: String,
   val locator: RepositoryIdentityLocator,

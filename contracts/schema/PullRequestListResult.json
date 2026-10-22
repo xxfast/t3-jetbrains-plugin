@@ -1,0 +1,407 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "PullRequestListResult",
+  "title": "PullRequestListResult",
+  "type": "object",
+  "properties": {
+    "viewers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "providers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PullRequestProviderSummary"
+      }
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PullRequestListEntry"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PullRequestListProjectError"
+      }
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "nextCursors": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "viewers",
+    "providers",
+    "entries",
+    "errors",
+    "truncated",
+    "nextCursors"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "PullRequestActor": {
+      "type": "object",
+      "properties": {
+        "isBot": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "login": {
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "avatarUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "login",
+        "name",
+        "avatarUrl"
+      ],
+      "additionalProperties": true
+    },
+    "PullRequestLabel": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "color"
+      ],
+      "additionalProperties": true
+    },
+    "PullRequestListEntry": {
+      "type": "object",
+      "properties": {
+        "stack": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PullRequestStackMembership"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "provider": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "projectTitle": {
+          "type": "string"
+        },
+        "repository": {
+          "type": "string"
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "author": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PullRequestActor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "headBranch": {
+          "type": "string"
+        },
+        "baseBranch": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "open",
+            "closed",
+            "merged"
+          ]
+        },
+        "isDraft": {
+          "type": "boolean"
+        },
+        "mergeability": {
+          "type": "string",
+          "enum": [
+            "mergeable",
+            "conflicting",
+            "unknown"
+          ]
+        },
+        "additions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "deletions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "observedAt": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "viewerReviewRequested": {
+          "type": "boolean"
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PullRequestLabel"
+          }
+        },
+        "reviewDecision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "approved",
+                "changes-requested",
+                "review-required"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checksState": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "passing",
+                "failing",
+                "pending"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "provider",
+        "host",
+        "projectId",
+        "projectTitle",
+        "repository",
+        "number",
+        "title",
+        "url",
+        "author",
+        "headBranch",
+        "baseBranch",
+        "state",
+        "isDraft",
+        "mergeability",
+        "additions",
+        "deletions",
+        "createdAt",
+        "updatedAt",
+        "viewerReviewRequested",
+        "labels"
+      ],
+      "additionalProperties": true
+    },
+    "PullRequestListProjectError": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string"
+        },
+        "projectTitle": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectId",
+        "projectTitle",
+        "message"
+      ],
+      "additionalProperties": true
+    },
+    "PullRequestProviderSummary": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "searchesOnHost": {
+          "type": "boolean"
+        },
+        "actions": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "merge",
+                      "ready",
+                      "draft",
+                      "close",
+                      "reopen",
+                      "delete-branch",
+                      "update-branch",
+                      "enable-auto-merge",
+                      "disable-auto-merge",
+                      "revert",
+                      "approve-workflows"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "projectCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "configured": {
+          "type": "boolean"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "host",
+        "kind",
+        "searchesOnHost",
+        "projectCount",
+        "configured",
+        "detail"
+      ],
+      "additionalProperties": true
+    },
+    "PullRequestStackMembership": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "position": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "base": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "number",
+        "position",
+        "size",
+        "base"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

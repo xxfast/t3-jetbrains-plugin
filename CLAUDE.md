@@ -52,7 +52,10 @@ How it fits together:
   `waiting-approval.json`, `waiting-question.json`, `unknown-items.json`, `many-items.json`,
   `unread.json`, `snoozed.json` with one sleeping and one woken, `worktree-setup.json` with a
   first turn whose worktree is still being prepared, `skills.json` with provider skills and a
-  workspace snapshot for the `$` menu), and its `connection.json` grants the
+  workspace snapshot for the `$` menu, `files.json` with the files and folders `@` searches,
+  `pull-requests.json` with KStore's pull requests for `#`, listed and older ones only
+  `pullRequests.detail` finds; KStore has a repository identity, Decompose-Router doesn't, so
+  its `#` says pull requests aren't available), and its `connection.json` grants the
   operate and terminal scopes so every action is live. `disconnected/`, `pairing/`, `auth-error/`, `read-only/` (no operate) and
   `empty-server/` cover connection-level states; the ones with threads carry a byte-for-byte copy
   of `default/list.json`. Shapes are the same `:protocol` types the real client decodes, so

@@ -371,9 +371,8 @@ private class ComposerTriggerMenu(
  * half of `ChatComposer.tsx`. The text and caret say which trigger is active, Esc dismisses it
  * until the token changes, and the kind decides the rows: `$` lists the provider's skills for
  * the thread's cwd (`resolveProviderSkillsForCwd`), `/` the built-ins, the provider's commands
- * and skills ([slashCommandMenuItems]), `@` threads, files and folders
- * ([ComposerMentionMenus]). `#` (#46) is detected already and gets its rows in
- * [triggerMenuFor].
+ * and skills ([slashCommandMenuItems]), `@` threads, files and folders and `#` pull requests
+ * ([ComposerMentionMenus]), each in its branch of [triggerMenuFor].
  *
  * Typing and a change of provider, cwd or snapshot ask the host to re-check the workspace
  * snapshot (`refreshWorkspaceSnapshotOnTyping` and the effect beside it, ChatComposer.tsx:1765).
@@ -585,8 +584,7 @@ private fun triggerMenuFor(
 
   ComposerTriggerKind.PATH -> mentions.pathMenu(trigger, pick)
 
-  ComposerTriggerKind.PULL_REQUEST,
-  -> null
+  ComposerTriggerKind.PULL_REQUEST -> mentions.pullRequestMenu(trigger, pick)
 }
 
 /**

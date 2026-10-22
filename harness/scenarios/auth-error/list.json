@@ -5,6 +5,19 @@
       "title": "KStore",
       "workspaceRoot": "/Users/xxfast/Developer/XXFAST/KMP/KStore",
       "scripts": [],
+      "repositoryIdentity": {
+        "canonicalKey": "github.com/xxfast/kstore",
+        "locator": {
+          "source": "git-remote",
+          "remoteName": "origin",
+          "remoteUrl": "git@github.com:xxfast/KStore.git"
+        },
+        "webUrl": "https://github.com/xxfast/KStore",
+        "displayName": "xxfast/KStore",
+        "provider": "github",
+        "owner": "xxfast",
+        "name": "KStore"
+      },
       "createdAt": "2026-08-02T09:14:00.000Z",
       "updatedAt": "2026-10-18T22:40:11.000Z"
     },
