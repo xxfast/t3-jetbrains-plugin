@@ -50,6 +50,7 @@ fun TraitsPicker(
   val label: String =
     buildTraitsTriggerLabel(state.provider?.driver, selected, state.selection, state.reported)
   var open: Boolean by remember { mutableStateOf(false) }
+  ComposerShortcutTarget(ComposerControlKind.EFFORT, enabled) { open = true }
 
   fun pick(descriptor: SelectProviderOptionDescriptor, value: String) {
     open = false

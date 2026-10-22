@@ -131,6 +131,7 @@ private fun RuntimeModeSelect(
   val current: RuntimeModeOption = state.runtimeModes.find { it.mode == state.runtimeMode }
     ?: RUNTIME_MODES.first()
   var open: Boolean by remember { mutableStateOf(false) }
+  ComposerShortcutTarget(ComposerControlKind.MODE, enabled) { open = true }
   Box {
     Tooltip(tooltip = { Text(current.description) }) {
       ComposerControl(onClick = { open = !open }, enabled = enabled) {

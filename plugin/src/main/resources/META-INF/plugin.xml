@@ -48,6 +48,8 @@
     <actionPromoter implementation="io.github.xxfast.t3code.plugin.actions.UndoThreadPromoter"/>
     <!-- Puts T3Code.StashPrompt ahead of SaveAll while the composer has focus -->
     <actionPromoter implementation="io.github.xxfast.t3code.plugin.actions.StashPromptPromoter"/>
+    <!-- Puts the T3Code.Composer.* shortcuts ahead of the IDE's while the composer has focus -->
+    <actionPromoter implementation="io.github.xxfast.t3code.plugin.actions.ComposerShortcutPromoter"/>
   </extensions>
 
   <actions>
@@ -256,6 +258,70 @@
       <add-to-group group-id="Diff.EditorPopupMenu" anchor="first"/>
       <add-to-group group-id="Diff.EditorGutterPopupMenu" anchor="first"/>
       <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift C"/>
+    </action>
+
+    <!-- Upstream's composer keybindings (packages/shared/src/keybindings.ts:176 to 206) and their
+         default keys, mod being Cmd on macOS. Only while the composer has focus -->
+    <action
+      id="T3Code.Composer.ModelPicker"
+      class="io.github.xxfast.t3code.plugin.actions.ComposerModelPickerAction"
+      text="T3 Model Picker: Toggle"
+      description="Open the model picker for the focused T3 composer">
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift M"/>
+      <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift M"/>
+      <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift M"/>
+    </action>
+    <action
+      id="T3Code.Composer.Effort"
+      class="io.github.xxfast.t3code.plugin.actions.ComposerEffortAction"
+      text="T3 Composer: Effort"
+      description="Open the focused T3 composer&apos;s effort and traits picker">
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift E"/>
+      <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift E"/>
+      <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift E"/>
+    </action>
+    <action
+      id="T3Code.Composer.Mode"
+      class="io.github.xxfast.t3code.plugin.actions.ComposerModeAction"
+      text="T3 Composer: Mode"
+      description="Open the focused T3 composer&apos;s runtime mode select">
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift A"/>
+      <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift A"/>
+      <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift A"/>
+    </action>
+    <action
+      id="T3Code.Composer.Workspace"
+      class="io.github.xxfast.t3code.plugin.actions.ComposerWorkspaceAction"
+      text="T3 Composer: Workspace"
+      description="Open the focused T3 composer&apos;s workspace select">
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift X"/>
+      <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift X"/>
+      <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift X"/>
+    </action>
+    <action
+      id="T3Code.Composer.Branch"
+      class="io.github.xxfast.t3code.plugin.actions.ComposerBranchAction"
+      text="T3 Composer: Branch"
+      description="Open the focused T3 composer&apos;s branch picker">
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift G"/>
+      <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift G"/>
+      <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift G"/>
+    </action>
+    <action
+      id="T3Code.Composer.SteerQueued"
+      class="io.github.xxfast.t3code.plugin.actions.ComposerSteerQueuedAction"
+      text="T3 Queue: Send First Queued Message as Steer"
+      description="Steer the first queued message into the running turn">
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift ENTER"/>
+      <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift ENTER"/>
+      <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift ENTER"/>
+    </action>
+    <action
+      id="T3Code.Composer.EditQueued"
+      class="io.github.xxfast.t3code.plugin.actions.ComposerEditQueuedAction"
+      text="T3 Queue: Edit Last Queued Message"
+      description="Take the last queued message back into the composer, with the caret at the start">
+      <keyboard-shortcut keymap="$default" first-keystroke="alt UP"/>
     </action>
   </actions>
 </idea-plugin>

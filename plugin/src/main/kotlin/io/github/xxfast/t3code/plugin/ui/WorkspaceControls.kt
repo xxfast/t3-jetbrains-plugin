@@ -92,6 +92,7 @@ private fun WorkspaceSelect(
   onEnvMode: (EnvMode) -> Unit,
 ) {
   var open: Boolean by remember { mutableStateOf(false) }
+  ComposerShortcutTarget(ComposerControlKind.WORKSPACE, enabled && !state.locked) { open = true }
   Box {
     Tooltip(tooltip = { Text("Choose a workspace") }) {
       ComposerControl(onClick = { open = !open }, enabled = enabled && !state.locked) {
@@ -154,6 +155,7 @@ private fun RefPicker(
   val base: Boolean = state.selectingWorktreeBase
   val canPick: Boolean = base || state.canChangeBranch
   var open: Boolean by remember { mutableStateOf(false) }
+  ComposerShortcutTarget(ComposerControlKind.BRANCH, enabled && canPick) { open = true }
   Box {
     Tooltip(tooltip = { Text(if (canPick) "Branch" else BRANCH_LOCKED_REASON) }) {
       ComposerControl(onClick = { open = !open }, enabled = enabled && canPick) {

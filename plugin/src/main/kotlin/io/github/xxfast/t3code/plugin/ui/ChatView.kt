@@ -225,6 +225,11 @@ fun ChatView(
           footer = footer,
           footerActions = footerActions,
           onClearReview = onClearReview,
+          promptHistory = remember(view?.items) {
+            view?.items.orEmpty()
+              .filterIsInstance<TurnItem.UserMessage>()
+              .map { it.toPromptHistoryMessage() }
+          },
           onSend = onSend,
           onInterrupt = onInterrupt,
           attachedAbove = queue?.let { state -> { QueuedRunsControl(state, queueActions) } },

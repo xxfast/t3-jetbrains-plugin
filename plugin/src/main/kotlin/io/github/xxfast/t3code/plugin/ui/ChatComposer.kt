@@ -12,9 +12,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +44,7 @@ import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -89,6 +92,9 @@ fun ChatComposer(
   onClearReview: () -> Unit = {},
   stashCount: Int = 0, // prompts in the stash, for its badge
   attachedAbove: (@Composable () -> Unit)? = null, // upstream's `attachedAbove`, a drawer on top
+  promptHistory: List<ComposerPromptHistoryMessage> = emptyList(),
+  onSteerQueued: (() -> Boolean)? = null,
+  onEditQueued: (() -> Boolean)? = null,
 ) {
   // [alternate] is Ctrl/Cmd+Enter or Ctrl/Cmd-click while running: the other follow-up behaviour
   fun send(alternate: Boolean) {
@@ -115,6 +121,15 @@ fun ChatComposer(
   val folded: Boolean = resting && pending == null
   val motion: ComposerRestingMotion = remember { ComposerRestingMotion(folded) }
   LaunchedEffect(folded) { motion.moveTo(folded) }
+
+  // What the `T3Code.Composer.*` actions reach while the prompt has focus
+  val shortcuts: ComposerShortcuts = remember { ComposerShortcuts() }
+  SideEffect {
+    shortcuts.onToggleModelPicker = footerActions.onOpenModelPicker.takeIf { footer != null }
+    shortcuts.onSteerQueued = onSteerQueued
+    shortcuts.onEditQueued = onEditQueued
+    shortcuts.isCaretAtStart = { draft.selection == TextRange(0) }
+  }
   val actions: @Composable () -> Unit = {
     ComposerActions(
       state = state,
@@ -135,6 +150,7 @@ fun ChatComposer(
   ) {
     if (state.reviewComments > 0) ReviewBanner(state.reviewComments, onClearReview)
     ComposerStashBadge(stashCount, attachmentActions.onOpenStash)
+    val recall: ComposerPromptRecall = remember(draft) { ComposerPromptRecall(draft) }
     // The trigger menu is a drawer over the box, `composerSuggestionsVisible`: not on a request
     val triggerMenu: ComposerTriggerMenu = rememberComposerTriggerMenu(
       draft = draft,
@@ -162,7 +178,11 @@ fun ChatComposer(
     ) {
     ComposerWithDrawer(
       drawer = strip?.let { workspace ->
-        { ComposerContextStrip(workspace, state.enabled, footerActions) }
+        {
+          CompositionLocalProvider(LocalComposerShortcuts provides shortcuts) {
+            ComposerContextStrip(workspace, state.enabled, footerActions)
+          }
+        }
       },
     ) {
     ComposerSurface(
@@ -184,20 +204,43 @@ fun ChatComposer(
               draft = draft,
               progress = { motion.expansion },
               attachmentActions = attachmentActions,
+              shortcuts = shortcuts,
               onSend = ::send,
               onFocus = onPromptFocus,
               onMenuKey = triggerMenu.onKey,
+              onModeKey = { event ->
+                composerModeKey(event, footer?.showInteractionModeToggle == true) {
+                  footerActions.onToggleInteractionMode()
+                }
+              },
+              onHistoryKey = { event, layout ->
+                recall.onKey(
+                  event = event,
+                  layout = layout,
+                  messages = promptHistory,
+                  available = pending == null && !hasNonPromptContent(state, extras),
+                  onReplace = triggerMenu.onPromptReplaced,
+                )
+              },
             )
           },
           actions = actions,
+          // Both sets stay composed; only the one on screen answers the shortcuts
           controls = {
             Row(Modifier.horizontalScroll(rememberScrollState())) {
-              footer?.let { ComposerControls(it, state.enabled, footerActions, draft) }
+              CompositionLocalProvider(
+                LocalComposerShortcuts provides shortcuts.takeIf { !folded },
+              ) {
+                footer?.let { ComposerControls(it, state.enabled, footerActions, draft) }
+              }
             }
           },
           restingControls = {
             Row(Modifier.horizontalScroll(rememberScrollState())) {
-              CompositionLocalProvider(LocalComposerControlSize provides ComposerControlSize.XS) {
+              CompositionLocalProvider(
+                LocalComposerControlSize provides ComposerControlSize.XS,
+                LocalComposerShortcuts provides shortcuts.takeIf { folded },
+              ) {
                 footer?.let { ComposerControls(it, state.enabled, footerActions, draft) }
               }
             }
@@ -270,11 +313,16 @@ private fun ComposerPromptEditor(
   draft: TextFieldState,
   progress: () -> Float,
   attachmentActions: AttachmentActions,
+  shortcuts: ComposerShortcuts,
   onSend: (alternate: Boolean) -> Unit,
   onFocus: () -> Unit,
   onMenuKey: (KeyEvent) -> Boolean,
+  onModeKey: (KeyEvent) -> Boolean,
+  onHistoryKey: (KeyEvent, layout: TextLayoutResult?) -> Boolean,
   modifier: Modifier = Modifier,
 ) {
+  // The prompt's lines as laid out, for `isCaretOnVisualEdge`
+  val layout: Array<(() -> TextLayoutResult?)?> = remember { arrayOfNulls(1) }
   // `onVisibleSelectionChange`: typing or moving the caret unfolds, and so does a click
   LaunchedEffect(draft) {
     snapshotFlow { draft.text.toString() to draft.selection }.drop(1).collect { onFocus() }
@@ -287,11 +335,16 @@ private fun ComposerPromptEditor(
       .offset { IntOffset(0, (RESTING_TEXT_INSET.toPx() * (1 - progress())).roundToInt()) }
       .onFocusChanged { if (it.isFocused) onFocus() }
       .attachmentTarget(state.enabled, attachmentActions)
-      // The open menu sees the keys first, as `onComposerCommandKey` does before sending
+      .composerShortcutTarget(state.enabled, shortcuts)
+      // `onComposerCommandKey`'s order: Shift+Tab, then the open menu, then prompt recall,
+      // then sending
+      .onPreviewKeyEvent(onModeKey)
       .onPreviewKeyEvent(onMenuKey)
+      .onPreviewKeyEvent { event -> onHistoryKey(event, layout[0]?.invoke()) }
       .composerKeys(draft, state.running, onSend),
     enabled = state.enabled,
     lineLimits = TextFieldLineLimits.MultiLine(),
+    onTextLayout = { result -> layout[0] = result },
     // Upstream's short placeholder (ChatComposer.tsx:6695). The long one offers @tags, $skills
     // and / commands, and `@` has no menu yet (#45).
     placeholder = { Text("Ask anything...", color = JewelTheme.globalColors.text.info) },
@@ -307,6 +360,8 @@ private class ComposerTriggerMenu(
   val onHighlight: (itemId: String) -> Unit,
   /** The prompt's preview key handler: true when the menu took the key. */
   val onKey: (KeyEvent) -> Boolean,
+  /** The prompt came back from history: no trigger for it, `setComposerTrigger(null)`. */
+  val onPromptReplaced: () -> Unit,
 )
 
 /**
@@ -331,6 +386,8 @@ private fun rememberComposerTriggerMenu(
   hasNonPromptContent: Boolean,
 ): ComposerTriggerMenu {
   val triggers: ComposerTriggerState = remember(draft) { ComposerTriggerState() }
+  // Set by a recall, so the text it puts in opens no menu until the next edit
+  val replaced: BooleanArray = remember(draft) { BooleanArray(1) }
   var trigger: ComposerTrigger? by remember(draft) { mutableStateOf(null) }
   var highlightedItemId: String? by remember(draft) { mutableStateOf(null) }
   var highlightedSearchKey: String? by remember(draft) { mutableStateOf(null) }
@@ -340,7 +397,10 @@ private fun rememberComposerTriggerMenu(
     snapshotFlow { draft.text.toString() to draft.selection }.collect { (text, selection) ->
       if (lastText != null && text != lastText) refresh.value()
       lastText = text
-      trigger = triggers.setTrigger(detectComposerTrigger(text, selection.end))
+      val detected: ComposerTrigger? =
+        if (replaced[0]) null else detectComposerTrigger(text, selection.end)
+      replaced[0] = false
+      trigger = triggers.setTrigger(detected)
     }
   }
   val provider: ServerProvider? = footer?.provider
@@ -476,7 +536,10 @@ private fun rememberComposerTriggerMenu(
     }
     true
   }
-  return ComposerTriggerMenu(menu, activeItemId, ::highlight, onKey)
+  return ComposerTriggerMenu(menu, activeItemId, ::highlight, onKey) {
+    replaced[0] = true
+    highlightedItemId = null
+  }
 }
 
 /**
@@ -516,6 +579,69 @@ private fun triggerMenuFor(
   ComposerTriggerKind.PATH,
   ComposerTriggerKind.PULL_REQUEST,
   -> null
+}
+
+/**
+ * Shift+Tab toggles plan mode when the provider has it (ChatComposer.tsx:4220); without it the
+ * key goes on to focus traversal.
+ */
+private fun composerModeKey(
+  event: KeyEvent,
+  planModeUiEnabled: Boolean,
+  onToggle: () -> Unit,
+): Boolean {
+  if (event.key != Key.Tab || !event.isShiftPressed || !planModeUiEnabled) return false
+  if (event.type == KeyEventType.KeyDown) onToggle()
+  return true
+}
+
+/**
+ * Up/Down through earlier prompts, upstream's `navigatePromptHistory` (ChatComposer.tsx:4170):
+ * the browsing position per draft (upstream keys it by the draft target), stepped by
+ * [stepComposerPromptHistory] when the caret is on the prompt's first or last visual line.
+ */
+private class ComposerPromptRecall(private val draft: TextFieldState) {
+  private var position: ComposerPromptHistoryPosition? = null
+
+  /** True when [event] recalled a prompt. [available]: no request waiting, nothing attached. */
+  fun onKey(
+    event: KeyEvent,
+    layout: TextLayoutResult?,
+    messages: List<ComposerPromptHistoryMessage>,
+    available: Boolean,
+    onReplace: () -> Unit,
+  ): Boolean {
+    val direction: ComposerPromptHistoryDirection = when (event.key) {
+      Key.DirectionUp -> ComposerPromptHistoryDirection.BACKWARD
+      Key.DirectionDown -> ComposerPromptHistoryDirection.FORWARD
+      else -> return false
+    }
+    if (event.type != KeyEventType.KeyDown) return false
+    val modified: Boolean =
+      event.isShiftPressed || event.isAltPressed || event.isCtrlPressed || event.isMetaPressed
+    val prompt: String = draft.text.toString()
+    if (!canNavigatePromptHistory(modified, !available, false, position, prompt)) return false
+    val selection: TextRange = draft.selection
+    // A layout from before the last edit can be shorter than the text
+    val laidOut: Int? = layout?.layoutInput?.text?.length
+    val caretLine: Int? = layout
+      ?.takeIf { laidOut == prompt.length }
+      ?.getLineForOffset(selection.end.coerceIn(0, prompt.length))
+    if (!isCaretOnVisualEdge(prompt, selection, direction, caretLine, layout?.lineCount)) {
+      return false
+    }
+    val step: ComposerPromptHistoryStep = stepComposerPromptHistory(
+      direction = direction,
+      entries = buildComposerPromptHistoryEntries(messages),
+      position = position,
+      currentPrompt = prompt,
+    ) ?: return false
+    position = step.position
+    // `replacePromptFromHistory`: the text, the caret at its end, no trigger
+    onReplace()
+    draft.setTextAndPlaceCursorAtEnd(step.prompt)
+    return true
+  }
 }
 
 /** What the `/` menu needs besides the trigger, see [slashCommandMenuItems]. */
