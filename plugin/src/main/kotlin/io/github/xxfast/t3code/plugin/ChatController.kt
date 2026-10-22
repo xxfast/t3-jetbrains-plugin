@@ -50,6 +50,7 @@ import io.github.xxfast.t3code.plugin.ui.classifyAttachment
 import io.github.xxfast.t3code.plugin.ui.messageContext
 import io.github.xxfast.t3code.plugin.ui.outgoingText
 import io.github.xxfast.t3code.plugin.ui.ThreadContextRecord
+import io.github.xxfast.t3code.plugin.ui.Upload
 import io.github.xxfast.t3code.plugin.ui.titleSeed
 import io.github.xxfast.t3code.plugin.ui.uploadUrlInput
 import io.github.xxfast.t3code.plugin.ui.uploadedAttachment
@@ -513,8 +514,12 @@ class ChatController(private val project: Project, private val scope: CoroutineS
       }
       return
     }
-    val bytes: ByteArray = transfers[id]?.bytes ?: return
+    val local: ByteArray? = transfers[id]?.bytes
+    val uploaded: ChatAttachment? = (attachment.upload as? Upload.Ready)?.attachment
+    if (local == null && uploaded == null) return
     scope.launchReporting(project, "Couldn't open ${attachment.name}") {
+      // A restored draft has no local bytes: the server still has the upload
+      val bytes: ByteArray = local ?: T3.get().client.attachment(uploaded!!.id)
       openImage(project, id, attachment.name, attachment.mimeType, bytes)
     }
   }

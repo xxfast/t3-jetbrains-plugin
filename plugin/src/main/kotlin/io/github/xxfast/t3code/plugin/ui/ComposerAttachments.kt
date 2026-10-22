@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.ui.awt.RelativePoint
 import io.github.xxfast.t3code.plugin.actions.T3DataKeys
+import io.github.xxfast.t3code.protocol.generated.ChatAttachment
 import java.awt.Image
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.Transferable
@@ -158,7 +160,13 @@ fun ComposerChips(extras: DraftExtras, enabled: Boolean, actions: AttachmentActi
 @Composable
 private fun ImageTile(attachment: DraftAttachment, enabled: Boolean, actions: AttachmentActions) {
   AttachmentTile(attachment, enabled, actions) {
-    val preview: ImageBitmap? = attachment.preview
+    // A draft restored after a restart or from the stash has no local bytes: its uploaded image
+    // is fetched by server id, through the loader and cache the timeline uses
+    val images: MessageImageState = LocalMessageImages.current
+    val uploaded: ChatAttachment? = (attachment.upload as? Upload.Ready)?.attachment
+    val fetched: Boolean = attachment.preview == null && uploaded != null
+    LaunchedEffect(uploaded?.id, fetched) { if (fetched) images.onShown(listOf(uploaded!!)) }
+    val preview: ImageBitmap? = attachment.preview ?: uploaded?.let { images.previews[it.id] }
     if (preview != null) {
       Image(
         bitmap = preview,
