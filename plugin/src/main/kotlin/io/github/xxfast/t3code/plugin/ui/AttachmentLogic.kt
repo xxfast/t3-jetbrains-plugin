@@ -5,6 +5,7 @@ import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.ChatAttachment
 import io.github.xxfast.t3code.protocol.generated.ChatFileAttachment
 import io.github.xxfast.t3code.protocol.generated.ChatImageAttachment
+import kotlin.math.floor
 
 // Attachment rules, ported from upstream's packages/contracts/src/chatAttachment.ts,
 // apps/web/src/components/chat/composerAttachmentFiles.ts,
@@ -57,24 +58,84 @@ sealed interface AttachmentClass {
 }
 
 /**
- * `classifyComposerAttachmentFile` and the `mimeType` it ends up with: an empty or generic type
- * with an image extension is that image, anything not `image/` is a file, and an image type the
- * provider can't take is refused. Upstream converts HEIC; the plugin doesn't, so HEIC is refused.
+ * `classifyComposerAttachmentFile` and the `mimeType` it ends up with: HEIC is an image (the
+ * controller converts it to JPEG first, see `HeicConversion.kt`), an empty or generic type with
+ * an image extension is that image, anything not `image/` is a file (a video's type from its
+ * extension when the type is generic, `ChatComposer.tsx:5452`), and an image type the provider
+ * can't take is refused.
  */
 fun classifyAttachment(name: String, mimeType: String?): AttachmentClass {
   val type: String = mimeType?.lowercase().orEmpty()
-  if (type.isEmpty() || type == "application/octet-stream") {
+  if (isHeicImageFile(name, type)) {
+    val heic: String = if (type.startsWith("image/")) type else HEIC_MIME_TYPE
+    return AttachmentClass.Accepted(AttachmentKind.IMAGE, heic)
+  }
+  if (type.isEmpty() || type == OCTET_STREAM) {
     val inferred: String? = inferImageMimeTypeFromName(name)
     if (inferred != null) return AttachmentClass.Accepted(AttachmentKind.IMAGE, inferred)
   }
   if (!type.startsWith("image/")) {
-    return AttachmentClass.Accepted(AttachmentKind.FILE, type.ifEmpty { OCTET_STREAM })
+    val fileType: String = videoMimeType(name, type) ?: type.ifEmpty { OCTET_STREAM }
+    return AttachmentClass.Accepted(AttachmentKind.FILE, fileType)
   }
   if (isSupportedImageMimeType(type)) return AttachmentClass.Accepted(AttachmentKind.IMAGE, type)
   return AttachmentClass.Refused(
-    "'$name' is not a supported image type. Attach GIF, JPEG, PNG, or WebP images.",
+    "'$name' is not a supported image type. Attach GIF, HEIC, HEIF, JPEG, PNG, or WebP images.",
   )
 }
+
+private const val HEIC_MIME_TYPE: String = "image/heic"
+
+private val HEIC_IMAGE_MIME_TYPE: Regex = Regex("^image/hei(?:c|f)$", RegexOption.IGNORE_CASE)
+
+private val HEIC_IMAGE_EXTENSION: Regex = Regex("""\.(?:heic|heif)$""", RegexOption.IGNORE_CASE)
+
+/**
+ * `isHeicImageFile`, apps/web/src/lib/imageCompression.ts:47. Finder and some browsers omit the
+ * MIME type when dragging HEIC photos, so the extension counts when the type is generic.
+ */
+fun isHeicImageFile(name: String, mimeType: String): Boolean {
+  if (HEIC_IMAGE_MIME_TYPE.matches(mimeType)) return true
+  return (mimeType.isEmpty() || mimeType.lowercase() == OCTET_STREAM) &&
+    HEIC_IMAGE_EXTENSION.containsMatchIn(name)
+}
+
+/** `fileNameForMimeType`, imageCompression.ts:158: [name] with a converted image's extension. */
+fun fileNameForMimeType(name: String, mimeType: String): String {
+  val extension: String = if (mimeType == "image/webp") ".webp" else ".jpg"
+  val dot: Int = name.lastIndexOf('.')
+  val base: String = if (dot > 0) name.substring(0, dot) else name
+  return "$base$extension"
+}
+
+/** `VIDEO_MIME_TYPE_BY_EXTENSION`, packages/shared/src/video.ts:3. */
+private val VIDEO_MIME_TYPE_BY_EXTENSION: Map<String, String> = mapOf(
+  "avi" to "video/x-msvideo",
+  "m4v" to "video/mp4",
+  "mkv" to "video/x-matroska",
+  "mov" to "video/quicktime",
+  "mp4" to "video/mp4",
+  "ogv" to "video/ogg",
+  "webm" to "video/webm",
+)
+
+/**
+ * `videoMimeType`, packages/shared/src/video.ts:15: the video type an attachment is, or null. A
+ * definite type answers; the extension only counts when the type is empty or generic.
+ */
+fun videoMimeType(name: String, mimeType: String): String? {
+  val type: String = mimeType.substringBefore(';').trim().lowercase()
+  if (type.startsWith("video/")) return type
+  if (type.isNotEmpty() && type !in GENERIC_MIME_TYPES) return null
+  val dot: Int = name.lastIndexOf('.')
+  if (dot < 0) return null
+  return VIDEO_MIME_TYPE_BY_EXTENSION[name.substring(dot + 1).lowercase()]
+}
+
+/** `isVideoAttachment`, apps/web/src/types.ts:79, for a draft's file. */
+fun isVideoAttachment(attachment: DraftAttachment): Boolean =
+  attachment.kind == AttachmentKind.FILE &&
+    videoMimeType(attachment.name, attachment.mimeType) != null
 
 private const val OCTET_STREAM: String = "application/octet-stream"
 
@@ -138,9 +199,16 @@ fun formatAttachmentSize(sizeBytes: Long): String =
     "${maxOf(1L, (sizeBytes + 1023) / 1024)} KB"
   }
 
+/** `formatAttachmentUploadProgress`, apps/web/src/lib/attachmentUploadState.ts:51. */
+fun formatAttachmentUploadProgress(progress: Double): String {
+  val bounded: Double = if (progress.isFinite()) progress.coerceIn(0.0, 1.0) else 0.0
+  return "${floor(bounded * 100).toInt()}%"
+}
+
 /** Where one attachment's upload is: `attachmentUploadState.ts`'s uploading, ready, failed. */
 sealed interface Upload {
-  data object Uploading : Upload
+  /** [progress] runs 0 to 1: the share of the bytes handed to the connection so far. */
+  data class Uploading(val progress: Double = 0.0) : Upload
 
   data class Ready(val attachment: ChatAttachment) : Upload
 
@@ -157,7 +225,7 @@ data class DraftAttachment(
   val kind: AttachmentKind,
   val mimeType: String,
   val sizeBytes: Long,
-  val upload: Upload = Upload.Uploading,
+  val upload: Upload = Upload.Uploading(),
   val preview: ImageBitmap? = null,
 )
 

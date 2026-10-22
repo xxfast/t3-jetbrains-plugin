@@ -41,7 +41,8 @@
     <editorNotificationProvider
       implementation="io.github.xxfast.t3code.plugin.ide.T3FileNotificationProvider"/>
     <notificationGroup id="T3 Code" displayType="BALLOON"/>
-    <!-- Puts T3Code.PasteAttachment ahead of $Paste while the composer has focus -->
+    <!-- Puts T3Code.PasteAttachment and T3Code.PasteAsText ahead of $Paste and Paste from
+         History while the composer has focus -->
     <actionPromoter implementation="io.github.xxfast.t3code.plugin.actions.PasteAttachmentPromoter"/>
     <!-- Puts T3Code.UndoThreadAction ahead of $Undo in the Sidebar -->
     <actionPromoter implementation="io.github.xxfast.t3code.plugin.actions.UndoThreadPromoter"/>
@@ -224,6 +225,17 @@
       text="Stash T3 prompt"
       description="Stash the composer's draft, or restore a stashed prompt when it's empty"
       use-shortcut-of="SaveAll"/>
+
+    <!-- Upstream's paste-as-text shortcut: the clipboard's text inline, however large -->
+    <action
+      id="T3Code.PasteAsText"
+      class="io.github.xxfast.t3code.plugin.actions.PasteAsTextAction"
+      text="Paste as Text into T3 Composer"
+      description="Paste the clipboard's text inline, without folding a large paste into a file">
+      <keyboard-shortcut keymap="$default" first-keystroke="control shift V"/>
+      <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift V"/>
+      <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift V"/>
+    </action>
 
     <!-- The editor selection as context on the selected thread's draft -->
     <action

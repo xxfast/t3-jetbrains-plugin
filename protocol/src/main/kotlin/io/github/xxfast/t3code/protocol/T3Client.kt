@@ -161,9 +161,15 @@ public interface T3Client {
 
   /**
    * An HTTP POST of [bytes] to [relativeUrl] with `Content-Type: mimeType`, what the web app's
-   * `uploadBytes` in `apps/web/src/lib/attachmentUploadQueue.ts` does.
+   * `uploadBytes` in `apps/web/src/lib/attachmentUploadQueue.ts` does. [onProgress] hears how
+   * many bytes have gone to the connection so far, the web app's `upload.onprogress`.
    */
-  public suspend fun upload(relativeUrl: String, mimeType: String, bytes: ByteArray)
+  public suspend fun upload(
+    relativeUrl: String,
+    mimeType: String,
+    bytes: ByteArray,
+    onProgress: (sent: Long) -> Unit = {},
+  )
 
   /**
    * `attachments.delete`: releases an attachment minted by [createUploadUrl] that no message

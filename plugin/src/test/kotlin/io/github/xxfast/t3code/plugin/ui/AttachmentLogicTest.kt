@@ -29,7 +29,8 @@ class AttachmentLogicTest {
     )
     val svg: AttachmentClass.Refused = assertIs(classifyAttachment("logo.svg", "image/svg+xml"))
     assertEquals(
-      "'logo.svg' is not a supported image type. Attach GIF, JPEG, PNG, or WebP images.",
+      "'logo.svg' is not a supported image type. " +
+        "Attach GIF, HEIC, HEIF, JPEG, PNG, or WebP images.",
       svg.reason,
     )
   }
@@ -127,7 +128,7 @@ internal fun draft(
   kind: AttachmentKind = AttachmentKind.FILE,
   mimeType: String = "text/plain",
   size: Long = 1,
-  upload: Upload = Upload.Uploading,
+  upload: Upload = Upload.Uploading(),
 ) = DraftAttachment(
   id = "local-$name",
   name = name,
@@ -183,6 +184,47 @@ class ImageAttachmentTest {
     assertEquals("photo.jpeg", imageFileName("photo", "image/jpeg"))
     assertEquals("a_b.png", imageFileName("a/b.png", "image/png"))
     assertEquals("attachment", safeFileName("  "))
+  }
+
+  @Test
+  fun uploadProgressIsAFlooredBoundedPercentage() {
+    assertEquals("0%", formatAttachmentUploadProgress(0.0))
+    assertEquals("49%", formatAttachmentUploadProgress(0.499))
+    assertEquals("100%", formatAttachmentUploadProgress(1.0))
+    assertEquals("100%", formatAttachmentUploadProgress(1.5))
+    assertEquals("0%", formatAttachmentUploadProgress(-1.0))
+    assertEquals("0%", formatAttachmentUploadProgress(Double.NaN))
+  }
+
+  @Test
+  fun heicIsAnImageByTypeOrByExtensionWhenTheTypeIsGeneric() {
+    assertTrue(isHeicImageFile("IMG_1.HEIC", "image/heic"))
+    assertTrue(isHeicImageFile("photo", "image/HEIF"))
+    assertTrue(isHeicImageFile("IMG_1.heic", ""))
+    assertTrue(isHeicImageFile("IMG_1.heif", "application/octet-stream"))
+    assertFalse(isHeicImageFile("IMG_1.heic", "text/plain"))
+    assertEquals(
+      AttachmentClass.Accepted(AttachmentKind.IMAGE, "image/heic"),
+      classifyAttachment("IMG_1.HEIC", null),
+    )
+    assertEquals("IMG_1.jpg", fileNameForMimeType("IMG_1.HEIC", "image/jpeg"))
+    assertEquals("photo.jpg", fileNameForMimeType("photo", "image/jpeg"))
+  }
+
+  // packages/shared/src/video.test.ts
+  @Test
+  fun videoTypesComeFromAGenericTypeByExtensionAndOtherwiseFromTheType() {
+    assertEquals("video/quicktime", videoMimeType("Recording.MOV", "application/octet-stream"))
+    assertEquals("video/webm", videoMimeType("recording.mp4", " VIDEO/WebM; codecs=vp9 "))
+    assertNull(videoMimeType("notes.mp4", "text/plain"))
+    assertNull(videoMimeType("clip", ""))
+    assertEquals(
+      AttachmentClass.Accepted(AttachmentKind.FILE, "video/mp4"),
+      classifyAttachment("clip.mp4", null),
+    )
+    assertTrue(
+      isVideoAttachment(draft("clip.mov", AttachmentKind.FILE, "video/quicktime", 1)),
+    )
   }
 }
 

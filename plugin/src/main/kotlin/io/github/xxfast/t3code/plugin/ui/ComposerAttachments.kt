@@ -9,6 +9,7 @@ import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -52,7 +53,7 @@ import javax.imageio.ImageIO
 import javax.swing.ImageIcon
 import org.jetbrains.jewel.foundation.actionSystem.provideData
 import org.jetbrains.jewel.foundation.theme.JewelTheme
-import org.jetbrains.jewel.ui.component.CircularProgressIndicator
+import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.IconActionButton
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.Tooltip
@@ -71,33 +72,43 @@ class AttachmentActions(
   val onRefused: (reason: String) -> Unit = {},
   val onStash: (at: RelativePoint) -> Unit = {}, // the stash shortcut, `StashPromptAction`
   val onOpenStash: (at: RelativePoint) -> Unit = {}, // the Stash badge's click
+  // What `foldPastedText` would do with a text paste, asked before the IDE's paste runs
+  val pasteFold: (text: String) -> PasteFold = { PasteFold.Inline },
+  val onFoldPaste: (text: String) -> Unit = {},
+  // The paste-as-text shortcut: the text over the selection, never folded
+  val onPasteInline: (text: String) -> Unit = {},
 )
 
 /**
  * The draft's images as tiles, then its review comments and other files as chips, above the
  * text field. Images are upstream's composer tiles (`ChatComposer.tsx:6763`): a wrapping row
  * with `gap-2`, each `h-16 w-16 rounded-lg border` with the picture cropped to fill, a click to
- * see it whole, an upload strip along the bottom, a retry when it failed and a remove button in
- * the corner. The chips are like upstream's composer context chips: a comment by its label
- * (`Paths.kt L10 to L20`), a file by name and `formatAttachmentSize`, a spinner while it uploads,
- * the error colour when it failed (click to retry), and a remove button on each. Then why the
- * last attach was refused, or why Send waits.
+ * see it whole, the upload's percentage along the bottom, a retry when it failed and a remove
+ * button in the corner; videos join them as play tiles. The chips are like upstream's composer
+ * context chips: a comment by its label (`Paths.kt L10 to L20`), a file by name and
+ * `formatAttachmentSize` (its percentage while it uploads), the error colour when it failed
+ * (click to retry), and a remove button on each. Then why the last attach was refused, or why
+ * Send waits.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ComposerChips(extras: DraftExtras, enabled: Boolean, actions: AttachmentActions) {
   val note: String? = extras.notice ?: extras.blockReason
   if (extras.comments.isEmpty() && extras.attachments.isEmpty() && note == null) return
-  val (images: List<DraftAttachment>, files: List<DraftAttachment>) =
+  val (images: List<DraftAttachment>, others: List<DraftAttachment>) =
     extras.attachments.partition { it.kind == AttachmentKind.IMAGE }
+  // `composerOtherFilesForPresentation`: videos are tiles beside the images
+  val (videos: List<DraftAttachment>, files: List<DraftAttachment>) =
+    others.partition(::isVideoAttachment)
   Column(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
-    if (images.isNotEmpty()) {
+    if (images.isNotEmpty() || videos.isNotEmpty()) {
       FlowRow(
         modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
         images.forEach { image -> ImageTile(image, enabled, actions) }
+        videos.forEach { video -> VideoTile(video, enabled, actions) }
       }
     }
     if (extras.comments.isNotEmpty() || files.isNotEmpty()) Row(
@@ -114,11 +125,14 @@ fun ComposerChips(extras: DraftExtras, enabled: Boolean, actions: AttachmentActi
       }
       files.forEach { attachment ->
         val failed: Upload.Failed? = attachment.upload as? Upload.Failed
+        val uploading: Upload.Uploading? = attachment.upload as? Upload.Uploading
         Chip(
           label = attachment.name,
-          detail = failed?.reason ?: formatAttachmentSize(attachment.sizeBytes),
+          // `ChatComposer.tsx:7052`: the percentage while it uploads, else the size
+          detail = failed?.reason
+            ?: uploading?.let { formatAttachmentUploadProgress(it.progress) }
+            ?: formatAttachmentSize(attachment.sizeBytes),
           enabled = enabled,
-          uploading = attachment.upload is Upload.Uploading,
           failed = failed != null,
           onClick = if (failed != null) {
             { actions.onRetryAttachment(attachment.id) }
@@ -141,19 +155,9 @@ fun ComposerChips(extras: DraftExtras, enabled: Boolean, actions: AttachmentActi
 }
 
 /** Upstream's 64px composer image tile, see [ComposerChips]. */
-@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip
 @Composable
 private fun ImageTile(attachment: DraftAttachment, enabled: Boolean, actions: AttachmentActions) {
-  val failed: Upload.Failed? = attachment.upload as? Upload.Failed
-  val shape: RoundedCornerShape = RoundedCornerShape(8.dp)
-  val outline: Color = if (failed != null) {
-    JewelTheme.globalColors.text.error
-  } else {
-    JewelTheme.globalColors.borders.normal
-  }
-  // `bg-background/85`, behind the strip and the buttons over the picture
-  val scrim: Color = JewelTheme.globalColors.panelBackground.copy(alpha = 0.85f)
-  Box(Modifier.size(64.dp).clip(shape).border(1.dp, outline, shape)) {
+  AttachmentTile(attachment, enabled, actions) {
     val preview: ImageBitmap? = attachment.preview
     if (preview != null) {
       Image(
@@ -174,12 +178,67 @@ private fun ImageTile(attachment: DraftAttachment, enabled: Boolean, actions: At
         modifier = Modifier.align(Alignment.Center).padding(horizontal = 4.dp),
       )
     }
-    if (attachment.upload is Upload.Uploading) {
+  }
+}
+
+/**
+ * Upstream's composer video tile (`ChatComposer.tsx:6945`): black, a play icon, a click to play
+ * it. Upstream draws the first frame behind the icon from a `<video>` element; the JVM can't
+ * decode video, so the plugin's tile has the icon alone.
+ */
+@Composable
+private fun VideoTile(attachment: DraftAttachment, enabled: Boolean, actions: AttachmentActions) {
+  AttachmentTile(attachment, enabled, actions, background = Color.Black) {
+    Box(
+      modifier = Modifier.fillMaxSize().clickable { actions.onOpenAttachment(attachment.id) },
+      contentAlignment = Alignment.Center,
+    ) {
+      Icon(
+        key = AllIconsKeys.Actions.Execute,
+        contentDescription = "Play ${attachment.name}",
+        modifier = Modifier.size(16.dp),
+      )
+    }
+  }
+}
+
+/**
+ * A 64px composer tile around [content]: the upload's percentage along the bottom
+ * (`formatAttachmentUploadProgress`, `ChatComposer.tsx:6872`), a retry when it failed and a
+ * remove button in the corner.
+ */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip
+@Composable
+private fun AttachmentTile(
+  attachment: DraftAttachment,
+  enabled: Boolean,
+  actions: AttachmentActions,
+  background: Color = Color.Unspecified,
+  content: @Composable BoxScope.() -> Unit,
+) {
+  val failed: Upload.Failed? = attachment.upload as? Upload.Failed
+  val uploading: Upload.Uploading? = attachment.upload as? Upload.Uploading
+  val shape: RoundedCornerShape = RoundedCornerShape(8.dp)
+  val outline: Color = if (failed != null) {
+    JewelTheme.globalColors.text.error
+  } else {
+    JewelTheme.globalColors.borders.normal
+  }
+  // `bg-background/85`, behind the strip and the buttons over the picture
+  val scrim: Color = JewelTheme.globalColors.panelBackground.copy(alpha = 0.85f)
+  Box(
+    Modifier.size(64.dp).clip(shape).background(background).border(1.dp, outline, shape),
+  ) {
+    content()
+    if (uploading != null) {
       Box(
         modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(scrim),
         contentAlignment = Alignment.Center,
       ) {
-        CircularProgressIndicator(Modifier.padding(vertical = 2.dp).size(10.dp))
+        Text(
+          text = formatAttachmentUploadProgress(uploading.progress),
+          style = JewelTheme.typography.small,
+        )
       }
     }
     if (failed != null) {
@@ -211,7 +270,6 @@ private fun Chip(
   detail: String?,
   enabled: Boolean,
   onRemove: () -> Unit,
-  uploading: Boolean = false,
   failed: Boolean = false,
   onClick: (() -> Unit)? = null,
 ) {
@@ -230,7 +288,6 @@ private fun Chip(
     horizontalArrangement = Arrangement.spacedBy(6.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    if (uploading) CircularProgressIndicator(Modifier.size(12.dp))
     Text(
       text = label,
       style = JewelTheme.typography.small,

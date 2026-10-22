@@ -975,9 +975,18 @@ class FixtureClient(
     )
   }
 
-  // Slow enough to see the chip's spinner, and a refusal to design the failed chip against
-  override suspend fun upload(relativeUrl: String, mimeType: String, bytes: ByteArray) {
-    delay(UPLOAD_MILLIS)
+  // Slow enough to watch the chip's progress climb, and a refusal to design the failed chip
+  // against
+  override suspend fun upload(
+    relativeUrl: String,
+    mimeType: String,
+    bytes: ByteArray,
+    onProgress: (sent: Long) -> Unit,
+  ) {
+    for (step in 1..UPLOAD_STEPS) {
+      delay(UPLOAD_MILLIS / UPLOAD_STEPS)
+      onProgress(bytes.size.toLong() * step / UPLOAD_STEPS)
+    }
     if (relativeUrl.removePrefix(UPLOAD_PATH) !in minted) {
       throw T3Exception.Transport("Upload rejected (404): no such attachment")
     }
@@ -1213,7 +1222,8 @@ private fun answerAttachment(
 
 // Upstream's ATTACHMENT_UPLOAD_URL_TTL_MS, contracts/src/assets.ts
 private const val UPLOAD_URL_TTL_MILLIS: Long = 10 * 60_000
-private const val UPLOAD_MILLIS: Long = 300
+private const val UPLOAD_MILLIS: Long = 1500
+private const val UPLOAD_STEPS: Int = 10
 private const val UPLOAD_MAX_BYTES: Int = 1024 * 1024
 private const val UPLOAD_PATH: String = "/api/attachments/fixture/"
 

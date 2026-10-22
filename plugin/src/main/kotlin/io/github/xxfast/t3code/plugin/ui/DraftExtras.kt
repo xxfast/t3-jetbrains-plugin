@@ -34,7 +34,15 @@ data class DraftExtras(
 
   fun uploadFailed(id: String, reason: String): DraftExtras = withUpload(id, Upload.Failed(reason))
 
-  fun retrying(id: String): DraftExtras = withUpload(id, Upload.Uploading)
+  fun retrying(id: String): DraftExtras = withUpload(id, Upload.Uploading())
+
+  /** How far [id]'s upload is, while it's still uploading. */
+  fun uploadProgress(id: String, progress: Double): DraftExtras = copy(
+    attachments = attachments.map { attachment ->
+      if (attachment.id != id || attachment.upload !is Upload.Uploading) return@map attachment
+      attachment.copy(upload = Upload.Uploading(progress))
+    },
+  )
 
   fun withoutAttachment(id: String): DraftExtras =
     copy(attachments = attachments.filterNot { it.id == id }, notice = null)

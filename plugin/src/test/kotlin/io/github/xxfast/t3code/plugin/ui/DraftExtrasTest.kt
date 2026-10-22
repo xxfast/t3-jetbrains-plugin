@@ -20,7 +20,7 @@ class DraftExtrasTest {
   @Test
   fun anAttachmentGoesUploadingThenReadyThenAway() {
     val uploading: DraftExtras = DraftExtras(notice = "old").attaching(image)
-    assertEquals(Upload.Uploading, uploading.attachments.single().upload)
+    assertEquals(Upload.Uploading(), uploading.attachments.single().upload)
     assertNull(uploading.notice, "A new attach clears the last refusal")
     assertEquals("Attachment still uploading", uploading.blockReason)
     assertEquals(emptyList(), uploading.ready)
@@ -38,7 +38,18 @@ class DraftExtrasTest {
     val failed: DraftExtras = DraftExtras().attaching(image).uploadFailed(image.id, "413")
     assertEquals(Upload.Failed("413"), failed.attachments.single().upload)
     assertEquals("Retry or remove the failed attachment", failed.blockReason)
-    assertEquals(Upload.Uploading, failed.retrying(image.id).attachments.single().upload)
+    assertEquals(Upload.Uploading(), failed.retrying(image.id).attachments.single().upload)
+  }
+
+  @Test
+  fun progressMovesAnUploadingAttachmentOnly() {
+    val uploading: DraftExtras = DraftExtras().attaching(image)
+    assertEquals(
+      Upload.Uploading(0.5),
+      uploading.uploadProgress(image.id, 0.5).attachments.single().upload,
+    )
+    val ready: DraftExtras = uploading.uploaded(image.id, minted)
+    assertEquals(ready, ready.uploadProgress(image.id, 0.9), "A late tick can't undo Ready")
   }
 
   @Test

@@ -274,10 +274,15 @@ public class WebSocketT3Client internal constructor(
     call("attachments.delete", buildJsonObject { put("attachmentId", attachmentId) })
   }
 
-  override suspend fun upload(relativeUrl: String, mimeType: String, bytes: ByteArray) {
+  override suspend fun upload(
+    relativeUrl: String,
+    mimeType: String,
+    bytes: ByteArray,
+    onProgress: (sent: Long) -> Unit,
+  ) {
     val request: HttpRequest = asset(relativeUrl)
       .header("Content-Type", mimeType)
-      .POST(HttpRequest.BodyPublishers.ofByteArray(bytes))
+      .POST(countingBodyPublisher(bytes, onProgress))
       .build()
     send(request, relativeUrl)
   }

@@ -28,5 +28,8 @@ fun rememberAttachmentActions(
       if (controller.onStashKey(threadId)) showComposerStash(controller, threadId, at)
     },
     onOpenStash = { at -> showComposerStash(controller, threadId, at) },
+    pasteFold = { text -> controller.pasteFold(threadId, text) },
+    onFoldPaste = { text -> controller.foldPaste(threadId, text) },
+    onPasteInline = { text -> controller.pasteInline(threadId, text) },
   )
 }

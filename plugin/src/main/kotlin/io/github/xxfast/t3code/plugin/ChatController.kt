@@ -2,6 +2,7 @@ package io.github.xxfast.t3code.plugin
 
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.placeCursorAtEnd
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.snapshotFlow
 import io.github.xxfast.t3code.plugin.settings.ComposerDrafts
@@ -52,6 +53,23 @@ import io.github.xxfast.t3code.plugin.ui.titleSeed
 import io.github.xxfast.t3code.plugin.ui.toRecord
 import io.github.xxfast.t3code.plugin.ui.uploadUrlInput
 import io.github.xxfast.t3code.plugin.ui.uploadedAttachment
+import io.github.xxfast.t3code.plugin.actions.PASTE_AS_TEXT_ACTION_ID
+import io.github.xxfast.t3code.plugin.ide.notify
+import io.github.xxfast.t3code.plugin.ui.PASTED_TEXT_MIME_TYPE
+import io.github.xxfast.t3code.plugin.ui.PasteFold
+import io.github.xxfast.t3code.plugin.ui.REMOTE_FOLDER_REFUSAL
+import io.github.xxfast.t3code.plugin.ui.fileNameForMimeType
+import io.github.xxfast.t3code.plugin.ui.foldPastedText
+import io.github.xxfast.t3code.plugin.ui.folderLinkText
+import io.github.xxfast.t3code.plugin.ui.formatAttachmentSize
+import io.github.xxfast.t3code.plugin.ui.isHeicImageFile
+import io.github.xxfast.t3code.plugin.ui.isVideoAttachment
+import io.github.xxfast.t3code.plugin.ui.nextPastedTextFileName
+import io.github.xxfast.t3code.plugin.ui.textForEndInsertion
+import com.intellij.notification.NotificationType
+import com.intellij.openapi.keymap.KeymapUtil
+import java.awt.Desktop
+import java.io.File
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
 import io.github.xxfast.t3code.protocol.generated.ChatAttachment
 import io.github.xxfast.t3code.protocol.generated.MessageContext
@@ -247,13 +265,21 @@ class ChatController(private val project: Project, private val scope: CoroutineS
    * One attachment's upload, by local id: the bytes until they're up (an image's for as long as
    * it's in the draft), the job moving them, and
    * the id the server minted, so removing the chip can stop the job and release the id.
+   * [source] is the file it came from, so a video tile can play it.
    */
-  private class Transfer(@Volatile var bytes: ByteArray?) {
+  private class Transfer(@Volatile var bytes: ByteArray?, val source: Path? = null) {
     @Volatile var job: Job? = null
     @Volatile var minted: String? = null
   }
 
   private val transfers: ConcurrentHashMap<String, Transfer> = ConcurrentHashMap()
+
+  /**
+   * The names folded pastes took per thread, upstream's `pastedTextFileNamesRef`, so a removed
+   * `pasted-text.txt` isn't handed out again.
+   */
+  private val pastedTextFileNames: ConcurrentHashMap<String, MutableSet<String>> =
+    ConcurrentHashMap()
 
   /** Adds [comment], an editor selection or a diff review comment, to [threadId]'s draft. */
   fun addContext(threadId: String, comment: ReviewCommentContext) {
@@ -270,10 +296,35 @@ class ChatController(private val project: Project, private val scope: CoroutineS
     updateExtras(threadId) { extras -> extras.refused(reason) }
   }
 
-  /** Checks then reads [paths] off the EDT and attaches each, see [attach]. */
+  /**
+   * Checks then reads [paths] off the EDT and attaches each, see [attach]. Folders among them
+   * become file links in the prompt instead, see [addFolders], the split upstream's
+   * `splitTransferredFiles` makes for a drop or a paste.
+   */
   fun attachFiles(threadId: String, paths: List<Path>) {
     scope.launch(Dispatchers.IO) {
-      for (path in paths) attachFile(threadId, path)
+      val (folders: List<Path>, files: List<Path>) = paths.partition { Files.isDirectory(it) }
+      if (folders.isNotEmpty()) addFolders(threadId, folders)
+      for (path in files) attachFile(threadId, path)
+    }
+  }
+
+  /**
+   * `addComposerFolders`, `ChatComposer.tsx:5801`: each folder as `serializeComposerFileLink` and
+   * a space at the end of the prompt, when the server shares this machine's paths.
+   */
+  private suspend fun addFolders(threadId: String, folders: List<Path>) {
+    if (!T3.serverIsLocal()) return refuse(threadId, REMOTE_FOLDER_REFUSAL)
+    withContext(Dispatchers.EDT) {
+      val draft: TextFieldState = draft(threadId)
+      for (folder in folders) {
+        val link: String = folderLinkText(folder.toAbsolutePath().toString())
+        draft.edit {
+          val text: String = textForEndInsertion(toString(), link)
+          append(text)
+          placeCursorAtEnd()
+        }
+      }
     }
   }
 
@@ -301,7 +352,13 @@ class ChatController(private val project: Project, private val scope: CoroutineS
       LOG.info("Couldn't read $path", e)
       return refuse(threadId, unreadable)
     }
-    attach(threadId, name, mimeType, bytes)
+    // `prepareImageForAttachment`: HEIC goes out as JPEG, or not at all
+    if (isHeicImageFile(name, accepted.mimeType)) {
+      val jpeg: ByteArray = convertHeicToJpeg(path)
+        ?: return refuse(threadId, "'$name' could not be read as an image.")
+      return attach(threadId, fileNameForMimeType(name, "image/jpeg"), "image/jpeg", jpeg, path)
+    }
+    attach(threadId, name, mimeType, bytes, path)
   }
 
   /**
@@ -309,11 +366,22 @@ class ChatController(private val project: Project, private val scope: CoroutineS
    * `attachments.createUploadUrl`, POST the bytes, and the minted id goes straight into
    * `message.dispatch.attachments` (`apps/web/src/lib/attachmentUploadQueue.ts`).
    * `assets.persistChatAttachments` is only for data-URL images, which the plugin never makes.
+   * [source] is the file the bytes came from, when there is one.
    */
-  fun attach(threadId: String, name: String, mimeType: String?, bytes: ByteArray) {
+  fun attach(
+    threadId: String,
+    name: String,
+    mimeType: String?,
+    bytes: ByteArray,
+    source: Path? = null,
+  ) {
     val accepted: AttachmentClass.Accepted = when (val kind = classifyAttachment(name, mimeType)) {
       is AttachmentClass.Refused -> return refuse(threadId, kind.reason)
       is AttachmentClass.Accepted -> kind
+    }
+    // Only [attachFile] converts HEIC; one that reaches here unconverted can't be sent
+    if (isHeicImageFile(name, accepted.mimeType)) {
+      return refuse(threadId, "'$name' could not be read as an image.")
     }
     val attachment = DraftAttachment(
       id = UUID.randomUUID().toString(),
@@ -325,7 +393,7 @@ class ChatController(private val project: Project, private val scope: CoroutineS
       preview = if (accepted.kind == AttachmentKind.IMAGE) decodePreview(bytes) else null,
     )
     // Before the chip shows, so a remove as fast as the eye can't miss it
-    transfers[attachment.id] = Transfer(bytes)
+    transfers[attachment.id] = Transfer(bytes, source)
     var started = false
     updateExtras(threadId) { extras ->
       val error: String? = attachmentLimitError(
@@ -358,6 +426,60 @@ class ChatController(private val project: Project, private val scope: CoroutineS
     }
   }
 
+  /**
+   * What `foldPastedText` (`ChatComposer.tsx:5659`) would do with [text] pasted over the
+   * selection of [threadId]'s prompt. [bypassAutoAttachment] is the paste-as-text shortcut.
+   */
+  fun pasteFold(threadId: String, text: String, bypassAutoAttachment: Boolean = false): PasteFold {
+    val draft: TextFieldState = draft(threadId)
+    return foldPastedText(
+      text = text,
+      bypassAutoAttachment = bypassAutoAttachment,
+      valueLength = draft.text.length,
+      selectionStart = draft.selection.min,
+      selectionEnd = draft.selection.max,
+      attachmentCount = extrasOf(threadId).attachments.size,
+    )
+  }
+
+  /**
+   * `foldPastedText`'s action for a paste [pasteFold] didn't leave inline: a text file named by
+   * `nextPastedTextFileName` with upstream's toast, or the too-large refusal.
+   */
+  fun foldPaste(threadId: String, text: String) {
+    when (val fold: PasteFold = pasteFold(threadId, text)) {
+      PasteFold.Inline -> return
+      is PasteFold.TooLarge -> return refuse(threadId, "${fold.title}. ${fold.description}")
+      PasteFold.Attach -> Unit
+    }
+    val reserved: MutableSet<String> =
+      pastedTextFileNames.computeIfAbsent(threadId) { ConcurrentHashMap.newKeySet() }
+    extrasOf(threadId).attachments.mapTo(reserved) { it.name }
+    val name: String = nextPastedTextFileName(reserved)
+    reserved += name
+    val bytes: ByteArray = text.toByteArray(Charsets.UTF_8)
+    attach(threadId, name, PASTED_TEXT_MIME_TYPE, bytes)
+    if (extrasOf(threadId).attachments.none { it.name == name }) return
+    val shortcut: String = KeymapUtil.getFirstKeyboardShortcutText(PASTE_AS_TEXT_ACTION_ID)
+      .ifEmpty { "paste as text" }
+    notify(
+      project = project,
+      title = "Large paste attached as $name",
+      message = "${formatAttachmentSize(bytes.size.toLong())} · Use $shortcut to keep a large " +
+        "paste inline.",
+      type = NotificationType.INFORMATION,
+    )
+  }
+
+  /** The paste-as-text shortcut's paste: [text] over the prompt's selection, never folded. */
+  fun pasteInline(threadId: String, text: String) {
+    draft(threadId).edit {
+      val start: Int = selection.min
+      replace(start, selection.max, text)
+      placeCursorBeforeCharAt(start + text.length)
+    }
+  }
+
   /** Upstream's manual retry: release the failed upload's id and start again. */
   fun retryAttachment(threadId: String, id: String) {
     val attachment: DraftAttachment =
@@ -373,11 +495,19 @@ class ChatController(private val project: Project, private val scope: CoroutineS
 
   /**
    * A draft image's full bytes in the IDE's image viewer, the composer tile's click
-   * (`buildExpandedImagePreview`, `ChatComposer.tsx:6810`).
+   * (`buildExpandedImagePreview`, `ChatComposer.tsx:6810`). A video tile's click plays it
+   * (`ChatComposer.tsx:6953`); the IDE has no player, so the file opens in the system's.
    */
   fun openAttachment(threadId: String, id: String) {
     val attachment: DraftAttachment =
       extrasOf(threadId).attachments.find { it.id == id } ?: return
+    if (isVideoAttachment(attachment)) {
+      val source: File = transfers[id]?.source?.toFile() ?: return
+      scope.launchReporting(project, "Couldn't play ${attachment.name}") {
+        withContext(Dispatchers.IO) { Desktop.getDesktop().open(source) }
+      }
+      return
+    }
     val bytes: ByteArray = transfers[id]?.bytes ?: return
     scope.launchReporting(project, "Couldn't open ${attachment.name}") {
       openImage(project, id, attachment.name, attachment.mimeType, bytes)
@@ -423,8 +553,18 @@ class ChatController(private val project: Project, private val scope: CoroutineS
       transfer.minted = minted.attachmentId
       // Removed while minting: nobody will release this id but us
       if (transfers[attachment.id] !== transfer) return@launch release(minted.attachmentId)
+      // Only when the shown percentage moves, `formatAttachmentUploadProgress` floors it
+      var shown = 0
+      val total: Long = maxOf(1L, bytes.size.toLong())
       try {
-        client.upload(minted.relativeUrl, attachment.mimeType, bytes)
+        client.upload(minted.relativeUrl, attachment.mimeType, bytes) { sent ->
+          val progress: Double = sent.toDouble() / total
+          val percent: Int = (progress * 100).toInt()
+          if (percent != shown) {
+            shown = percent
+            updateExtras(threadId) { it.uploadProgress(attachment.id, progress) }
+          }
+        }
       } catch (e: CancellationException) {
         throw e
       } catch (e: Exception) {
