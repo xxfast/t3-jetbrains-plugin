@@ -7,14 +7,11 @@ import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.ui.dsl.builder.Cell
-import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.COLUMNS_LARGE
 import com.intellij.ui.dsl.builder.panel
-import com.intellij.ui.dsl.builder.toNullableProperty
-import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import io.github.xxfast.t3code.plugin.T3
 import io.github.xxfast.t3code.protocol.ConnectionState
 import javax.swing.JComponent
@@ -33,10 +30,6 @@ class T3Configurable : BoundConfigurable("T3 Code") {
         textField()
           .bindText(T3Settings.get()::serverUrl)
           .columns(COLUMNS_LARGE)
-      }
-      row("Open threads in") {
-        comboBox(ThreadHost.entries, textListCellRenderer { it?.label })
-          .bindItem(T3Settings.get()::openThreadsIn.toNullableProperty())
       }
       row {
         checkBox("Confirm thread archiving")

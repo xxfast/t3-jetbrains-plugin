@@ -4,12 +4,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.Disposer
-import com.intellij.openapi.wm.ToolWindow
-import com.intellij.openapi.wm.ToolWindowManager
-import com.intellij.openapi.wm.ex.ToolWindowManagerListener
 import io.github.xxfast.t3code.plugin.T3
-import io.github.xxfast.t3code.plugin.ThreadSelection
 import io.github.xxfast.t3code.plugin.actions.blockedBy
 import io.github.xxfast.t3code.plugin.ui.shouldVisit
 import io.github.xxfast.t3code.plugin.ui.visitDelay
@@ -22,13 +17,10 @@ import java.time.Instant
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -39,8 +31,7 @@ import kotlinx.coroutines.launch
  * the row's `updatedAt`: at once for an unseen completion, else at most every 10 seconds.
  * Failures are logged, never shown, as upstream's `reportFailure: false`.
  *
- * Each host mounts and unmounts it once: an editor tab on select and deselect, "T3 Chat View"
- * through [follow].
+ * The thread's editor tab mounts it on select and unmounts it on deselect.
  */
 @Service(Service.Level.PROJECT)
 class ThreadVisits(private val project: Project, private val scope: CoroutineScope) {
@@ -63,31 +54,6 @@ class ThreadVisits(private val project: Project, private val scope: CoroutineSco
   /** [threadId] left the screen: unmounting. Another thread on screen stays. */
   fun closed(threadId: String) {
     open.update { current -> current?.takeIf { it.threadId != threadId } }
-  }
-
-  /** Mounts the selected thread while [toolWindow] is visible, and unmounts it when it hides. */
-  fun follow(toolWindow: ToolWindow) {
-    val visible: MutableStateFlow<Boolean> = MutableStateFlow(toolWindow.isVisible)
-    project.messageBus.connect(toolWindow.disposable).subscribe(
-      ToolWindowManagerListener.TOPIC,
-      object : ToolWindowManagerListener {
-        override fun stateChanged(toolWindowManager: ToolWindowManager) {
-          visible.value = toolWindow.isVisible
-        }
-      },
-    )
-    val selected: StateFlow<String?> = ThreadSelection.getInstance(project).selected
-    val job: Job = scope.launch {
-      var shown: String? = null
-      combine(visible, selected) { isVisible, id -> id.takeIf { isVisible } }
-        .distinctUntilChanged()
-        .collect { id ->
-          shown?.let(::closed)
-          id?.let(::opened)
-          shown = id
-        }
-    }
-    Disposer.register(toolWindow.disposable) { job.cancel() }
   }
 
   /**

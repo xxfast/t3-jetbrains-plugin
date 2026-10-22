@@ -27,11 +27,6 @@
       icon="/icons/t3Sidebar.svg"
       factoryClass="io.github.xxfast.t3code.plugin.SidebarToolWindowFactory"/>
     <toolWindow
-      id="T3 Chat View"
-      anchor="right"
-      doNotActivateOnStart="true"
-      factoryClass="io.github.xxfast.t3code.plugin.ChatViewToolWindowFactory"/>
-    <toolWindow
       id="T3 Thread Details"
       anchor="right"
       doNotActivateOnStart="true"

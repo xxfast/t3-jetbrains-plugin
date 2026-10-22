@@ -82,7 +82,7 @@ class ProjectAwareness(
 
   /**
    * Once per session, and only while nothing is selected: the thread whose worktree this window
-   * has open. It selects, it doesn't open a tab; "T3 Chat View" shows it, the Sidebar marks it.
+   * has open. It selects, it doesn't open a tab; the Sidebar marks it, T3 Thread Details shows it.
    */
   private suspend fun selectWorkspaceThread() {
     val roots: List<Path> = this.roots.filter { it != null }.first().orEmpty()

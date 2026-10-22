@@ -85,7 +85,10 @@ the same precedence and the same edge cases, and say in a comment which upstream
 Upstream drifts; a one-to-one port is a diff away from catching up, a reinterpretation isn't.
 Names follow upstream too, down to the tool windows: the thread list is the **Sidebar**
 (`Sidebar.tsx`, tool window "T3 Sidebar"), the conversation is the **ChatView** (`ChatView.tsx`,
-tool window "T3 Chat View"). Don't invent friendlier names.
+an editor tab named "T3 Chat View"), the thread's lineage is **Thread Details**
+(`ThreadDetailsPanel.tsx`, tool window "T3 Thread Details"). Don't invent friendlier names.
+The ChatView was a docked tool window too until 2026-10-22; it went because a split editor
+already does side by side, and Thread Details owns the right dock now. Don't bring it back.
 
 The plugin mirrors server state and never reimplements T3 logic. Decode with `ignoreUnknownKeys`, fall
 back to a generic renderer for anything unrecognised, and open files, diffs and terminals in the IDE

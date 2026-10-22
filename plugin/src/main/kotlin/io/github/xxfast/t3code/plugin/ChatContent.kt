@@ -17,21 +17,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.diagnostic.Logger
-import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
-import com.intellij.openapi.wm.ToolWindow
-import com.intellij.openapi.wm.ToolWindowFactory
-import com.intellij.ui.content.Content
-import com.intellij.ui.content.ContentFactory
 import io.github.xxfast.t3code.plugin.actions.interruptCommand
 import io.github.xxfast.t3code.plugin.actions.RENAME_ACTION
 import io.github.xxfast.t3code.plugin.actions.performThreadAction
 import io.github.xxfast.t3code.plugin.actions.showThreadMenu
 import io.github.xxfast.t3code.plugin.ui.ChatHeaderActions
-import io.github.xxfast.t3code.plugin.ide.ProjectAwareness
 import io.github.xxfast.t3code.plugin.ide.T3Opener
-import io.github.xxfast.t3code.plugin.ide.ThreadVisits
 import io.github.xxfast.t3code.plugin.ide.VcsStatuses
 import io.github.xxfast.t3code.plugin.ide.notify
 import io.github.xxfast.t3code.plugin.ide.threadCwd
@@ -73,7 +66,6 @@ import io.github.xxfast.t3code.plugin.ui.shouldCreateWorktree
 import io.github.xxfast.t3code.plugin.ui.workspaceControlState
 import io.github.xxfast.t3code.plugin.ui.worktreeSetupBlocksSend
 import io.github.xxfast.t3code.plugin.terminal.ThreadTerminals
-import io.github.xxfast.t3code.plugin.ui.Hint
 import io.github.xxfast.t3code.plugin.ui.ModelChangeBlock
 import io.github.xxfast.t3code.plugin.ui.modelDisabledReason
 import io.github.xxfast.t3code.plugin.ui.providerModelKey
@@ -138,35 +130,8 @@ import io.github.xxfast.t3code.plugin.ui.QueuedRunsState
 import io.github.xxfast.t3code.plugin.ui.ThreadQueueWorkflowState
 import io.github.xxfast.t3code.plugin.ui.deriveThreadQueueWorkflowState
 import java.util.UUID
-import javax.swing.JComponent
-import org.jetbrains.jewel.bridge.JewelComposePanel
 
-/** "T3 Chat View": whatever thread is selected in T3 Sidebar, for those who'd rather dock it. */
-class ChatViewToolWindowFactory : ToolWindowFactory, DumbAware {
-  override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-    val client: T3Client = T3.get().client
-    val selection: ThreadSelection = ThreadSelection.getInstance(project)
-    val panel: JComponent = JewelComposePanel {
-      when (val id: String? = selection.selected.collectAsState().value) {
-        null -> Hint("Pick a thread in T3 Sidebar")
-        else -> {
-          val attempt: MutableIntState = remember(id) { mutableIntStateOf(0) }
-          // Keyed, so a new thread or a retry starts from a fresh state instead of the last value
-          val load: ThreadLoad = key(id, attempt.intValue) {
-            remember { client.threadLoad(id) }.collectAsState(initial = ThreadLoad()).value
-          }
-          ChatContent(project, id, load, onRetry = { attempt.intValue++ })
-        }
-      }
-    }
-    val content: Content = ContentFactory.getInstance().createContent(panel, null, false)
-    toolWindow.contentManager.addContent(content)
-    ThreadVisits.getInstance(project).follow(toolWindow)
-    ProjectAwareness.getInstance(project) // selects this window's worktree thread, if it has one
-  }
-}
-
-/** [ChatView] wired to the IDE, shared by the editor tab and the tool window. */
+/** [ChatView] wired to the IDE, for the thread's editor tab. */
 @Composable
 fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: () -> Unit) {
   val opener: T3Opener = T3Opener.getInstance(project)
@@ -772,7 +737,7 @@ private fun rememberWorkspaceControl(
 /** `usePaginatedBranches`'s page, enough for a picker without paging. */
 private const val REFS_PAGE: Long = 100
 
-private val LOG: Logger = Logger.getInstance(ChatViewToolWindowFactory::class.java)
+private val LOG: Logger = Logger.getInstance("io.github.xxfast.t3code.plugin.ChatContent")
 
 /**
  * Rolls [view]'s thread back to [run]'s checkpoint once you say so, with the desktop's copy for
