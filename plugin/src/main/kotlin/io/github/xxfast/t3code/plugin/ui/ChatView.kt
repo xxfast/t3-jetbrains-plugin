@@ -79,6 +79,7 @@ import java.time.Instant
 import kotlin.math.roundToInt
 import kotlinx.serialization.json.JsonObject
 import org.jetbrains.jewel.bridge.toComposeColor
+import org.jetbrains.jewel.foundation.GlobalColors
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.intui.markdown.bridge.ProvideMarkdownStyling
 import org.jetbrains.jewel.intui.markdown.bridge.create
@@ -179,7 +180,7 @@ fun ChatView(
         view.items.isEmpty() -> Hint("Send a message to start the conversation.")
         else -> {
           val processor: MarkdownProcessor = remember { chatMarkdownProcessor() }
-          val styling: MarkdownStyling = MarkdownStyling.create()
+          val styling: MarkdownStyling = chatMarkdownStyling()
           val renderer: MarkdownBlockRenderer = remember(styling) {
             chatMarkdownRenderer(styling)
           }
@@ -1322,6 +1323,23 @@ private fun chatMarkdownRenderer(styling: MarkdownStyling): MarkdownBlockRendere
       GitHubStrikethroughRendererExtension,
     ),
   )
+
+// The bridge's BlockQuote defaults are GitHub's light colours, fixed, so a quote is grey on grey
+// in a dark theme. Upstream's index.css draws it with a 2px `--contrast-border` line and
+// `--contrast-muted-foreground` text. Keyed on the theme's colours so a theme switch restyles.
+@Composable
+private fun chatMarkdownStyling(): MarkdownStyling {
+  val colors: GlobalColors = JewelTheme.globalColors
+  return remember(colors) {
+    MarkdownStyling.create(
+      blockQuote = MarkdownStyling.BlockQuote.create(
+        lineWidth = 2.dp,
+        lineColor = colors.borders.normal,
+        textColor = colors.text.info,
+      ),
+    )
+  }
+}
 
 @Composable
 private fun MarkdownText(text: String, processor: MarkdownProcessor, fill: Boolean = true) {
