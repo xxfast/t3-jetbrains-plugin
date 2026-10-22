@@ -4661,7 +4661,7 @@
         "startedAt": "2026-10-19T08:44:30.000Z",
         "completedAt": "2026-10-19T08:44:30.000Z",
         "updatedAt": "2026-10-19T08:44:30.000Z",
-        "text": "Case 79 passes now. 0 to go."
+        "text": "Case 79 passes now. 0 to go.\n\n| Module | Cases | Status |\n| :--- | ---: | :---: |\n| `:kstore` | 20 | pass |\n| `:kstore-file` | 20 | pass |\n| `:kstore-storage` | 20 | pass |\n| `:kstore-test` | 20 | ~~pending~~ pass |\n\n> The flaky one was a timing assumption in `:kstore-test`, not a real failure.\n> Details at https://github.com/xxfast/KStore/issues/1."
       },
       {
         "type": "system_notice",

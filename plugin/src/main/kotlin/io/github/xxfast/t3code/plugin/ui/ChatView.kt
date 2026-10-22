@@ -81,9 +81,20 @@ import kotlinx.serialization.json.JsonObject
 import org.jetbrains.jewel.bridge.toComposeColor
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.intui.markdown.bridge.ProvideMarkdownStyling
+import org.jetbrains.jewel.intui.markdown.bridge.create
+import org.jetbrains.jewel.intui.markdown.bridge.styling.create
+import org.jetbrains.jewel.intui.markdown.bridge.styling.extensions.github.tables.create
 import org.jetbrains.jewel.markdown.Markdown
 import org.jetbrains.jewel.markdown.MarkdownBlock
+import org.jetbrains.jewel.markdown.extensions.autolink.AutolinkProcessorExtension
+import org.jetbrains.jewel.markdown.extensions.github.strikethrough.GitHubStrikethroughProcessorExtension
+import org.jetbrains.jewel.markdown.extensions.github.strikethrough.GitHubStrikethroughRendererExtension
+import org.jetbrains.jewel.markdown.extensions.github.tables.GfmTableStyling
+import org.jetbrains.jewel.markdown.extensions.github.tables.GitHubTableProcessorExtension
+import org.jetbrains.jewel.markdown.extensions.github.tables.GitHubTableRendererExtension
 import org.jetbrains.jewel.markdown.processing.MarkdownProcessor
+import org.jetbrains.jewel.markdown.rendering.MarkdownBlockRenderer
+import org.jetbrains.jewel.markdown.rendering.MarkdownStyling
 import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.Link
 import org.jetbrains.jewel.ui.component.Text
@@ -167,8 +178,16 @@ fun ChatView(
         view == null -> Unit // upstream draws nothing while a thread loads
         view.items.isEmpty() -> Hint("Send a message to start the conversation.")
         else -> {
-          val processor: MarkdownProcessor = remember { MarkdownProcessor() }
-          ProvideMarkdownStyling(markdownProcessor = processor) {
+          val processor: MarkdownProcessor = remember { chatMarkdownProcessor() }
+          val styling: MarkdownStyling = MarkdownStyling.create()
+          val renderer: MarkdownBlockRenderer = remember(styling) {
+            chatMarkdownRenderer(styling)
+          }
+          ProvideMarkdownStyling(
+            markdownStyling = styling,
+            markdownProcessor = processor,
+            markdownBlockRenderer = renderer,
+          ) {
             MessagesTimeline(
               view = view,
               state = timeline,
@@ -1285,6 +1304,24 @@ private fun Modifier.bottomHairline(): Modifier {
   }
 }
 
+
+// GFM, as upstream's ChatMarkdown.tsx renders with remark-gfm: tables, strikethrough, autolinks
+private fun chatMarkdownProcessor(): MarkdownProcessor = MarkdownProcessor(
+  listOf(
+    GitHubTableProcessorExtension,
+    GitHubStrikethroughProcessorExtension(),
+    AutolinkProcessorExtension,
+  ),
+)
+
+private fun chatMarkdownRenderer(styling: MarkdownStyling): MarkdownBlockRenderer =
+  MarkdownBlockRenderer.create(
+    styling,
+    listOf(
+      GitHubTableRendererExtension(GfmTableStyling.create(), styling),
+      GitHubStrikethroughRendererExtension,
+    ),
+  )
 
 @Composable
 private fun MarkdownText(text: String, processor: MarkdownProcessor, fill: Boolean = true) {
