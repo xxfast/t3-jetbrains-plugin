@@ -1,8 +1,10 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,6 +18,7 @@ import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -29,6 +32,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -45,13 +50,16 @@ import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
+import io.github.xxfast.t3code.protocol.generated.ServerProviderSkill
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterNotNull
@@ -59,6 +67,7 @@ import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Link
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.TextArea
+import org.jetbrains.jewel.ui.theme.textAreaStyle
 import org.jetbrains.jewel.ui.typography
 
 /**
@@ -218,16 +227,21 @@ fun ChatComposer(
               shortcuts = shortcuts,
               onSend = ::send,
               onFocus = onPromptFocus,
+              skills = footer?.provider
+                ?.let { resolveProviderSkillsForCwd(it, footer?.cwd) }
+                .orEmpty(),
+              extras = extras,
               onMenuKey = triggerMenu.onKey,
               onModeKey = { event ->
                 composerModeKey(event, footer?.showInteractionModeToggle == true) {
                   footerActions.onToggleInteractionMode()
                 }
               },
-              onHistoryKey = { event, layout ->
+              onHistoryKey = { event, caretLine, lineCount ->
                 recall.onKey(
                   event = event,
-                  layout = layout,
+                  caretLine = caretLine,
+                  lineCount = lineCount,
                   messages = promptHistory,
                   available = pending == null && !hasNonPromptContent(state, extras),
                   onReplace = triggerMenu.onPromptReplaced,
@@ -316,6 +330,10 @@ private fun ComposerWithDrawer(
  * The prompt, upstream's `ComposerPromptEditor`: borderless and `leading-relaxed`, as tall as
  * [ComposerBody] makes it. Resting, its one line sits centred in the 32dp row (`leading-8`), so
  * the text eases down by [RESTING_TEXT_INSET] as [progress] falls to 0.
+ *
+ * Skills, mentions and context links in the draft draw as chips ([ComposerPromptChips]), the
+ * Tiptap editor's atom nodes: [skills] says which `$name`s are skills, [extras] what the links
+ * point at. The draft itself stays the markdown that gets sent.
  */
 @OptIn(ExperimentalComposeUiApi::class) // onPointerEvent
 @Composable
@@ -327,13 +345,35 @@ private fun ComposerPromptEditor(
   shortcuts: ComposerShortcuts,
   onSend: (alternate: Boolean) -> Unit,
   onFocus: () -> Unit,
+  skills: List<ServerProviderSkill>,
+  extras: DraftExtras,
   onMenuKey: (KeyEvent) -> Boolean,
   onModeKey: (KeyEvent) -> Boolean,
-  onHistoryKey: (KeyEvent, layout: TextLayoutResult?) -> Boolean,
+  onHistoryKey: (KeyEvent, caretLine: Int?, lineCount: Int?) -> Boolean,
   modifier: Modifier = Modifier,
 ) {
-  // The prompt's lines as laid out, for `isCaretOnVisualEdge`
-  val layout: Array<(() -> TextLayoutResult?)?> = remember { arrayOfNulls(1) }
+  // The prompt's lines as laid out, for `isCaretOnVisualEdge` and the chips. State, so the chips
+  // redraw on a new layout
+  val layout: MutableState<(() -> TextLayoutResult?)?> = remember { mutableStateOf(null) }
+  val chips: ComposerPromptChips = remember(draft) { ComposerPromptChips() }
+  val chipStyle = ComposerPromptChipStyle(
+    fill = JewelTheme.globalColors.text.normal.copy(alpha = 0.06f),
+    outline = JewelTheme.globalColors.borders.normal,
+  )
+  val iconRoom: TextUnit =
+    with(LocalDensity.current) { composerPromptChipIconRoom(chipStyle).toSp() }
+  val detailColor: Color = JewelTheme.globalColors.text.info
+  val records: Map<String, ComposerDraftContextRecord> =
+    remember(extras) { composerContextRecordsFromDraft(extras) }
+  SideEffect {
+    chips.skills = skills
+    chips.records = records
+    chips.iconRoom = iconRoom
+    chips.detailColor = detailColor
+  }
+  val painters: Map<ComposerPromptChipIcon, Painter> = rememberComposerPromptChipPainters()
+  val scroll: ScrollState = rememberScrollState()
+  val contentPadding: PaddingValues = JewelTheme.textAreaStyle.metrics.contentPadding
   // `onVisibleSelectionChange`: typing or moving the caret unfolds, and so does a click
   LaunchedEffect(draft) {
     snapshotFlow { draft.text.toString() to draft.selection }.drop(1).collect { onFocus() }
@@ -351,11 +391,33 @@ private fun ComposerPromptEditor(
       // then sending
       .onPreviewKeyEvent(onModeKey)
       .onPreviewKeyEvent(onMenuKey)
-      .onPreviewKeyEvent { event -> onHistoryKey(event, layout[0]?.invoke()) }
-      .composerKeys(draft, state.running, onSend),
+      .onPreviewKeyEvent { event ->
+        val result: TextLayoutResult? = layout.value?.invoke()
+        val text: String = draft.text.toString()
+        val line: Int? = composerPromptCaretLine(
+          layout = result,
+          text = text,
+          caret = draft.selection.end,
+          chips = chips.chipsFor(text),
+        )
+        onHistoryKey(event, line, result?.lineCount)
+      }
+      .composerKeys(draft, state.running, onSend)
+      .composerPromptChipBackgrounds(
+        chips = chips,
+        draft = draft,
+        layout = layout,
+        scroll = scroll,
+        contentPadding = contentPadding,
+        painters = painters,
+        style = chipStyle,
+      ),
     enabled = state.enabled,
+    inputTransformation = chips.input,
     lineLimits = TextFieldLineLimits.MultiLine(),
-    onTextLayout = { result -> layout[0] = result },
+    onTextLayout = { result -> if (layout.value !== result) layout.value = result },
+    outputTransformation = chips.output,
+    scrollState = scroll,
     // Upstream's short placeholder (ChatComposer.tsx:6695). The long one offers @tags, $skills
     // and / commands, and `@` has no menu yet (#45).
     placeholder = { Text("Ask anything...", color = JewelTheme.globalColors.text.info) },
@@ -618,10 +680,14 @@ private fun composerModeKey(
 private class ComposerPromptRecall(private val draft: TextFieldState) {
   private var position: ComposerPromptHistoryPosition? = null
 
-  /** True when [event] recalled a prompt. [available]: no request waiting, nothing attached. */
+  /**
+   * True when [event] recalled a prompt. [caretLine] of [lineCount] is the caret's visual line.
+   * [available]: no request waiting, nothing attached.
+   */
   fun onKey(
     event: KeyEvent,
-    layout: TextLayoutResult?,
+    caretLine: Int?,
+    lineCount: Int?,
     messages: List<ComposerPromptHistoryMessage>,
     available: Boolean,
     onReplace: () -> Unit,
@@ -637,12 +703,8 @@ private class ComposerPromptRecall(private val draft: TextFieldState) {
     val prompt: String = draft.text.toString()
     if (!canNavigatePromptHistory(modified, !available, false, position, prompt)) return false
     val selection: TextRange = draft.selection
-    // A layout from before the last edit can be shorter than the text
-    val laidOut: Int? = layout?.layoutInput?.text?.length
-    val caretLine: Int? = layout
-      ?.takeIf { laidOut == prompt.length }
-      ?.getLineForOffset(selection.end.coerceIn(0, prompt.length))
-    if (!isCaretOnVisualEdge(prompt, selection, direction, caretLine, layout?.lineCount)) {
+    // [caretLine] is null for a layout from before the last edit
+    if (!isCaretOnVisualEdge(prompt, selection, direction, caretLine, lineCount)) {
       return false
     }
     val step: ComposerPromptHistoryStep = stepComposerPromptHistory(

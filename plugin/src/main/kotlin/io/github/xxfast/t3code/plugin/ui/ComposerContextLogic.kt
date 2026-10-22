@@ -294,6 +294,49 @@ fun inlineContextIds(text: String): List<String> {
     .toList()
 }
 
+/** `toKindScopedComposerContextId`: `<kind>_<producerId>`, made safe. */
+fun toKindScopedComposerContextId(kind: String, producerId: String): String =
+  toComposerContextId("${kind}_$producerId")
+
+/** `parseComposerContextHref`: the kind and context id of a `t3-context://v1/` href, or null. */
+fun parseComposerContextHref(href: String): Pair<String, String>? {
+  if (!href.startsWith(CONTEXT_HREF_PREFIX)) return null
+  val parts: List<String> = href.removePrefix(CONTEXT_HREF_PREFIX).split('/')
+  if (parts.size != 2) return null
+  val (kind: String, contextId: String) = parts
+  if (!CONTEXT_KIND_PATTERN.matches(kind) || !CONTEXT_ID_PATTERN.matches(contextId)) return null
+  return kind to contextId
+}
+
+/** `ComposerContextReferenceOccurrence`: one context link in a text, with its source range. */
+data class ComposerContextReferenceOccurrence(
+  val kind: String,
+  val contextId: String,
+  val label: String,
+  val image: Boolean,
+  val source: String,
+  val start: Int,
+  val end: Int,
+)
+
+/** `collectComposerContextReferences`, composerContextReferences.ts: [text]'s valid links. */
+fun collectComposerContextReferences(text: String): List<ComposerContextReferenceOccurrence> {
+  if (!text.contains("](t3-context:")) return emptyList()
+  return CONTEXT_LINK.findAll(text).mapNotNull { match ->
+    val (kind: String, contextId: String) =
+      parseComposerContextHref(match.groupValues[3]) ?: return@mapNotNull null
+    ComposerContextReferenceOccurrence(
+      kind = kind,
+      contextId = contextId,
+      label = sanitizeComposerContextLabel(match.groupValues[2], kind),
+      image = match.groupValues[1] == "!",
+      source = match.value,
+      start = match.range.first,
+      end = match.range.last + 1,
+    )
+  }.toList()
+}
+
 /** [text] without its context links, for showing a sent message. Upstream draws them as chips. */
 fun stripContextReferences(text: String): String {
   if (!text.contains("](t3-context:")) return text
