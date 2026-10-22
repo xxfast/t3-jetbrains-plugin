@@ -37,6 +37,8 @@ data class ComposerState(
   val queue: Boolean,
   /** Review comments going with the next message. */
   val reviewComments: Int = 0,
+  /** Upstream's `isEditingQueuedMessage`: a send saves the queued message being edited. */
+  val editingQueuedMessage: Boolean = false,
 )
 
 const val NOT_CONNECTED: String = "Not connected"

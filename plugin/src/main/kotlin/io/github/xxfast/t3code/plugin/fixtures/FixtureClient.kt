@@ -202,6 +202,8 @@ class FixtureClient(
       providerSessions = scenario.providerSessions[thread.id].orEmpty(),
       checkpoints = scenario.checkpoints[thread.id].orEmpty(),
       providerThreads = scenario.providerThreads[thread.id].orEmpty(),
+      providerTurns = scenario.providerTurns[thread.id].orEmpty(),
+      messages = scenario.messages[thread.id].orEmpty(),
     )
     emit(view())
     entries.drop(snapshot).forEach { entry ->
@@ -256,7 +258,32 @@ class FixtureClient(
             .withRow(command.threadId) { row ->
               row.copy(status = "idle", activeRunId = null, latestRunCompletedAt = now)
             }
+            .let { next ->
+              if (command.holdQueue == true) holdQueue(next, command.threadId) else next
+            }
         }
+      }
+
+      // The queue, apps/server/src/orchestration-v2/Orchestrator.ts at the pinned tag
+      is Command.QueuedRunReorder -> overlay.update { overlay -> reorder(overlay, command) }
+
+      is Command.QueuedRunCancel -> overlay.update { overlay ->
+        val run: Run = queuedOf(overlay, command.threadId).find { it.id == command.runId }
+          ?: return@update overlay
+        overlay.upsertRun(command.threadId, cancelledRun(run, now))
+      }
+
+      is Command.QueuedRunEdit -> overlay.update { overlay -> editQueued(overlay, command, now) }
+
+      is Command.QueuedMessagePromoteToSteer -> overlay.update { overlay ->
+        promote(overlay, command, now)
+      }
+
+      is Command.QueueResume -> overlay.update { overlay ->
+        val resumed: Overlay = queuedOf(overlay, command.threadId).fold(overlay) { next, run ->
+          next.upsertRun(command.threadId, run.copy(queueHeld = false))
+        }
+        startNextQueued(resumed, command.threadId, now)
       }
 
       is Command.ProviderSessionDetach -> overlay.update { overlay ->
@@ -649,6 +676,11 @@ class FixtureClient(
   /** The user's message now, a streaming reply after 600 ms, done 600 ms after that. */
   private fun send(command: Command.MessageDispatch, now: String, at: Long) {
     val threadId: String = command.threadId
+    if (command.dispatchMode is Command.MessageDispatch.DispatchMode.QueueAfterActive &&
+      runsOf(overlay.value, threadId).any { it.status in ACTIVE_RUN }
+    ) {
+      return overlay.update { overlay -> enqueue(overlay, command, now, at) }
+    }
     val runId = "run_fixture_${command.messageId}"
     val replyId = "msg_fixture_reply_${command.messageId}"
     val text = "Fixture reply to: ${command.text}"
@@ -860,6 +892,181 @@ class FixtureClient(
       }
     }
   }
+
+  /** Queued runs in delivery order, `queuedRunsInDeliveryOrder` (QueuedRunOrder.ts:12). */
+  private fun queuedOf(overlay: Overlay, threadId: String): List<Run> = runsOf(overlay, threadId)
+    .filter { run -> run.status == "queued" }
+    .sortedWith(compareBy<Run>({ run -> run.queuePosition ?: run.ordinal }, { it.ordinal }))
+
+  private fun messagesOf(overlay: Overlay, threadId: String): List<ConversationMessage> =
+    loaded.value?.messages?.get(threadId).orEmpty()
+      .upsertAll(overlay.messages[threadId].orEmpty(), ConversationMessage::id)
+
+  /** A `queue_after_active` send behind a run: a queued run and its message, no item yet. */
+  private fun enqueue(
+    overlay: Overlay,
+    command: Command.MessageDispatch,
+    now: String,
+    at: Long,
+  ): Overlay {
+    val threadId: String = command.threadId
+    val row: Thread = rowOf(overlay, threadId) ?: return overlay
+    val queued: List<Run> = queuedOf(overlay, threadId)
+    val run = Run(
+      id = "run_fixture_${command.messageId}",
+      threadId = threadId,
+      ordinal = runsOf(overlay, threadId).size + 1L,
+      providerInstanceId = row.providerInstanceId,
+      modelSelection = command.modelSelection ?: row.modelSelection,
+      providerThreadId = null,
+      userMessageId = command.messageId,
+      rootNodeId = null,
+      activeAttemptId = null,
+      status = "queued",
+      queuePosition = (queued.maxOfOrNull { it.queuePosition ?: it.ordinal } ?: 0) + 1,
+      requestedAt = now,
+      startedAt = null,
+      completedAt = null,
+      checkpointId = null,
+      contextHandoffId = null,
+    )
+    val message = ConversationMessage(
+      createdBy = command.createdBy,
+      creationSource = command.creationSource,
+      id = command.messageId,
+      threadId = threadId,
+      runId = run.id,
+      nodeId = null,
+      role = "user",
+      text = command.text,
+      context = command.context,
+      attachments = command.attachments,
+      streaming = false,
+      createdAt = now,
+      updatedAt = now,
+    )
+    return overlay
+      .upsertRun(threadId, run)
+      .upsertMessage(threadId, message)
+      .copy(sequence = maxOf(overlay.sequence, at))
+  }
+
+  /** `dispatchQueuedRunReorder`, Orchestrator.ts:8022: then every queued run renumbered from 1. */
+  private fun reorder(overlay: Overlay, command: Command.QueuedRunReorder): Overlay {
+    val queued: List<Run> = queuedOf(overlay, command.threadId)
+    val moving: Run = queued.find { it.id == command.runId } ?: return overlay
+    val without: List<Run> = queued - moving
+    val before: Int = command.beforeRunId
+      ?.let { id -> without.indexOfFirst { it.id == id } }
+      ?: without.size
+    if (before < 0) return overlay
+    val reordered: List<Run> = without.take(before) + moving + without.drop(before)
+    return reordered.foldIndexed(overlay) { index, next, run ->
+      next.upsertRun(command.threadId, run.copy(queuePosition = index + 1L))
+    }
+  }
+
+  /** `dispatchQueuedRunEdit`, Orchestrator.ts:8215: the message's text, the rest kept. */
+  private fun editQueued(overlay: Overlay, command: Command.QueuedRunEdit, now: String): Overlay {
+    val run: Run = queuedOf(overlay, command.threadId).find { it.id == command.runId }
+      ?: return overlay
+    val message: ConversationMessage =
+      messagesOf(overlay, command.threadId).find { it.id == run.userMessageId } ?: return overlay
+    val edited: ConversationMessage = message.copy(
+      text = command.text,
+      attachments = command.attachments ?: message.attachments,
+      context = command.context ?: message.context,
+      updatedAt = now,
+    )
+    return overlay.upsertMessage(command.threadId, edited)
+  }
+
+  /**
+   * `dispatchQueuedMessagePromoteToSteer`, Orchestrator.ts:7883: the queued run is cancelled and
+   * its message steers the target run.
+   */
+  private fun promote(
+    overlay: Overlay,
+    command: Command.QueuedMessagePromoteToSteer,
+    now: String,
+  ): Overlay {
+    val threadId: String = command.threadId
+    val run: Run = queuedOf(overlay, threadId).find { it.id == command.queuedRunId }
+      ?: return overlay
+    val message: ConversationMessage =
+      messagesOf(overlay, threadId).find { it.id == run.userMessageId } ?: return overlay
+    val steered: ConversationMessage = message.copy(runId = command.targetRunId, updatedAt = now)
+    val item: TurnItem.UserMessage = userItem(
+      overlay = overlay,
+      message = steered,
+      runId = command.targetRunId,
+      inputIntent = "promoted_queued_to_steer",
+      now = now,
+    )
+    return overlay
+      .upsertRun(threadId, cancelledRun(run, now))
+      .upsertMessage(threadId, steered)
+      .upsertItem(threadId, item)
+  }
+
+  /** The held mark `run.interrupt` with `holdQueue` leaves on every queued run. */
+  private fun holdQueue(overlay: Overlay, threadId: String): Overlay =
+    queuedOf(overlay, threadId).fold(overlay) { next, run ->
+      next.upsertRun(threadId, run.copy(queueHeld = true))
+    }
+
+  /**
+   * `startNextQueuedRun`: with nothing active, the first queued run starts and its message
+   * shows. The fixture doesn't play a reply for it.
+   */
+  private fun startNextQueued(overlay: Overlay, threadId: String, now: String): Overlay {
+    if (runsOf(overlay, threadId).any { it.status in ACTIVE_RUN }) return overlay
+    val run: Run = queuedOf(overlay, threadId).firstOrNull { it.queueHeld != true }
+      ?: return overlay
+    val message: ConversationMessage? =
+      messagesOf(overlay, threadId).find { it.id == run.userMessageId }
+    val started: Run = run.copy(status = "running", queuePosition = null, startedAt = now)
+    var next: Overlay = overlay.upsertRun(threadId, started)
+    if (message != null) {
+      next = next.upsertItem(threadId, userItem(next, message, run.id, "queued_turn", now))
+    }
+    return next.withRow(threadId) { row ->
+      row.copy(status = "running", activeRunId = run.id, latestRunId = run.id, updatedAt = now)
+    }
+  }
+
+  private fun cancelledRun(run: Run, now: String): Run =
+    run.copy(status = "cancelled", queuePosition = null, completedAt = now)
+
+  private fun userItem(
+    overlay: Overlay,
+    message: ConversationMessage,
+    runId: String,
+    inputIntent: String,
+    now: String,
+  ): TurnItem.UserMessage = TurnItem.UserMessage(
+    id = "item_${message.id}",
+    threadId = message.threadId,
+    runId = runId,
+    nodeId = null,
+    providerThreadId = null,
+    providerTurnId = null,
+    nativeItemRef = null,
+    parentItemId = null,
+    ordinal = nextOrdinal(overlay, message.threadId),
+    status = "completed",
+    title = null,
+    startedAt = now,
+    completedAt = now,
+    updatedAt = now,
+    createdBy = message.createdBy,
+    creationSource = message.creationSource,
+    messageId = message.id,
+    inputIntent = inputIntent,
+    text = message.text,
+    context = message.context,
+    attachments = message.attachments,
+  )
 
   private fun updateRow(threadId: String, change: (Thread) -> Thread) =
     overlay.update { overlay -> overlay.withRow(threadId, change) }
@@ -1186,6 +1393,9 @@ private const val REGENERATED: String = " (regenerated)"
 
 /** Item statuses that are still going; an interrupt cancels them. */
 private val IN_FLIGHT: Set<String> = setOf("pending", "running", "waiting")
+
+/** Run statuses a send queues behind, `ACTIVE_RUN_STATUSES` in threadWorkflows.ts:14. */
+private val ACTIVE_RUN: Set<String> = setOf("preparing", "starting", "running", "waiting")
 
 /** [item], whatever its type, closed as cancelled at [now], through its JSON to stay generic. */
 private fun cancelled(item: TurnItem, now: String): TurnItem {

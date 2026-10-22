@@ -144,6 +144,8 @@ fun ChatView(
   onOpenSetupTerminal: ((terminalId: String) -> Unit)? = null, // the setup script's terminal
   header: ChatHeaderActions = ChatHeaderActions(), // the title's menu, rename and new thread
   stashCount: Int = 0, // prompts in the composer's stash
+  queue: QueuedRunsState? = null, // the queued messages above the composer
+  queueActions: QueuedRunsActions = QueuedRunsActions(),
 ) {
   val threadId: String? = view?.thread?.id
   val timeline: LazyListState = remember(threadId) { LazyListState() }
@@ -225,6 +227,7 @@ fun ChatView(
           onClearReview = onClearReview,
           onSend = onSend,
           onInterrupt = onInterrupt,
+          attachedAbove = queue?.let { state -> { QueuedRunsControl(state, queueActions) } },
           extras = extras,
           attachmentActions = attachmentActions,
           contextWindow = contextWindow,

@@ -1,0 +1,384 @@
+{
+  "threads": [
+    {
+      "id": "thr_01JC4C3Q8UQUEUED1",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Demo: running thread with queued messages",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC4C3Q8UQUEUED1"
+      },
+      "status": "running",
+      "branch": "kotlinx-io-0.8",
+      "latestRunId": "run_01JC4C3QR2RUN",
+      "activeRunId": "run_01JC4C3QR2RUN",
+      "itemCount": 4,
+      "visibleItemCount": 4,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T09:10:00.000Z",
+      "updatedAt": "2026-10-21T09:14:30.000Z"
+    }
+  ],
+  "runs": {
+    "thr_01JC4C3Q8UQUEUED1": [
+      {
+        "id": "run_01JC4C3QR1DONE",
+        "threadId": "thr_01JC4C3Q8UQUEUED1",
+        "ordinal": 1,
+        "status": "completed",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC4C3QM1",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-21T09:10:00.000Z",
+        "startedAt": "2026-10-21T09:10:01.000Z",
+        "completedAt": "2026-10-21T09:12:40.000Z",
+        "checkpointId": null,
+        "contextHandoffId": null
+      },
+      {
+        "id": "run_01JC4C3QR2RUN",
+        "threadId": "thr_01JC4C3Q8UQUEUED1",
+        "ordinal": 2,
+        "status": "running",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC4C3QM2",
+        "rootNodeId": null,
+        "activeAttemptId": "att_01JC4C3QA2",
+        "requestedAt": "2026-10-21T09:13:00.000Z",
+        "startedAt": "2026-10-21T09:13:01.000Z",
+        "completedAt": null,
+        "checkpointId": null,
+        "contextHandoffId": null
+      },
+      {
+        "id": "run_01JC4C3QR3Q",
+        "threadId": "thr_01JC4C3Q8UQUEUED1",
+        "ordinal": 3,
+        "status": "queued",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC4C3QM3",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-21T09:13:40.000Z",
+        "startedAt": null,
+        "completedAt": null,
+        "checkpointId": null,
+        "contextHandoffId": null,
+        "queuePosition": 1
+      },
+      {
+        "id": "run_01JC4C3QR4Q",
+        "threadId": "thr_01JC4C3Q8UQUEUED1",
+        "ordinal": 4,
+        "status": "queued",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC4C3QM4",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-21T09:14:10.000Z",
+        "startedAt": null,
+        "completedAt": null,
+        "checkpointId": null,
+        "contextHandoffId": null,
+        "queuePosition": 2
+      }
+    ]
+  },
+  "messages": {
+    "thr_01JC4C3Q8UQUEUED1": [
+      {
+        "createdBy": "user",
+        "creationSource": "web",
+        "id": "msg_01JC4C3QM1",
+        "threadId": "thr_01JC4C3Q8UQUEUED1",
+        "runId": "run_01JC4C3QR1DONE",
+        "nodeId": null,
+        "role": "user",
+        "text": "Add a JSON codec for KStore so it can persist kotlinx.serialization types.",
+        "attachments": [],
+        "streaming": false,
+        "createdAt": "2026-10-21T09:10:00.000Z",
+        "updatedAt": "2026-10-21T09:10:00.000Z"
+      },
+      {
+        "createdBy": "user",
+        "creationSource": "web",
+        "id": "msg_01JC4C3QM2",
+        "threadId": "thr_01JC4C3Q8UQUEUED1",
+        "runId": "run_01JC4C3QR2RUN",
+        "nodeId": null,
+        "role": "user",
+        "text": "Now cover the codec with tests for a missing file and a corrupt file.",
+        "attachments": [],
+        "streaming": false,
+        "createdAt": "2026-10-21T09:13:00.000Z",
+        "updatedAt": "2026-10-21T09:13:00.000Z"
+      },
+      {
+        "createdBy": "user",
+        "creationSource": "web",
+        "id": "msg_01JC4C3QM3",
+        "threadId": "thr_01JC4C3Q8UQUEUED1",
+        "runId": "run_01JC4C3QR3Q",
+        "nodeId": null,
+        "role": "user",
+        "text": "Then run :kstore-file:check on JVM and iOS and tell me what fails.",
+        "attachments": [],
+        "streaming": false,
+        "createdAt": "2026-10-21T09:13:40.000Z",
+        "updatedAt": "2026-10-21T09:13:40.000Z"
+      },
+      {
+        "createdBy": "user",
+        "creationSource": "web",
+        "id": "msg_01JC4C3QM4",
+        "threadId": "thr_01JC4C3Q8UQUEUED1",
+        "runId": "run_01JC4C3QR4Q",
+        "nodeId": null,
+        "role": "user",
+        "text": "Also update the README's install snippet, it still shows the old artifact like in this screenshot.",
+        "attachments": [
+          {
+            "type": "image",
+            "id": "att_fixture_screenshot",
+            "name": "screenshot.png",
+            "mimeType": "image/png",
+            "sizeBytes": 1678
+          }
+        ],
+        "streaming": false,
+        "createdAt": "2026-10-21T09:14:10.000Z",
+        "updatedAt": "2026-10-21T09:14:10.000Z"
+      }
+    ]
+  },
+  "providerSessions": {
+    "thr_01JC4C3Q8UQUEUED1": [
+      {
+        "id": "psn_01JC4C3QCODEX",
+        "driver": "codex",
+        "providerInstanceId": "codex",
+        "status": "ready",
+        "cwd": "/Users/xxfast/Developer/XXFAST/KMP/KStore",
+        "model": "gpt-5",
+        "capabilities": {
+          "sessions": {
+            "supportsMultipleProviderThreadsPerSession": false,
+            "supportsModelSwitchInSession": true,
+            "supportsProviderSwitchingViaHandoff": true,
+            "supportsRuntimeModeSwitchInSession": true,
+            "pendingRequestsSurviveRestart": false
+          },
+          "threads": {
+            "canCreateEmptyThread": true,
+            "canReadThreadSnapshot": true,
+            "canRollbackThread": true,
+            "canForkThread": true,
+            "canForkFromTurn": true,
+            "canForkFromSubagentThread": false,
+            "exposesNativeThreadId": true
+          },
+          "turns": {
+            "exposesNativeTurnId": true,
+            "emitsTurnStarted": true,
+            "emitsTurnCompleted": true,
+            "supportsInterrupt": true,
+            "supportsActiveSteering": true,
+            "supportsSteeringByInterruptRestart": false,
+            "supportsQueuedMessages": true,
+            "terminalStatusQuality": "exact"
+          },
+          "streaming": {
+            "streamsAssistantText": true,
+            "streamsReasoning": true,
+            "streamsToolOutput": true,
+            "streamsPlanText": true,
+            "emitsMessageCompleted": true
+          },
+          "tools": {
+            "exposesToolItemIds": true,
+            "emitsToolStarted": true,
+            "emitsToolCompleted": true,
+            "emitsToolOutput": true,
+            "supportsMcpTools": true,
+            "supportsDynamicToolCallbacks": false
+          },
+          "approvals": {
+            "supportsCommandApproval": true,
+            "supportsFileReadApproval": false,
+            "supportsFileChangeApproval": true,
+            "supportsApplyPatchApproval": true,
+            "approvalsHaveNativeRequestIds": true,
+            "approvalCallbacksAreLiveOnly": true,
+            "approvalsCanOriginateFromSubagents": false
+          },
+          "planning": {
+            "emitsPlanUpdated": true,
+            "emitsTodoList": true,
+            "emitsProposedPlan": true,
+            "supportsStructuredQuestions": true,
+            "planDeltasHaveItemIds": true
+          },
+          "subagents": {
+            "supportsSubagents": false,
+            "exposesSubagentThreadIds": false,
+            "emitsSubagentLifecycle": false,
+            "canWaitForSubagents": false,
+            "canCloseSubagents": false,
+            "canForkSubagentThread": false
+          },
+          "context": {
+            "acceptsSystemContext": true,
+            "acceptsDeveloperContext": true,
+            "acceptsSyntheticUserContext": true,
+            "canGenerateSummaries": true,
+            "canConsumeHandoffSummaries": true,
+            "supportsDeltaHandoff": false,
+            "supportsFullThreadHandoff": true,
+            "maxRecommendedHandoffChars": null
+          },
+          "checkpointing": {
+            "appCanCheckpointFilesystem": true,
+            "supportsNestedCheckpointScopes": false,
+            "providerCanRollbackConversation": true,
+            "providerRollbackReturnsSnapshot": false,
+            "providerCanReadConversationSnapshot": true
+          },
+          "identity": {
+            "nativeThreadIds": "stable",
+            "nativeTurnIds": "stable",
+            "nativeItemIds": "stable",
+            "nativeRequestIds": "stable"
+          }
+        },
+        "createdAt": "2026-10-21T09:10:00.000Z",
+        "updatedAt": "2026-10-21T09:13:01.000Z",
+        "lastError": null
+      }
+    ]
+  },
+  "providerTurns": {
+    "thr_01JC4C3Q8UQUEUED1": [
+      {
+        "id": "ptn_01JC4C3QT2",
+        "providerThreadId": "pth_01JC4C3QCODEX",
+        "nodeId": "nod_01JC4C3QN2",
+        "runAttemptId": "att_01JC4C3QA2",
+        "nativeTurnRef": null,
+        "ordinal": 2,
+        "status": "running",
+        "startedAt": "2026-10-21T09:13:01.000Z",
+        "completedAt": null
+      }
+    ]
+  },
+  "items": {
+    "thr_01JC4C3Q8UQUEUED1": [
+      {
+        "type": "user_message",
+        "id": "qu1",
+        "threadId": "thr_01JC4C3Q8UQUEUED1",
+        "runId": "run_01JC4C3QR1DONE",
+        "ordinal": 1,
+        "status": "completed",
+        "messageId": "msg_01JC4C3QM1",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "Add a JSON codec for KStore so it can persist kotlinx.serialization types.",
+        "startedAt": "2026-10-21T09:10:00.000Z",
+        "completedAt": "2026-10-21T09:10:00.000Z",
+        "updatedAt": "2026-10-21T09:10:00.000Z"
+      },
+      {
+        "type": "assistant_message",
+        "id": "qa1",
+        "threadId": "thr_01JC4C3Q8UQUEUED1",
+        "runId": "run_01JC4C3QR1DONE",
+        "ordinal": 2,
+        "status": "completed",
+        "messageId": "msg_01JC4C3QA1",
+        "streaming": false,
+        "text": "Added `JsonCodec` in `:kstore-file`, backed by `Json.encodeToString`. `storeOf(file, codec = JsonCodec())` now works for any `@Serializable` type.",
+        "startedAt": "2026-10-21T09:10:05.000Z",
+        "completedAt": "2026-10-21T09:12:40.000Z",
+        "updatedAt": "2026-10-21T09:12:40.000Z"
+      },
+      {
+        "type": "user_message",
+        "id": "qu2",
+        "threadId": "thr_01JC4C3Q8UQUEUED1",
+        "runId": "run_01JC4C3QR2RUN",
+        "ordinal": 3,
+        "status": "completed",
+        "messageId": "msg_01JC4C3QM2",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "Now cover the codec with tests for a missing file and a corrupt file.",
+        "startedAt": "2026-10-21T09:13:00.000Z",
+        "completedAt": "2026-10-21T09:13:00.000Z",
+        "updatedAt": "2026-10-21T09:13:00.000Z"
+      },
+      {
+        "after": 600,
+        "type": "assistant_message",
+        "id": "qa2",
+        "threadId": "thr_01JC4C3Q8UQUEUED1",
+        "runId": "run_01JC4C3QR2RUN",
+        "ordinal": 4,
+        "status": "running",
+        "messageId": "msg_01JC4C3QA2",
+        "streaming": true,
+        "text": "Writing `JsonCodecTest` with a",
+        "startedAt": "2026-10-21T09:13:05.000Z",
+        "updatedAt": "2026-10-21T09:13:05.000Z"
+      },
+      {
+        "after": 900,
+        "type": "assistant_message",
+        "id": "qa2",
+        "threadId": "thr_01JC4C3Q8UQUEUED1",
+        "runId": "run_01JC4C3QR2RUN",
+        "ordinal": 4,
+        "status": "running",
+        "messageId": "msg_01JC4C3QA2",
+        "streaming": true,
+        "text": "Writing `JsonCodecTest` with a missing file case first, then a corrupt file that should fall back to the default.",
+        "startedAt": "2026-10-21T09:13:05.000Z",
+        "updatedAt": "2026-10-21T09:13:09.000Z"
+      }
+    ]
+  }
+}

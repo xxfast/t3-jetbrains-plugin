@@ -129,6 +129,12 @@ import io.github.xxfast.t3code.protocol.generated.VcsRef
 import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
 import kotlin.coroutines.cancellation.CancellationException
 import java.time.Instant
+import io.github.xxfast.t3code.plugin.ui.AttachmentActions
+import io.github.xxfast.t3code.plugin.ui.EditingQueuedRun
+import io.github.xxfast.t3code.plugin.ui.QueuedRunsActions
+import io.github.xxfast.t3code.plugin.ui.QueuedRunsState
+import io.github.xxfast.t3code.plugin.ui.ThreadQueueWorkflowState
+import io.github.xxfast.t3code.plugin.ui.deriveThreadQueueWorkflowState
 import java.util.UUID
 import javax.swing.JComponent
 import org.jetbrains.jewel.bridge.JewelComposePanel
@@ -174,6 +180,13 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
   val draft: TextFieldState = remember(threadId) { controller.draft(threadId) }
   val stash: List<PromptStashEntry> by ComposerDrafts.get().stash.collectAsState()
   LaunchedEffect(projects) { ProjectIcons.get().ensure(projects) }
+  val queuedRuns: QueuedRuns = QueuedRuns.getInstance(project)
+  val editingAll: Map<String, EditingQueuedRun> by queuedRuns.editing.collectAsState()
+  val queueBusy: Map<String, String> by queuedRuns.busy.collectAsState()
+  val queueSaving: Set<String> by queuedRuns.saving.collectAsState()
+  // `useQueuedRunEdit`: while a queued message is edited the composer holds its own draft
+  val editing: EditingQueuedRun? = editingAll[threadId]
+  val composerDraft: TextFieldState = if (editing != null) queuedRuns.editDraft(threadId) else draft
 
   val view: ThreadView? = load.view
   // For a check after a modal dialog, which outlives this composition's view
@@ -185,6 +198,10 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
   }
   LaunchedEffect(view, requests, pending.delivered, pending.responding, pending.settings) {
     view?.let { controller.reconcile(it, requests.requestIds) }
+  }
+  LaunchedEffect(view, editing) { view?.let { queuedRuns.reconcile(it, draft) } }
+  val queue: ThreadQueueWorkflowState? = remember(view) {
+    view?.let(::deriveThreadQueueWorkflowState)
   }
   val shown: ThreadView? = remember(view, pending.messages) {
     view?.let { current ->
@@ -201,12 +218,12 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
     connection = connection,
     running = view?.let { activeRun(it.runs) } != null,
     // A worktree being prepared holds the composer, upstream's `blocksSend`
-    sending = pending.sending || setup.blocksSend,
+    sending = pending.sending || setup.blocksSend || threadId in queueSaving,
     error = pending.error,
     // Upstream's `followUpBehavior` default; Ctrl/Cmd sends the other
     queue = false,
     reviewComments = comments.size,
-  )
+  ).copy(editingQueuedMessage = editing != null)
   val (request: PendingRequest?, actions: PendingActions) =
     rememberPendingRequest(view, requests, pending.responding, controller)
   val (footer: ComposerFooterState?, footerActions: ComposerFooterActions) =
@@ -230,7 +247,7 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
       project = projects.find { it.id == projectId },
       favicon = favicons[projectId],
       composer = composer,
-      draft = draft,
+      draft = composerDraft,
       pending = request,
       pendingActions = actions,
       footer = footer,
@@ -241,6 +258,8 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
       },
       onSend = onSend@{ text, mode ->
         val current: ThreadView = view ?: return@onSend
+        // Edit mode repurposes the composer: a send saves the queued message in place
+        if (editing != null) return@onSend queuedRuns.saveEdit(threadId, text)
         // `compactBeforeSend`, ChatView.tsx:6370: a `/compact` of its own doesn't compact twice
         val compactFirst: Boolean = contextWindow.compactBeforeSendTokens != null &&
           !contextWindow.keepFullHistory &&
@@ -298,8 +317,10 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
           null
         },
       ),
-      extras = extras[threadId] ?: DraftExtras(),
-      attachmentActions = rememberAttachmentActions(project, threadId, controller),
+      // A queued message's edit is text only: the thread's draft attachments stay out of it
+      extras = if (editing != null) DraftExtras() else extras[threadId] ?: DraftExtras(),
+      attachmentActions = rememberAttachmentActions(project, threadId, controller)
+        .takeIf { editing == null } ?: AttachmentActions(),
       stashCount = stash.size,
       contextWindow = contextWindow,
       worktreeSetup = setup.visible,
@@ -307,6 +328,24 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
       onOpenSetupTerminal = { terminalId ->
         ThreadTerminals.getInstance(project).open(threadId, terminalId)
       },
+      queue = queue?.let { workflow ->
+        QueuedRunsState(
+          workflow = workflow,
+          editingRunId = editing?.runId,
+          busy = queueBusy.containsKey(threadId),
+          enabled = operable,
+        )
+      },
+      queueActions = QueuedRunsActions(
+        onEdit = { queued -> view?.let { queuedRuns.beginEdit(it, queued) } },
+        onCancelEdit = { queuedRuns.cancelEdit(threadId) },
+        onSteer = { queuedRunId, targetRunId ->
+          view?.let { queuedRuns.promote(it, queuedRunId, targetRunId) }
+        },
+        onRemove = { runId -> view?.let { queuedRuns.cancel(it, runId) } },
+        onMove = { move -> view?.let { queuedRuns.reorder(it, move) } },
+        onResume = { view?.let(queuedRuns::resume) },
+      ),
     )
   }
 }

@@ -87,6 +87,7 @@ fun ChatComposer(
   onSettledHeight: (Int) -> Unit = {},
   onClearReview: () -> Unit = {},
   stashCount: Int = 0, // prompts in the stash, for its badge
+  attachedAbove: (@Composable () -> Unit)? = null, // upstream's `attachedAbove`, a drawer on top
 ) {
   // [alternate] is Ctrl/Cmd+Enter or Ctrl/Cmd-click while running: the other follow-up behaviour
   fun send(alternate: Boolean) {
@@ -130,6 +131,7 @@ fun ChatComposer(
     )
     // The context strip is a drawer tucked under the box, `ComposerSurface.ContextStrip`
     val strip: WorkspaceControlState? = footer?.workspace?.takeIf { pending == null }
+    ComposerWithMenuDrawer(drawer = attachedAbove) {
     ComposerWithMenuDrawer(
       drawer = triggerMenu.menu?.let { menu ->
         { ComposerCommandMenu(menu, triggerMenu.activeItemId, triggerMenu.onHighlight) }
@@ -196,6 +198,7 @@ fun ChatComposer(
           }
         }
       }
+    }
     }
     }
     }

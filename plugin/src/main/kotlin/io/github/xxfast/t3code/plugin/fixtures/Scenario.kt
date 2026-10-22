@@ -2,9 +2,11 @@ package io.github.xxfast.t3code.plugin.fixtures
 
 import io.github.xxfast.t3code.protocol.Checkpoint
 import io.github.xxfast.t3code.protocol.ConnectionState
+import io.github.xxfast.t3code.protocol.ConversationMessage
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.ProviderSession
 import io.github.xxfast.t3code.protocol.ProviderThread
+import io.github.xxfast.t3code.protocol.ProviderTurn
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ServerSession
@@ -40,6 +42,10 @@ class ScenarioFile(
   val providerSkills: Map<String, List<ServerProviderSkill>> = emptyMap(),
   /** Workspace snapshots per provider instance, `ServerProvider.workspaceSnapshots`. */
   val providerWorkspaceSnapshots: Map<String, List<ServerProviderWorkspaceSnapshot>> = emptyMap(),
+  /** The projection's conversation messages per thread, what a queued run's text comes from. */
+  val messages: Map<String, List<ConversationMessage>> = emptyMap(),
+  /** The projection's provider turns per thread, what says a run can be steered. */
+  val providerTurns: Map<String, List<ProviderTurn>> = emptyMap(),
 )
 
 @Serializable
@@ -71,6 +77,8 @@ class Scenario(
   val worktreeSetups: Map<String, WorktreeSetupSnapshot> = emptyMap(),
   val providerSkills: Map<String, List<ServerProviderSkill>> = emptyMap(),
   val providerWorkspaceSnapshots: Map<String, List<ServerProviderWorkspaceSnapshot>> = emptyMap(),
+  val messages: Map<String, List<ConversationMessage>> = emptyMap(),
+  val providerTurns: Map<String, List<ProviderTurn>> = emptyMap(),
 ) {
   companion object {
     fun decode(text: String): Scenario {
@@ -89,6 +97,8 @@ class Scenario(
         worktreeSetups = file.worktreeSetups,
         providerSkills = file.providerSkills,
         providerWorkspaceSnapshots = file.providerWorkspaceSnapshots,
+        messages = file.messages,
+        providerTurns = file.providerTurns,
       )
     }
 
@@ -114,6 +124,8 @@ class Scenario(
       providerSkills = parts.map { it.providerSkills }.fold(emptyMap(), ::append),
       providerWorkspaceSnapshots =
         parts.map { it.providerWorkspaceSnapshots }.fold(emptyMap(), ::append),
+      messages = parts.map { it.messages }.fold(emptyMap(), ::append),
+      providerTurns = parts.map { it.providerTurns }.fold(emptyMap(), ::append),
     )
 
     fun failed(name: String, message: String): Scenario = Scenario(

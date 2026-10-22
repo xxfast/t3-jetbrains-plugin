@@ -58,12 +58,15 @@ fun ComposerPrimaryActions(
   keepFullHistory: Boolean = false,
   onToggleKeepFullHistory: () -> Unit = {},
 ) {
-  if (state.running && state.canInterrupt && !hasSendableContent) {
+  if (state.running && state.canInterrupt && !hasSendableContent && !state.editingQueuedMessage) {
     StopGenerationButton(enabled = state.enabled, onInterrupt = onInterrupt)
     return
   }
   val mode: ComposerDispatchMode = resolveComposerDispatchMode(state.running, false, state.queue)
-  val compactTokens: String? = compactBeforeSendTokens?.let(::formatContextWindowTokens)
+  // `compactTokens` is null while editing a queued message, ComposerPrimaryActions.tsx:272
+  val compactTokens: String? = compactBeforeSendTokens
+    ?.takeUnless { state.editingQueuedMessage }
+    ?.let(::formatContextWindowTokens)
   val compactsBeforeSend: Boolean = compactTokens != null && !keepFullHistory
   val tooltip: String = if (compactsBeforeSend && !state.sending && state.disabledReason == null) {
     "Summarize $compactTokens tokens of history, then send"
@@ -79,9 +82,10 @@ fun ComposerPrimaryActions(
       sending = state.sending,
       onSend = onSend,
     ) {
-      when (mode) {
-        ComposerDispatchMode.QUEUE -> Glyph("list-plus", Color.White, 16.dp)
-        ComposerDispatchMode.STEER -> Glyph("corner-up-right", Color.White, 16.dp)
+      when {
+        state.editingQueuedMessage -> Glyph("check", Color.White, 16.dp)
+        mode == ComposerDispatchMode.QUEUE -> Glyph("list-plus", Color.White, 16.dp)
+        mode == ComposerDispatchMode.STEER -> Glyph("corner-up-right", Color.White, 16.dp)
         else -> SendArrow()
       }
     }
@@ -93,8 +97,10 @@ fun ComposerPrimaryActions(
  * what; else the label. `alternateShortcutLabel` is the plugin's Ctrl/Cmd+Enter.
  */
 fun submitTooltip(state: ComposerState, mode: ComposerDispatchMode): String {
-  if (state.sending) return "Submitting message"
+  val editing: Boolean = state.editingQueuedMessage
+  if (state.sending) return if (editing) "Updating queued message" else "Submitting message"
   if (state.disabledReason != null) return state.disabledReason
+  if (editing) return "Update queued message"
   return when (mode) {
     ComposerDispatchMode.QUEUE, ComposerDispatchMode.STEER -> {
       val behaviour: String = if (state.queue) "queue" else "steer"
