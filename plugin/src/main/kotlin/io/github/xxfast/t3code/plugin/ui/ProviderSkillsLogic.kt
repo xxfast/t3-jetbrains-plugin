@@ -2,6 +2,7 @@ package io.github.xxfast.t3code.plugin.ui
 
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.ServerProviderSkill
+import io.github.xxfast.t3code.protocol.generated.ServerProviderSlashCommand
 import io.github.xxfast.t3code.protocol.generated.ServerProviderWorkspaceSnapshot
 import java.time.Instant
 
@@ -42,6 +43,31 @@ fun dedupeProviderSkillsByName(skills: List<ServerProviderSkill>): List<ServerPr
  */
 fun isProviderSkillUserInvocable(skill: ServerProviderSkill): Boolean =
   skill.enabled && skill.userInvocable != false
+
+/**
+ * `getProviderSkillsForSlashMenu`, providerSkills.ts:41: the user-invocable skills, one per name,
+ * or none when the `showSkillsInSlashMenu` setting is off.
+ */
+fun getProviderSkillsForSlashMenu(
+  skills: List<ServerProviderSkill>,
+  showSkillsInSlashMenu: Boolean,
+): List<ServerProviderSkill> = if (showSkillsInSlashMenu) {
+  dedupeProviderSkillsByName(skills.filter(::isProviderSkillUserInvocable))
+} else {
+  emptyList()
+}
+
+/**
+ * `getProviderSlashCommandsForSlashMenu`, providerSkills.ts:50: the provider's commands minus
+ * any whose name a visible skill already takes.
+ */
+fun getProviderSlashCommandsForSlashMenu(
+  slashCommands: List<ServerProviderSlashCommand>,
+  visibleSkills: List<ServerProviderSkill>,
+): List<ServerProviderSlashCommand> {
+  val skillNames: Set<String> = visibleSkills.map { it.name.trim().lowercase() }.toSet()
+  return slashCommands.filter { command -> command.name.trim().lowercase() !in skillNames }
+}
 
 /** `resolveProviderSkillSourceKind`, providerSkills.ts:58. */
 fun resolveProviderSkillSourceKind(skill: ServerProviderSkill): ProviderSkillSourceKind {
@@ -104,6 +130,17 @@ fun hasCurrentProviderWorkspaceSnapshot(
  */
 fun resolveProviderSkillsForCwd(provider: ServerProvider, cwd: String?): List<ServerProviderSkill> =
   resolveProviderWorkspaceSnapshot(provider, cwd)?.skills ?: provider.skills.orEmpty()
+
+/**
+ * `resolveProviderSlashCommandsForCwd`, providerSkills.ts:148: the workspace snapshot's
+ * commands for [cwd], else the machine's.
+ */
+fun resolveProviderSlashCommandsForCwd(
+  provider: ServerProvider,
+  cwd: String?,
+): List<ServerProviderSlashCommand> = resolveProviderWorkspaceSnapshot(provider, cwd)
+  ?.slashCommands
+  ?: provider.slashCommands.orEmpty()
 
 /** `titleCaseWords`, inlineSkills.ts:5. */
 private fun titleCaseWords(value: String): String = value

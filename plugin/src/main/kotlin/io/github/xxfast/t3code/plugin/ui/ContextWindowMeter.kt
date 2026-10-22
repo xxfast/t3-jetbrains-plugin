@@ -51,6 +51,8 @@ data class ComposerContextWindow(
   val modelDisplayName: String? = null,
   val onCompact: (() -> Unit)? = null,
   val compactDisabledReason: String? = null,
+  /** `activeThreadHasCompactableConversation`, for the `/compact` row. */
+  val hasCompactableConversation: Boolean = false,
   val compactBeforeSendTokens: Long? = null,
   val keepFullHistory: Boolean = false,
   val onToggleKeepFullHistory: () -> Unit = {},

@@ -49,6 +49,13 @@ class T3Configurable : BoundConfigurable("T3 Code") {
           .comment("Ask before deleting a thread and its chat history.")
       }
       row {
+        checkBox("Show skills in slash menu")
+          .bindSelected(T3Settings.get()::showSkillsInSlashMenu)
+          .comment(
+            "Also include skills in the / command menu. Skills always appear when you type $.",
+          )
+      }
+      row {
         button("Pair...") {
           apply()
           PairDialog().takeIf { it.showAndGet() }?.let { T3.get().pair(it.input) }

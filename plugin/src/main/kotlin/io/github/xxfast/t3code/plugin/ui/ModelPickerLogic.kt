@@ -387,6 +387,8 @@ data class ComposerFooterState(
   val workspace: WorkspaceControlState? = null,
   /** The thread's checkout, upstream's `gitCwd`: whose workspace snapshot the `$` menu reads. */
   val cwd: String? = null,
+  /** Upstream's `showSkillsInSlashMenu` setting: `/skill:<name>` rows in the `/` menu. */
+  val showSkillsInSlashMenu: Boolean = true,
 )
 
 /**

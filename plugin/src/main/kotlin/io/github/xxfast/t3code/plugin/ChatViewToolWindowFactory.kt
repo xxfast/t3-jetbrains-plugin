@@ -55,6 +55,7 @@ import io.github.xxfast.t3code.plugin.ui.MessageImageState
 import io.github.xxfast.t3code.plugin.ui.BranchSelectionTarget
 import io.github.xxfast.t3code.plugin.ui.EnvMode
 import io.github.xxfast.t3code.plugin.ui.canChangeThreadBranch
+import io.github.xxfast.t3code.plugin.ui.hasCompactableConversation
 import io.github.xxfast.t3code.plugin.ui.resolveBranchSelectionTarget
 import io.github.xxfast.t3code.plugin.ui.SELECT_BASE_BRANCH_ERROR
 import io.github.xxfast.t3code.plugin.ui.WorkspaceControlState
@@ -457,6 +458,7 @@ private fun rememberContextWindow(
       null
     },
     compactDisabledReason = disabledReason,
+    hasCompactableConversation = view?.let { hasCompactableConversation(it.items) } ?: false,
     compactBeforeSendTokens = if (offer) usage?.usedTokens else null,
     keepFullHistory = keepFullHistory,
     onToggleKeepFullHistory = { keepFullHistory = !keepFullHistory },
@@ -580,7 +582,11 @@ private fun rememberComposerFooter(
       selection = selection,
       reported = view?.let(::deriveReportedModelSelection),
       favorites = favorites,
-    ).copy(workspace = workspace, cwd = cwd)
+    ).copy(
+      workspace = workspace,
+      cwd = cwd,
+      showSkillsInSlashMenu = T3Settings.get().showSkillsInSlashMenu,
+    )
   }
 
   fun commandId(): String = UUID.randomUUID().toString()
@@ -661,6 +667,16 @@ private fun rememberComposerFooter(
       if (view != null && footer != null) {
         val next: String = toggledInteractionMode(footer.interactionMode)
         val command: Command = setThreadInteractionMode(view.thread.id, next, commandId())
+        controller.dispatchForThread(view, command)
+      }
+    },
+    // `handleInteractionModeChange`, ChatView.tsx:3732: no plan without the toggle, nothing for
+    // the mode it's already in
+    onInteractionMode = onInteractionMode@{ mode ->
+      if (view == null || footer == null) return@onInteractionMode
+      if (mode == "plan" && !footer.showInteractionModeToggle) return@onInteractionMode
+      if (mode != footer.interactionMode) {
+        val command: Command = setThreadInteractionMode(view.thread.id, mode, commandId())
         controller.dispatchForThread(view, command)
       }
     },

@@ -33,6 +33,8 @@ class ComposerFooterActions(
   val onModelOptions: (List<ProviderOptionSelection>?) -> Unit = {},
   val onRuntimeMode: (mode: String) -> Unit = {},
   val onToggleInteractionMode: () -> Unit = {},
+  /** Sets the interaction mode outright, `handleInteractionModeChange`: `/plan`, `/default`. */
+  val onInteractionMode: (mode: String) -> Unit = {},
   /** The Workspace select, `onEnvModeChange`. */
   val onEnvMode: (EnvMode) -> Unit = {},
   /** A base branch picked for a new worktree, `onActiveThreadBranchOverrideChange`. */

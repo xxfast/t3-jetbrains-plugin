@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -93,6 +94,19 @@ fun ChatComposer(
   fun send(alternate: Boolean) {
     val text: String = draft.text.toString()
     if (!sendable(text, state, extras)) return
+    // A bare `/plan` or `/default` with nothing attached switches the mode instead
+    // (ChatView.tsx:6529)
+    val standalone: ComposerSlashCommand? =
+      if (footer?.showInteractionModeToggle == true && !hasNonPromptContent(state, extras)) {
+        parseStandaloneComposerSlashCommand(text.trim())
+      } else {
+        null
+      }
+    if (standalone != null) {
+      footerActions.onInteractionMode(standalone.command)
+      draft.clearText()
+      return
+    }
     onSend(text.trim(), resolveComposerDispatchMode(state.running, alternate, state.queue))
   }
 
@@ -128,6 +142,15 @@ fun ChatComposer(
       footerActions = footerActions,
       enabled = state.enabled && pending == null,
       running = state.running,
+      // `compactThreadUnavailable` and the draft's other content gate the `/compact` row
+      compactUnavailable = compactThreadUnavailable(
+        canOperateThread = contextWindow.compactDisabledReason == null,
+        hasCompactableConversation = contextWindow.hasCompactableConversation,
+        manualCompactionProviderAvailable = contextWindow.onCompact != null,
+        isWorking = state.running || state.sending,
+        hasPendingRequest = pending != null,
+      ),
+      hasNonPromptContent = hasNonPromptContent(state, extras),
     )
     // The context strip is a drawer tucked under the box, `ComposerSurface.ContextStrip`
     val strip: WorkspaceControlState? = footer?.workspace?.takeIf { pending == null }
@@ -270,7 +293,7 @@ private fun ComposerPromptEditor(
     enabled = state.enabled,
     lineLimits = TextFieldLineLimits.MultiLine(),
     // Upstream's short placeholder (ChatComposer.tsx:6695). The long one offers @tags, $skills
-    // and / commands, and only `$` has a menu so far (#44 `/`, #45 `@` still to come).
+    // and / commands, and `@` has no menu yet (#45).
     placeholder = { Text("Ask anything...", color = JewelTheme.globalColors.text.info) },
     undecorated = true,
   )
@@ -290,8 +313,9 @@ private class ComposerTriggerMenu(
  * The trigger at the caret and its menu, upstream's `useComposerTriggerState` plus the menu
  * half of `ChatComposer.tsx`. The text and caret say which trigger is active, Esc dismisses it
  * until the token changes, and the kind decides the rows: `$` lists the provider's skills for
- * the thread's cwd (`resolveProviderSkillsForCwd`). `/` (#44), `@` (#45) and `#` (#46) are
- * detected already and get their rows in [triggerMenuFor].
+ * the thread's cwd (`resolveProviderSkillsForCwd`), `/` the built-ins, the provider's commands
+ * and skills ([slashCommandMenuItems]). `@` (#45) and `#` (#46) are detected already and get
+ * their rows in [triggerMenuFor].
  *
  * Typing and a change of provider, cwd or snapshot ask the host to re-check the workspace
  * snapshot (`refreshWorkspaceSnapshotOnTyping` and the effect beside it, ChatComposer.tsx:1765).
@@ -303,6 +327,8 @@ private fun rememberComposerTriggerMenu(
   footerActions: ComposerFooterActions,
   enabled: Boolean,
   running: Boolean,
+  compactUnavailable: Boolean,
+  hasNonPromptContent: Boolean,
 ): ComposerTriggerMenu {
   val triggers: ComposerTriggerState = remember(draft) { ComposerTriggerState() }
   var trigger: ComposerTrigger? by remember(draft) { mutableStateOf(null) }
@@ -329,17 +355,18 @@ private fun rememberComposerTriggerMenu(
     rangeEnd: Int,
     replacement: String,
     expected: String,
-  ) {
+  ): Boolean {
     val current: String = draft.text.toString()
     val safeStart: Int = rangeStart.coerceIn(0, current.length)
     val safeEnd: Int = rangeEnd.coerceIn(safeStart, current.length)
-    if (current.substring(safeStart, safeEnd) != expected) return
+    if (current.substring(safeStart, safeEnd) != expected) return false
     val next: TextReplacement = replaceTextRange(current, rangeStart, rangeEnd, replacement)
     draft.edit {
       replace(safeStart, safeEnd, replacement)
       selection = TextRange(next.cursor)
     }
     highlightedItemId = null
+    return true
   }
 
   fun pick(active: ComposerTrigger, replacement: String) {
@@ -349,9 +376,49 @@ private fun rememberComposerTriggerMenu(
     applyPromptReplacement(active.rangeStart, end, replacement, expected)
   }
 
+  val planModeUiEnabled: Boolean = footer?.showInteractionModeToggle == true
+
+  // The slash branches of `onSelectComposerItem`, ChatComposer.tsx:3849
+  fun pickSlash(active: ComposerTrigger, item: SlashSearchItem) {
+    fun removeToken(): Boolean {
+      val text: String = draft.text.toString()
+      val start: Int = active.rangeStart.coerceIn(0, text.length)
+      val end: Int = active.rangeEnd.coerceIn(start, text.length)
+      return applyPromptReplacement(start, end, "", text.substring(start, end))
+    }
+    // No usage limits panel here, so `/usage-limits` stays a provider command, as upstream does
+    // without `onUsageLimitsCommand`
+    when (val effect: SlashCommandPick = slashCommandPick(item, planModeUiEnabled, false)) {
+      SlashCommandPick.OpenModelPicker -> if (removeToken()) footerActions.onOpenModelPicker()
+
+      is SlashCommandPick.InteractionMode -> {
+        footerActions.onInteractionMode(effect.mode)
+        removeToken()
+      }
+
+      SlashCommandPick.UsageLimits -> removeToken()
+
+      is SlashCommandPick.Replace -> pick(active, effect.replacement)
+
+      SlashCommandPick.Ignore -> Unit
+    }
+  }
+
   val active: ComposerTrigger? = trigger.takeIf { enabled }
-  val menu: ComposerMenu? = remember(active, provider, cwd) {
-    active?.let { triggerMenuFor(it, provider, cwd, ::pick) }
+  val compactAvailable: Boolean = compactSlashCommandAvailable(
+    prompt = draft.text.toString(),
+    trigger = active,
+    compactThreadUnavailable = compactUnavailable,
+    hasNonPromptContent = hasNonPromptContent,
+  )
+  val slash = SlashMenuOptions(
+    planModeUiEnabled = planModeUiEnabled,
+    showSkillsInSlashMenu = footer?.showSkillsInSlashMenu ?: true,
+    compactAvailable = compactAvailable,
+    onPick = ::pickSlash,
+  )
+  val menu: ComposerMenu? = remember(active, provider, cwd, slash.key) {
+    active?.let { triggerMenuFor(it, provider, cwd, ::pick, slash) }
   }
   val searchKey: String? = active?.let(::composerMenuSearchKey)
   val itemIds: List<String> = menu?.items?.map { it.id }.orEmpty()
@@ -421,6 +488,7 @@ private fun triggerMenuFor(
   provider: ServerProvider?,
   cwd: String?,
   pick: (ComposerTrigger, replacement: String) -> Unit,
+  slash: SlashMenuOptions,
 ): ComposerMenu? = when (trigger.kind) {
   ComposerTriggerKind.SKILL -> ComposerMenu(
     kind = trigger.kind,
@@ -433,11 +501,66 @@ private fun triggerMenuFor(
     emptyStateText = SKILL_MENU_EMPTY_TEXT,
   )
 
-  ComposerTriggerKind.SLASH_COMMAND,
+  ComposerTriggerKind.SLASH_COMMAND -> ComposerMenu(
+    kind = trigger.kind,
+    items = slashCommandMenuItems(
+      trigger = trigger,
+      provider = provider,
+      cwd = cwd,
+      planModeUiEnabled = slash.planModeUiEnabled,
+      showSkillsInSlashMenu = slash.showSkillsInSlashMenu,
+      compactAvailable = slash.compactAvailable,
+    ).map { item -> slashMenuItem(item) { slash.onPick(trigger, item) } },
+  )
+
   ComposerTriggerKind.PATH,
   ComposerTriggerKind.PULL_REQUEST,
   -> null
 }
+
+/** What the `/` menu needs besides the trigger, see [slashCommandMenuItems]. */
+private class SlashMenuOptions(
+  val planModeUiEnabled: Boolean,
+  val showSkillsInSlashMenu: Boolean,
+  val compactAvailable: Boolean,
+  val onPick: (ComposerTrigger, SlashSearchItem) -> Unit,
+) {
+  /** What changes the rows. */
+  val key: Triple<Boolean, Boolean, Boolean>
+    get() = Triple(planModeUiEnabled, showSkillsInSlashMenu, compactAvailable)
+}
+
+/**
+ * A `/` row, `ComposerCommandMenuItem`: a skill shows `/skill:` and its display name with its
+ * source badge (no " Skill" suffix under `/`), the rest their label.
+ */
+private fun slashMenuItem(item: SlashSearchItem, onPick: () -> Unit): ComposerMenuItem =
+  when (item) {
+    is SlashSearchItem.Skill -> {
+      val source: ProviderSkillSourceKind = resolveProviderSkillSourceKind(item.skill)
+      ComposerMenuItem(
+        id = item.id,
+        label = "/skill:${formatProviderSkillDisplayName(item.skill)}",
+        description = item.description,
+        badge = ComposerMenuBadge(source.label, source.icon),
+        onPick = onPick,
+      )
+    }
+
+    else -> ComposerMenuItem(
+      id = item.id,
+      label = item.label,
+      description = item.description,
+      onPick = onPick,
+    )
+  }
+
+/**
+ * Whether the draft carries more than its text: attachments or review comments, upstream's
+ * images, files, terminal and preview contexts and review comments.
+ */
+private fun hasNonPromptContent(state: ComposerState, extras: DraftExtras): Boolean =
+  extras.attachments.isNotEmpty() || extras.comments.isNotEmpty() || state.reviewComments > 0
 
 /** How far a resting prompt's one line sits from the row's top to look centred in 32dp. */
 private val RESTING_TEXT_INSET: Dp = 6.dp
