@@ -48,13 +48,15 @@ data class PersistedComposerAttachment(
 
 /**
  * `PersistedComposerThreadDraftState`, the parts the plugin's composer has: the prompt, the
- * attachments, and the review comments (upstream's `reviewComments`).
+ * attachments, the review comments (`reviewComments`) and the `@` threads (`threadContexts`).
  */
 @Serializable
 data class PersistedComposerDraft(
   val prompt: String,
   val attachments: List<PersistedComposerAttachment> = emptyList(),
   val reviewComments: List<ReviewCommentContext> = emptyList(),
+  /** Upstream's `threadContexts`. Absent in drafts saved before `@` threads persisted. */
+  val threadContexts: List<ThreadContextRecord> = emptyList(),
 )
 
 /**
@@ -69,6 +71,8 @@ data class PromptStashEntry(
   val prompt: String,
   val attachments: List<PersistedComposerAttachment> = emptyList(),
   val reviewComments: List<ReviewCommentContext> = emptyList(),
+  /** Upstream's `threadContexts`. Absent in drafts saved before `@` threads persisted. */
+  val threadContexts: List<ThreadContextRecord> = emptyList(),
 )
 
 /** Upstream's scoped thread key: the server and the thread, so another server never sees it. */
@@ -103,11 +107,17 @@ private fun PersistedComposerAttachment.hydrated(): DraftAttachment {
  * upstream judges by `prompt.length`, not the trimmed prompt. The notice is transient.
  */
 fun persistedDraft(text: String, extras: DraftExtras): PersistedComposerDraft? {
-  if (text.isEmpty() && extras.attachments.isEmpty() && extras.comments.isEmpty()) return null
+  if (
+    text.isEmpty() && extras.attachments.isEmpty() && extras.comments.isEmpty() &&
+    extras.threads.isEmpty()
+  ) {
+    return null
+  }
   return PersistedComposerDraft(
     prompt = text,
     attachments = extras.attachments.map { it.persisted() },
     reviewComments = extras.comments,
+    threadContexts = extras.threads,
   )
 }
 
@@ -115,6 +125,7 @@ fun persistedDraft(text: String, extras: DraftExtras): PersistedComposerDraft? {
 fun hydratedExtras(draft: PersistedComposerDraft): DraftExtras = DraftExtras(
   attachments = draft.attachments.map { it.hydrated() },
   comments = draft.reviewComments,
+  threads = draft.threadContexts,
 )
 
 fun encodeDraft(draft: PersistedComposerDraft): String =
@@ -183,6 +194,7 @@ fun stashEntry(
   prompt = text.trim(),
   attachments = extras.attachments.map { it.persisted() },
   reviewComments = extras.comments,
+  threadContexts = extras.threads,
 )
 
 /** `stashEntry` in the store: newest first, the oldest evicted past [MAX_STASH_ENTRIES]. */
@@ -218,9 +230,12 @@ fun restoredExtras(current: DraftExtras, entry: PromptStashEntry): DraftExtras {
     .map { it.hydrated() }
   val comments: List<ReviewCommentContext> = current.comments +
     entry.reviewComments.filterNot { c -> current.comments.any { it.contextId == c.contextId } }
+  val threads: List<ThreadContextRecord> = current.threads +
+    entry.threadContexts.filterNot { t -> current.threads.any { it.contextId == t.contextId } }
   return current.copy(
     attachments = current.attachments + added,
     comments = comments.take(COMPOSER_CONTEXT_MAX_RECORDS),
+    threads = threads,
   )
 }
 

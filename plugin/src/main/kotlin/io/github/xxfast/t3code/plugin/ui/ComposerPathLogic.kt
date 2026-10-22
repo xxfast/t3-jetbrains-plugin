@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -110,6 +111,7 @@ fun matchComposerThreadItems(
 private const val THREAD_KIND: String = "thread"
 
 /** Upstream's `ThreadContextRecord` (packages/contracts/src/composerContext.ts:207). */
+@Serializable
 data class ThreadContextRecord(
   val contextId: String,
   val label: String,

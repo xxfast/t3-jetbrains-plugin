@@ -206,6 +206,33 @@ class ComposerDraftStoreLogicTest {
     assertIs<Upload.Ready>(restored.upload)
   }
 
+  @Test
+  fun threadContextsPersistWithTheDraftAndTheStash() {
+    val record: ThreadContextRecord = threadContextRecord("env", "t9", "Fix the build")
+    val link: String = threadContextReference(record)
+    val extras = DraftExtras(threads = listOf(record))
+
+    val saved: PersistedComposerDraft = persistedDraft("see $link", extras)!!
+    val restored: DraftExtras = hydratedExtras(decodeDraft(encodeDraft(saved))!!)
+    assertEquals(listOf(record), restored.threads)
+    // Still sent while its link is in the text, dropped once the link is deleted
+    assertEquals(1, restored.records("see $link").size)
+    assertEquals(0, restored.records("see").size)
+
+    val stashed: PromptStashEntry = stashEntry("e1", 5, "s", "see $link", extras)
+    val back: PromptStashEntry = decodeStash(encodeStash(listOf(stashed))).single()
+    assertEquals(listOf(record), restoredExtras(DraftExtras(), back).threads)
+    assertEquals(listOf(record), restoredExtras(DraftExtras(threads = listOf(record)), back).threads)
+  }
+
+  @Test
+  fun draftsSavedBeforeThreadContextsStillDecode() {
+    val old = """{"prompt":"hi","attachments":[],"reviewComments":[]}"""
+    assertEquals(emptyList(), decodeDraft(old)!!.threadContexts)
+    val oldStash = """[{"id":"e","createdAt":1,"server":"s","prompt":"p"}]"""
+    assertEquals(emptyList(), decodeStash(oldStash).single().threadContexts)
+  }
+
   private fun entry(id: String, prompt: String = "p $id"): PromptStashEntry =
     PromptStashEntry(id = id, createdAt = 0, server = "s", prompt = prompt)
 }
