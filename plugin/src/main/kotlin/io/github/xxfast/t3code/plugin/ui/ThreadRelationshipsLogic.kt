@@ -698,3 +698,17 @@ fun subagentStopCommand(agent: LineageSubagent, commandId: String): Command.Suba
       subagentId = agent.id,
     )
   }
+
+/** A subagent thread's parent, as the ChatView's breadcrumb shows it. */
+data class ParentThreadLink(val threadId: String, val title: String)
+
+/**
+ * `parentThreadLink`, apps/web/src/components/ChatView.tsx:1565 to 1605: only a subagent's
+ * parent, named by its shell, else "Parent thread". Forks don't get one.
+ */
+fun parentThreadLink(thread: Thread?, threads: List<Thread>): ParentThreadLink? {
+  if (thread?.lineage?.relationshipToParent != "subagent") return null
+  val parentThreadId: String = thread.lineage.parentThreadId ?: return null
+  val title: String = threads.find { it.id == parentThreadId }?.title ?: "Parent thread"
+  return ParentThreadLink(parentThreadId, title)
+}

@@ -50,6 +50,7 @@ import io.github.xxfast.t3code.plugin.ui.ContextWindowSnapshot
 import io.github.xxfast.t3code.plugin.settings.ComposerDrafts
 import io.github.xxfast.t3code.plugin.ui.DraftExtras
 import io.github.xxfast.t3code.plugin.ui.PromptStashEntry
+import io.github.xxfast.t3code.plugin.ui.parentThreadLink
 import io.github.xxfast.t3code.plugin.ui.LocalMessageImages
 import io.github.xxfast.t3code.plugin.ui.MessageImageState
 import io.github.xxfast.t3code.plugin.ui.BranchSelectionTarget
@@ -172,6 +173,7 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
   val controller: ChatController = ChatController.getInstance(project)
   val client: T3Client = T3.get().client
   val projects: List<T3Project> by client.projects.collectAsState()
+  val threads: List<Thread> by client.threads.collectAsState()
   val favicons: Map<String, ImageBitmap> by ProjectIcons.get().favicons.collectAsState()
   val connection: ConnectionState by client.connection.collectAsState()
   val outboxes: Map<String, PendingMessages> by controller.outboxes.collectAsState()
@@ -317,6 +319,8 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
         } else {
           null
         },
+        parentThreadLink = parentThreadLink(view?.thread, threads),
+        onOpenThread = { parentId -> opener.openThread(parentId) },
       ),
       // A queued message's edit is text only: the thread's draft attachments stay out of it
       extras = if (editing != null) DraftExtras() else extras[threadId] ?: DraftExtras(),

@@ -60,6 +60,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.intellij.openapi.editor.colors.EditorColorsManager
@@ -308,6 +312,10 @@ class ChatHeaderActions(
   val onRename: (() -> Unit)? = null,
   /** A click on the project, upstream's `onNewThreadInProject`. */
   val onNewThreadInProject: (() -> Unit)? = null,
+  /** A subagent's parent, between the project and the title. */
+  val parentThreadLink: ParentThreadLink? = null,
+  /** A click on the parent crumb, upstream's `onOpenThread`. */
+  val onOpenThread: ((threadId: String) -> Unit)? = null,
 )
 
 /**
@@ -376,34 +384,14 @@ private fun ChatHeader(
         }
         Text("/", color = muted())
       }
-      val title: String = view?.thread?.title.orEmpty()
-      val titleHover: MutableInteractionSource = remember { MutableInteractionSource() }
-      val titleHovered: Boolean by titleHover.collectIsHoveredAsState()
-      Tooltip({ Text(title) }, enabled = title.isNotEmpty()) {
-        Row(
-          horizontalArrangement = Arrangement.spacedBy(4.dp),
-          verticalAlignment = Alignment.CenterVertically,
-          modifier = Modifier
-            .hoverable(titleHover)
-            .threadMenuGestures(menu, actions.onRename, anchorBelow = true),
-        ) {
-          Text(
-            text = title,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-          )
-          // `ChevronDownIcon`: opacity 0 until the title is hovered
-          if (menu != null) {
-            Icon(
-              key = AllIconsKeys.General.ChevronDown,
-              contentDescription = null,
-              modifier = Modifier.size(14.dp).alpha(if (titleHovered) 1f else 0f),
-              tint = muted(),
-            )
-          }
-        }
+      val parent: ParentThreadLink? = actions.parentThreadLink
+      if (parent != null) {
+        ParentCollapsingCrumbs(
+          parent = { collapsed -> ParentCrumb(parent, collapsed, actions.onOpenThread) },
+          title = { ThreadTitleCrumb(view, menu, actions) },
+        )
+      } else {
+        ThreadTitleCrumb(view, menu, actions)
       }
       Spacer(Modifier.weight(1f))
     }
@@ -415,6 +403,129 @@ private fun ChatHeader(
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
       )
+    }
+  }
+}
+
+/**
+ * Upstream's `collapseParentTitle` (`ChatHeader.tsx:113`): when the crumbs don't fit, the
+ * parent's title gives way to "..." first, so the thread's own title keeps its room.
+ */
+@Composable
+private fun ParentCollapsingCrumbs(
+  parent: @Composable (collapsed: Boolean) -> Unit,
+  title: @Composable () -> Unit,
+) {
+  Layout(
+    content = {
+      parent(false)
+      parent(true)
+      Text("/", color = muted())
+      title()
+    },
+  ) { measurables, constraints ->
+    val (full: Measurable, collapsed: Measurable, separator: Measurable, name: Measurable) =
+      measurables
+    val gap: Int = 8.dp.roundToPx()
+    val loose: Constraints = constraints.copy(minWidth = 0)
+    val separatorPlaceable: Placeable = separator.measure(loose)
+    val fixed: Int = separatorPlaceable.width + gap * 2
+    val fits: Boolean = full.maxIntrinsicWidth(constraints.maxHeight) + fixed +
+      name.maxIntrinsicWidth(constraints.maxHeight) <= constraints.maxWidth
+    val parentPlaceable: Placeable = (if (fits) full else collapsed)
+      .measure(loose.copy(maxWidth = (constraints.maxWidth - fixed).coerceAtLeast(0)))
+    val used: Int = parentPlaceable.width + fixed
+    val namePlaceable: Placeable =
+      name.measure(loose.copy(maxWidth = (constraints.maxWidth - used).coerceAtLeast(0)))
+    val height: Int = maxOf(
+      parentPlaceable.height,
+      separatorPlaceable.height,
+      namePlaceable.height,
+    )
+    layout(used + namePlaceable.width, height) {
+      var x = 0
+      for (placeable in listOf(parentPlaceable, separatorPlaceable, namePlaceable)) {
+        placeable.placeRelative(x, (height - placeable.height) / 2)
+        x += placeable.width + gap
+      }
+    }
+  }
+}
+
+/** Upstream's parent breadcrumb: muted, opens the parent, its full title in the tooltip. */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip
+@Composable
+private fun ParentCrumb(
+  link: ParentThreadLink,
+  collapsed: Boolean,
+  onOpenThread: ((threadId: String) -> Unit)?,
+) {
+  val hover: MutableInteractionSource = remember { MutableInteractionSource() }
+  val hovered: Boolean by hover.collectIsHoveredAsState()
+  Tooltip({ Text(link.title) }) {
+    Text(
+      text = if (collapsed) "..." else link.title,
+      // `text-muted-foreground hover:text-foreground`
+      color = if (hovered && onOpenThread != null) {
+        JewelTheme.globalColors.text.normal
+      } else {
+        muted()
+      },
+      fontWeight = FontWeight.Medium,
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis,
+      modifier = Modifier
+        .hoverable(hover)
+        .then(
+          if (onOpenThread != null) {
+            Modifier.clickable(
+              interactionSource = hover,
+              indication = null,
+              onClick = { onOpenThread(link.threadId) },
+            )
+          } else {
+            Modifier
+          },
+        ),
+    )
+  }
+}
+
+/** The thread's own title: the action menu on click, rename on double-click. */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip
+@Composable
+private fun ThreadTitleCrumb(
+  view: ThreadView?,
+  menu: ((x: Int, y: Int) -> Unit)?,
+  actions: ChatHeaderActions,
+) {
+  val title: String = view?.thread?.title.orEmpty()
+  val titleHover: MutableInteractionSource = remember { MutableInteractionSource() }
+  val titleHovered: Boolean by titleHover.collectIsHoveredAsState()
+  Tooltip({ Text(title) }, enabled = title.isNotEmpty()) {
+    Row(
+      horizontalArrangement = Arrangement.spacedBy(4.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      modifier = Modifier
+        .hoverable(titleHover)
+        .threadMenuGestures(menu, actions.onRename, anchorBelow = true),
+    ) {
+      Text(
+        text = title,
+        fontWeight = FontWeight.Medium,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.weight(1f, fill = false),
+      )
+      // `ChevronDownIcon`: opacity 0 until the title is hovered
+      if (menu != null) {
+        Icon(
+          key = AllIconsKeys.General.ChevronDown,
+          contentDescription = null,
+          modifier = Modifier.size(14.dp).alpha(if (titleHovered) 1f else 0f),
+          tint = muted(),
+        )
+      }
     }
   }
 }

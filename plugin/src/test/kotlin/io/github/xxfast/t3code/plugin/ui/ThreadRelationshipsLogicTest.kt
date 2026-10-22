@@ -524,6 +524,29 @@ class ThreadRelationshipsLogicTest {
     shell(id, parent = parent, relationship = "fork".takeIf { parent != null }, forkedFrom = parent)
       .copy(createdAt = createdAt)
 
+  @Test
+  fun `links a subagent to its parent by the parent's title`() {
+    val parent: Thread = shell("parent", title = "Plan the release")
+    val child: Thread = shell("child", parent = "parent", relationship = "subagent")
+    assertEquals(
+      ParentThreadLink("parent", "Plan the release"),
+      parentThreadLink(child, listOf(parent, child)),
+    )
+  }
+
+  @Test
+  fun `names a parent without a shell Parent thread`() {
+    val child: Thread = shell("child", parent = "gone", relationship = "subagent")
+    assertEquals(ParentThreadLink("gone", "Parent thread"), parentThreadLink(child, listOf(child)))
+  }
+
+  @Test
+  fun `gives a fork no parent link`() {
+    val parent: Thread = shell("parent")
+    val fork: Thread = shell("fork", parent = "parent", relationship = "fork")
+    assertNull(parentThreadLink(fork, listOf(parent, fork)))
+  }
+
   private fun shell(
     id: String,
     title: String = id,
