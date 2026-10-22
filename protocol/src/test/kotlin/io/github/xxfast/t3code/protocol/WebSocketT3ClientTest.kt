@@ -258,6 +258,7 @@ class WebSocketT3ClientTest {
     val info: ServerInfo = client.serverInfo()
 
     assertTrue(info.serverResolvedCommandContext)
+    assertEquals("env-1", info.environmentId)
     assertEquals(listOf("codex"), info.providers.map { it.instanceId }, "Bad provider dropped")
     assertEquals(listOf("gpt-5", "gpt-5-mini"), info.providers.single().models.map { it.slug })
     assertSame(info, client.serverInfo())

@@ -4,6 +4,8 @@ import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
+import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
+import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesResult
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
@@ -64,6 +66,12 @@ public interface T3Client {
 
   /** `projects.readFile`. [path] is workspace-relative or absolute. */
   public suspend fun readFile(cwd: String, path: String): FileContents
+
+  /**
+   * `projects.searchEntries` (`filesystem:read`): files and folders under `input.cwd` matching
+   * `input.query`, in the server's order.
+   */
+  public suspend fun searchEntries(input: ProjectSearchEntriesInput): ProjectSearchEntriesResult
 
   /**
    * The project's favicon as encoded image bytes, or null when the server has none for it.

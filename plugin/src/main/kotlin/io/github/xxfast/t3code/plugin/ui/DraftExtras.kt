@@ -1,6 +1,7 @@
 package io.github.xxfast.t3code.plugin.ui
 
 import io.github.xxfast.t3code.protocol.generated.ChatAttachment
+import kotlinx.serialization.json.JsonObject
 
 /**
  * What one thread's draft carries besides its text: attachments and their uploads, review
@@ -11,6 +12,8 @@ data class DraftExtras(
   val attachments: List<DraftAttachment> = emptyList(),
   val comments: List<ReviewCommentContext> = emptyList(),
   val notice: String? = null,
+  /** Threads mentioned with `@`, upstream's `threadContexts`. */
+  val threads: List<ThreadContextRecord> = emptyList(),
 ) {
   /** The attachments that go out with the message, as the server knows them. */
   val ready: List<ChatAttachment>
@@ -61,6 +64,23 @@ data class DraftExtras(
   fun withoutComment(contextId: String): DraftExtras =
     copy(comments = comments.filterNot { it.contextId == contextId })
 
+  /** [record] joins the draft, once per context id, `addComposerDraftThreadContexts`. */
+  fun withThread(record: ThreadContextRecord): DraftExtras {
+    if (threads.any { it.contextId == record.contextId }) return this
+    return copy(threads = threads + record)
+  }
+
+  /**
+   * The records that go with [text], upstream's `buildMessageContext` order: review comments,
+   * then threads. A thread only while [text] still cites it; deleting its link is the plugin's
+   * way of removing upstream's inline chip.
+   */
+  fun records(text: String): List<JsonObject> {
+    val cited: Set<String> = inlineContextIds(text).toSet()
+    return comments.map { it.toRecord() } +
+      threads.filter { it.contextId in cited }.map { it.toRecord() }
+  }
+
   /** A refused send hands back what it took, ahead of anything added since. */
   fun restored(sent: DraftExtras): DraftExtras = DraftExtras(
     attachments = sent.attachments + attachments.filterNot { a ->
@@ -70,6 +90,9 @@ data class DraftExtras(
       sent.comments.any { it.contextId == c.contextId }
     },
     notice = notice,
+    threads = sent.threads + threads.filterNot { t ->
+      sent.threads.any { it.contextId == t.contextId }
+    },
   )
 
   private fun withUpload(id: String, upload: Upload): DraftExtras =

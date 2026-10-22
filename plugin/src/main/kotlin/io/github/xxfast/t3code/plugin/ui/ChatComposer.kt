@@ -95,6 +95,7 @@ fun ChatComposer(
   promptHistory: List<ComposerPromptHistoryMessage> = emptyList(),
   onSteerQueued: (() -> Boolean)? = null,
   onEditQueued: (() -> Boolean)? = null,
+  mentions: ComposerMentions = ComposerMentions(),
 ) {
   // [alternate] is Ctrl/Cmd+Enter or Ctrl/Cmd-click while running: the other follow-up behaviour
   fun send(alternate: Boolean) {
@@ -167,6 +168,7 @@ fun ChatComposer(
         hasPendingRequest = pending != null,
       ),
       hasNonPromptContent = hasNonPromptContent(state, extras),
+      mentions = mentions,
     )
     // The context strip is a drawer tucked under the box, `ComposerSurface.ContextStrip`
     val strip: WorkspaceControlState? = footer?.workspace?.takeIf { pending == null }
@@ -369,8 +371,9 @@ private class ComposerTriggerMenu(
  * half of `ChatComposer.tsx`. The text and caret say which trigger is active, Esc dismisses it
  * until the token changes, and the kind decides the rows: `$` lists the provider's skills for
  * the thread's cwd (`resolveProviderSkillsForCwd`), `/` the built-ins, the provider's commands
- * and skills ([slashCommandMenuItems]). `@` (#45) and `#` (#46) are detected already and get
- * their rows in [triggerMenuFor].
+ * and skills ([slashCommandMenuItems]), `@` threads, files and folders
+ * ([ComposerMentionMenus]). `#` (#46) is detected already and gets its rows in
+ * [triggerMenuFor].
  *
  * Typing and a change of provider, cwd or snapshot ask the host to re-check the workspace
  * snapshot (`refreshWorkspaceSnapshotOnTyping` and the effect beside it, ChatComposer.tsx:1765).
@@ -384,6 +387,7 @@ private fun rememberComposerTriggerMenu(
   running: Boolean,
   compactUnavailable: Boolean,
   hasNonPromptContent: Boolean,
+  mentions: ComposerMentions,
 ): ComposerTriggerMenu {
   val triggers: ComposerTriggerState = remember(draft) { ComposerTriggerState() }
   // Set by a recall, so the text it puts in opens no menu until the next edit
@@ -429,11 +433,12 @@ private fun rememberComposerTriggerMenu(
     return true
   }
 
-  fun pick(active: ComposerTrigger, replacement: String) {
+  // True when the token was still there to replace, upstream's `applied`
+  fun pick(active: ComposerTrigger, replacement: String): Boolean {
     val text: String = draft.text.toString()
     val end: Int = extendReplacementRangeForTrailingSpace(text, active.rangeEnd, replacement)
     val expected: String = text.substring(active.rangeStart.coerceIn(0, text.length), end)
-    applyPromptReplacement(active.rangeStart, end, replacement, expected)
+    return applyPromptReplacement(active.rangeStart, end, replacement, expected)
   }
 
   val planModeUiEnabled: Boolean = footer?.showInteractionModeToggle == true
@@ -477,8 +482,9 @@ private fun rememberComposerTriggerMenu(
     compactAvailable = compactAvailable,
     onPick = ::pickSlash,
   )
-  val menu: ComposerMenu? = remember(active, provider, cwd, slash.key) {
-    active?.let { triggerMenuFor(it, provider, cwd, ::pick, slash) }
+  val mentionMenus: ComposerMentionMenus = rememberComposerMentionMenus(active, cwd, mentions)
+  val menu: ComposerMenu? = remember(active, provider, cwd, slash.key, mentionMenus) {
+    active?.let { triggerMenuFor(it, provider, cwd, mentionMenus, ::pick, slash) }
   }
   val searchKey: String? = active?.let(::composerMenuSearchKey)
   val itemIds: List<String> = menu?.items?.map { it.id }.orEmpty()
@@ -550,7 +556,8 @@ private fun triggerMenuFor(
   trigger: ComposerTrigger,
   provider: ServerProvider?,
   cwd: String?,
-  pick: (ComposerTrigger, replacement: String) -> Unit,
+  mentions: ComposerMentionMenus,
+  pick: (ComposerTrigger, replacement: String) -> Boolean,
   slash: SlashMenuOptions,
 ): ComposerMenu? = when (trigger.kind) {
   ComposerTriggerKind.SKILL -> ComposerMenu(
@@ -576,7 +583,8 @@ private fun triggerMenuFor(
     ).map { item -> slashMenuItem(item) { slash.onPick(trigger, item) } },
   )
 
-  ComposerTriggerKind.PATH,
+  ComposerTriggerKind.PATH -> mentions.pathMenu(trigger, pick)
+
   ComposerTriggerKind.PULL_REQUEST,
   -> null
 }

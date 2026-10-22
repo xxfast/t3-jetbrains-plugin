@@ -49,8 +49,8 @@ import io.github.xxfast.t3code.plugin.ui.attachmentLimitError
 import io.github.xxfast.t3code.plugin.ui.classifyAttachment
 import io.github.xxfast.t3code.plugin.ui.messageContext
 import io.github.xxfast.t3code.plugin.ui.outgoingText
+import io.github.xxfast.t3code.plugin.ui.ThreadContextRecord
 import io.github.xxfast.t3code.plugin.ui.titleSeed
-import io.github.xxfast.t3code.plugin.ui.toRecord
 import io.github.xxfast.t3code.plugin.ui.uploadUrlInput
 import io.github.xxfast.t3code.plugin.ui.uploadedAttachment
 import io.github.xxfast.t3code.plugin.actions.PASTE_AS_TEXT_ACTION_ID
@@ -285,6 +285,11 @@ class ChatController(private val project: Project, private val scope: CoroutineS
   fun addContext(threadId: String, comment: ReviewCommentContext) {
     draft(threadId) // the saved draft first, so this joins it rather than replacing it
     updateExtras(threadId) { extras -> extras.withComment(comment) }
+  }
+
+  /** Adds [record], a thread mentioned with `@`, to [threadId]'s draft. */
+  fun addThreadContext(threadId: String, record: ThreadContextRecord) {
+    updateExtras(threadId) { extras -> extras.withThread(record) }
   }
 
   fun removeContext(threadId: String, contextId: String) {
@@ -813,7 +818,7 @@ class ChatController(private val project: Project, private val scope: CoroutineS
     // records go as `context`, never the legacy text serialisation
     val extras: DraftExtras = extrasOf(threadId)
     val outgoing: String = outgoingText(text, extras)
-    val context: MessageContext? = messageContext(extras.comments.map { it.toRecord() })
+    val context: MessageContext? = messageContext(extras.records(outgoing))
     val attachments: List<ChatAttachment> = extras.ready
     val message: TurnItem.UserMessage =
       optimisticMessage(threadId, messageId, outgoing, Instant.now(), view.items)

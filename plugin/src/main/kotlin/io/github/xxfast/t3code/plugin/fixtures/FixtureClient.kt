@@ -32,6 +32,8 @@ import io.github.xxfast.t3code.protocol.generated.ModelCapabilities
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
+import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
+import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesResult
 import io.github.xxfast.t3code.protocol.generated.ProviderOptionChoice
 import io.github.xxfast.t3code.protocol.generated.SelectProviderOptionDescriptor
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
@@ -216,6 +218,14 @@ class FixtureClient(
   override suspend fun readFile(cwd: String, path: String): FileContents {
     val contents = "// fixture content for $path\n"
     return FileContents(path, contents, byteLength = contents.length.toLong(), truncated = false)
+  }
+
+  /** The scenario's `projectEntries`, after a moment so the menu shows its loading line. */
+  override suspend fun searchEntries(
+    input: ProjectSearchEntriesInput,
+  ): ProjectSearchEntriesResult {
+    delay(SEARCH_ENTRIES_MILLIS)
+    return fixtureSearchEntries(loaded.value?.projectEntries.orEmpty(), input)
   }
 
   override suspend fun projectFavicon(cwd: String, path: String?): ByteArray? = null
@@ -1293,6 +1303,7 @@ class FixtureClient(
       THREAD_TITLE_REGENERATION,
     ),
     environmentLabel = "Fixture MacBook",
+    environmentId = FIXTURE_ENVIRONMENT_ID,
     machine = "laptop",
   ).let { info -> info.copy(providers = info.providers.map(::withSkills)) }
 
@@ -1383,6 +1394,12 @@ private const val REPLY_STEP_MILLIS: Long = 600
 
 /** How long the fixture's provider rescan takes. */
 private const val PROVIDER_SCAN_MILLIS: Long = 400
+
+/** How long the fake `projects.searchEntries` takes. */
+private const val SEARCH_ENTRIES_MILLIS: Long = 150
+
+/** The fixture server's `environment.environmentId`. */
+const val FIXTURE_ENVIRONMENT_ID: String = "env_fixture"
 
 /** How long the fixture keeps a finished worktree setup before answering null. */
 private const val SETUP_GRACE_MILLIS: Long = 30_000

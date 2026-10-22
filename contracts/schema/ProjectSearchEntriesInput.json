@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ProjectSearchEntriesInput",
+  "title": "ProjectSearchEntriesInput",
+  "type": "object",
+  "properties": {
+    "cwd": {
+      "type": "string"
+    },
+    "query": {
+      "type": "string"
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 200
+    },
+    "kind": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "file",
+            "directory"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "imageOnly": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "cwd",
+    "query",
+    "limit"
+  ],
+  "additionalProperties": true
+}

@@ -1,0 +1,136 @@
+{
+  "projectEntries": [
+    {
+      "path": "kstore",
+      "kind": "directory"
+    },
+    {
+      "path": "kstore/src",
+      "kind": "directory"
+    },
+    {
+      "path": "kstore/src/commonMain",
+      "kind": "directory"
+    },
+    {
+      "path": "kstore/src/commonMain/kotlin/io/github/xxfast/kstore",
+      "kind": "directory"
+    },
+    {
+      "path": "kstore-file",
+      "kind": "directory"
+    },
+    {
+      "path": "kstore-file/src/commonMain/kotlin/io/github/xxfast/kstore/file",
+      "kind": "directory"
+    },
+    {
+      "path": "kstore-storage",
+      "kind": "directory"
+    },
+    {
+      "path": "docs",
+      "kind": "directory"
+    },
+    {
+      "path": "gradle",
+      "kind": "directory"
+    },
+    {
+      "path": "samples",
+      "kind": "directory"
+    },
+    {
+      "path": "samples/My Notes (draft)",
+      "kind": "directory"
+    },
+    {
+      "path": "README.md",
+      "kind": "file"
+    },
+    {
+      "path": "build.gradle.kts",
+      "kind": "file"
+    },
+    {
+      "path": "settings.gradle.kts",
+      "kind": "file"
+    },
+    {
+      "path": "gradle.properties",
+      "kind": "file"
+    },
+    {
+      "path": "gradle/libs.versions.toml",
+      "kind": "file"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "kind": "file"
+    },
+    {
+      "path": "kstore/build.gradle.kts",
+      "kind": "file"
+    },
+    {
+      "path": "kstore/src/commonMain/kotlin/io/github/xxfast/kstore/KStore.kt",
+      "kind": "file"
+    },
+    {
+      "path": "kstore/src/commonMain/kotlin/io/github/xxfast/kstore/Codec.kt",
+      "kind": "file"
+    },
+    {
+      "path": "kstore/src/commonMain/kotlin/io/github/xxfast/kstore/Migration.kt",
+      "kind": "file"
+    },
+    {
+      "path": "kstore/src/commonTest/kotlin/io/github/xxfast/kstore/KStoreTests.kt",
+      "kind": "file"
+    },
+    {
+      "path": "kstore-file/build.gradle.kts",
+      "kind": "file"
+    },
+    {
+      "path": "kstore-file/src/commonMain/kotlin/io/github/xxfast/kstore/file/FileCodec.kt",
+      "kind": "file"
+    },
+    {
+      "path": "kstore-file/src/commonMain/kotlin/io/github/xxfast/kstore/file/Builders.kt",
+      "kind": "file"
+    },
+    {
+      "path": "kstore-file/src/commonTest/kotlin/io/github/xxfast/kstore/file/FileCodecTests.kt",
+      "kind": "file"
+    },
+    {
+      "path": "kstore-storage/src/jsMain/kotlin/io/github/xxfast/kstore/storage/StorageCodec.kt",
+      "kind": "file"
+    },
+    {
+      "path": "kstore-storage/src/wasmJsMain/kotlin/io/github/xxfast/kstore/storage/IndexedDbCodec.kt",
+      "kind": "file"
+    },
+    {
+      "path": "docs/index.md",
+      "kind": "file"
+    },
+    {
+      "path": "docs/migrations.md",
+      "kind": "file"
+    },
+    {
+      "path": "docs/using-platform-paths.md",
+      "kind": "file"
+    },
+    {
+      "path": "samples/My Notes (draft)/notes #1.md",
+      "kind": "file"
+    },
+    {
+      "path": "samples/@scope/package.json",
+      "kind": "file"
+    }
+  ]
+}

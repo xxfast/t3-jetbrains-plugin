@@ -5,6 +5,8 @@ import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResul
 import io.github.xxfast.t3code.protocol.generated.DispatchCommandResult
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
+import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
+import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesResult
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
@@ -181,6 +183,14 @@ public class WebSocketT3Client internal constructor(
     return decode(WorktreeSetupCancelResult.serializer(), result).cancelled
   }
 
+  override suspend fun searchEntries(
+    input: ProjectSearchEntriesInput,
+  ): ProjectSearchEntriesResult {
+    val payload: JsonElement =
+      T3JsonOut.encodeToJsonElement(ProjectSearchEntriesInput.serializer(), input)
+    return decode(ProjectSearchEntriesResult.serializer(), call("projects.searchEntries", payload))
+  }
+
   override suspend fun listRefs(input: VcsListRefsInput): VcsListRefsResult {
     val payload: JsonElement = T3JsonOut.encodeToJsonElement(VcsListRefsInput.serializer(), input)
     return decode(VcsListRefsResult.serializer(), call("vcs.listRefs", payload))
@@ -314,6 +324,7 @@ public class WebSocketT3Client internal constructor(
         .filterValues { flag -> (flag as? JsonPrimitive)?.booleanOrNull == true }
         .keys,
       environmentLabel = environment?.string("label"),
+      environmentId = environment?.string("environmentId"),
       machine = settings?.string("environmentIcon") ?: platform?.string("machine") ?: "server",
     )
     info = rpc to fresh

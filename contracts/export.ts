@@ -38,6 +38,8 @@ export const CURATED: ReadonlyArray<readonly [name: string, module: string]> = [
   ["OrchestrationGetFullThreadDiffResult", "checkpointDiff.ts"],
   ["ProjectReadFileInput", "project.ts"],
   ["ProjectReadFileResult", "project.ts"],
+  ["ProjectSearchEntriesInput", "project.ts"],
+  ["ProjectSearchEntriesResult", "project.ts"],
   ["OrchestrationV2Command", "orchestrationV2.ts"],
   ["OrchestrationV2DispatchCommandResult", "orchestrationV2.ts"],
   ["TerminalAttachInput", "terminal.ts"],

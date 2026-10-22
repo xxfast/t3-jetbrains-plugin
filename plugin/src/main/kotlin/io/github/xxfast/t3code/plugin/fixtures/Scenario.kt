@@ -12,6 +12,7 @@ import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ServerSession
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
+import io.github.xxfast.t3code.protocol.generated.ProjectEntry
 import io.github.xxfast.t3code.protocol.generated.ServerAuthDescriptor
 import io.github.xxfast.t3code.protocol.generated.ServerProviderSkill
 import io.github.xxfast.t3code.protocol.generated.ServerProviderWorkspaceSnapshot
@@ -46,6 +47,8 @@ class ScenarioFile(
   val messages: Map<String, List<ConversationMessage>> = emptyMap(),
   /** The projection's provider turns per thread, what says a run can be steered. */
   val providerTurns: Map<String, List<ProviderTurn>> = emptyMap(),
+  /** Files and folders `projects.searchEntries` searches, relative to any cwd. */
+  val projectEntries: List<ProjectEntry> = emptyList(),
 )
 
 @Serializable
@@ -79,6 +82,7 @@ class Scenario(
   val providerWorkspaceSnapshots: Map<String, List<ServerProviderWorkspaceSnapshot>> = emptyMap(),
   val messages: Map<String, List<ConversationMessage>> = emptyMap(),
   val providerTurns: Map<String, List<ProviderTurn>> = emptyMap(),
+  val projectEntries: List<ProjectEntry> = emptyList(),
 ) {
   companion object {
     fun decode(text: String): Scenario {
@@ -99,6 +103,7 @@ class Scenario(
         providerWorkspaceSnapshots = file.providerWorkspaceSnapshots,
         messages = file.messages,
         providerTurns = file.providerTurns,
+        projectEntries = file.projectEntries,
       )
     }
 
@@ -126,6 +131,7 @@ class Scenario(
         parts.map { it.providerWorkspaceSnapshots }.fold(emptyMap(), ::append),
       messages = parts.map { it.messages }.fold(emptyMap(), ::append),
       providerTurns = parts.map { it.providerTurns }.fold(emptyMap(), ::append),
+      projectEntries = parts.flatMap { it.projectEntries }.distinctBy { it.path },
     )
 
     fun failed(name: String, message: String): Scenario = Scenario(

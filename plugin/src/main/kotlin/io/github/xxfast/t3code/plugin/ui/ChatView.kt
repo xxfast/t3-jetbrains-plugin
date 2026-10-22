@@ -146,6 +146,7 @@ fun ChatView(
   stashCount: Int = 0, // prompts in the composer's stash
   queue: QueuedRunsState? = null, // the queued messages above the composer
   queueActions: QueuedRunsActions = QueuedRunsActions(),
+  mentions: ComposerMentions = ComposerMentions(), // what the composer's `@` and `#` menus read
 ) {
   val threadId: String? = view?.thread?.id
   val timeline: LazyListState = remember(threadId) { LazyListState() }
@@ -230,6 +231,7 @@ fun ChatView(
               .filterIsInstance<TurnItem.UserMessage>()
               .map { it.toPromptHistoryMessage() }
           },
+          mentions = mentions,
           onSend = onSend,
           onInterrupt = onInterrupt,
           attachedAbove = queue?.let { state -> { QueuedRunsControl(state, queueActions) } },

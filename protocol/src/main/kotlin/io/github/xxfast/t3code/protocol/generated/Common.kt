@@ -1567,6 +1567,13 @@ public data class PastedTextAttachmentSource(
 )
 
 @Serializable
+public data class ProjectEntry(
+  val path: String,
+  val kind: String,
+  val ignored: Boolean? = null,
+)
+
+@Serializable
 public data class ProjectScript(
   val id: String,
   val name: String,

@@ -106,6 +106,11 @@ public data class ServerInfo(
   /** `environment.label`, what the Sidebar's hover card calls the machine. */
   val environmentLabel: String? = null,
   /**
+   * `environment.environmentId`, the server's own id. A thread context record names the thread
+   * by it (`threadContextRecord`, apps/web/src/lib/composerContextRecords.ts:161).
+   */
+  val environmentId: String? = null,
+  /**
    * `resolveEnvironmentMachineKind`, packages/contracts/src/server.ts:629: the user's
    * `settings.environmentIcon`, else `environment.platform.machine`, else `server`.
    */

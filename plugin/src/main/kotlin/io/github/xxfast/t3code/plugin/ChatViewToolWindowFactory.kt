@@ -324,6 +324,7 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
         .takeIf { editing == null } ?: AttachmentActions(),
       stashCount = stash.size,
       contextWindow = contextWindow,
+      mentions = rememberComposerMentions(threadId, client, controller),
       worktreeSetup = setup.visible,
       onCancelWorktreeSetup = { controller.cancelWorktreeSetup(threadId) },
       onOpenSetupTerminal = { terminalId ->
