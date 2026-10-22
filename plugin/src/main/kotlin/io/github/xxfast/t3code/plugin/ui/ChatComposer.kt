@@ -3,6 +3,7 @@ package io.github.xxfast.t3code.plugin.ui
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -51,13 +52,20 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.ServerProviderSkill
 import kotlin.math.roundToInt
@@ -231,6 +239,7 @@ fun ChatComposer(
                 ?.let { resolveProviderSkillsForCwd(it, footer?.cwd) }
                 .orEmpty(),
               extras = extras,
+              richText = footer?.composerRichTextEnabled ?: true,
               onMenuKey = triggerMenu.onKey,
               onModeKey = { event ->
                 composerModeKey(event, footer?.showInteractionModeToggle == true) {
@@ -331,9 +340,10 @@ private fun ComposerWithDrawer(
  * [ComposerBody] makes it. Resting, its one line sits centred in the 32dp row (`leading-8`), so
  * the text eases down by [RESTING_TEXT_INSET] as [progress] falls to 0.
  *
- * Skills, mentions and context links in the draft draw as chips ([ComposerPromptChips]), the
- * Tiptap editor's atom nodes: [skills] says which `$name`s are skills, [extras] what the links
- * point at. The draft itself stays the markdown that gets sent.
+ * Skills, mentions and context links in the draft draw as chips, the Tiptap editor's atom
+ * nodes: [skills] says which `$name`s are skills, [extras] what the links point at. With
+ * [richText] on, the markdown formats as you type, upstream's rich extensions. Both go through
+ * one [ComposerPromptDecorations]; the draft itself stays the markdown that gets sent.
  */
 @OptIn(ExperimentalComposeUiApi::class) // onPointerEvent
 @Composable
@@ -347,29 +357,44 @@ private fun ComposerPromptEditor(
   onFocus: () -> Unit,
   skills: List<ServerProviderSkill>,
   extras: DraftExtras,
+  richText: Boolean,
   onMenuKey: (KeyEvent) -> Boolean,
   onModeKey: (KeyEvent) -> Boolean,
   onHistoryKey: (KeyEvent, caretLine: Int?, lineCount: Int?) -> Boolean,
   modifier: Modifier = Modifier,
 ) {
-  // The prompt's lines as laid out, for `isCaretOnVisualEdge` and the chips. State, so the chips
-  // redraw on a new layout
+  // The prompt's lines as laid out, for `isCaretOnVisualEdge` and the decorations. State, so
+  // they redraw on a new layout
   val layout: MutableState<(() -> TextLayoutResult?)?> = remember { mutableStateOf(null) }
-  val chips: ComposerPromptChips = remember(draft) { ComposerPromptChips() }
+  val decorations: ComposerPromptDecorations = remember(draft) { ComposerPromptDecorations() }
   val chipStyle = ComposerPromptChipStyle(
     fill = JewelTheme.globalColors.text.normal.copy(alpha = 0.06f),
     outline = JewelTheme.globalColors.borders.normal,
   )
-  val iconRoom: TextUnit =
-    with(LocalDensity.current) { composerPromptChipIconRoom(chipStyle).toSp() }
+  val blockStyle = ComposerPromptBlockStyle(
+    quoteBar = JewelTheme.globalColors.borders.normal,
+    rule = JewelTheme.globalColors.borders.normal,
+    checkboxOutline = JewelTheme.globalColors.text.info,
+    checkboxFill = JewelTheme.globalColors.borders.focused,
+    checkmark = Color.White,
+    codeBackground = JewelTheme.globalColors.text.normal.copy(alpha = 0.04f),
+    codeOutline = JewelTheme.globalColors.borders.normal.copy(alpha = 0.6f),
+  )
+  val density: Density = LocalDensity.current
+  val iconRoom: TextUnit = with(density) { composerPromptChipIconRoom(chipStyle).toSp() }
   val detailColor: Color = JewelTheme.globalColors.text.info
+  val textStyles: Map<ComposerPromptStyleKind, SpanStyle> = composerPromptTextStyles(blockStyle)
   val records: Map<String, ComposerDraftContextRecord> =
     remember(extras) { composerContextRecordsFromDraft(extras) }
+  val highlighter: ComposerCodeHighlighter = remember { IdeComposerCodeHighlighter() }
   SideEffect {
-    chips.skills = skills
-    chips.records = records
-    chips.iconRoom = iconRoom
-    chips.detailColor = detailColor
+    decorations.skills = skills
+    decorations.records = records
+    decorations.iconRoom = iconRoom
+    decorations.detailColor = detailColor
+    decorations.richText = richText
+    decorations.textStyles = textStyles
+    decorations.highlighter = highlighter
   }
   val painters: Map<ComposerPromptChipIcon, Painter> = rememberComposerPromptChipPainters()
   val scroll: ScrollState = rememberScrollState()
@@ -378,51 +403,144 @@ private fun ComposerPromptEditor(
   LaunchedEffect(draft) {
     snapshotFlow { draft.text.toString() to draft.selection }.drop(1).collect { onFocus() }
   }
-  TextArea(
-    state = draft,
+  Box(
     modifier = modifier
       .fillMaxWidth()
-      .onPointerEvent(PointerEventType.Press, PointerEventPass.Initial) { onFocus() }
-      .offset { IntOffset(0, (RESTING_TEXT_INSET.toPx() * (1 - progress())).roundToInt()) }
-      .onFocusChanged { if (it.isFocused) onFocus() }
-      .attachmentTarget(state.enabled, attachmentActions)
-      .composerShortcutTarget(state.enabled, shortcuts)
-      // `onComposerCommandKey`'s order: Shift+Tab, then the open menu, then prompt recall,
-      // then sending
-      .onPreviewKeyEvent(onModeKey)
-      .onPreviewKeyEvent(onMenuKey)
-      .onPreviewKeyEvent { event ->
-        val result: TextLayoutResult? = layout.value?.invoke()
-        val text: String = draft.text.toString()
-        val line: Int? = composerPromptCaretLine(
-          layout = result,
-          text = text,
-          caret = draft.selection.end,
-          chips = chips.chipsFor(text),
-        )
-        onHistoryKey(event, line, result?.lineCount)
-      }
-      .composerKeys(draft, state.running, onSend)
-      .composerPromptChipBackgrounds(
-        chips = chips,
-        draft = draft,
-        layout = layout,
-        scroll = scroll,
-        contentPadding = contentPadding,
-        painters = painters,
-        style = chipStyle,
-      ),
-    enabled = state.enabled,
-    inputTransformation = chips.input,
-    lineLimits = TextFieldLineLimits.MultiLine(),
-    onTextLayout = { result -> if (layout.value !== result) layout.value = result },
-    outputTransformation = chips.output,
-    scrollState = scroll,
-    // Upstream's short placeholder (ChatComposer.tsx:6695). The long one offers @tags, $skills
-    // and / commands, and `@` has no menu yet (#45).
-    placeholder = { Text("Ask anything...", color = JewelTheme.globalColors.text.info) },
-    undecorated = true,
+      .offset { IntOffset(0, (RESTING_TEXT_INSET.toPx() * (1 - progress())).roundToInt()) },
+    propagateMinConstraints = true,
+  ) {
+    TextArea(
+      state = draft,
+      modifier = Modifier
+        .fillMaxWidth()
+        .onPointerEvent(PointerEventType.Press, PointerEventPass.Initial) { onFocus() }
+        .onFocusChanged { if (it.isFocused) onFocus() }
+        .attachmentTarget(state.enabled, attachmentActions)
+        .composerShortcutTarget(state.enabled, shortcuts)
+        // Upstream's `handleKeyDown` takes Tab and Enter in a code block, and Enter on a
+        // fence line, before `onComposerCommandKey` sees them
+        .onPreviewKeyEvent { event -> richText && composerRichKey(event, draft) }
+        // `onComposerCommandKey`'s order: Shift+Tab, then the open menu, then prompt recall,
+        // then sending
+        .onPreviewKeyEvent(onModeKey)
+        .onPreviewKeyEvent(onMenuKey)
+        .onPreviewKeyEvent { event ->
+          val result: TextLayoutResult? = layout.value?.invoke()
+          val text: String = draft.text.toString()
+          val line: Int? = composerPromptCaretLine(
+            layout = result,
+            text = text,
+            caret = draft.selection.end,
+            presentation = decorations.presentationFor(text, draft.selection),
+          )
+          onHistoryKey(event, line, result?.lineCount)
+        }
+        .composerKeys(draft, state.running, richText, onSend)
+        .composerPromptDecorationBackgrounds(
+          decorations = decorations,
+          draft = draft,
+          layout = layout,
+          scroll = scroll,
+          contentPadding = contentPadding,
+          painters = painters,
+          chipStyle = chipStyle,
+          blockStyle = blockStyle,
+        ),
+      enabled = state.enabled,
+      inputTransformation = decorations.input,
+      lineLimits = TextFieldLineLimits.MultiLine(),
+      onTextLayout = { result -> if (layout.value !== result) layout.value = result },
+      outputTransformation = decorations.output,
+      scrollState = scroll,
+      // Upstream's short placeholder (ChatComposer.tsx:6695). The long one offers @tags,
+      // $skills and / commands, and `@` has no menu yet (#45).
+      placeholder = { Text("Ask anything...", color = JewelTheme.globalColors.text.info) },
+      undecorated = true,
+    )
+    ComposerPromptBlockControls(
+      decorations = decorations,
+      draft = draft,
+      layout = layout,
+      scroll = scroll,
+      contentPadding = contentPadding,
+      enabled = state.enabled,
+      checkboxSize = blockStyle.checkboxSize,
+      modifier = Modifier.matchParentSize(),
+    )
+  }
+}
+
+/**
+ * The styles for the formatting, from upstream's `.composer-tiptap` rules in index.css:
+ * headings at 600 weight and `1.25rem`, `1.125rem`, `1rem`, then `0.875rem` on the composer's
+ * `0.875rem` text, inline code in the mono font with a tinted background, markers muted.
+ */
+@Composable
+private fun composerPromptTextStyles(
+  blockStyle: ComposerPromptBlockStyle,
+): Map<ComposerPromptStyleKind, SpanStyle> {
+  val density: Density = LocalDensity.current
+  val mono: FontFamily? = JewelTheme.editorTextStyle.fontFamily
+  val muted: Color = JewelTheme.globalColors.text.info
+  val codeBackground: Color = JewelTheme.globalColors.text.normal.copy(alpha = 0.1f)
+  fun heading(scale: Float, color: Color = Color.Unspecified): SpanStyle =
+    SpanStyle(fontSize = scale.em, fontWeight = FontWeight.SemiBold, color = color)
+  return mapOf(
+    ComposerPromptStyleKind.BOLD to SpanStyle(fontWeight = FontWeight.Bold),
+    ComposerPromptStyleKind.ITALIC to SpanStyle(fontStyle = FontStyle.Italic),
+    ComposerPromptStyleKind.STRIKE to SpanStyle(textDecoration = TextDecoration.LineThrough),
+    ComposerPromptStyleKind.CODE to
+      SpanStyle(fontFamily = mono, fontSize = 0.92.em, background = codeBackground),
+    ComposerPromptStyleKind.MARKER to SpanStyle(
+      color = muted.copy(alpha = muted.alpha * 0.75f),
+      fontWeight = FontWeight.Normal,
+      fontStyle = FontStyle.Normal,
+      textDecoration = TextDecoration.None,
+    ),
+    ComposerPromptStyleKind.HEADING_1 to heading(1.43f),
+    ComposerPromptStyleKind.HEADING_2 to heading(1.29f),
+    ComposerPromptStyleKind.HEADING_3 to heading(1.14f),
+    ComposerPromptStyleKind.HEADING_4 to heading(1f),
+    ComposerPromptStyleKind.HEADING_5 to heading(1f),
+    ComposerPromptStyleKind.HEADING_6 to heading(1f, muted),
+    ComposerPromptStyleKind.CODE_BLOCK to SpanStyle(fontFamily = mono, fontSize = 0.92.em),
+    ComposerPromptStyleKind.FENCE to
+      SpanStyle(fontFamily = mono, fontSize = 0.92.em, color = muted),
+    // The quote's `padding-left: 0.8rem` past its bar
+    ComposerPromptStyleKind.QUOTE_SLOT to
+      SpanStyle(letterSpacing = with(density) { 10.dp.toSp() }),
+    // The checkbox and the item's `gap: 0.5rem`
+    ComposerPromptStyleKind.TASK_SLOT to
+      SpanStyle(letterSpacing = with(density) { (blockStyle.checkboxSize + 4.dp).toSp() }),
   )
+}
+
+/**
+ * Tab and Enter in a code block and Enter on a fence line ([composerRichEnter]), and Backspace
+ * over a prefix that draws as nothing ([composerRichBackspace]).
+ */
+private fun composerRichKey(event: KeyEvent, draft: TextFieldState): Boolean {
+  if (event.type != KeyEventType.KeyDown || event.isCtrlPressed || event.isMetaPressed) {
+    return false
+  }
+  val edit: ComposerPromptEdit = when (event.key) {
+    Key.Enter, Key.NumPadEnter -> composerRichEnter(draft.text.toString(), draft.selection)
+    Key.Backspace -> if (event.isAltPressed || event.isShiftPressed) {
+      null
+    } else {
+      composerRichBackspace(draft.text.toString(), draft.selection)
+    }
+
+    Key.Tab -> if (event.isAltPressed) {
+      null
+    } else {
+      composerRichTab(draft.text.toString(), draft.selection, event.isShiftPressed)
+    }
+
+    else -> null
+  } ?: return false
+  draft.apply(edit)
+  return true
 }
 
 /** The trigger menu for the prompt, [rememberComposerTriggerMenu]. */
@@ -903,11 +1021,13 @@ private fun ComposerActions(
 /**
  * The composer's keys on [field], see [composerKey]: Enter sends, Ctrl/Cmd+Enter while [running]
  * sends the alternate, Shift or Alt+Enter is a newline. The newline goes in by hand: the text
- * field's own mapping may not newline a shifted Enter.
+ * field's own mapping may not newline a shifted Enter. With [richText] the newline splits or
+ * leaves a list item or quote as upstream's does ([composerRichNewline]).
  */
 fun Modifier.composerKeys(
   field: TextFieldState,
   running: Boolean,
+  richText: Boolean = false,
   onSend: (alternate: Boolean) -> Unit,
 ): Modifier = onPreviewKeyEvent { event ->
   val action: ComposerKey = composerKey(
@@ -926,8 +1046,14 @@ fun Modifier.composerKeys(
 
     ComposerKey.NEWLINE -> field.edit {
       val at: TextRange = selection
-      replace(at.min, at.max, "\n")
-      placeCursorAfterCharAt(at.min)
+      val edit: ComposerPromptEdit? =
+        if (richText) composerRichNewline(asCharSequence().toString(), at) else null
+      if (edit != null) {
+        apply(edit)
+      } else {
+        replace(at.min, at.max, "\n")
+        placeCursorAfterCharAt(at.min)
+      }
     }
 
     ComposerKey.IGNORE -> return@onPreviewKeyEvent false

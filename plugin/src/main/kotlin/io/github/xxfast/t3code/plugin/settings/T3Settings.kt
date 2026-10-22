@@ -22,6 +22,7 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
     var confirmThreadArchive: Boolean by property(false)
     var confirmThreadDelete: Boolean by property(true)
     var showSkillsInSlashMenu: Boolean by property(true)
+    var composerRichTextEnabled: Boolean by property(true)
 
     // Upstream's `favorites` (`ModelFavorites`, settings.ts:277), as `instanceId:slug` keys
     var modelFavorites: MutableList<String> by list()
@@ -49,6 +50,12 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
     get() = state.showSkillsInSlashMenu
     set(value) {
       state.showSkillsInSlashMenu = value
+    }
+
+  var composerRichTextEnabled: Boolean
+    get() = state.composerRichTextEnabled
+    set(value) {
+      state.composerRichTextEnabled = value
     }
 
   /** The favourite models in the picker, keyed by `providerModelKey`. */

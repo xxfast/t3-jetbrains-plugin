@@ -467,7 +467,7 @@ class ComposerPromptChipsLogicTest {
     val markdown = "${skillReplacement(review)}${threadContextReference(record)} and " +
       "${serializeComposerFileLink("src/App.kt")} now"
     val draft = TextFieldState(markdown)
-    val promptChips = ComposerPromptChips().apply {
+    val promptChips = ComposerPromptDecorations().apply {
       skills = listOf(review)
       records = composerContextRecordsFromDraft(DraftExtras().withThread(record))
     }
@@ -486,7 +486,7 @@ class ComposerPromptChipsLogicTest {
   fun `backspace after a chip removes it whole through the input transformation`() {
     val review: ServerProviderSkill = skill("review")
     val draft = TextFieldState("Run \$review now", initialSelection = TextRange(11))
-    val promptChips = ComposerPromptChips().apply { skills = listOf(review) }
+    val promptChips = ComposerPromptDecorations().apply { skills = listOf(review) }
     // What the field asks for: the chip's last character
     draft.edit {
       delete(5, 11)
@@ -500,7 +500,7 @@ class ComposerPromptChipsLogicTest {
   fun `typing inside a chip moves the text out through the input transformation`() {
     val review: ServerProviderSkill = skill("review")
     val draft = TextFieldState("Run \$review now", initialSelection = TextRange(4))
-    val promptChips = ComposerPromptChips().apply { skills = listOf(review) }
+    val promptChips = ComposerPromptDecorations().apply { skills = listOf(review) }
     draft.edit {
       insert(9, "x")
       with(promptChips.input) { transformInput() }
@@ -568,7 +568,7 @@ class ComposerPromptChipsLogicTest {
   fun `typing at a file chip's leading edge keeps the chip`() {
     val link: String = serializeComposerFileLink("kstore-file/FileCodec.kt")
     val draft = TextFieldState("$link ", initialSelection = TextRange(0))
-    val promptChips = ComposerPromptChips()
+    val promptChips = ComposerPromptDecorations()
     draft.edit {
       insert(0, "X")
       with(promptChips.input) { transformInput() }

@@ -556,6 +556,7 @@ private fun rememberComposerFooter(
       workspace = workspace,
       cwd = cwd,
       showSkillsInSlashMenu = T3Settings.get().showSkillsInSlashMenu,
+      composerRichTextEnabled = T3Settings.get().composerRichTextEnabled,
     )
   }
 

@@ -49,6 +49,11 @@ class T3Configurable : BoundConfigurable("T3 Code") {
           )
       }
       row {
+        checkBox("Rich text composer")
+          .bindSelected(T3Settings.get()::composerRichTextEnabled)
+          .comment("Show formatted Markdown as you type.")
+      }
+      row {
         button("Pair...") {
           apply()
           PairDialog().takeIf { it.showAndGet() }?.let { T3.get().pair(it.input) }

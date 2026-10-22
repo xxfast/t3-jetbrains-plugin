@@ -375,6 +375,8 @@ data class ComposerFooterState(
   val cwd: String? = null,
   /** Upstream's `showSkillsInSlashMenu` setting: `/skill:<name>` rows in the `/` menu. */
   val showSkillsInSlashMenu: Boolean = true,
+  /** Upstream's `composerRichTextEnabled` setting: formatted markdown in the prompt. */
+  val composerRichTextEnabled: Boolean = true,
 )
 
 /**
