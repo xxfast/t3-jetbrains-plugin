@@ -239,14 +239,16 @@ fun ComposerWithMenuDrawer(
   drawer: (@Composable () -> Unit)?,
   box: @Composable () -> Unit,
 ) {
-  if (drawer == null) return box()
-  Layout(contents = listOf(drawer, box)) { (menu, surface), constraints ->
-    val menuPlaceable: Placeable = menu.first().measure(constraints.copy(minHeight = 0))
+  // One layout with or without the menu: composing the box in another slot recreates the
+  // prompt and drops its focus as the menu opens and closes
+  Layout(contents = listOf(drawer ?: {}, box)) { (menu, surface), constraints ->
+    val menuPlaceable: Placeable? =
+      menu.firstOrNull()?.measure(constraints.copy(minHeight = 0))
     val boxPlaceable: Placeable = surface.first().measure(constraints.copy(minHeight = 0))
     val overlap: Int = MENU_DRAWER_OVERLAP.roundToPx()
-    val top: Int = (menuPlaceable.height - overlap).coerceAtLeast(0)
+    val top: Int = menuPlaceable?.let { (it.height - overlap).coerceAtLeast(0) } ?: 0
     layout(boxPlaceable.width, top + boxPlaceable.height) {
-      menuPlaceable.placeRelative(0, 0)
+      menuPlaceable?.placeRelative(0, 0)
       boxPlaceable.placeRelative(0, top)
     }
   }

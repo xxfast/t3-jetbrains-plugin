@@ -217,14 +217,16 @@ private fun ComposerWithDrawer(
   drawer: (@Composable () -> Unit)?,
   surface: @Composable () -> Unit,
 ) {
-  if (drawer == null) return surface()
-  Layout(contents = listOf(drawer, surface)) { (strip, box), constraints ->
+  // One layout with or without a drawer: composing the box in another slot recreates the prompt
+  // and drops its focus
+  Layout(contents = listOf(drawer ?: {}, surface)) { (strip, box), constraints ->
     val boxPlaceable: Placeable = box.first().measure(constraints)
-    val stripPlaceable: Placeable = strip.first().measure(constraints.copy(minHeight = 0))
+    val stripPlaceable: Placeable? =
+      strip.firstOrNull()?.measure(constraints.copy(minHeight = 0))
     val overlap: Int = CONTEXT_STRIP_OVERLAP.roundToPx()
-    val height: Int = boxPlaceable.height + (stripPlaceable.height - overlap).coerceAtLeast(0)
-    layout(boxPlaceable.width, height) {
-      stripPlaceable.placeRelative(0, boxPlaceable.height - overlap)
+    val hanging: Int = stripPlaceable?.let { (it.height - overlap).coerceAtLeast(0) } ?: 0
+    layout(boxPlaceable.width, boxPlaceable.height + hanging) {
+      stripPlaceable?.placeRelative(0, boxPlaceable.height - overlap)
       boxPlaceable.placeRelative(0, 0)
     }
   }
