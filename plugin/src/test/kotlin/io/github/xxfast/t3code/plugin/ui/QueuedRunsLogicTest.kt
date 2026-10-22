@@ -94,6 +94,19 @@ class QueuedRunsLogicTest {
   }
 
   @Test
+  fun `the steer and edit shortcuts follow the strip's rules`() {
+    val state: ThreadQueueWorkflowState = deriveThreadQueueWorkflowState(view)
+    assertTrue(canSteerQueuedRun(state, idle = true))
+    assertFalse(canSteerQueuedRun(state, idle = false))
+    assertFalse(canSteerQueuedRun(state.copy(activeRun = null), idle = true))
+    assertFalse(canSteerQueuedRun(state.copy(canPromoteToSteer = false), idle = true))
+
+    assertTrue(canEditQueuedRun(idle = true, editingRunId = null))
+    assertFalse(canEditQueuedRun(idle = false, editingRunId = null))
+    assertFalse(canEditQueuedRun(idle = true, editingRunId = FIRST))
+  }
+
+  @Test
   fun `a held queued run holds the queue`() {
     val runs: List<Run> = view.runs.map { run ->
       if (run.id == SECOND) run.copy(queueHeld = true) else run

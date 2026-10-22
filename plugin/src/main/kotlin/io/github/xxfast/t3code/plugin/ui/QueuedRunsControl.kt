@@ -244,7 +244,7 @@ private fun QueuedRow(
       modifier = Modifier.size(SMALL_BUTTON),
     )
     val activeRunId: String? = workflow.activeRun?.id
-    val canSteer: Boolean = idle && workflow.canPromoteToSteer && activeRunId != null
+    val canSteer: Boolean = canSteerQueuedRun(workflow, idle)
     Tooltip(tooltip = { Text(queuedRunSteerTooltip(workflow.activeRun)) }) {
       IconButton(
         onClick = { if (activeRunId != null) actions.onSteer(item.run.id, activeRunId) },

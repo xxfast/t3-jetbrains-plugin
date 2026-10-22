@@ -240,6 +240,8 @@ fun ChatView(
           mentions = mentions,
           onSend = onSend,
           onInterrupt = onInterrupt,
+          onSteerQueued = queue?.let { state -> queuedSteerShortcut(state, queueActions) },
+          onEditQueued = queue?.let { state -> queuedEditShortcut(state, queueActions) },
           attachedAbove = queue?.let { state -> { QueuedRunsControl(state, queueActions) } },
           extras = extras,
           attachmentActions = attachmentActions,
@@ -1483,4 +1485,34 @@ private fun MarkdownText(text: String, processor: MarkdownProcessor, fill: Boole
 @Composable
 private fun Mono(text: String, color: Color) {
   Text(text = text, style = JewelTheme.editorTextStyle, color = color)
+}
+
+// `thread.steerQueuedMessage` (ChatView.tsx:5888): the first queued message as a steer, live under
+// the strip's Steer rule. Null when it isn't, so the action is disabled.
+private fun queuedSteerShortcut(
+  state: QueuedRunsState,
+  actions: QueuedRunsActions,
+): (() -> Boolean)? {
+  val workflow: ThreadQueueWorkflowState = state.workflow
+  val first: QueuedThreadRun = workflow.queuedRuns.firstOrNull() ?: return null
+  val activeRun: Run = workflow.activeRun ?: return null
+  if (!canSteerQueuedRun(workflow, state.enabled && !state.busy)) return null
+  return {
+    actions.onSteer(first.run.id, activeRun.id)
+    true
+  }
+}
+
+// `thread.editQueuedMessage` (ChatView.tsx:5890): the last queued message into the composer, live
+// under the strip's Edit rule and not while one is already being edited.
+private fun queuedEditShortcut(
+  state: QueuedRunsState,
+  actions: QueuedRunsActions,
+): (() -> Boolean)? {
+  val latest: QueuedThreadRun = state.workflow.queuedRuns.lastOrNull() ?: return null
+  if (!canEditQueuedRun(state.enabled && !state.busy, state.editingRunId)) return null
+  return {
+    actions.onEdit(latest)
+    true
+  }
 }

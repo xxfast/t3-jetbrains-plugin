@@ -126,6 +126,20 @@ fun queuedRunMoveDown(queued: List<QueuedThreadRun>, index: Int): QueuedRunMove?
   return QueuedRunMove(queued[index].run.id, queued.getOrNull(index + 2)?.run?.id)
 }
 
+/**
+ * Whether Steer is live: the strip's button and `steerNext` (QueuedRunsControl.tsx:187) share it.
+ * [idle] is the pairing may operate and no queue command is in flight.
+ */
+fun canSteerQueuedRun(workflow: ThreadQueueWorkflowState, idle: Boolean): Boolean =
+  idle && workflow.canPromoteToSteer && workflow.activeRun != null
+
+/**
+ * Whether `editLatest` (QueuedRunsControl.tsx:195) is live: the edit button's [idle] rule, and
+ * not while a queued message is already being edited.
+ */
+fun canEditQueuedRun(idle: Boolean, editingRunId: String?): Boolean =
+  idle && editingRunId == null
+
 /** The header's `aria-label`, QueuedRunsControl.tsx:226. */
 fun queuedMessagesLabel(count: Int): String =
   "$count queued message${if (count == 1) "" else "s"}"
