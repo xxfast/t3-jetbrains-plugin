@@ -27,13 +27,6 @@ fun TurnItem.json(): JsonObject = when (this) {
 /** `TIMELINE_FOLLOW_REARM_THRESHOLD_PX`, MessagesTimeline.logic.ts. */
 const val TIMELINE_FOLLOW_REARM_THRESHOLD_DP: Int = 40
 
-/** Where the timeline is scrolled to, its first visible row and how far into it. */
-data class TimelineScrollPosition(val index: Int, val offset: Int) {
-  /** Whether this is further up the timeline than [other]. */
-  fun isAbove(other: TimelineScrollPosition): Boolean =
-    index < other.index || (index == other.index && offset < other.offset)
-}
-
 /**
  * How far the timeline's true end, bottom padding included, sits below the viewport's end, in
  * pixels. The padding is the composer's inset, which hides the same amount of viewport, so this
@@ -56,21 +49,30 @@ fun timelineEndGap(
 fun isTimelineAtEnd(gap: Int?, thresholdPx: Int): Boolean = gap != null && gap <= thresholdPx
 
 /**
- * Whether the timeline stays pinned to its end after a layout. Reaching the end band pins it,
- * moving up the timeline unpins it, and anything else (the composer growing, the last row
- * streaming, rows arriving) keeps what it was. Upstream's live follow (ChatView.tsx), which only
- * a user's navigation away from the end breaks; content growth leaves the scroll position alone
- * here, so only the user moves it up.
+ * Whether the timeline follows its end, upstream's follow mode (ChatView.tsx:4162). Only the
+ * user's navigation away from the end breaks it (`cancelTimelineLiveFollowForUserNavigation`);
+ * rows arriving, regrouping or streaming never do. Coming back into the end band re-arms it, on
+ * the change only, as `onIsAtEndChange` does, so a small scroll up inside the band holds. One per
+ * thread.
  */
-fun resolveTimelinePinned(
-  pinned: Boolean,
-  atEnd: Boolean,
-  previous: TimelineScrollPosition,
-  current: TimelineScrollPosition,
-): Boolean = when {
-  atEnd -> true
-  current.isAbove(previous) -> false
-  else -> pinned
+class TimelineFollow {
+  var following: Boolean = true
+    private set
+
+  private var atEnd: Boolean = true
+
+  /** `cancelTimelineLiveFollowForUserNavigation`: a wheel step or scrollbar drag up. */
+  fun cancelForUserNavigation() {
+    following = false
+  }
+
+  /** After a layout, [gap] as [timelineEndGap] has it: whether to scroll to the true end. */
+  fun onLayout(gap: Int?, thresholdPx: Int): Boolean {
+    val nowAtEnd: Boolean = isTimelineAtEnd(gap, thresholdPx)
+    if (nowAtEnd && !atEnd) following = true
+    atEnd = nowAtEnd
+    return shouldFollowTimelineEnd(following, gap)
+  }
 }
 
 /**

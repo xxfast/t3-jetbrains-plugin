@@ -49,11 +49,13 @@ import org.jetbrains.jewel.ui.theme.scrollbarStyle
 internal fun TimelineScrollContainer(
   state: LazyListState,
   keys: List<Any>,
+  onScrollUp: () -> Unit = {}, // the thumb dragged up, the user navigating away from the end
   modifier: Modifier = Modifier,
   content: @Composable () -> Unit,
 ) {
   val heights: SnapshotStateMap<Any, Int> = remember { mutableStateMapOf() }
   val currentKeys: List<Any> by rememberUpdatedState(keys)
+  val currentOnScrollUp: () -> Unit by rememberUpdatedState(onScrollUp)
   val padding: Int by remember {
     derivedStateOf { state.layoutInfo.beforeContentPadding + state.layoutInfo.afterContentPadding }
   }
@@ -94,6 +96,7 @@ internal fun TimelineScrollContainer(
     snapshotFlow { shadow.value }.collect { value ->
       val clamped: Boolean = value == shadow.maxValue && listOffset > value
       if (value == synced || clamped || !(hovered || dragged.value)) return@collect
+      if (value < synced) currentOnScrollUp()
       val (index: Int, offset: Int) = extent.positionOf(value)
       state.scrollToItem(index, offset)
     }

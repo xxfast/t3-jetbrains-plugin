@@ -38,17 +38,28 @@ class ChatViewLogicTest {
   }
 
   @Test
-  fun `only moving up the timeline unpins it`() {
-    val here = TimelineScrollPosition(index = 4, offset = 100)
-    val up = TimelineScrollPosition(index = 4, offset = 20)
-    val down = TimelineScrollPosition(index = 5, offset = 0)
-    // the composer grew or the last row streamed: position unchanged, still pinned
-    assertTrue(resolveTimelinePinned(pinned = true, atEnd = false, here, here))
-    assertFalse(resolveTimelinePinned(pinned = true, atEnd = false, here, up))
-    assertTrue(resolveTimelinePinned(pinned = true, atEnd = false, here, down))
-    assertFalse(resolveTimelinePinned(pinned = false, atEnd = false, here, down))
-    // the end clamping up after something shrank keeps it pinned
-    assertTrue(resolveTimelinePinned(pinned = false, atEnd = true, here, up))
+  fun `rows regrouping or streaming never break the follow`() {
+    val follow = TimelineFollow()
+    assertTrue(follow.onLayout(gap = null, thresholdPx = 40)) // opened at the top
+    assertFalse(follow.onLayout(gap = 0, thresholdPx = 40))
+    // the last row grew past the band, or rows above it collapsed
+    assertTrue(follow.onLayout(gap = 300, thresholdPx = 40))
+    assertTrue(follow.onLayout(gap = null, thresholdPx = 40))
+    assertTrue(follow.following)
+  }
+
+  @Test
+  fun `only the user breaks the follow, and coming back to the end re-arms it`() {
+    val follow = TimelineFollow()
+    follow.onLayout(gap = 0, thresholdPx = 40)
+    follow.cancelForUserNavigation()
+    // still inside the band: no change into it, so it holds
+    assertFalse(follow.onLayout(gap = 20, thresholdPx = 40))
+    assertFalse(follow.onLayout(gap = 400, thresholdPx = 40))
+    assertFalse(follow.following)
+    assertTrue(follow.onLayout(gap = 30, thresholdPx = 40)) // back in the band: re-armed
+    assertTrue(follow.following)
+    assertTrue(follow.onLayout(gap = 200, thresholdPx = 40))
   }
 
   @Test

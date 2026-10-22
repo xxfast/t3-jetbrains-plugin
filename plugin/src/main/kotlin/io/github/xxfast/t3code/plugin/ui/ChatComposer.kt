@@ -19,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -43,7 +44,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Placeable
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.Constraints
@@ -53,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filterNotNull
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Link
 import org.jetbrains.jewel.ui.component.Text
@@ -122,6 +124,15 @@ fun ChatComposer(
   val folded: Boolean = resting && pending == null
   val motion: ComposerRestingMotion = remember { ComposerRestingMotion(folded) }
   LaunchedEffect(folded) { motion.moveTo(folded) }
+  // Observed rather than read in a layout callback: a fold or unfold ends after its last layout,
+  // so the settled height only lands once the clock stops
+  var height: Int by remember { mutableIntStateOf(0) }
+  val currentOnSettledHeight: (Int) -> Unit by rememberUpdatedState(onSettledHeight)
+  LaunchedEffect(motion) {
+    snapshotFlow { if (motion.settled) height else null }
+      .filterNotNull()
+      .collect { settled -> currentOnSettledHeight(settled) }
+  }
 
   // What the `T3Code.Composer.*` actions reach while the prompt has focus
   val shortcuts: ComposerShortcuts = remember { ComposerShortcuts() }
@@ -144,9 +155,7 @@ fun ChatComposer(
 
   Column(
     // The timeline keeps room for the settled composer only, see [resolveComposerTimelineInset]
-    modifier = modifier.onGloballyPositioned { coordinates ->
-      if (motion.settled) onSettledHeight(coordinates.size.height)
-    },
+    modifier = modifier.onSizeChanged { size -> height = size.height },
     verticalArrangement = Arrangement.spacedBy(4.dp),
   ) {
     if (state.reviewComments > 0) ReviewBanner(state.reviewComments, onClearReview)

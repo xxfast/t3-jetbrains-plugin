@@ -151,6 +151,7 @@ fun ChatView(
   val threadId: String? = view?.thread?.id
   val timeline: LazyListState = remember(threadId) { LazyListState() }
   val scrollCollapse: ComposerScrollCollapse = remember(threadId) { ComposerScrollCollapse() }
+  val follow: TimelineFollow = remember(threadId) { TimelineFollow() }
   // `canScrollCollapseComposer`'s and `composerHasExpandedChrome`'s parts the plugin has: a
   // multi-line prompt, a request, chips or a note on the draft, or an error keep it open
   val hasMultilinePrompt: Boolean = draft.text.contains('\n')
@@ -197,6 +198,7 @@ fun ChatView(
             MessagesTimeline(
               view = view,
               state = timeline,
+              follow = follow,
               processor = processor,
               operateReason = composer.disabledReason,
               actions = TimelineActions(
@@ -209,7 +211,7 @@ fun ChatView(
               ),
               worktreeSetup = worktreeSetup,
               bottomInset = with(LocalDensity.current) { inset.toDp() },
-              modifier = Modifier.timelineWheel(timeline, scrollCollapse, collapseEligible),
+              modifier = Modifier.timelineWheel(timeline, scrollCollapse, follow, collapseEligible),
             )
           }
         }
@@ -463,6 +465,7 @@ private fun Modifier.threadMenuGestures(
 private fun MessagesTimeline(
   view: ThreadView,
   state: LazyListState,
+  follow: TimelineFollow,
   processor: MarkdownProcessor,
   operateReason: String?, // why nothing can change the thread, when it can't
   actions: TimelineActions,
@@ -513,12 +516,17 @@ private fun MessagesTimeline(
       expansion = expansion.copy(workGroupIds = expansion.workGroupIds.toggle(groupId))
     },
   )
-  FollowTail(state)
+  FollowTail(state, follow)
 
   BoxWithConstraints(modifier.fillMaxSize()) {
     // `.messages-timeline-scroll`: 12px a side when narrow, 48px from 640px up
     val side: Dp = if (maxWidth >= 640.dp) 48.dp else 12.dp
-    TimelineScrollContainer(state, keys = rows.map { it.id }, modifier = Modifier.fillMaxSize()) {
+    TimelineScrollContainer(
+      state = state,
+      keys = rows.map { it.id },
+      onScrollUp = follow::cancelForUserNavigation,
+      modifier = Modifier.fillMaxSize(),
+    ) {
       LazyColumn(
         state = state,
         modifier = Modifier.fillMaxSize(),
@@ -551,11 +559,14 @@ private fun MessagesTimeline(
 private fun Modifier.timelineWheel(
   state: LazyListState,
   collapse: ComposerScrollCollapse,
+  follow: TimelineFollow,
   eligible: Boolean,
 ): Modifier = onPointerEvent(PointerEventType.Scroll, PointerEventPass.Initial) { event ->
   if (event.keyboardModifiers.isCtrlPressed) return@onPointerEvent
   val deltaY: Float = event.changes.firstOrNull()?.scrollDelta?.y ?: return@onPointerEvent
   if (deltaY == 0f) return@onPointerEvent
+  // A step up breaks the follow only when there's somewhere to go, ChatView.tsx:4382
+  if (deltaY < 0 && state.canScrollBackward) follow.cancelForUserNavigation()
   collapse.onWheel(
     now = System.currentTimeMillis(),
     deltaY = deltaY * WHEEL_LINE_PX,
@@ -595,19 +606,17 @@ private fun TimelineRow.bottomPadding(continuesWorkLog: Boolean): Dp = when (thi
 }
 
 /**
- * Keeps the timeline at its true end, the composer's inset included, while the user is there:
+ * Keeps the timeline at its true end, the composer's inset included, while [follow] says so:
  * after every layout, so rows arriving, the last row streaming and the composer growing all
- * follow. Scrolling up unpins it until the user comes back to the end. Upstream's
- * `maintainScrollAtEnd` with `TIMELINE_MAINTAIN_SCROLL_AT_END` (MessagesTimeline.tsx).
+ * follow. Upstream's `maintainScrollAtEnd` with `TIMELINE_MAINTAIN_SCROLL_AT_END`
+ * (MessagesTimeline.tsx).
  */
 @Composable
-private fun FollowTail(state: LazyListState) {
+private fun FollowTail(state: LazyListState, follow: TimelineFollow) {
   val threshold: Int = with(LocalDensity.current) {
     TIMELINE_FOLLOW_REARM_THRESHOLD_DP.dp.roundToPx()
   }
-  LaunchedEffect(state, threshold) {
-    var pinned: Boolean = true
-    var previous: TimelineScrollPosition = TimelineScrollPosition(0, 0)
+  LaunchedEffect(state, follow, threshold) {
     snapshotFlow { state.layoutInfo }.collect { info ->
       val last: LazyListItemInfo? = info.visibleItemsInfo.lastOrNull()
       val gap: Int? = timelineEndGap(
@@ -617,13 +626,7 @@ private fun FollowTail(state: LazyListState) {
         afterContentPadding = info.afterContentPadding,
         viewportEnd = info.viewportEndOffset,
       )
-      val position: TimelineScrollPosition = TimelineScrollPosition(
-        state.firstVisibleItemIndex,
-        state.firstVisibleItemScrollOffset,
-      )
-      pinned = resolveTimelinePinned(pinned, isTimelineAtEnd(gap, threshold), previous, position)
-      previous = position
-      if (shouldFollowTimelineEnd(pinned, gap)) {
+      if (follow.onLayout(gap, threshold)) {
         state.scrollToItem(info.totalItemsCount - 1, Int.MAX_VALUE)
       }
     }
