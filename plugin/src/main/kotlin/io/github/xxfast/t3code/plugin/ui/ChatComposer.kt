@@ -14,13 +14,19 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -40,6 +46,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.drop
 import org.jetbrains.jewel.foundation.theme.JewelTheme
@@ -111,8 +118,21 @@ fun ChatComposer(
     verticalArrangement = Arrangement.spacedBy(4.dp),
   ) {
     if (state.reviewComments > 0) ReviewBanner(state.reviewComments, onClearReview)
+    // The trigger menu is a drawer over the box, `composerSuggestionsVisible`: not on a request
+    val triggerMenu: ComposerTriggerMenu = rememberComposerTriggerMenu(
+      draft = draft,
+      footer = footer,
+      footerActions = footerActions,
+      enabled = state.enabled && pending == null,
+      running = state.running,
+    )
     // The context strip is a drawer tucked under the box, `ComposerSurface.ContextStrip`
     val strip: WorkspaceControlState? = footer?.workspace?.takeIf { pending == null }
+    ComposerWithMenuDrawer(
+      drawer = triggerMenu.menu?.let { menu ->
+        { ComposerCommandMenu(menu, triggerMenu.activeItemId, triggerMenu.onHighlight) }
+      },
+    ) {
     ComposerWithDrawer(
       drawer = strip?.let { workspace ->
         { ComposerContextStrip(workspace, state.enabled, footerActions) }
@@ -139,6 +159,7 @@ fun ChatComposer(
               attachmentActions = attachmentActions,
               onSend = ::send,
               onFocus = onPromptFocus,
+              onMenuKey = triggerMenu.onKey,
             )
           },
           actions = actions,
@@ -173,6 +194,7 @@ fun ChatComposer(
           }
         }
       }
+    }
     }
     }
     state.disabledReason?.let { reason ->
@@ -220,6 +242,7 @@ private fun ComposerPromptEditor(
   attachmentActions: AttachmentActions,
   onSend: (alternate: Boolean) -> Unit,
   onFocus: () -> Unit,
+  onMenuKey: (KeyEvent) -> Boolean,
   modifier: Modifier = Modifier,
 ) {
   // `onVisibleSelectionChange`: typing or moving the caret unfolds, and so does a click
@@ -234,14 +257,179 @@ private fun ComposerPromptEditor(
       .offset { IntOffset(0, (RESTING_TEXT_INSET.toPx() * (1 - progress())).roundToInt()) }
       .onFocusChanged { if (it.isFocused) onFocus() }
       .attachmentTarget(state.enabled, attachmentActions)
+      // The open menu sees the keys first, as `onComposerCommandKey` does before sending
+      .onPreviewKeyEvent(onMenuKey)
       .composerKeys(draft, state.running, onSend),
     enabled = state.enabled,
     lineLimits = TextFieldLineLimits.MultiLine(),
-    // Upstream's short placeholder (ChatComposer.tsx:6695). The long one offers @tags,
-    // skills and slash commands, which this plugin doesn't have.
+    // Upstream's short placeholder (ChatComposer.tsx:6695). The long one offers @tags, $skills
+    // and / commands, and only `$` has a menu so far (#44 `/`, #45 `@` still to come).
     placeholder = { Text("Ask anything...", color = JewelTheme.globalColors.text.info) },
     undecorated = true,
   )
+}
+
+/** The trigger menu for the prompt, [rememberComposerTriggerMenu]. */
+private class ComposerTriggerMenu(
+  /** What the drawer shows, null while no trigger with a menu is active. */
+  val menu: ComposerMenu?,
+  val activeItemId: String?,
+  val onHighlight: (itemId: String) -> Unit,
+  /** The prompt's preview key handler: true when the menu took the key. */
+  val onKey: (KeyEvent) -> Boolean,
+)
+
+/**
+ * The trigger at the caret and its menu, upstream's `useComposerTriggerState` plus the menu
+ * half of `ChatComposer.tsx`. The text and caret say which trigger is active, Esc dismisses it
+ * until the token changes, and the kind decides the rows: `$` lists the provider's skills for
+ * the thread's cwd (`resolveProviderSkillsForCwd`). `/` (#44), `@` (#45) and `#` (#46) are
+ * detected already and get their rows in [triggerMenuFor].
+ *
+ * Typing and a change of provider, cwd or snapshot ask the host to re-check the workspace
+ * snapshot (`refreshWorkspaceSnapshotOnTyping` and the effect beside it, ChatComposer.tsx:1765).
+ */
+@Composable
+private fun rememberComposerTriggerMenu(
+  draft: TextFieldState,
+  footer: ComposerFooterState?,
+  footerActions: ComposerFooterActions,
+  enabled: Boolean,
+  running: Boolean,
+): ComposerTriggerMenu {
+  val triggers: ComposerTriggerState = remember(draft) { ComposerTriggerState() }
+  var trigger: ComposerTrigger? by remember(draft) { mutableStateOf(null) }
+  var highlightedItemId: String? by remember(draft) { mutableStateOf(null) }
+  var highlightedSearchKey: String? by remember(draft) { mutableStateOf(null) }
+  val refresh: State<() -> Unit> = rememberUpdatedState(footerActions.onRefreshWorkspaceSnapshot)
+  LaunchedEffect(draft) {
+    var lastText: String? = null
+    snapshotFlow { draft.text.toString() to draft.selection }.collect { (text, selection) ->
+      if (lastText != null && text != lastText) refresh.value()
+      lastText = text
+      trigger = triggers.setTrigger(detectComposerTrigger(text, selection.end))
+    }
+  }
+  val provider: ServerProvider? = footer?.provider
+  val cwd: String? = footer?.cwd
+  val hasSnapshot: Boolean = hasCompleteProviderWorkspaceSnapshot(provider, cwd)
+  LaunchedEffect(provider?.instanceId, cwd, hasSnapshot) { refresh.value() }
+
+  // `applyPromptReplacement`, ChatComposer.tsx:3710, for a text field: the token's range, as
+  // long as the text there is still what the trigger saw
+  fun applyPromptReplacement(
+    rangeStart: Int,
+    rangeEnd: Int,
+    replacement: String,
+    expected: String,
+  ) {
+    val current: String = draft.text.toString()
+    val safeStart: Int = rangeStart.coerceIn(0, current.length)
+    val safeEnd: Int = rangeEnd.coerceIn(safeStart, current.length)
+    if (current.substring(safeStart, safeEnd) != expected) return
+    val next: TextReplacement = replaceTextRange(current, rangeStart, rangeEnd, replacement)
+    draft.edit {
+      replace(safeStart, safeEnd, replacement)
+      selection = TextRange(next.cursor)
+    }
+    highlightedItemId = null
+  }
+
+  fun pick(active: ComposerTrigger, replacement: String) {
+    val text: String = draft.text.toString()
+    val end: Int = extendReplacementRangeForTrailingSpace(text, active.rangeEnd, replacement)
+    val expected: String = text.substring(active.rangeStart.coerceIn(0, text.length), end)
+    applyPromptReplacement(active.rangeStart, end, replacement, expected)
+  }
+
+  val active: ComposerTrigger? = trigger.takeIf { enabled }
+  val menu: ComposerMenu? = remember(active, provider, cwd) {
+    active?.let { triggerMenuFor(it, provider, cwd, ::pick) }
+  }
+  val searchKey: String? = active?.let(::composerMenuSearchKey)
+  val itemIds: List<String> = menu?.items?.map { it.id }.orEmpty()
+  val activeItemId: String? =
+    resolveComposerMenuActiveItemId(itemIds, highlightedItemId, searchKey, highlightedSearchKey)
+
+  fun highlight(itemId: String?) {
+    highlightedItemId = itemId
+    highlightedSearchKey = searchKey
+  }
+
+  val onKey: (KeyEvent) -> Boolean = onKey@{ event ->
+    if (menu == null) return@onKey false
+    val input: ComposerMenuInput = when (event.key) {
+      Key.Escape -> ComposerMenuInput.ESCAPE
+      Key.DirectionUp -> ComposerMenuInput.UP
+      Key.DirectionDown -> ComposerMenuInput.DOWN
+      Key.Enter, Key.NumPadEnter -> ComposerMenuInput.ENTER
+      Key.Tab -> ComposerMenuInput.TAB
+      else -> return@onKey false
+    }
+    val keyDown: Boolean = event.type == KeyEventType.KeyDown
+    val submission: ComposerKey = composerKey(
+      enter = input == ComposerMenuInput.ENTER,
+      keyDown = keyDown,
+      shift = event.isShiftPressed,
+      alt = event.isAltPressed,
+      ctrl = event.isCtrlPressed,
+      meta = event.isMetaPressed,
+      running = running,
+    )
+    val action: ComposerMenuKey = composerMenuKey(
+      key = input,
+      keyDown = keyDown,
+      shift = event.isShiftPressed,
+      submission = submission,
+      hasItems = itemIds.isNotEmpty(),
+    )
+    when (action) {
+      ComposerMenuKey.DISMISS -> {
+        triggers.dismissTrigger(active)
+        trigger = null
+      }
+
+      ComposerMenuKey.NEXT -> highlight(nudgeComposerMenuHighlight(itemIds, activeItemId, true))
+
+      ComposerMenuKey.PREVIOUS ->
+        highlight(nudgeComposerMenuHighlight(itemIds, activeItemId, false))
+
+      // `activeComposerMenuItemRef.current ?? currentItems[0]`
+      ComposerMenuKey.PICK ->
+        (menu.items.find { it.id == activeItemId } ?: menu.items.first()).onPick()
+
+      ComposerMenuKey.IGNORE -> return@onKey false
+    }
+    true
+  }
+  return ComposerTriggerMenu(menu, activeItemId, ::highlight, onKey)
+}
+
+/**
+ * The rows for [trigger], `composerMenuItems` (ChatComposer.tsx:2690), or null for a kind that
+ * has no menu yet. [pick] replaces the trigger's token.
+ */
+private fun triggerMenuFor(
+  trigger: ComposerTrigger,
+  provider: ServerProvider?,
+  cwd: String?,
+  pick: (ComposerTrigger, replacement: String) -> Unit,
+): ComposerMenu? = when (trigger.kind) {
+  ComposerTriggerKind.SKILL -> ComposerMenu(
+    kind = trigger.kind,
+    items = skillMenuItems(
+      skills = provider?.let { resolveProviderSkillsForCwd(it, cwd) }.orEmpty(),
+      query = trigger.query,
+      provider = provider?.instanceId.orEmpty(),
+      onPick = { skill -> pick(trigger, skillReplacement(skill)) },
+    ),
+    emptyStateText = SKILL_MENU_EMPTY_TEXT,
+  )
+
+  ComposerTriggerKind.SLASH_COMMAND,
+  ComposerTriggerKind.PATH,
+  ComposerTriggerKind.PULL_REQUEST,
+  -> null
 }
 
 /** How far a resting prompt's one line sits from the row's top to look centred in 32dp. */

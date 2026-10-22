@@ -145,9 +145,12 @@ class ModelPickerContentLogicTest {
     assertEquals(3 * 2 + 2, scoreSubsequenceMatch("g-p-t", "gpt", ignorePosition = true))
     assertEquals(10, scoreQueryMatch("opus", "opus", 10, 12, 14, 16, 110, ignorePosition = true))
     assertEquals(12, scoreQueryMatch("opus 4", "opus", 10, 12, 14, 16, 110, ignorePosition = true))
-    assertEquals(14, scoreQueryMatch("claude opus", "opus", 10, 12, 14, 16, 110, true))
-    assertEquals(16, scoreQueryMatch("xopus", "opus", 10, 12, 14, 16, 110, true))
-    assertNull(scoreQueryMatch("xopus", "zzz", 10, 12, 14, 16, null, true))
+    assertEquals(
+      14,
+      scoreQueryMatch("claude opus", "opus", 10, 12, 14, 16, 110, ignorePosition = true),
+    )
+    assertEquals(16, scoreQueryMatch("xopus", "opus", 10, 12, 14, 16, 110, ignorePosition = true))
+    assertNull(scoreQueryMatch("xopus", "zzz", 10, 12, 14, 16, null, ignorePosition = true))
   }
 
   @Test

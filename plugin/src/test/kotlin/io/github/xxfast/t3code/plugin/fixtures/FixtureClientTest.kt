@@ -8,6 +8,10 @@ import io.github.xxfast.t3code.plugin.ui.answerLines
 import io.github.xxfast.t3code.plugin.ui.answersResponse
 import io.github.xxfast.t3code.plugin.ui.derivePendingThreadRequests
 import io.github.xxfast.t3code.plugin.ui.dismissal
+import io.github.xxfast.t3code.plugin.ui.hasCompleteProviderWorkspaceSnapshot
+import io.github.xxfast.t3code.plugin.ui.hasCurrentProviderWorkspaceSnapshot
+import io.github.xxfast.t3code.plugin.ui.resolveProviderSkillsForCwd
+import io.github.xxfast.t3code.plugin.ui.searchProviderSkills
 import io.github.xxfast.t3code.plugin.ui.instance
 import io.github.xxfast.t3code.plugin.ui.isImageAttachment
 import io.github.xxfast.t3code.plugin.ui.settled
@@ -528,6 +532,32 @@ class FixtureClientTest {
     assertEquals("claude", after.thread.modelSelection.instance)
     assertEquals("opus", after.thread.modelSelection.slug)
     assertEquals("claude", after.thread.providerInstanceId, "The row moves to the instance")
+  }
+
+  @Test
+  fun `default gives codex skills and a stale KStore snapshot that a refresh stamps`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { it.isNotEmpty() }
+    val kstore = "/Users/xxfast/Developer/XXFAST/KMP/KStore"
+    val codex: ServerProvider = client.serverInfo().providers.first { it.instanceId == "codex" }
+    assertTrue(codex.skills.orEmpty().isNotEmpty())
+    val skills: List<String> =
+      searchProviderSkills(resolveProviderSkillsForCwd(codex, kstore), "").map { it.name }
+    assertEquals(listOf("release-kstore", "kmp-targets", "gh-fix-ci", "babysit-pr"), skills)
+    val now: Long = System.currentTimeMillis()
+    assertFalse(hasCurrentProviderWorkspaceSnapshot(codex, kstore, now))
+
+    val refreshed: ServerProvider = withContext(Dispatchers.Default) {
+      client.refreshProviders("codex", kstore)
+    }.first { it.instanceId == "codex" }
+
+    assertTrue(hasCurrentProviderWorkspaceSnapshot(refreshed, kstore, System.currentTimeMillis()))
+    assertEquals(
+      skills,
+      searchProviderSkills(resolveProviderSkillsForCwd(refreshed, kstore), "").map { it.name },
+    )
+    val again: ServerProvider = client.serverInfo().providers.first { it.instanceId == "codex" }
+    assertTrue(hasCompleteProviderWorkspaceSnapshot(again, kstore))
   }
 
   @Test

@@ -44,6 +44,12 @@ class ComposerFooterActions(
   val onPickRef: (VcsRef) -> Unit = {},
   /** A branch typed that doesn't exist yet, `createRef`. */
   val onCreateRef: (name: String) -> Unit = {},
+  /**
+   * Re-check the provider's workspace snapshot for the thread's cwd, upstream's
+   * `refreshWorkspaceSnapshotIfStale`: on a change of scope and on typing. The host decides
+   * whether a `server.refreshProviders` is due.
+   */
+  val onRefreshWorkspaceSnapshot: () -> Unit = {},
 )
 
 /**

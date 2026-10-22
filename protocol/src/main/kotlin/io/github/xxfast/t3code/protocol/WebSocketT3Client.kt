@@ -315,6 +315,24 @@ public class WebSocketT3Client internal constructor(
     return fresh
   }
 
+  override suspend fun refreshProviders(instanceId: String?, cwd: String?): List<ServerProvider> {
+    val rpc: RpcConnection = active.value ?: throw T3Exception.Transport("Not connected")
+    // An inline struct upstream (contracts/src/rpc.ts:608), every field optional
+    val payload: JsonObject = buildJsonObject {
+      if (instanceId != null) put("instanceId", instanceId)
+      if (cwd != null) put("cwd", cwd)
+    }
+    val result: JsonObject = call("server.refreshProviders", payload, rpc) as? JsonObject
+      ?: throw T3Exception.Transport("No providers from server.refreshProviders")
+    val providers: List<ServerProvider> =
+      decodeEach(ServerProvider.serializer(), result["providers"])
+    // A later [serverInfo] on this connection answers with the refreshed providers
+    info?.takeIf { (connection, _) -> connection === rpc }?.let { (_, cached) ->
+      info = rpc to cached.copy(providers = providers)
+    }
+    return providers
+  }
+
   override suspend fun turnDiff(threadId: String, fromTurn: Long, toTurn: Long): String {
     val payload: JsonObject = buildJsonObject {
       put("threadId", threadId)

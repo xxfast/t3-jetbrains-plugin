@@ -4,6 +4,7 @@ import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
+import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TerminalMetadataStreamEvent
@@ -178,6 +179,14 @@ public interface T3Client {
 
   /** `server.getConfig`, the parts the plugin uses. Cached per connection. */
   public suspend fun serverInfo(): ServerInfo
+
+  /**
+   * `server.refreshProviders` (packages/contracts/src/rpc.ts:608, scope `orchestration:read`):
+   * rescans [instanceId]'s provider, and with a [cwd] its workspace snapshot there (skills and
+   * slash commands). Answers every provider as it stands after, and [serverInfo] on the same
+   * connection follows.
+   */
+  public suspend fun refreshProviders(instanceId: String?, cwd: String?): List<ServerProvider>
 
   /** Start, or start over. Safe to call in any state. */
   public fun connect()

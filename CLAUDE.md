@@ -51,7 +51,8 @@ How it fits together:
   `default/` is the thread list plus one demo thread per thread-level state (`running.json`,
   `waiting-approval.json`, `waiting-question.json`, `unknown-items.json`, `many-items.json`,
   `unread.json`, `snoozed.json` with one sleeping and one woken, `worktree-setup.json` with a
-  first turn whose worktree is still being prepared), and its `connection.json` grants the
+  first turn whose worktree is still being prepared, `skills.json` with provider skills and a
+  workspace snapshot for the `$` menu), and its `connection.json` grants the
   operate and terminal scopes so every action is live. `disconnected/`, `pairing/`, `auth-error/`, `read-only/` (no operate) and
   `empty-server/` cover connection-level states; the ones with threads carry a byte-for-byte copy
   of `default/list.json`. Shapes are the same `:protocol` types the real client decodes, so

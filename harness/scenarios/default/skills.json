@@ -1,0 +1,97 @@
+{
+  "providerSkills": {
+    "codex": [
+      {
+        "name": "gh-fix-ci",
+        "displayName": "Gh Fix Ci",
+        "shortDescription": "Read the failing checks on a PR and fix them",
+        "path": "/Users/xxfast/.codex/skills/gh-fix-ci/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "babysit-pr",
+        "description": "Shepherd a pull request to merge: rebase, wait for CI, squash.",
+        "path": "/Users/xxfast/.codex/skills/babysit-pr/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "babysit-pr",
+        "description": "A second copy under .agents, hidden by the dedupe.",
+        "path": "/Users/xxfast/.agents/skills/babysit-pr/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "agent-browser",
+        "shortDescription": "Drive a headless browser",
+        "path": "/Users/xxfast/.codex/plugins/browser/skills/agent-browser/SKILL.md",
+        "enabled": true
+      },
+      {
+        "name": "skill-creator",
+        "description": "Write a new skill from a description.",
+        "path": "/opt/codex/skills/.system/skill-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "imagegen",
+        "description": "Switched off in Codex's settings, so it never lists.",
+        "path": "/Users/xxfast/.codex/skills/imagegen/SKILL.md",
+        "scope": "user",
+        "enabled": false
+      },
+      {
+        "name": "memory-sweep",
+        "description": "Only the agent may start this one, so it never lists.",
+        "path": "/Users/xxfast/.codex/skills/memory-sweep/SKILL.md",
+        "scope": "user",
+        "enabled": true,
+        "userInvocable": false
+      }
+    ]
+  },
+  "providerWorkspaceSnapshots": {
+    "codex": [
+      {
+        "cwd": "/Users/xxfast/Developer/XXFAST/KMP/KStore",
+        "checkedAt": "2026-10-19T06:00:00.000Z",
+        "slashCommands": [],
+        "skills": [
+          {
+            "name": "release-kstore",
+            "displayName": "Release KStore",
+            "shortDescription": "Bump the version, tag and publish to Maven Central",
+            "path": "/Users/xxfast/Developer/XXFAST/KMP/KStore/.codex/skills/release-kstore/SKILL.md",
+            "scope": "repo",
+            "enabled": true
+          },
+          {
+            "name": "kmp-targets",
+            "description": "Check every Kotlin Multiplatform target still builds.",
+            "path": "/Users/xxfast/Developer/XXFAST/KMP/KStore/.agents/skills/kmp-targets/SKILL.md",
+            "scope": "project",
+            "enabled": true
+          },
+          {
+            "name": "gh-fix-ci",
+            "displayName": "Gh Fix Ci",
+            "shortDescription": "Read the failing checks on a PR and fix them",
+            "path": "/Users/xxfast/.codex/skills/gh-fix-ci/SKILL.md",
+            "scope": "user",
+            "enabled": true
+          },
+          {
+            "name": "babysit-pr",
+            "description": "Shepherd a pull request to merge: rebase, wait for CI, squash.",
+            "path": "/Users/xxfast/.codex/skills/babysit-pr/SKILL.md",
+            "scope": "user",
+            "enabled": true
+          }
+        ]
+      }
+    ]
+  }
+}

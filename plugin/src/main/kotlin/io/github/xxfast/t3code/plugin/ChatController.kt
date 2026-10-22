@@ -16,6 +16,9 @@ import io.github.xxfast.t3code.plugin.ui.ComposerDispatchMode
 import io.github.xxfast.t3code.plugin.ui.DraftAttachment
 import io.github.xxfast.t3code.plugin.ui.DraftExtras
 import io.github.xxfast.t3code.plugin.ui.PASTED_IMAGE_NAME
+import io.github.xxfast.t3code.plugin.ui.ProviderWorkspaceSnapshotRefresh
+import io.github.xxfast.t3code.plugin.ui.hasCompleteProviderWorkspaceSnapshot
+import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.plugin.ui.ReviewCommentContext
 import io.github.xxfast.t3code.plugin.ui.BranchSelectionTarget
 import io.github.xxfast.t3code.plugin.ui.WorkspaceDraft
@@ -458,6 +461,37 @@ class ChatController(private val project: Project, private val scope: CoroutineS
   /** The connection went: the next one gets its own catalog. */
   fun dropCatalog() {
     _catalog.value = null
+  }
+
+  private val snapshotRefresh = ProviderWorkspaceSnapshotRefresh()
+
+  /**
+   * `refreshWorkspaceSnapshotIfStale`, ChatComposer.tsx:1716: asks `server.refreshProviders`
+   * for [instanceId]'s workspace snapshot at [cwd] when [ProviderWorkspaceSnapshotRefresh] says
+   * one is due, and takes the answer as the catalog's providers. No snapshot back, or a
+   * failure, waits out the cooldown before the next try. Failures stay quiet, as upstream's
+   * `reportFailure: false`.
+   */
+  fun refreshWorkspaceSnapshotIfStale(instanceId: String?, cwd: String?) {
+    val provider: ServerProvider? =
+      _catalog.value?.providers?.find { it.instanceId == instanceId }
+    val request: ProviderWorkspaceSnapshotRefresh.Request =
+      snapshotRefresh.begin(provider, instanceId, cwd, System.currentTimeMillis()) ?: return
+    scope.launch {
+      val providers: List<ServerProvider>? = try {
+        client.refreshProviders(instanceId, cwd)
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        LOG.info("Couldn't refresh $instanceId's workspace snapshot at $cwd", e)
+        null
+      }
+      if (providers != null) _catalog.update { info -> info?.copy(providers = providers) }
+      val refreshed: ServerProvider? = providers?.find { it.instanceId == instanceId }
+      if (!hasCompleteProviderWorkspaceSnapshot(refreshed, cwd)) {
+        snapshotRefresh.retryLater(request, System.currentTimeMillis())
+      }
+    }
   }
 
   /**

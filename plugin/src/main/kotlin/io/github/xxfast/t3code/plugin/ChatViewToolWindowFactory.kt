@@ -537,7 +537,7 @@ private fun rememberComposerFooter(
       selection = selection,
       reported = view?.let(::deriveReportedModelSelection),
       favorites = favorites,
-    ).copy(workspace = workspace)
+    ).copy(workspace = workspace, cwd = cwd)
   }
 
   fun commandId(): String = UUID.randomUUID().toString()
@@ -578,6 +578,10 @@ private fun rememberComposerFooter(
   }
 
   val actions = ComposerFooterActions(
+    // `useProviderWorkspaceSnapshotRefresh` on the selected provider instance and `gitCwd`
+    onRefreshWorkspaceSnapshot = {
+      controller.refreshWorkspaceSnapshotIfStale(footer?.provider?.instanceId, cwd)
+    },
     onOpenModelPicker = onOpenModelPicker@{
       val current: ThreadView = view ?: return@onOpenModelPicker
       val state: ComposerFooterState = footer ?: return@onOpenModelPicker

@@ -385,6 +385,8 @@ data class ComposerFooterState(
   val favorites: Set<String> = emptySet(),
   /** The Workspace and base branch controls, upstream's `BranchToolbar`; null off a git repo. */
   val workspace: WorkspaceControlState? = null,
+  /** The thread's checkout, upstream's `gitCwd`: whose workspace snapshot the `$` menu reads. */
+  val cwd: String? = null,
 )
 
 /**

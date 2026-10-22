@@ -142,65 +142,8 @@ fun getProviderRowLabel(providerDisplayName: String, subProvider: String?): Stri
   return "$providerDisplayName · $sub"
 }
 
-// Search, `packages/shared/src/searchRanking.ts` and `modelPickerSearch.ts`. Lower scores rank
-// first; null is no match.
-
-/** `normalizeSearchQuery`: trimmed and lowercased. */
-fun normalizeSearchQuery(input: String): String = input.trim().lowercase()
-
-/** `scoreSubsequenceMatch`: the query's characters in order, penalised for the gaps between. */
-internal fun scoreSubsequenceMatch(value: String, query: String, ignorePosition: Boolean): Int? {
-  if (query.isEmpty()) return 0
-  var queryIndex = 0
-  var firstMatch = -1
-  var previousMatch = -1
-  var gapPenalty = 0
-  value.forEachIndexed { index, char ->
-    if (char != query[queryIndex]) return@forEachIndexed
-    if (firstMatch == -1) firstMatch = index
-    if (previousMatch != -1) gapPenalty += index - previousMatch - 1
-    previousMatch = index
-    queryIndex++
-    if (queryIndex == query.length) {
-      val spanPenalty: Int = index - firstMatch + 1 - query.length
-      if (ignorePosition) return gapPenalty * 3 + spanPenalty
-      val lengthPenalty: Int = minOf(64, value.length - query.length)
-      return firstMatch * 2 + gapPenalty * 3 + spanPenalty + lengthPenalty
-    }
-  }
-  return null
-}
-
-private val BOUNDARY_MARKERS: List<String> = listOf(" ", "-", "_", "/")
-
-/** `scoreQueryMatch` on normalised inputs: exact, then prefix, word boundary, substring, fuzzy. */
-internal fun scoreQueryMatch(
-  value: String,
-  query: String,
-  exactBase: Int,
-  prefixBase: Int,
-  boundaryBase: Int,
-  includesBase: Int,
-  fuzzyBase: Int?,
-  ignorePosition: Boolean,
-): Int? {
-  if (value.isEmpty() || query.isEmpty()) return null
-  val penalty: Int = if (ignorePosition) 0 else minOf(64, maxOf(0, value.length - query.length))
-  if (value == query) return exactBase
-  if (value.startsWith(query)) return prefixBase + penalty
-  val boundary: Int? = BOUNDARY_MARKERS
-    .mapNotNull { marker ->
-      value.indexOf("$marker$query").takeIf { it != -1 }?.plus(marker.length)
-    }
-    .minOrNull()
-  if (boundary != null) return boundaryBase + (if (ignorePosition) 0 else boundary * 2) + penalty
-  val includes: Int = value.indexOf(query)
-  if (includes != -1) return includesBase + (if (ignorePosition) 0 else includes * 2) + penalty
-  if (fuzzyBase != null) {
-    scoreSubsequenceMatch(value, query, ignorePosition)?.let { return fuzzyBase + it }
-  }
-  return null
-}
+// Search, `modelPickerSearch.ts`, on the helpers in SearchRanking.kt. Lower scores rank first;
+// null is no match.
 
 private const val FAVORITE_SCORE_BOOST: Int = 24
 private const val EXACT_NAME_SCORE: Int = -1000

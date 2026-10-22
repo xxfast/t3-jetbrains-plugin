@@ -11,6 +11,8 @@ import io.github.xxfast.t3code.protocol.ServerSession
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.generated.ServerAuthDescriptor
+import io.github.xxfast.t3code.protocol.generated.ServerProviderSkill
+import io.github.xxfast.t3code.protocol.generated.ServerProviderWorkspaceSnapshot
 import io.github.xxfast.t3code.protocol.generated.TerminalSummary
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
@@ -34,6 +36,10 @@ class ScenarioFile(
   val terminals: List<TerminalSummary> = emptyList(),
   /** A worktree setup in flight per thread, what `subscribeWorktreeSetup` answers at once. */
   val worktreeSetups: Map<String, WorktreeSetupSnapshot> = emptyMap(),
+  /** The machine's skills per provider instance, `ServerProvider.skills`. */
+  val providerSkills: Map<String, List<ServerProviderSkill>> = emptyMap(),
+  /** Workspace snapshots per provider instance, `ServerProvider.workspaceSnapshots`. */
+  val providerWorkspaceSnapshots: Map<String, List<ServerProviderWorkspaceSnapshot>> = emptyMap(),
 )
 
 @Serializable
@@ -63,6 +69,8 @@ class Scenario(
   val providerThreads: Map<String, List<ProviderThread>> = emptyMap(),
   val terminals: List<TerminalSummary> = emptyList(), // what `subscribeTerminalMetadata` lists
   val worktreeSetups: Map<String, WorktreeSetupSnapshot> = emptyMap(),
+  val providerSkills: Map<String, List<ServerProviderSkill>> = emptyMap(),
+  val providerWorkspaceSnapshots: Map<String, List<ServerProviderWorkspaceSnapshot>> = emptyMap(),
 ) {
   companion object {
     fun decode(text: String): Scenario {
@@ -79,6 +87,8 @@ class Scenario(
         providerThreads = file.providerThreads,
         terminals = file.terminals,
         worktreeSetups = file.worktreeSetups,
+        providerSkills = file.providerSkills,
+        providerWorkspaceSnapshots = file.providerWorkspaceSnapshots,
       )
     }
 
@@ -101,6 +111,9 @@ class Scenario(
       providerThreads = parts.map { it.providerThreads }.fold(emptyMap(), ::append),
       terminals = parts.flatMap { it.terminals }.distinctBy { it.threadId to it.terminalId },
       worktreeSetups = parts.map { it.worktreeSetups }.fold(emptyMap()) { into, from -> from + into },
+      providerSkills = parts.map { it.providerSkills }.fold(emptyMap(), ::append),
+      providerWorkspaceSnapshots =
+        parts.map { it.providerWorkspaceSnapshots }.fold(emptyMap(), ::append),
     )
 
     fun failed(name: String, message: String): Scenario = Scenario(

@@ -38,6 +38,7 @@ import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.ServerProviderAuth
 import io.github.xxfast.t3code.protocol.generated.ServerProviderModel
 import io.github.xxfast.t3code.protocol.generated.ServerProviderSlashCommand
+import io.github.xxfast.t3code.protocol.generated.ServerProviderWorkspaceSnapshot
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TerminalMetadataStreamEvent
@@ -130,6 +131,10 @@ class FixtureClient(
 
   /** What [upload] received, by attachment id, so a sent image shows in the timeline. */
   private val uploaded: ConcurrentHashMap<String, ByteArray> = ConcurrentHashMap()
+
+  /** Workspace snapshots [refreshProviders] stamped, by provider instance then cwd. */
+  private val refreshedSnapshots:
+    ConcurrentHashMap<String, Map<String, ServerProviderWorkspaceSnapshot>> = ConcurrentHashMap()
 
   /** The fake assistant replies in flight, by thread id, so an interrupt can stop one. */
   private val replies: ConcurrentHashMap<String, Job> = ConcurrentHashMap()
@@ -1073,7 +1078,47 @@ class FixtureClient(
     ),
     environmentLabel = "Fixture MacBook",
     machine = "laptop",
-  )
+  ).let { info -> info.copy(providers = info.providers.map(::withSkills)) }
+
+  /**
+   * [provider] with the scenario's `providerSkills` and `providerWorkspaceSnapshots` for it,
+   * and the snapshots [refreshProviders] took since the directory loaded on top, by cwd.
+   */
+  private fun withSkills(provider: ServerProvider): ServerProvider {
+    val scenario: Scenario = loaded.value ?: return provider
+    val scripted: List<ServerProviderWorkspaceSnapshot> =
+      scenario.providerWorkspaceSnapshots[provider.instanceId].orEmpty()
+    val refreshed: Map<String, ServerProviderWorkspaceSnapshot> =
+      refreshedSnapshots[provider.instanceId].orEmpty()
+    val snapshots: List<ServerProviderWorkspaceSnapshot> =
+      scripted.map { snapshot -> refreshed[snapshot.cwd] ?: snapshot } +
+        refreshed.values.filter { snapshot -> scripted.none { it.cwd == snapshot.cwd } }
+    return provider.copy(
+      skills = scenario.providerSkills[provider.instanceId] ?: provider.skills,
+      workspaceSnapshots = snapshots,
+    )
+  }
+
+  /**
+   * After a short scan, stamps the snapshot for [cwd] as checked now: the scenario's skills for
+   * it, or the machine's for a cwd the scenario has no snapshot for.
+   */
+  override suspend fun refreshProviders(instanceId: String?, cwd: String?): List<ServerProvider> {
+    delay(PROVIDER_SCAN_MILLIS)
+    if (instanceId != null && cwd != null) {
+      val current: ServerProvider? = serverInfo().providers.find { it.instanceId == instanceId }
+      val existing: ServerProviderWorkspaceSnapshot? =
+        current?.workspaceSnapshots?.find { it.cwd == cwd }
+      val snapshot = ServerProviderWorkspaceSnapshot(
+        cwd = cwd,
+        checkedAt = Instant.now().toString(),
+        slashCommands = existing?.slashCommands ?: current?.slashCommands.orEmpty(),
+        skills = existing?.skills ?: current?.skills.orEmpty(),
+      )
+      refreshedSnapshots.compute(instanceId) { _, byCwd -> byCwd.orEmpty() + (cwd to snapshot) }
+    }
+    return serverInfo().providers
+  }
 
   override fun connect() {
     online.value = true
@@ -1101,6 +1146,7 @@ class FixtureClient(
     replies.clear()
     // The sequence only moves forward, or a sent message waiting on it would never retire
     overlay.value = Overlay(sequence = sequence.get())
+    refreshedSnapshots.clear()
     loaded.value = load(files)
   }
 
@@ -1118,6 +1164,9 @@ class FixtureClient(
 }
 
 private const val REPLY_STEP_MILLIS: Long = 600
+
+/** How long the fixture's provider rescan takes. */
+private const val PROVIDER_SCAN_MILLIS: Long = 400
 
 /** How long the fixture keeps a finished worktree setup before answering null. */
 private const val SETUP_GRACE_MILLIS: Long = 30_000
