@@ -30,7 +30,7 @@
       id="T3 Thread Details"
       anchor="right"
       doNotActivateOnStart="true"
-      icon="AllIcons.Toolwindows.ToolWindowHierarchy"
+      icon="/icons/t3ThreadDetails.svg"
       factoryClass="io.github.xxfast.t3code.plugin.ThreadDetailsToolWindowFactory"/>
     <fileEditorProvider
       implementation="io.github.xxfast.t3code.plugin.ide.ThreadFileEditorProvider"/>
