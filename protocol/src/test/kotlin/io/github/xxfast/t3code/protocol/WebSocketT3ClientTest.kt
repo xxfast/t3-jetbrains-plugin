@@ -78,6 +78,8 @@ class WebSocketT3ClientTest {
   fun threadFlowAppliesTurnItemUpdates() = realTimeTest {
     val client: WebSocketT3Client = client()
     client.connect()
+    // The shell has to list the thread first, else there's no shell status to carry over
+    client.threads.first { threads -> threads.any { it.id == "thread-1" } }
     val (snapshot: ThreadView, updated: ThreadView) = client.thread("thread-1").take(2).toList()
 
     assertEquals(listOf("item-1", "item-2", "item-3", "item-4"), snapshot.items.map { it.id })
