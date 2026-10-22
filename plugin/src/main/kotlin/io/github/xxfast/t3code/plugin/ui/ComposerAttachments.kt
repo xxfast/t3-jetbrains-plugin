@@ -37,6 +37,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.ui.awt.RelativePoint
 import io.github.xxfast.t3code.plugin.actions.T3DataKeys
 import java.awt.Image
 import java.awt.datatransfer.DataFlavor
@@ -68,6 +69,8 @@ class AttachmentActions(
   val onOpenAttachment: (id: String) -> Unit = {}, // an image tile's click, the full image
   val onRemoveContext: (contextId: String) -> Unit = {},
   val onRefused: (reason: String) -> Unit = {},
+  val onStash: (at: RelativePoint) -> Unit = {}, // the stash shortcut, `StashPromptAction`
+  val onOpenStash: (at: RelativePoint) -> Unit = {}, // the Stash badge's click
 )
 
 /**

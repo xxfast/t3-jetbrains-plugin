@@ -47,7 +47,9 @@ import io.github.xxfast.t3code.plugin.ui.ComposerFooterActions
 import io.github.xxfast.t3code.plugin.ui.ComposerFooterState
 import io.github.xxfast.t3code.plugin.ui.ComposerState
 import io.github.xxfast.t3code.plugin.ui.ContextWindowSnapshot
+import io.github.xxfast.t3code.plugin.settings.ComposerDrafts
 import io.github.xxfast.t3code.plugin.ui.DraftExtras
+import io.github.xxfast.t3code.plugin.ui.PromptStashEntry
 import io.github.xxfast.t3code.plugin.ui.LocalMessageImages
 import io.github.xxfast.t3code.plugin.ui.MessageImageState
 import io.github.xxfast.t3code.plugin.ui.BranchSelectionTarget
@@ -170,6 +172,7 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
   val comments: List<ReviewCommentContext> = extras[threadId]?.comments.orEmpty()
   val pending: PendingMessages = outboxes[threadId] ?: PendingMessages()
   val draft: TextFieldState = remember(threadId) { controller.draft(threadId) }
+  val stash: List<PromptStashEntry> by ComposerDrafts.get().stash.collectAsState()
   LaunchedEffect(projects) { ProjectIcons.get().ensure(projects) }
 
   val view: ThreadView? = load.view
@@ -297,6 +300,7 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
       ),
       extras = extras[threadId] ?: DraftExtras(),
       attachmentActions = rememberAttachmentActions(project, threadId, controller),
+      stashCount = stash.size,
       contextWindow = contextWindow,
       worktreeSetup = setup.visible,
       onCancelWorktreeSetup = { controller.cancelWorktreeSetup(threadId) },

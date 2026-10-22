@@ -45,6 +45,8 @@
     <actionPromoter implementation="io.github.xxfast.t3code.plugin.actions.PasteAttachmentPromoter"/>
     <!-- Puts T3Code.UndoThreadAction ahead of $Undo in the Sidebar -->
     <actionPromoter implementation="io.github.xxfast.t3code.plugin.actions.UndoThreadPromoter"/>
+    <!-- Puts T3Code.StashPrompt ahead of SaveAll while the composer has focus -->
+    <actionPromoter implementation="io.github.xxfast.t3code.plugin.actions.StashPromptPromoter"/>
   </extensions>
 
   <actions>
@@ -214,6 +216,14 @@
       text="Paste as T3 attachment"
       description="Attach the files or image on the clipboard to the message"
       use-shortcut-of="$Paste"/>
+
+    <!-- Upstream's composer.stash (mod+s): stash the draft, or restore or open the stash -->
+    <action
+      id="T3Code.StashPrompt"
+      class="io.github.xxfast.t3code.plugin.actions.StashPromptAction"
+      text="Stash T3 prompt"
+      description="Stash the composer's draft, or restore a stashed prompt when it's empty"
+      use-shortcut-of="SaveAll"/>
 
     <!-- The editor selection as context on the selected thread's draft -->
     <action

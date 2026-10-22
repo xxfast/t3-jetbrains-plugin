@@ -24,5 +24,9 @@ fun rememberAttachmentActions(
     onOpenAttachment = { id -> controller.openAttachment(threadId, id) },
     onRemoveContext = { contextId -> controller.removeContext(threadId, contextId) },
     onRefused = { reason -> controller.refuse(threadId, reason) },
+    onStash = { at ->
+      if (controller.onStashKey(threadId)) showComposerStash(controller, threadId, at)
+    },
+    onOpenStash = { at -> showComposerStash(controller, threadId, at) },
   )
 }

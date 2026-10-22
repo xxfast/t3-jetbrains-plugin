@@ -86,6 +86,7 @@ fun ChatComposer(
   onPromptFocus: () -> Unit = {},
   onSettledHeight: (Int) -> Unit = {},
   onClearReview: () -> Unit = {},
+  stashCount: Int = 0, // prompts in the stash, for its badge
 ) {
   // [alternate] is Ctrl/Cmd+Enter or Ctrl/Cmd-click while running: the other follow-up behaviour
   fun send(alternate: Boolean) {
@@ -118,6 +119,7 @@ fun ChatComposer(
     verticalArrangement = Arrangement.spacedBy(4.dp),
   ) {
     if (state.reviewComments > 0) ReviewBanner(state.reviewComments, onClearReview)
+    ComposerStashBadge(stashCount, attachmentActions.onOpenStash)
     // The trigger menu is a drawer over the box, `composerSuggestionsVisible`: not on a request
     val triggerMenu: ComposerTriggerMenu = rememberComposerTriggerMenu(
       draft = draft,

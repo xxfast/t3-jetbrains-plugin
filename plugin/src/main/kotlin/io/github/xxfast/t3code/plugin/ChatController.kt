@@ -3,6 +3,24 @@ package io.github.xxfast.t3code.plugin
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.runtime.snapshotFlow
+import io.github.xxfast.t3code.plugin.settings.ComposerDrafts
+import io.github.xxfast.t3code.plugin.ui.PersistedComposerDraft
+import io.github.xxfast.t3code.plugin.ui.PromptStashEntry
+import io.github.xxfast.t3code.plugin.ui.STASH_EVICTED
+import io.github.xxfast.t3code.plugin.ui.StashKey
+import io.github.xxfast.t3code.plugin.ui.Stashed
+import io.github.xxfast.t3code.plugin.ui.composerDraftKey
+import io.github.xxfast.t3code.plugin.ui.hydratedExtras
+import io.github.xxfast.t3code.plugin.ui.persistedDraft
+import io.github.xxfast.t3code.plugin.ui.restoredExtras
+import io.github.xxfast.t3code.plugin.ui.restoredPrompt
+import io.github.xxfast.t3code.plugin.ui.stashEntry
+import io.github.xxfast.t3code.plugin.ui.stashKey
+import io.github.xxfast.t3code.plugin.ui.stashRestoreBlock
+import io.github.xxfast.t3code.plugin.ui.stashed
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -132,9 +150,93 @@ class ChatController(private val project: Project, private val scope: CoroutineS
   /** `server.getConfig` for this connection: providers and their models. Null until it loads. */
   val catalog: StateFlow<ServerInfo?> = _catalog
 
-  /** What's typed for [threadId], kept across hosts and thread switches like upstream's drafts. */
+  /**
+   * What's typed for [threadId], kept across hosts, thread switches and restarts like upstream's
+   * drafts.
+   */
   fun draft(threadId: String): TextFieldState =
-    drafts.computeIfAbsent(threadId) { TextFieldState() }
+    drafts.computeIfAbsent(threadId) { restoreDraft(threadId) }
+
+  // `composerDraftStore`'s persist: the saved draft comes back, and every change to the text,
+  // attachments or context is saved under the server the draft was opened on
+  private fun restoreDraft(threadId: String): TextFieldState {
+    val store: ComposerDrafts = ComposerDrafts.get()
+    val key: String = composerDraftKey(ComposerDrafts.server(), threadId)
+    val saved: PersistedComposerDraft? = store.draft(key)
+    val state = TextFieldState(saved?.prompt.orEmpty())
+    if (saved != null) updateExtras(threadId) { it.restored(hydratedExtras(saved)) }
+    scope.launch {
+      combine(snapshotFlow { state.text.toString() }, _extras) { text, all ->
+        persistedDraft(text, all[threadId] ?: DraftExtras())
+      }
+        .distinctUntilChanged()
+        .collect { draft -> store.put(key, draft) }
+    }
+    return state
+  }
+
+  /**
+   * The stash shortcut on [threadId]'s composer, upstream's `stashCurrentPrompt`. True when the
+   * stash menu should open instead.
+   */
+  fun onStashKey(threadId: String): Boolean {
+    val text: String = draft(threadId).text.toString()
+    val entries: List<PromptStashEntry> = ComposerDrafts.get().stash.value
+    when (val key: StashKey = stashKey(text, extrasOf(threadId), entries)) {
+      StashKey.Stash -> stash(threadId, text)
+      is StashKey.Restore -> restoreStash(threadId, key.entry.id)
+      StashKey.ToggleMenu -> return true
+      is StashKey.Refused -> refuse(threadId, key.reason)
+    }
+    return false
+  }
+
+  private fun stash(threadId: String, text: String) {
+    val store: ComposerDrafts = ComposerDrafts.get()
+    val server: String = ComposerDrafts.server()
+    val entry: PromptStashEntry = stashEntry(
+      id = UUID.randomUUID().toString(),
+      createdAt = System.currentTimeMillis(),
+      server = server,
+      text = text,
+      extras = extrasOf(threadId),
+    )
+    val result: Stashed = stashed(store.stash.value, entry)
+    store.putStash(result.entries)
+    // The entry holds the uploads now: the chips go without releasing them
+    for (attachment in entry.attachments) transfers.remove(attachment.id)
+    draft(threadId).clearText()
+    val notice: String? = result.evicted?.let { STASH_EVICTED }
+    updateExtras(threadId) { DraftExtras(notice = notice) }
+    result.evicted?.let(::releaseStashed)
+  }
+
+  /** `restoreStashEntry`: [entryId] leaves the stash and joins [threadId]'s draft. */
+  fun restoreStash(threadId: String, entryId: String) {
+    val store: ComposerDrafts = ComposerDrafts.get()
+    val entry: PromptStashEntry = store.stash.value.find { it.id == entryId } ?: return
+    stashRestoreBlock(entry, ComposerDrafts.server())?.let { return refuse(threadId, it) }
+    store.putStash(store.stash.value - entry)
+    val state: TextFieldState = draft(threadId)
+    val current: String = state.text.toString()
+    val next: String = restoredPrompt(current, entry.prompt)
+    if (next != current) state.setTextAndPlaceCursorAtEnd(next)
+    updateExtras(threadId) { extras -> restoredExtras(extras, entry) }
+  }
+
+  /** `deleteStashEntry`: gone, and its uploads released. */
+  fun deleteStash(entryId: String) {
+    val store: ComposerDrafts = ComposerDrafts.get()
+    val entry: PromptStashEntry = store.stash.value.find { it.id == entryId } ?: return
+    store.putStash(store.stash.value - entry)
+    releaseStashed(entry)
+  }
+
+  // `releasePersistedAttachmentUpload`, only on the server that holds them
+  private fun releaseStashed(entry: PromptStashEntry) {
+    if (entry.server != ComposerDrafts.server()) return
+    entry.attachments.mapNotNull { it.attachmentId }.forEach(::release)
+  }
 
   private val _extras: MutableStateFlow<Map<String, DraftExtras>> = MutableStateFlow(emptyMap())
 
@@ -155,6 +257,7 @@ class ChatController(private val project: Project, private val scope: CoroutineS
 
   /** Adds [comment], an editor selection or a diff review comment, to [threadId]'s draft. */
   fun addContext(threadId: String, comment: ReviewCommentContext) {
+    draft(threadId) // the saved draft first, so this joins it rather than replacing it
     updateExtras(threadId) { extras -> extras.withComment(comment) }
   }
 

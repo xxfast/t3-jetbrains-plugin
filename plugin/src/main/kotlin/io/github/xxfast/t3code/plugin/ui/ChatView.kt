@@ -143,6 +143,7 @@ fun ChatView(
   onCancelWorktreeSetup: (() -> Unit)? = null, // the card's Cancel, null when it can't
   onOpenSetupTerminal: ((terminalId: String) -> Unit)? = null, // the setup script's terminal
   header: ChatHeaderActions = ChatHeaderActions(), // the title's menu, rename and new thread
+  stashCount: Int = 0, // prompts in the composer's stash
 ) {
   val threadId: String? = view?.thread?.id
   val timeline: LazyListState = remember(threadId) { LazyListState() }
@@ -227,6 +228,7 @@ fun ChatView(
           extras = extras,
           attachmentActions = attachmentActions,
           contextWindow = contextWindow,
+          stashCount = stashCount,
           resting = resting,
           onPromptFocus = { scrollCollapse.expandForEditor(System.currentTimeMillis()) },
           onSettledHeight = { height ->

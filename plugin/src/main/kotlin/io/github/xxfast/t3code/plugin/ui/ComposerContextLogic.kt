@@ -4,6 +4,7 @@ import io.github.xxfast.t3code.plugin.ide.isUnder
 import io.github.xxfast.t3code.protocol.generated.MessageContext
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -46,6 +47,7 @@ private val CONTEXT_LINK_AND_SPACE: Regex = Regex("${CONTEXT_LINK.pattern} ?")
 private val DIFF_RANGE: Regex = Regex("^([+-])(\\d+)(?: to \\1(\\d+))?$")
 
 /** Upstream's `ReviewCommentContext`, apps/web/src/reviewCommentContext.ts. */
+@Serializable
 data class ReviewCommentContext(
   val id: String,
   val sectionId: String,
