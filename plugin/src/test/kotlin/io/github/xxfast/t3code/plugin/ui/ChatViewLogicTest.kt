@@ -98,6 +98,22 @@ class ChatViewLogicTest {
   }
 
   @Test
+  fun `scroll to end shows once the user leaves the end band`() {
+    val follow = TimelineFollow()
+    assertFalse(follow.onLayout(gap = 0, thresholdPx = 40))
+    assertTrue(follow.onLayout(gap = 400, thresholdPx = 40)) // streaming past it doesn't count
+    assertFalse(follow.awayFromEnd)
+    follow.onLayout(gap = 0, thresholdPx = 40)
+    follow.cancelForUserNavigation()
+    follow.onLayout(gap = 20, thresholdPx = 40)
+    assertFalse(follow.awayFromEnd) // still inside the band
+    follow.onLayout(gap = 400, thresholdPx = 40)
+    assertTrue(follow.awayFromEnd)
+    follow.scrollToEnd()
+    assertFalse(follow.awayFromEnd)
+  }
+
+  @Test
   fun `only the first prompt is anchored`() {
     val rows: List<TimelineRow> = listOf(prompt("m-1"), prompt("m-2"))
     assertEquals(0, anchoredIndex(rows, "m-1"))

@@ -74,7 +74,10 @@ class TimelineFollow {
   /** `timelineLiveFollowEnabled`: following the end, or anchoring a send. */
   val following: Boolean get() = mode != TimelineScrollMode.FreeScrolling
 
-  private var atEnd: Boolean = true
+  /** `showScrollToBottom`: the user scrolled away and left the end band. */
+  val awayFromEnd: Boolean get() = mode == TimelineScrollMode.FreeScrolling && !atEnd
+
+  private var atEnd: Boolean by mutableStateOf(true)
   private var positioned: String? = null // `positionedTimelineAnchorRef`
 
   /** `cancelTimelineLiveFollowForUserNavigation`: a wheel step or scrollbar drag up. */

@@ -36,6 +36,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -59,6 +60,7 @@ import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -84,7 +86,7 @@ import java.awt.datatransfer.StringSelection
 import java.awt.event.MouseEvent
 import java.time.Instant
 import kotlin.math.roundToInt
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import org.jetbrains.jewel.bridge.toComposeColor
@@ -174,6 +176,8 @@ fun ChatView(
   val collapseEligible: Boolean = !hasMultilinePrompt && !hasExpandedChrome
   // How much of the timeline's bottom the composer covers, in pixels
   var inset: Int by remember(threadId) { mutableIntStateOf(0) }
+  var composerHeight: Int by remember(threadId) { mutableIntStateOf(0) } // its padding left out
+  val scope: CoroutineScope = rememberCoroutineScope()
   val resting: Boolean = shouldUseRestingComposerLayout(
     isScrollCollapsed = scrollCollapse.collapsed,
     timelineOverflows = timeline.canScrollBackward || timeline.canScrollForward,
@@ -226,6 +230,21 @@ fun ChatView(
           }
         }
       }
+      // Upstream's `scrollToEndClearance + 4` above the composer. The queued drawer spans the
+      // lane, so it always sits under the pill, as `resolveScrollToEndClearance` counts it.
+      if (view != null && view.items.isNotEmpty()) {
+        val clearance: Dp = with(LocalDensity.current) { composerHeight.toDp() } + 16.dp
+        ScrollToEndButton(
+          visible = follow.awayFromEnd,
+          onScrollToEnd = {
+            scrollCollapse.restore()
+            follow.scrollToEnd()
+            val end: Int = (timeline.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
+            scope.launch { timeline.animateScrollToItem(end) }
+          },
+          modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = clearance + 4.dp),
+        )
+      }
       if (view != null) {
         val expansionMin: Int = with(LocalDensity.current) {
           COMPOSER_RESTING_EXPANSION_MIN_DP.dp.roundToPx()
@@ -256,6 +275,7 @@ fun ChatView(
           resting = resting,
           onPromptFocus = { scrollCollapse.expandForEditor(System.currentTimeMillis()) },
           onSettledHeight = { height ->
+            composerHeight = height
             inset = resolveComposerTimelineInset(inset, height, resting, expansionMin)
           },
           modifier = Modifier
@@ -739,10 +759,10 @@ private fun TimelineRow.bottomPadding(continuesWorkLog: Boolean): Dp = when (thi
  * Keeps the timeline at its true end, the composer's inset included, while [follow] says so:
  * after every layout, so rows arriving, the last row streaming and the composer growing all
  * follow. Upstream's `maintainScrollAtEnd` with `TIMELINE_MAINTAIN_SCROLL_AT_END`
- * (MessagesTimeline.tsx), and its `_SMOOTH` twin while [animated]: the thread is working. The
- * glide runs on its own, so a layout mid-way doesn't restart it and a wheel step stops it.
+ * (MessagesTimeline.tsx), and its `_SMOOTH` twin while [animated]: the thread is working.
  * Opening a thread lands at its end without one, as `initialScrollAtEnd` does: only a list that
- * has reached its end once glides.
+ * has reached its end once glides. A scroll under way, a glide, "Scroll to end" or the user's,
+ * is left to finish and the end is checked again after it.
  */
 @Composable
 private fun FollowTail(
@@ -757,9 +777,8 @@ private fun FollowTail(
   val currentAnchored: Int? by rememberUpdatedState(anchored)
   val currentAnimated: Boolean by rememberUpdatedState(animated)
   LaunchedEffect(state, follow, threshold) {
-    var glide: Job? = null
     var settled: Boolean = false // reached the end once, so the opening jump is behind it
-    snapshotFlow { state.layoutInfo }.collect { info ->
+    snapshotFlow { state.layoutInfo to state.isScrollInProgress }.collect { (info, scrolling) ->
       val last: LazyListItemInfo? = info.visibleItemsInfo.lastOrNull()
       val gap: Int? = timelineEndGap(
         lastVisibleIndex = last?.index,
@@ -769,13 +788,14 @@ private fun FollowTail(
         viewportEnd = info.viewportEndOffset,
       )
       if (gap != null && gap <= 0) settled = true
-      if (!follow.onLayout(gap, threshold, anchored = currentAnchored != null)) return@collect
+      val follows: Boolean = follow.onLayout(gap, threshold, anchored = currentAnchored != null)
+      if (!follows || scrolling) return@collect
       val end: Int = info.totalItemsCount - 1
       if (!currentAnimated || !settled) {
         state.scrollToItem(end, Int.MAX_VALUE)
-      } else if (glide?.isActive != true) {
+      } else {
         // the last row on screen glides by its gap, else toward it and the next layout finishes
-        glide = launch {
+        launch {
           if (gap != null) state.animateScrollBy(gap.toFloat()) else state.animateScrollToItem(end)
         }
       }
@@ -1530,11 +1550,15 @@ private fun chatMarkdownRenderer(styling: MarkdownStyling): MarkdownBlockRendere
 // The bridge's BlockQuote defaults are GitHub's light colours, fixed, so a quote is grey on grey
 // in a dark theme. Upstream's index.css draws it with a 2px `--contrast-border` line and
 // `--contrast-muted-foreground` text. Keyed on the theme's colours so a theme switch restyles.
+// The bridge's default base is the IDE's label font; the composition's text style carries the
+// editor size (`EditorSizedText`), so it's passed in.
 @Composable
 private fun chatMarkdownStyling(): MarkdownStyling {
   val colors: GlobalColors = JewelTheme.globalColors
-  return remember(colors) {
+  val base: TextStyle = JewelTheme.defaultTextStyle
+  return remember(colors, base) {
     MarkdownStyling.create(
+      baseTextStyle = base,
       blockQuote = MarkdownStyling.BlockQuote.create(
         lineWidth = 2.dp,
         lineColor = colors.borders.normal,
