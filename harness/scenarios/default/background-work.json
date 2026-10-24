@@ -1,0 +1,268 @@
+{
+  "threads": [
+    {
+      "id": "thr_01JC6B1K0BGWORK01",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Demo: background work",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "claude",
+      "modelSelection": {
+        "instanceId": "claude",
+        "model": "claude-fable-5-1"
+      },
+      "providerInstanceHistory": [
+        "claude"
+      ],
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC6B1K0BGWORK01"
+      },
+      "status": "idle",
+      "branch": "ci-flake",
+      "latestRunId": "run_01JC6B1K1DONE",
+      "activeRunId": null,
+      "activeProviderThreadId": "pth_01JC6B1K0CLAUDE",
+      "itemCount": 5,
+      "visibleItemCount": 5,
+      "hasActionableProposedPlan": false,
+      "pendingBackgroundTasks": [
+        {
+          "taskId": "task_01JC6B1K2CI1",
+          "kind": "command",
+          "description": "Wait for CI on the pushed commit to finish"
+        },
+        {
+          "taskId": "task_01JC6B1K3CI2",
+          "kind": "command",
+          "description": "Wait for CI on the newest commit to land"
+        },
+        {
+          "taskId": "task_01JC6B1K4REVIEW",
+          "kind": "subagent",
+          "description": "Subagent: /root/review/code_reviewer",
+          "providerInstanceId": "claude",
+          "childThreadId": "thr_01JC5L1S0RUNAPP1"
+        }
+      ],
+      "createdAt": "2026-10-24T08:40:00.000Z",
+      "updatedAt": "2026-10-24T08:52:10.000Z"
+    }
+  ],
+  "runs": {
+    "thr_01JC6B1K0BGWORK01": [
+      {
+        "id": "run_01JC6B1K1DONE",
+        "threadId": "thr_01JC6B1K0BGWORK01",
+        "ordinal": 1,
+        "status": "completed",
+        "providerInstanceId": "claude",
+        "modelSelection": {
+          "instanceId": "claude",
+          "model": "claude-fable-5-1"
+        },
+        "providerThreadId": "pth_01JC6B1K0CLAUDE",
+        "userMessageId": "msg_01JC6B1KU1",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-24T08:40:00.000Z",
+        "startedAt": "2026-10-24T08:40:01.000Z",
+        "completedAt": "2026-10-24T08:52:10.000Z",
+        "checkpointId": null,
+        "contextHandoffId": null
+      }
+    ]
+  },
+  "providerSessions": {
+    "thr_01JC6B1K0BGWORK01": [
+      {
+        "id": "psn_01JC6B1K0CLAUDE",
+        "driver": "claude",
+        "providerInstanceId": "claude",
+        "status": "ready",
+        "cwd": "/Users/xxfast/Developer/XXFAST/KMP/KStore",
+        "model": "claude-fable-5-1",
+        "capabilities": {
+          "sessions": {
+            "supportsMultipleProviderThreadsPerSession": false,
+            "supportsModelSwitchInSession": true,
+            "supportsProviderSwitchingViaHandoff": true,
+            "supportsRuntimeModeSwitchInSession": true,
+            "pendingRequestsSurviveRestart": false
+          },
+          "threads": {
+            "canCreateEmptyThread": true,
+            "canReadThreadSnapshot": true,
+            "canRollbackThread": true,
+            "canForkThread": true,
+            "canForkFromTurn": true,
+            "canForkFromSubagentThread": false,
+            "exposesNativeThreadId": true
+          },
+          "turns": {
+            "exposesNativeTurnId": true,
+            "emitsTurnStarted": true,
+            "emitsTurnCompleted": true,
+            "supportsInterrupt": true,
+            "supportsActiveSteering": true,
+            "supportsSteeringByInterruptRestart": false,
+            "supportsQueuedMessages": true,
+            "terminalStatusQuality": "exact"
+          },
+          "streaming": {
+            "streamsAssistantText": true,
+            "streamsReasoning": true,
+            "streamsToolOutput": true,
+            "streamsPlanText": true,
+            "emitsMessageCompleted": true
+          },
+          "tools": {
+            "exposesToolItemIds": true,
+            "emitsToolStarted": true,
+            "emitsToolCompleted": true,
+            "emitsToolOutput": true,
+            "supportsMcpTools": true,
+            "supportsDynamicToolCallbacks": false
+          },
+          "approvals": {
+            "supportsCommandApproval": true,
+            "supportsFileReadApproval": false,
+            "supportsFileChangeApproval": true,
+            "supportsApplyPatchApproval": true,
+            "approvalsHaveNativeRequestIds": true,
+            "approvalCallbacksAreLiveOnly": true,
+            "approvalsCanOriginateFromSubagents": false
+          },
+          "planning": {
+            "emitsPlanUpdated": true,
+            "emitsTodoList": true,
+            "emitsProposedPlan": true,
+            "supportsStructuredQuestions": true,
+            "planDeltasHaveItemIds": true
+          },
+          "subagents": {
+            "supportsSubagents": false,
+            "exposesSubagentThreadIds": false,
+            "emitsSubagentLifecycle": false,
+            "canWaitForSubagents": false,
+            "canCloseSubagents": false,
+            "canForkSubagentThread": false
+          },
+          "context": {
+            "acceptsSystemContext": true,
+            "acceptsDeveloperContext": true,
+            "acceptsSyntheticUserContext": true,
+            "canGenerateSummaries": true,
+            "canConsumeHandoffSummaries": true,
+            "supportsDeltaHandoff": false,
+            "supportsFullThreadHandoff": true,
+            "maxRecommendedHandoffChars": null
+          },
+          "checkpointing": {
+            "appCanCheckpointFilesystem": true,
+            "supportsNestedCheckpointScopes": false,
+            "providerCanRollbackConversation": true,
+            "providerRollbackReturnsSnapshot": false,
+            "providerCanReadConversationSnapshot": true
+          },
+          "identity": {
+            "nativeThreadIds": "stable",
+            "nativeTurnIds": "stable",
+            "nativeItemIds": "stable",
+            "nativeRequestIds": "stable"
+          }
+        },
+        "createdAt": "2026-10-24T08:40:01.000Z",
+        "updatedAt": "2026-10-24T08:52:10.000Z",
+        "lastError": null
+      }
+    ]
+  },
+  "items": {
+    "thr_01JC6B1K0BGWORK01": [
+      {
+        "type": "user_message",
+        "id": "bw-u1",
+        "threadId": "thr_01JC6B1K0BGWORK01",
+        "runId": "run_01JC6B1K1DONE",
+        "ordinal": 1,
+        "status": "completed",
+        "messageId": "msg_01JC6B1KU1",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "Push the CI flake fix, wait for the checks on it and on whatever lands on main after, and get the code reviewer to look at the diff meanwhile.",
+        "startedAt": "2026-10-24T08:40:00.000Z",
+        "completedAt": "2026-10-24T08:40:00.000Z",
+        "updatedAt": "2026-10-24T08:40:00.000Z"
+      },
+      {
+        "type": "command_execution",
+        "id": "bw-c1",
+        "threadId": "thr_01JC6B1K0BGWORK01",
+        "runId": "run_01JC6B1K1DONE",
+        "ordinal": 2,
+        "status": "completed",
+        "title": "Push the fix",
+        "input": "git push origin ci-flake",
+        "output": "To github.com:xxfast/KStore.git\n   3f1c2a9..b7e04d1  ci-flake -> ci-flake",
+        "exitCode": 0,
+        "startedAt": "2026-10-24T08:40:05.000Z",
+        "completedAt": "2026-10-24T08:40:09.000Z",
+        "updatedAt": "2026-10-24T08:40:09.000Z"
+      },
+      {
+        "type": "command_execution",
+        "id": "bw-c2",
+        "threadId": "thr_01JC6B1K0BGWORK01",
+        "runId": "run_01JC6B1K1DONE",
+        "ordinal": 3,
+        "status": "running",
+        "title": "Wait for CI on the pushed commit to finish",
+        "input": "gh run watch --exit-status $(gh run list --branch ci-flake --limit 1 --json databaseId -q '.[0].databaseId')",
+        "nativeItemRef": {
+          "driver": "claude",
+          "nativeId": "task_01JC6B1K2CI1",
+          "strength": "stable"
+        },
+        "startedAt": "2026-10-24T08:40:12.000Z",
+        "updatedAt": "2026-10-24T08:40:12.000Z",
+        "completedAt": null
+      },
+      {
+        "type": "command_execution",
+        "id": "bw-c3",
+        "threadId": "thr_01JC6B1K0BGWORK01",
+        "runId": "run_01JC6B1K1DONE",
+        "ordinal": 4,
+        "status": "running",
+        "title": "Wait for CI on the newest commit to land",
+        "input": "gh run watch --exit-status $(gh run list --branch main --limit 1 --json databaseId -q '.[0].databaseId')",
+        "nativeItemRef": {
+          "driver": "claude",
+          "nativeId": "task_01JC6B1K3CI2",
+          "strength": "stable"
+        },
+        "startedAt": "2026-10-24T08:40:14.000Z",
+        "updatedAt": "2026-10-24T08:40:14.000Z",
+        "completedAt": null
+      },
+      {
+        "type": "assistant_message",
+        "id": "bw-a1",
+        "threadId": "thr_01JC6B1K0BGWORK01",
+        "runId": "run_01JC6B1K1DONE",
+        "ordinal": 5,
+        "status": "completed",
+        "messageId": "msg_01JC6B1KA1",
+        "text": "Pushed `b7e04d1` to `ci-flake`. Two watchers are running, one on that commit's checks and one on the next commit to land on `main`, and the code reviewer is going over the diff in the background. I'll pick up once they report back.",
+        "startedAt": "2026-10-24T08:40:16.000Z",
+        "completedAt": "2026-10-24T08:40:20.000Z",
+        "updatedAt": "2026-10-24T08:40:20.000Z",
+        "streaming": false
+      }
+    ]
+  }
+}

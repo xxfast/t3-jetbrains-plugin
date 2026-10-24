@@ -165,6 +165,8 @@ fun ChatView(
   stashCount: Int = 0, // prompts in the composer's stash
   queue: QueuedRunsState? = null, // the queued messages above the composer
   queueActions: QueuedRunsActions = QueuedRunsActions(),
+  backgroundWork: BackgroundWorkState? = null, // the provider's pending work, above the composer
+  backgroundWorkActions: BackgroundWorkActions = BackgroundWorkActions(),
   mentions: ComposerMentions = ComposerMentions(), // what the composer's `@` and `#` menus read
   memory: TimelineMemory = remember { TimelineMemory() }, // where the timeline was left
   linkFavicons: LinkFaviconSource = NoLinkFavicons, // the favicons in front of external links
@@ -298,7 +300,17 @@ fun ChatView(
           onInterrupt = onInterrupt,
           onSteerQueued = queue?.let { state -> queuedSteerShortcut(state, queueActions) },
           onEditQueued = queue?.let { state -> queuedEditShortcut(state, queueActions) },
-          attachedAbove = queue?.let { state -> { QueuedRunsControl(state, queueActions) } },
+          // `ComposerBannerStack`: the queued drawer (`attachedAbove`) over the front banner
+          attachedAbove = if (queue == null && backgroundWork == null) {
+            null
+          } else {
+            {
+              Column {
+                queue?.let { state -> QueuedRunsControl(state, queueActions) }
+                backgroundWork?.let { state -> BackgroundWorkBanner(state, backgroundWorkActions) }
+              }
+            }
+          },
           extras = extras,
           attachmentActions = attachmentActions,
           contextWindow = contextWindow,

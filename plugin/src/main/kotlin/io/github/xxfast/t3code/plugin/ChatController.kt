@@ -166,6 +166,11 @@ class ChatController(private val project: Project, private val scope: CoroutineS
   /** Threads with a `checkpoint.rollback` still being dispatched. */
   private val rollingBack: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
+  private val _stoppingBackgroundWork: MutableStateFlow<Set<String>> = MutableStateFlow(emptySet())
+
+  /** Threads whose background work banner's Stop is still being dispatched. */
+  val stoppingBackgroundWork: StateFlow<Set<String>> = _stoppingBackgroundWork
+
   private val _catalog: MutableStateFlow<ServerInfo?> = MutableStateFlow(null)
 
   /** `server.getConfig` for this connection: providers and their models. Null until it loads. */
@@ -773,6 +778,30 @@ class ChatController(private val project: Project, private val scope: CoroutineS
           val error = "Couldn't change it: $reason"
           pending.copy(settings = pending.settings.failed(command), error = error)
         }
+      }
+    }
+  }
+
+  /**
+   * The background work banner's Stop, upstream's `handleStopBackgroundWork`
+   * (useThreadLifecycle.tsx:392): the banner says "Stopping..." until the server answers.
+   * Acceptance doesn't confirm the work ended, so it offers Stop again while the provider
+   * finishes; a refusal says why under the composer.
+   */
+  fun stopBackgroundWork(view: ThreadView, command: OrchestrationV2Command) {
+    val threadId: String = view.thread.id
+    _stoppingBackgroundWork.update { it + threadId }
+    scope.launch {
+      try {
+        client.dispatch(command)
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        LOG.info("Couldn't ${command.type} on $threadId", e)
+        val reason: String = e.message ?: "Failed to stop background work."
+        update(threadId) { pending -> pending.copy(error = reason) }
+      } finally {
+        _stoppingBackgroundWork.update { it - threadId }
       }
     }
   }

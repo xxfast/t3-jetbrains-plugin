@@ -24,6 +24,8 @@ import io.github.xxfast.t3code.plugin.actions.interruptCommand
 import io.github.xxfast.t3code.plugin.actions.RENAME_ACTION
 import io.github.xxfast.t3code.plugin.actions.performThreadAction
 import io.github.xxfast.t3code.plugin.actions.showThreadMenu
+import io.github.xxfast.t3code.plugin.ui.BackgroundWorkActions
+import io.github.xxfast.t3code.plugin.ui.BackgroundWorkState
 import io.github.xxfast.t3code.plugin.ui.ChatHeaderActions
 import io.github.xxfast.t3code.plugin.ide.EditorSelections
 import io.github.xxfast.t3code.plugin.ide.T3Opener
@@ -47,6 +49,7 @@ import io.github.xxfast.t3code.plugin.ui.DraftExtras
 import io.github.xxfast.t3code.plugin.ui.EditorSelection
 import io.github.xxfast.t3code.plugin.ui.MessageChipActions
 import io.github.xxfast.t3code.plugin.ui.PromptStashEntry
+import io.github.xxfast.t3code.plugin.ui.activeBackgroundTasks
 import io.github.xxfast.t3code.plugin.ui.parentThreadLink
 import io.github.xxfast.t3code.plugin.ui.LocalMessageImages
 import io.github.xxfast.t3code.plugin.ui.MessageImageState
@@ -69,6 +72,7 @@ import io.github.xxfast.t3code.plugin.ui.resolveWorktreeSetupProgress
 import io.github.xxfast.t3code.plugin.ui.selectionComment
 import io.github.xxfast.t3code.plugin.ui.shouldShowComposerContextStrip
 import io.github.xxfast.t3code.plugin.ui.shouldCreateWorktree
+import io.github.xxfast.t3code.plugin.ui.stopBackgroundWorkCommand
 import io.github.xxfast.t3code.plugin.ui.workspaceControlState
 import io.github.xxfast.t3code.plugin.ui.worktreeSetupBlocksSend
 import io.github.xxfast.t3code.plugin.terminal.ThreadTerminals
@@ -188,6 +192,8 @@ fun ChatContent(
   val queue: ThreadQueueWorkflowState? = remember(view) {
     view?.let(::deriveThreadQueueWorkflowState)
   }
+  val stoppingWork: Set<String> by controller.stoppingBackgroundWork.collectAsState()
+  val serverInfo: ServerInfo? by controller.catalog.collectAsState()
   val shown: ThreadView? = remember(view, pending.messages) {
     view?.let { current ->
       current.copy(items = mergeOptimistic(current.items, current.messages, pending.messages))
@@ -357,6 +363,25 @@ fun ChatContent(
           enabled = operable,
         )
       },
+      // The background work banner, after the composer knows whether a run is going
+      backgroundWork = activeBackgroundTasks(view, working = composer.running || composer.sending)
+        .takeIf { it.isNotEmpty() }
+        ?.let { tasks ->
+          BackgroundWorkState(
+            tasks = tasks,
+            stopping = threadId in stoppingWork,
+            enabled = operable,
+          )
+        },
+      backgroundWorkActions = BackgroundWorkActions(
+        onStop = {
+          view?.let { current ->
+            stopBackgroundWorkCommand(current, serverInfo, UUID.randomUUID().toString())
+              ?.let { command -> controller.stopBackgroundWork(current, command) }
+          }
+        },
+        onOpenThread = opener::openThread,
+      ),
       queueActions = QueuedRunsActions(
         onEdit = { queued -> view?.let { queuedRuns.beginEdit(it, queued) } },
         onCancelEdit = { queuedRuns.cancelEdit(threadId) },

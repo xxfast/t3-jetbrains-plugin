@@ -65,7 +65,9 @@ How it fits together:
 - A scenario is a folder in `harness/scenarios/`; the fixture client merges every `*.json` in it.
   `default/` is the thread list plus one demo thread per thread-level state (`running.json`,
   `waiting-approval.json`, `waiting-question.json`, `unknown-items.json`, `many-items.json`,
-  `unread.json`, `snoozed.json` with one sleeping and one woken, `worktree-setup.json` with a
+  `unread.json`, `snoozed.json` with one sleeping and one woken, `background-work.json` with a
+  settled run whose provider still waits on two commands and a subagent (the background work
+  banner above the composer), `worktree-setup.json` with a
   first turn whose worktree is still being prepared, `skills.json` with provider skills and a
   workspace snapshot for the `$` menu, `files.json` with the files and folders `@` searches,
   `lineage.json` with a fork that has a parent, a fork of its own, running, finished and failed
