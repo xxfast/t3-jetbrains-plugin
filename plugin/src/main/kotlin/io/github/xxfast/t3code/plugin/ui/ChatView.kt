@@ -782,6 +782,9 @@ private fun FollowTail(
   LaunchedEffect(state, follow, threshold) {
     var settled: Boolean = false // reached the end once, so the opening jump is behind it
     snapshotFlow { state.layoutInfo to state.isScrollInProgress }.collect { (info, scrolling) ->
+      // Not measured yet, or a hidden tab's: no rows reads as being at the end, which would
+      // throw away a remembered place before the list ever got there
+      if (info.totalItemsCount == 0 || info.viewportSize.height == 0) return@collect
       val last: LazyListItemInfo? = info.visibleItemsInfo.lastOrNull()
       val gap: Int? = timelineEndGap(
         lastVisibleIndex = last?.index,
