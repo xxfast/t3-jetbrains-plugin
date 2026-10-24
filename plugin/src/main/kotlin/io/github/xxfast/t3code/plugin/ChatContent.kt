@@ -128,12 +128,19 @@ import io.github.xxfast.t3code.plugin.ui.EditingQueuedRun
 import io.github.xxfast.t3code.plugin.ui.QueuedRunsActions
 import io.github.xxfast.t3code.plugin.ui.QueuedRunsState
 import io.github.xxfast.t3code.plugin.ui.ThreadQueueWorkflowState
+import io.github.xxfast.t3code.plugin.ui.TimelineMemory
 import io.github.xxfast.t3code.plugin.ui.deriveThreadQueueWorkflowState
 import java.util.UUID
 
 /** [ChatView] wired to the IDE, for the thread's editor tab. */
 @Composable
-fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: () -> Unit) {
+fun ChatContent(
+  project: Project,
+  threadId: String,
+  load: ThreadLoad,
+  onRetry: () -> Unit,
+  memory: TimelineMemory, // the editor tab's, so the timeline comes back where it was
+) {
   val opener: T3Opener = T3Opener.getInstance(project)
   val controller: ChatController = ChatController.getInstance(project)
   val client: T3Client = T3.get().client
@@ -210,6 +217,7 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
   // The timeline's sent images, read by the user message row only
   CompositionLocalProvider(LocalMessageImages provides imageState) {
     ChatView(
+      memory = memory,
       view = shown,
       error = load.error,
       project = projects.find { it.id == projectId },

@@ -158,11 +158,12 @@ fun ChatView(
   queue: QueuedRunsState? = null, // the queued messages above the composer
   queueActions: QueuedRunsActions = QueuedRunsActions(),
   mentions: ComposerMentions = ComposerMentions(), // what the composer's `@` and `#` menus read
+  memory: TimelineMemory = remember { TimelineMemory() }, // where the timeline was left
 ) {
   val threadId: String? = view?.thread?.id
-  val timeline: LazyListState = remember(threadId) { LazyListState() }
+  val timeline: LazyListState = remember(threadId) { LazyListState(memory.index, memory.offset) }
   val scrollCollapse: ComposerScrollCollapse = remember(threadId) { ComposerScrollCollapse() }
-  val follow: TimelineFollow = remember(threadId) { TimelineFollow() }
+  val follow: TimelineFollow = remember(threadId) { TimelineFollow(followEnd = memory.atEnd) }
   // `canScrollCollapseComposer`'s and `composerHasExpandedChrome`'s parts the plugin has: a
   // multi-line prompt, a request, chips or a note on the draft, or an error keep it open
   val hasMultilinePrompt: Boolean = draft.text.contains('\n')
@@ -212,6 +213,7 @@ fun ChatView(
               view = view,
               state = timeline,
               follow = follow,
+              memory = memory,
               processor = processor,
               operateReason = composer.disabledReason,
               actions = TimelineActions(
@@ -605,6 +607,7 @@ private fun MessagesTimeline(
   view: ThreadView,
   state: LazyListState,
   follow: TimelineFollow,
+  memory: TimelineMemory,
   processor: MarkdownProcessor,
   operateReason: String?, // why nothing can change the thread, when it can't
   actions: TimelineActions,
@@ -615,9 +618,7 @@ private fun MessagesTimeline(
 ) {
   val running: Run? = activeRun(view.runs)
   val now: Instant by rememberNow(if (running != null) 1_000 else 30_000)
-  var expansion: TimelineExpansion by remember(view.thread.id) {
-    mutableStateOf(TimelineExpansion())
-  }
+  var expansion: TimelineExpansion by memory::expansion
   val entries: List<TimelineEntry> = remember(view.items) { deriveTimelineEntries(view.items) }
   val rows: List<TimelineRow> = remember(
     entries,
@@ -643,7 +644,7 @@ private fun MessagesTimeline(
   val requests: Map<String, RuntimeRequest> =
     remember(view.runtimeRequests) { view.runtimeRequests.associateBy { it.id } }
   // Which work entries have their details open; survives rows scrolling out of the lazy column
-  val open: SnapshotStateMap<String, Boolean> = remember(view.thread.id) { mutableStateMapOf() }
+  val open: SnapshotStateMap<String, Boolean> = memory.open
   val context = RowContext(
     now = now,
     processor = processor,
@@ -657,7 +658,7 @@ private fun MessagesTimeline(
     },
   )
   val anchored: Int? = anchoredIndex(rows, follow.anchor)
-  FollowTail(state, follow, anchored, animated = working)
+  FollowTail(state, follow, memory, anchored, animated = working)
   AnchorNewTurn(state, follow, anchored)
   // `useTimelineFollow`'s release: once the running run does work, the anchor gives way
   val runningRunId: String? = running?.id
@@ -762,12 +763,14 @@ private fun TimelineRow.bottomPadding(continuesWorkLog: Boolean): Dp = when (thi
  * (MessagesTimeline.tsx), and its `_SMOOTH` twin while [animated]: the thread is working.
  * Opening a thread lands at its end without one, as `initialScrollAtEnd` does: only a list that
  * has reached its end once glides. A scroll under way, a glide, "Scroll to end" or the user's,
- * is left to finish and the end is checked again after it.
+ * is left to finish and the end is checked again after it. Every layout leaves the position in
+ * [memory], for the next time the thread's tab is shown.
  */
 @Composable
 private fun FollowTail(
   state: LazyListState,
   follow: TimelineFollow,
+  memory: TimelineMemory,
   anchored: Int?,
   animated: Boolean,
 ) {
@@ -788,6 +791,13 @@ private fun FollowTail(
         viewportEnd = info.viewportEndOffset,
       )
       if (gap != null && gap <= 0) settled = true
+      // `rememberTimelinePosition`, with `liveFollowEnabled && !anchoredEndSpace`
+      memory.record(
+        index = state.firstVisibleItemIndex,
+        offset = state.firstVisibleItemScrollOffset,
+        following = follow.following && currentAnchored == null,
+        atEnd = isTimelineAtEnd(gap, threshold),
+      )
       val follows: Boolean = follow.onLayout(gap, threshold, anchored = currentAnchored != null)
       if (!follows || scrolling) return@collect
       val end: Int = info.totalItemsCount - 1

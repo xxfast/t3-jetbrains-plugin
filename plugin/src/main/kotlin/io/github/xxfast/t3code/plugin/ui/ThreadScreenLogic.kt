@@ -61,10 +61,13 @@ enum class TimelineScrollMode { FollowingEnd, AnchoringNewTurn, FreeScrolling }
  * it, on the change only, as `onIsAtEndChange` does, so a small scroll up inside the band holds.
  * A send anchors its message ([anchorNewTurn]); the anchor only holds the row in place when it's
  * the thread's first prompt ([anchoredIndex]), otherwise the send just returns to the end. One
- * per thread.
+ * per thread. Without [followEnd] it opens away from the end, where the thread was left
+ * (`timelineThreadReset`).
  */
-class TimelineFollow {
-  var mode: TimelineScrollMode by mutableStateOf(TimelineScrollMode.FollowingEnd)
+class TimelineFollow(followEnd: Boolean = true) {
+  var mode: TimelineScrollMode by mutableStateOf(
+    if (followEnd) TimelineScrollMode.FollowingEnd else TimelineScrollMode.FreeScrolling,
+  )
     private set
 
   /** The sent message's id, upstream's `timelineAnchor.messageId`. Free scrolling keeps it. */
@@ -77,7 +80,7 @@ class TimelineFollow {
   /** `showScrollToBottom`: the user scrolled away and left the end band. */
   val awayFromEnd: Boolean get() = mode == TimelineScrollMode.FreeScrolling && !atEnd
 
-  private var atEnd: Boolean by mutableStateOf(true)
+  private var atEnd: Boolean by mutableStateOf(followEnd)
   private var positioned: String? = null // `positionedTimelineAnchorRef`
 
   /** `cancelTimelineLiveFollowForUserNavigation`: a wheel step or scrollbar drag up. */

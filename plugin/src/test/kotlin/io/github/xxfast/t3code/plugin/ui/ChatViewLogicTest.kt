@@ -114,6 +114,16 @@ class ChatViewLogicTest {
   }
 
   @Test
+  fun `a thread left away from the end reopens there`() {
+    val follow = TimelineFollow(followEnd = false)
+    assertTrue(follow.awayFromEnd)
+    assertFalse(follow.onLayout(gap = 400, thresholdPx = 40))
+    follow.onLayout(gap = 0, thresholdPx = 40) // scrolled back down: follows again
+    assertTrue(follow.following)
+    assertFalse(follow.awayFromEnd)
+  }
+
+  @Test
   fun `only the first prompt is anchored`() {
     val rows: List<TimelineRow> = listOf(prompt("m-1"), prompt("m-2"))
     assertEquals(0, anchoredIndex(rows, "m-1"))

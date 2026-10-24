@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.fileEditor.FileEditor
 import com.intellij.openapi.fileEditor.FileEditorState
+import com.intellij.openapi.fileEditor.FileEditorStateLevel
 import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
@@ -15,6 +16,7 @@ import io.github.xxfast.t3code.plugin.ThreadLoad
 import io.github.xxfast.t3code.plugin.ThreadSelection
 import io.github.xxfast.t3code.plugin.actions.ThreadPanel
 import io.github.xxfast.t3code.plugin.threadLoad
+import io.github.xxfast.t3code.plugin.ui.TimelineMemory
 import java.beans.PropertyChangeListener
 import javax.swing.JComponent
 import kotlinx.coroutines.CoroutineScope
@@ -49,9 +51,18 @@ class ThreadFileEditor(
     .flatMapLatest { T3.get().client.threadLoad(file.threadId) }
     .stateIn(scope, SharingStarted.Eagerly, ThreadLoad())
 
+  /** Where the timeline was, kept while the panel's composition comes and goes with the tab. */
+  private val memory: TimelineMemory = TimelineMemory()
+
   private val panel: JComponent = JewelComposePanel {
     val current: ThreadLoad by load.collectAsState()
-    ChatContent(project, file.threadId, current, onRetry = { attempt.update { it + 1 } })
+    ChatContent(
+      project = project,
+      threadId = file.threadId,
+      load = current,
+      onRetry = { attempt.update { it + 1 } },
+      memory = memory,
+    )
   }
 
   // The thread actions on top, acting on this tab's thread
@@ -78,7 +89,12 @@ class ThreadFileEditor(
 
   override fun getFile(): ThreadVirtualFile = file
 
-  override fun setState(state: FileEditorState) = Unit
+  override fun getState(level: FileEditorStateLevel): FileEditorState =
+    ThreadEditorState.of(memory)
+
+  override fun setState(state: FileEditorState) {
+    if (state is ThreadEditorState) state.applyTo(memory)
+  }
 
   override fun isModified(): Boolean = false
 
