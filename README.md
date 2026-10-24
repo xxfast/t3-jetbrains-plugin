@@ -87,7 +87,8 @@ Targets IntelliJ Platform 2025.3 and later, so IDEA, Android Studio, WebStorm, R
 ## Roadmap
 
 Work items are [GitHub issues](https://github.com/xxfast/t3-jetbrains-plugin/issues).
-[`ROADMAP.md`](ROADMAP.md) groups them into phases and has the order.
+[Milestones](https://github.com/xxfast/t3-jetbrains-plugin/milestones) group them into phases and
+hold the order.
 
 ## Licence
 

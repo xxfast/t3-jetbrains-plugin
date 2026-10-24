@@ -1,6 +1,6 @@
 # Goals
 
-What this project is for. Everything else (`ROADMAP.md`, the issues, `CLAUDE.md`) serves these.
+What this project is for. Everything else (the milestones, the issues, `CLAUDE.md`) serves these.
 When two of them pull against each other, the order below is the tie-break.
 
 ## 1. A faithful T3 Code client
