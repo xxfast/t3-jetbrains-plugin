@@ -1,12 +1,10 @@
 package io.github.xxfast.t3code.plugin.ide
 
 import com.intellij.ide.BrowserUtil
-import com.intellij.ide.plugins.PluginManager
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.diagnostic.ErrorReportSubmitter
 import com.intellij.openapi.diagnostic.IdeaLoggingEvent
 import com.intellij.openapi.diagnostic.SubmittedReportInfo
-import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.util.Consumer
@@ -29,10 +27,9 @@ class T3ErrorReportSubmitter : ErrorReportSubmitter() {
     val event: IdeaLoggingEvent = events.firstOrNull() ?: return false
     val info: ApplicationInfo = ApplicationInfo.getInstance()
     val environment = ErrorReportEnvironment(
-      // getPluginDescriptor() is override-only and PluginManagerCore.getPlugin is internal on
-      // 2025.3; findEnabledPlugin is the public lookup
-      pluginVersion = PluginManager.getInstance().findEnabledPlugin(PluginId.getId(PLUGIN_ID))
-        ?.version ?: "unknown",
+      // The dialog attributes the event to the plugin. Every PluginManager lookup is internal
+      // on 2026.3 and getPluginDescriptor() is override-only on 2025.3, so this is the way in.
+      pluginVersion = event.plugin?.version ?: "unknown",
       ide = "${info.fullApplicationName} (${info.build.asString()})",
       os = "${SystemInfo.getOsNameAndVersion()} ${SystemInfo.OS_ARCH}",
       jbr = SystemInfo.JAVA_RUNTIME_VERSION,
@@ -44,5 +41,3 @@ class T3ErrorReportSubmitter : ErrorReportSubmitter() {
     return true
   }
 }
-
-private const val PLUGIN_ID: String = "io.github.xxfast.t3code"
