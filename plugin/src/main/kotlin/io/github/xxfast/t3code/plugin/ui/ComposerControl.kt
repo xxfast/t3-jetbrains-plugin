@@ -24,9 +24,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -59,17 +63,34 @@ fun ComposerSurface(
   val dark: Boolean = JewelTheme.isDark
   val outline: Color =
     if (dark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f)
-  val ring: Color = if (highlight) accent().copy(alpha = 0.7f) else outline
   Box(
     modifier = modifier
       .then(if (dark) Modifier else Modifier.dropShadow(COMPOSER_SHAPE, COMPOSER_SHADOW))
       .clip(COMPOSER_SHAPE)
       .background(composerGlassSurface())
       .then(if (highlight) Modifier.background(subtle(0.06f)) else Modifier)
-      .border(1.dp, ring, COMPOSER_SHAPE),
+      // Lit, the ring is `WorkspaceFileDropOverlay`'s `border-2 border-dashed border-primary/60`
+      .then(if (highlight) Modifier.dashedRing(accent().copy(alpha = 0.6f)) else Modifier)
+      .then(if (highlight) Modifier else Modifier.border(1.dp, outline, COMPOSER_SHAPE)),
   ) {
     content()
   }
+}
+
+/**
+ * A 2dp dashed stroke along the box's edge, over the content. The box is clipped to its shape, so
+ * the stroke is drawn twice as wide and the outer half falls away, which keeps the dash's corners
+ * on the rounded outline.
+ */
+private fun Modifier.dashedRing(color: Color): Modifier = drawWithContent {
+  drawContent()
+  val width: Float = 2.dp.toPx()
+  val dash: Float = 6.dp.toPx()
+  drawOutline(
+    outline = COMPOSER_SHAPE.createOutline(size, layoutDirection, this),
+    color = color,
+    style = Stroke(width * 2, pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash, dash))),
+  )
 }
 
 /** `--shadow-composer`: `0 12px 28px -18px rgb(0 0 0 / 40%)`. */
