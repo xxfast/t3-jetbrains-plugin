@@ -9,41 +9,15 @@ permission prompts in a tool window; files, diffs and terminals in the IDE you a
   <img alt="T3 Sidebar, a Chat View tab and T3 Thread Details in IntelliJ IDEA" src="docs/screenshot-light.png">
 </picture>
 
-Unofficial, built for my own use. Will publish if it turns out useful to others.
+Unofficial. Built for my own use, published in case it's useful to others.
 
 ## Status
 
-0.1.0 is the first release. Built and tested on IntelliJ IDEA, against T3 Code 0.1.2. Android Studio and Rider are checked by the plugin verifier on
-every build. Other IDEs on IntelliJ Platform 2025.3 and later share IDEA's platform build and
-should work; report it if one doesn't. What works:
-
-- Pair with a T3 server, browse its threads in the Sidebar, read a thread live as it runs.
-- Open the files and diffs a thread touches, in the IDE's own editor and diff viewer.
-- Send messages, steer while a run is going (Ctrl/Cmd-click or Ctrl/Cmd+Enter queues), or stop it.
-- Answer approvals and questions from the composer. A balloon and a Sidebar badge say when a
-  thread is waiting on you.
-- The desktop's thread menu: new thread on the branch, pin, settle, snooze, rename, mark
-  unread, copy, archive, delete. Click the thread title or right-click a Sidebar row.
-  Interrupt and stop session too, all in Find Action and keymaps.
-- The thread's terminal as a tab in the IDE's Terminal tool window.
-- A project picker that defaults to whatever this IDE window has open, worktrees included.
-  "Open in IDE" when it isn't: focuses the window that has the thread's checkout, else opens one.
-- A git line on the thread header: branch, changed files, ahead and behind.
-- The desktop's composer: model, effort, runtime mode and Plan/Build in its footer, a context
-  window meter with "Compact context", and an offer to compact a big, cold Claude thread first.
-- Attach files and images: drop them on the composer, paste them, or pick them with the paperclip. A
-  selection in the editor goes along as context through "Add to T3 thread" (Cmd+Opt+K or
-  Ctrl+Alt+K).
-- Review a diff in the IDE's viewer and leave comments on its lines; they go with the next
-  message. Revert to before a prompt from its hover row, behind a confirmation.
-- A thread timeline laid out like the desktop's: finished turns fold behind "Worked for", tool
-  calls group into one line, and a turn's changed files sit under its last reply.
-- Start a thread from the IDE: "New T3 thread" picks the project (yours by default), then the
-  composer picks the provider, model, runtime mode and workspace. Switch or create the branch
-  from the composer; "New worktree" from a base branch prepares one on the first send, with
-  the desktop's setup card showing each stage.
-
-See the roadmap for what's next.
+0.1.0 is the first release. Built and tested on IntelliJ IDEA, against T3 Code 0.1.2. Android
+Studio and Rider are checked by the plugin verifier on every build. Other IDEs on IntelliJ
+Platform 2025.3 and later share IDEA's platform build and should work; report it if one doesn't.
+What each release adds is in its [release notes](https://github.com/xxfast/t3-jetbrains-plugin/releases);
+what's next is in the [milestones](https://github.com/xxfast/t3-jetbrains-plugin/milestones).
 
 ## Install
 
@@ -73,7 +47,7 @@ client is a supported shape, not a hack.
 - **Design in the harness.** Int UI is the design system, so we prototype in it: the plugin runs in a
   sandbox IDE against JSON fixtures in `harness/`. No mockups, nothing built twice.
 
-## Planned layout
+## Layout
 
 | Module | What |
 | --- | --- |
