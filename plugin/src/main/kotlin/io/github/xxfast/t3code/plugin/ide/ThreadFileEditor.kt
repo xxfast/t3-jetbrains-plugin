@@ -122,6 +122,8 @@ class ThreadFileEditor(
 
   override fun dispose() {
     ThreadVisits.getInstance(project).closed(file.threadId)
+    // Closing the last tab leaves no neighbour to select, so the row would stay lit
+    ThreadSelection.getInstance(project).deselect(file.threadId)
     scope.cancel()
   }
 }

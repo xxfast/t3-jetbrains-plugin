@@ -22,6 +22,11 @@ class ThreadSelection {
     selection.value = threadId
   }
 
+  /** Clears the selection if it's still [threadId]; a tab that took over on the way out stays. */
+  fun deselect(threadId: String) {
+    selection.compareAndSet(threadId, null)
+  }
+
   fun file(threadId: String, title: String): ThreadVirtualFile =
     files.getOrPut(threadId) { ThreadVirtualFile(threadId, title) }
 
