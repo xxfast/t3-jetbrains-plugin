@@ -83,6 +83,23 @@ How it fits together:
 The loop: pick a scenario, look, change Kotlin or JSON, look again. When a screen settles, its
 scenario becomes the test fixture and the PR gets a screenshot from the harness.
 
+### One sandbox at a time
+
+Several agents share this machine's one screen and one mouse, so two sandboxes click over each
+other. Hold the harness lock, `/tmp/t3-harness.lock`, from launching a sandbox until it's
+killed. `runIde` against a real server counts too.
+
+- Take it with a background command (foreground `sleep` is blocked), which wakes you once it's
+  yours: `until mkdir /tmp/t3-harness.lock 2>/dev/null; do sleep 15; done; echo "<thread or
+  task> $(date)" > /tmp/t3-harness.lock/owner`.
+- Hold it for the whole session: launch, drive, screenshot, kill. A booting IDE grabs focus, so
+  booting while someone else clicks breaks their run too.
+- Kill your sandbox before letting go, then `rm -rf /tmp/t3-harness.lock`. Release it on
+  failure too, never leave it behind.
+- Waiting is normal, a session is several minutes. A lock only counts as stale when its `owner`
+  is over 45 minutes old and `pgrep -f runHarness` finds nothing. Then remove it and take it.
+- Don't click or type in a window you didn't launch.
+
 ## Principles
 
 Match T3 Code's own implementation as closely as possible, not just its behaviour. When the
