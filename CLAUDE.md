@@ -57,8 +57,11 @@ How it fits together:
   subagents and context transfers for T3 Thread Details (its fork merges back),
   `pull-requests.json` with KStore's pull requests for `#`, listed and older ones only
   `pullRequests.detail` finds; KStore has a repository identity, Decompose-Router doesn't, so
-  its `#` says pull requests aren't available), and its `connection.json` grants the
-  operate and terminal scopes so every action is live. `disconnected/`, `pairing/`, `auth-error/`, `read-only/` (no operate) and
+  its `#` says pull requests aren't available; KStore has three scripts in `list.json`, one a
+  worktree hook, so T3 Thread Details shows "Run tests" and Decompose-Router shows "Add
+  project script"), and its `connection.json` grants the
+  operate, terminal and `source-control:write` scopes so every action is live, the branch
+  pickers included. `disconnected/`, `pairing/`, `auth-error/`, `read-only/` (no operate) and
   `empty-server/` cover connection-level states; the ones with threads carry a byte-for-byte copy
   of `default/list.json`. Shapes are the same `:protocol` types the real client decodes, so
   scenarios double as test fixtures.
@@ -253,6 +256,14 @@ Hard-won, so recorded here rather than rediscovered.
   is `vcs.switchRef` on the checkout and a `thread.metadata.update { branch }` ahead of the
   next send (`resolveThreadMetadataUpdateForNextTurn`); a ref that has a worktree only sets
   the branch on a server thread, which is upstream's `setThreadBranch` path too.
+- T3 Thread Details' Workspace and Version Control sections (2026-10-24) port upstream's row
+  rules (`resolveQuickAction`, `buildMenuItems`, `primaryProjectScript`) but not its git RPCs
+  (`git.runStackedAction`, `vcs.init`, `project.update` aren't in the protocol yet). The rows
+  run the IDE's own actions instead, `ideActionForGitAction`: `CheckinProject`, `Vcs.Push`,
+  `Vcs.UpdateProject`, `Github.Create.Pull.Request`, and the Changes row opens the Commit tool
+  window. Only when the thread's `gitCwd` is open in this window and the server is local;
+  otherwise the rows are disabled with the reason. A script runs in a fresh thread terminal
+  (`ThreadTerminals.run`), typed as upstream's `projectScriptTerminalInput`.
 - `LiveServerTest` (skipped unless `T3_LIVE_TOKEN` and `T3_LIVE_THREAD` are set) is how wire
   changes get checked against the real server. Last passed 2026-10-20 against the local desktop.
 - A Search Everywhere-shaped chooser is `com.intellij.ide.actions.BigPopupUI` (public, what

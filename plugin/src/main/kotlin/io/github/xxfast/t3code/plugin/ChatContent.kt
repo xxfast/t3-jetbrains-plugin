@@ -341,7 +341,7 @@ class WorktreeSetupState(
  * setup. A follow-up message hides a finished card.
  */
 @Composable
-private fun rememberWorktreeSetup(
+internal fun rememberWorktreeSetup(
   view: ThreadView?,
   pending: PendingMessages,
   client: T3Client,
@@ -707,6 +707,31 @@ private fun rememberWorkspaceControl(
   val isGitRepo: Boolean = vcs != null
   // Upstream's strip is the draft hero state's; a started thread has none
   if (!shouldShowComposerContextStrip(view, isGitRepo) || setup.preparing) return null
+  val (refs: List<VcsRef>, refsStatus: String?) = rememberRefs(cwd, query, client)
+  return workspaceControlState(
+    view = view,
+    draft = pending.workspace,
+    currentGitBranch = vcs?.branch,
+    isGitRepo = isGitRepo,
+    preparingWorktree = setup.preparing,
+    refs = refs,
+    refsQuery = query,
+    refsStatus = refsStatus,
+    canChangeBranch =
+      canChangeThreadBranch((connection as? ConnectionState.Connected)?.session),
+  )
+}
+
+/**
+ * The refs `vcs.listRefs` lists in [cwd] for [query], asked again per query, with
+ * "Loading refs...", a "Showing N of M" when the page isn't the whole list, or the error.
+ */
+@Composable
+internal fun rememberRefs(
+  cwd: String?,
+  query: String,
+  client: T3Client,
+): Pair<List<VcsRef>, String?> {
   var refs: List<VcsRef> by remember(cwd) { mutableStateOf(emptyList()) }
   var refsStatus: String? by remember(cwd) { mutableStateOf(null) }
   LaunchedEffect(cwd, query) {
@@ -728,18 +753,7 @@ private fun rememberWorkspaceControl(
       refsStatus = e.message ?: "Couldn't list refs"
     }
   }
-  return workspaceControlState(
-    view = view,
-    draft = pending.workspace,
-    currentGitBranch = vcs?.branch,
-    isGitRepo = isGitRepo,
-    preparingWorktree = setup.preparing,
-    refs = refs,
-    refsQuery = query,
-    refsStatus = refsStatus,
-    canChangeBranch =
-      canChangeThreadBranch((connection as? ConnectionState.Connected)?.session),
-  )
+  return refs to refsStatus
 }
 
 /** `usePaginatedBranches`'s page, enough for a picker without paging. */

@@ -22,23 +22,34 @@ import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
 
 /**
- * The thread header's git line, one `subscribeVcsStatus` per checkout however many tabs show it.
+ * A checkout's git status, one `subscribeVcsStatus` per checkout however many tabs and tool
+ * windows show it: the thread header's git line and T3 Thread Details' Version Control section.
  * A subscription lives while something collects it, plus a grace period for tab switches. `null`
  * while loading, outside a repository, or when the stream fails: the IDE's own git integration is
  * the source of truth, this is a glance.
  */
 @Service(Service.Level.PROJECT)
 class VcsStatuses(private val scope: CoroutineScope) {
-  private val shared: ConcurrentHashMap<String, StateFlow<VcsSummary?>> = ConcurrentHashMap()
+  private val statuses: ConcurrentHashMap<String, StateFlow<VcsStatus?>> = ConcurrentHashMap()
+  private val summaries: ConcurrentHashMap<String, StateFlow<VcsSummary?>> = ConcurrentHashMap()
+
+  /** The last status for [cwd], both halves merged, or always `null` without one. */
+  fun status(cwd: String?): StateFlow<VcsStatus?> {
+    if (cwd == null) return NO_STATUS
+    return statuses.computeIfAbsent(cwd) {
+      T3.get().client.vcsStatus(cwd)
+        .runningFold(null as VcsStatus?, ::applyGitStatusStreamEvent)
+        .catch { emit(null) }
+        .stateIn(scope, SharingStarted.WhileSubscribed(GRACE_MS), null)
+    }
+  }
 
   /** The summary for [cwd], or always `null` without one. */
   fun summary(cwd: String?): StateFlow<VcsSummary?> {
     if (cwd == null) return NONE
-    return shared.computeIfAbsent(cwd) {
-      T3.get().client.vcsStatus(cwd)
-        .runningFold(null as VcsStatus?, ::applyGitStatusStreamEvent)
+    return summaries.computeIfAbsent(cwd) {
+      status(cwd)
         .map { status -> status?.let(::vcsSummary) }
-        .catch { emit(null) }
         .stateIn(scope, SharingStarted.WhileSubscribed(GRACE_MS), null)
     }
   }
@@ -46,6 +57,7 @@ class VcsStatuses(private val scope: CoroutineScope) {
   companion object {
     private const val GRACE_MS: Long = 5_000
     private val NONE: StateFlow<VcsSummary?> = MutableStateFlow<VcsSummary?>(null).asStateFlow()
+    private val NO_STATUS: StateFlow<VcsStatus?> = MutableStateFlow<VcsStatus?>(null).asStateFlow()
 
     fun getInstance(project: IdeProject): VcsStatuses = project.service()
   }

@@ -4,7 +4,29 @@
       "id": "prj_01JB2K7Q9V3XKSTORE",
       "title": "KStore",
       "workspaceRoot": "/Users/xxfast/Developer/XXFAST/KMP/KStore",
-      "scripts": [],
+      "scripts": [
+        {
+          "id": "scr_01JC5M0KSTORETEST",
+          "name": "Run tests",
+          "command": "./gradlew allTests",
+          "icon": "test",
+          "runOnWorktreeCreate": false
+        },
+        {
+          "id": "scr_01JC5M0KSTOREBUILD",
+          "name": "Build",
+          "command": "./gradlew build",
+          "icon": "build",
+          "runOnWorktreeCreate": false
+        },
+        {
+          "id": "scr_01JC5M0KSTORESETUP",
+          "name": "Install",
+          "command": "./gradlew --offline help",
+          "icon": "configure",
+          "runOnWorktreeCreate": true
+        }
+      ],
       "repositoryIdentity": {
         "canonicalKey": "github.com/xxfast/kstore",
         "locator": {

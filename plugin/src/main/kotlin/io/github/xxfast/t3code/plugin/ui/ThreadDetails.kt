@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -63,33 +62,50 @@ class ThreadLineageActions(
 )
 
 /**
- * "T3 Thread Details": for now only the Lineage, upstream's `ThreadRelationshipsPanel`
- * (apps/web/src/components/chat/ThreadRelationshipsControl.tsx). Upstream hides the section when
- * there's nothing related; a tool window says so instead. [enabled] is false without the operate
- * scope, which leaves opening rows but no actions. [stoppingId] is the row being stopped.
+ * "T3 Thread Details", upstream's `ThreadDetailsPanel` (apps/web/src/components/chat/
+ * ThreadDetailsPanel.tsx): the Workspace section, the Version Control section when the thread
+ * has a `gitCwd`, then the Lineage, upstream's `ThreadRelationshipsPanel`
+ * (ThreadRelationshipsControl.tsx). Automations aren't ported: upstream hides the section without
+ * scheduled tasks, and the plugin has none. Upstream hides the Lineage when there's nothing
+ * related; so does this. [enabled] is false without the operate scope, which leaves opening rows
+ * but no actions. [stoppingId] is the row being stopped. Upstream's card drops to a compact
+ * density when short of height; a tool window scrolls instead.
  */
 @Composable
 fun ThreadDetails(
   threadId: String,
+  panel: ThreadDetailsPanelState?,
+  panelActions: ThreadDetailsPanelActions,
   lineage: ThreadLineage?,
   busyAction: LineageBusyAction?,
   stoppingId: String?,
   enabled: Boolean,
   actions: ThreadLineageActions,
 ) {
-  if (lineage == null) return Hint("No related threads")
+  if (panel == null && lineage == null) return Hint("No details for this thread yet")
   val now: Long = rememberNow(1_000).value.toEpochMilli()
   VerticallyScrollableContainer(
     scrollState = rememberScrollState(),
     modifier = Modifier.fillMaxSize(),
   ) {
-    Column(Modifier.fillMaxWidth().padding(8.dp)) {
-      LineageHeader(lineage, busyAction, enabled, actions.onDetach)
-      lineage.groups.forEach { group ->
-        // Upstream keys each group by thread, so paging and folding start over per thread
-        key(threadId, group.id) {
-          LineageGroup(group) { row ->
-            LineageRow(row, lineage, now, busyAction, stoppingId, enabled, actions)
+    Column(Modifier.fillMaxWidth()) {
+      if (panel != null) {
+        WorkspaceSection(panel, panelActions)
+        if (panel.gitCwd != null) VersionControlSection(panel, panelActions)
+      }
+      if (lineage != null) {
+        ThreadDetailsSection(
+          separated = panel != null,
+          title = lineage.title,
+          actions = { LineageActions(lineage, busyAction, enabled, actions.onDetach) },
+        ) {
+          lineage.groups.forEach { group ->
+            // Upstream keys each group by thread, so paging and folding start over per thread
+            key(threadId, group.id) {
+              LineageGroup(group) { row ->
+                LineageRow(row, lineage, now, busyAction, stoppingId, enabled, actions)
+              }
+            }
           }
         }
       }
@@ -97,58 +113,43 @@ fun ThreadDetails(
   }
 }
 
-/** `ThreadDetailsSection`'s heading: the title, and the "…" menu while a session can detach. */
+/** The Lineage heading's "…" menu, shown while a session can detach. */
 @OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip sits on Compose's TooltipArea
 @Composable
-private fun LineageHeader(
+private fun LineageActions(
   lineage: ThreadLineage,
   busyAction: LineageBusyAction?,
   enabled: Boolean,
   onDetach: () -> Unit,
 ) {
-  Row(
-    modifier = Modifier.fillMaxWidth().heightIn(min = 32.dp).padding(horizontal = 6.dp),
-    horizontalArrangement = Arrangement.spacedBy(8.dp),
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    Text(
-      text = lineage.title,
-      modifier = Modifier.weight(1f),
-      style = small(),
-      color = muted(),
-      fontWeight = FontWeight.Medium,
-      maxLines = 1,
-      overflow = TextOverflow.Ellipsis,
-    )
-    if (!lineage.canDetach) return@Row
-    var open: Boolean by remember { mutableStateOf(false) }
-    Box {
-      Tooltip(tooltip = { Text("More thread actions") }) {
-        IconButton(
-          onClick = { open = !open },
-          enabled = enabled && busyAction == null,
-          modifier = Modifier.size(24.dp),
-        ) {
-          Icon(AllIconsKeys.Actions.MoreHorizontal, contentDescription = "More thread actions")
-        }
+  if (!lineage.canDetach) return
+  var open: Boolean by remember { mutableStateOf(false) }
+  Box {
+    Tooltip(tooltip = { Text("More thread actions") }) {
+      IconButton(
+        onClick = { open = !open },
+        enabled = enabled && busyAction == null,
+        modifier = Modifier.size(24.dp),
+      ) {
+        Icon(AllIconsKeys.Actions.MoreHorizontal, contentDescription = "More thread actions")
       }
-      if (open) {
-        PopupMenu(
-          onDismissRequest = {
+    }
+    if (open) {
+      PopupMenu(
+        onDismissRequest = {
+          open = false
+          return@PopupMenu true
+        },
+        horizontalAlignment = Alignment.End,
+      ) {
+        selectableItem(
+          selected = false,
+          onClick = {
             open = false
-            return@PopupMenu true
+            onDetach()
           },
-          horizontalAlignment = Alignment.End,
         ) {
-          selectableItem(
-            selected = false,
-            onClick = {
-              open = false
-              onDetach()
-            },
-          ) {
-            Text("Disconnect agent session")
-          }
+          Text("Disconnect agent session")
         }
       }
     }

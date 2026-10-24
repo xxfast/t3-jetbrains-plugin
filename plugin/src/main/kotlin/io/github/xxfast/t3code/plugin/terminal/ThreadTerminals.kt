@@ -15,12 +15,16 @@ import com.intellij.terminal.ui.TerminalWidget
 import com.intellij.ui.content.Content
 import io.github.xxfast.t3code.plugin.T3
 import io.github.xxfast.t3code.plugin.ide.NOTIFICATION_GROUP
+import io.github.xxfast.t3code.plugin.ui.nextTerminalId
+import io.github.xxfast.t3code.plugin.ui.projectScriptTerminalInput
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.ServerSession
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.Thread
+import io.github.xxfast.t3code.protocol.generated.ProjectScript
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.has
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,8 +41,26 @@ import org.jetbrains.plugins.terminal.TerminalToolWindowManager
 class ThreadTerminals(private val project: Project, private val scope: CoroutineScope) {
   private val tabs: MutableMap<String, Content> = ConcurrentHashMap()
 
-  /** Opens or focuses [threadId]'s terminal. On the EDT. */
-  fun open(threadId: String, terminalId: String = DEFAULT_TERMINAL_ID) {
+  /**
+   * Runs [script] for [threadId] in a terminal of its own, upstream's `runProjectScript`
+   * (ChatView.tsx:3583) with a new terminal: upstream reuses an idle one it already has open,
+   * which the plugin can't tell apart from a busy one. The command is typed once the server has
+   * attached. On the EDT.
+   */
+  fun run(threadId: String, script: ProjectScript) {
+    val ownTabs: List<String> = tabs.keys
+      .filter { it.startsWith("$threadId/") }
+      .map { it.substringAfter('/') }
+    val terminalId: String = nextTerminalId(ownTabs, UUID.randomUUID().toString())
+    val connector: T3TtyConnector = open(threadId, terminalId) ?: return
+    connector.write(projectScriptTerminalInput(script.command))
+  }
+
+  /**
+   * Opens or focuses [threadId]'s terminal. On the EDT. Answers the new tab's connector, or null
+   * when the tab was there already or couldn't open.
+   */
+  fun open(threadId: String, terminalId: String = DEFAULT_TERMINAL_ID): T3TtyConnector? {
     val manager: TerminalToolWindowManager = TerminalToolWindowManager.getInstance(project)
     val toolWindow: ToolWindow = manager.toolWindow
       ?: ToolWindowManager.getInstance(project)
@@ -48,7 +70,7 @@ class ThreadTerminals(private val project: Project, private val scope: Coroutine
     val existing: Content? = tabs[key]
     if (existing != null) {
       toolWindow.activate { toolWindow.contentManager.setSelectedContent(existing, true) }
-      return
+      return null
     }
 
     val client: T3Client = T3.get().client
@@ -69,10 +91,12 @@ class ThreadTerminals(private val project: Project, private val scope: Coroutine
 
     var content: Content? = null
     val listener: T3TtyConnector.Listener = object : T3TtyConnector.Listener {
-      override fun readOnly() = notify(
-        "${thread.title}'s terminal is read-only: this pairing has terminal:read only",
-        NotificationType.INFORMATION,
-      )
+      override fun readOnly() {
+        notify(
+          "${thread.title}'s terminal is read-only: this pairing has terminal:read only",
+          NotificationType.INFORMATION,
+        )
+      }
 
       override fun failed(error: Throwable) {
         val reason: String = error.message ?: error.javaClass.simpleName
@@ -111,13 +135,16 @@ class ThreadTerminals(private val project: Project, private val scope: Coroutine
     terminal.addTerminationCallback({ tabs.remove(key, tab) }, tab)
     connector.start()
     terminal.requestFocus()
+    return connector
   }
 
-  private fun notify(message: String, type: NotificationType) {
+  /** Shows [message] and answers null, so a failed open reads as one expression. */
+  private fun notify(message: String, type: NotificationType): T3TtyConnector? {
     NotificationGroupManager.getInstance()
       .getNotificationGroup(NOTIFICATION_GROUP)
       .createNotification(message, type)
       .notify(project)
+    return null
   }
 
   companion object {

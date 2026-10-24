@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import io.github.xxfast.t3code.protocol.generated.VcsRef
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.CheckboxRow
+import org.jetbrains.jewel.ui.component.MenuScope
 import org.jetbrains.jewel.ui.component.PopupMenu
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.TextField
@@ -109,30 +110,43 @@ private fun WorkspaceSelect(
         },
         horizontalAlignment = Alignment.Start,
       ) {
-        passiveItem { MenuGroupLabel("Workspace") }
-        selectableItem(
-          selected = state.envMode == EnvMode.LOCAL,
-          onClick = {
-            open = false
-            onEnvMode(EnvMode.LOCAL)
-          },
-        ) {
-          MenuRow(
-            icon = if (state.activeWorktreePath != null) "folder-git" else "folder",
-            label = resolveCurrentWorkspaceLabel(state.activeWorktreePath),
-          )
-        }
-        selectableItem(
-          selected = state.envMode == EnvMode.WORKTREE,
-          onClick = {
-            open = false
-            onEnvMode(EnvMode.WORKTREE)
-          },
-        ) {
-          MenuRow(icon = "folder-git-2", label = resolveEnvModeLabel(EnvMode.WORKTREE))
-        }
+        workspaceItems(state, onEnvMode) { open = false }
       }
     }
+  }
+}
+
+/**
+ * The Workspace group of `RunContextSelector`'s menu (`BranchToolbar.tsx:361`): Current
+ * checkout or New worktree, as radio items. Shared by the composer's strip and T3 Thread
+ * Details' run context row. [close] dismisses the menu around a pick.
+ */
+fun MenuScope.workspaceItems(
+  state: WorkspaceControlState,
+  onEnvMode: (EnvMode) -> Unit,
+  close: () -> Unit,
+) {
+  passiveItem { MenuGroupLabel("Workspace") }
+  selectableItem(
+    selected = state.envMode == EnvMode.LOCAL,
+    onClick = {
+      close()
+      onEnvMode(EnvMode.LOCAL)
+    },
+  ) {
+    MenuRow(
+      icon = if (state.activeWorktreePath != null) "folder-git" else "folder",
+      label = resolveCurrentWorkspaceLabel(state.activeWorktreePath),
+    )
+  }
+  selectableItem(
+    selected = state.envMode == EnvMode.WORKTREE,
+    onClick = {
+      close()
+      onEnvMode(EnvMode.WORKTREE)
+    },
+  ) {
+    MenuRow(icon = "folder-git-2", label = resolveEnvModeLabel(EnvMode.WORKTREE))
   }
 }
 
@@ -165,81 +179,115 @@ private fun RefPicker(
       }
     }
     if (open) {
-      val query: TextFieldState = remember { TextFieldState(state.refsQuery) }
-      LaunchedEffect(query) {
-        snapshotFlow { query.text.toString() }.collect { actions.onRefsQuery(it) }
-      }
-      fun close() {
-        open = false
-        actions.onRefsQuery("")
-      }
-      PopupMenu(
-        onDismissRequest = {
+      RefPickerPopup(state, actions.toRefPickerActions()) { open = false }
+    }
+  }
+}
+
+/** The ref picker's callbacks, the branch half of [ComposerFooterActions]. */
+class RefPickerActions(
+  val onRefsQuery: (query: String) -> Unit,
+  val onBaseBranch: (branch: String) -> Unit,
+  val onPickRef: (VcsRef) -> Unit,
+  val onCreateRef: (name: String) -> Unit,
+  val onStartFromOrigin: (Boolean) -> Unit,
+)
+
+fun ComposerFooterActions.toRefPickerActions(): RefPickerActions = RefPickerActions(
+  onRefsQuery = onRefsQuery,
+  onBaseBranch = onBaseBranch,
+  onPickRef = onPickRef,
+  onCreateRef = onCreateRef,
+  onStartFromOrigin = onStartFromOrigin,
+)
+
+/**
+ * The ref picker's popup (`BranchPicker`): a search field, the refs `vcs.listRefs` answers, a
+ * "Create branch" row in local mode, the list's status, and the "Start from origin" switch while
+ * a worktree base is being picked. Shared by the composer's strip and T3 Thread Details' branch
+ * row. Closing clears the query. [horizontalAlignment] is where it hangs off its anchor.
+ */
+@Composable
+fun RefPickerPopup(
+  state: WorkspaceControlState,
+  actions: RefPickerActions,
+  horizontalAlignment: Alignment.Horizontal = Alignment.End,
+  onClose: () -> Unit,
+) {
+  val base: Boolean = state.selectingWorktreeBase
+  val query: TextFieldState = remember { TextFieldState(state.refsQuery) }
+  LaunchedEffect(query) {
+    snapshotFlow { query.text.toString() }.collect { actions.onRefsQuery(it) }
+  }
+  fun close() {
+    onClose()
+    actions.onRefsQuery("")
+  }
+  PopupMenu(
+    onDismissRequest = {
+      close()
+      return@PopupMenu true
+    },
+    horizontalAlignment = horizontalAlignment,
+  ) {
+    passiveItem {
+      TextField(
+        state = query,
+        modifier = Modifier.width(280.dp).padding(horizontal = 8.dp, vertical = 4.dp),
+        placeholder = { Text(if (base) "Search refs" else "Search or create a branch") },
+      )
+    }
+    state.refs.forEach { ref ->
+      selectableItem(
+        selected = ref.name == state.baseBranch,
+        onClick = {
           close()
-          return@PopupMenu true
+          if (base) actions.onBaseBranch(ref.name) else actions.onPickRef(ref)
         },
-        horizontalAlignment = Alignment.End,
       ) {
-        passiveItem {
-          TextField(
-            state = query,
-            modifier = Modifier.width(280.dp).padding(horizontal = 8.dp, vertical = 4.dp),
-            placeholder = { Text(if (base) "Search refs" else "Search or create a branch") },
-          )
+        RefRow(ref)
+      }
+    }
+    // `createBranchItemValue`: only in local mode, as a worktree starts from what exists
+    val create: String? = if (base) null else createBranchName(state.refsQuery, state.refs)
+    if (create != null) {
+      selectableItem(
+        selected = false,
+        onClick = {
+          close()
+          actions.onCreateRef(create)
+        },
+      ) {
+        Row(
+          modifier = Modifier.widthIn(min = 240.dp, max = 280.dp),
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Glyph("git-branch", JewelTheme.globalColors.text.info, 12.dp)
+          Text("Create branch \"$create\"", maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        state.refs.forEach { ref ->
-          selectableItem(
-            selected = ref.name == state.baseBranch,
-            onClick = {
-              close()
-              if (base) actions.onBaseBranch(ref.name) else actions.onPickRef(ref)
-            },
-          ) {
-            RefRow(ref)
-          }
-        }
-        // `createBranchItemValue`: only in local mode, as a worktree starts from what exists
-        val create: String? = if (base) null else createBranchName(state.refsQuery, state.refs)
-        if (create != null) {
-          selectableItem(
-            selected = false,
-            onClick = {
-              close()
-              actions.onCreateRef(create)
-            },
-          ) {
-            Row(
-              modifier = Modifier.widthIn(min = 240.dp, max = 280.dp),
-              horizontalArrangement = Arrangement.spacedBy(6.dp),
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Glyph("git-branch", JewelTheme.globalColors.text.info, 12.dp)
-              Text("Create branch \"$create\"", maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-          }
-        }
-        state.refsStatus?.let { status ->
-          passiveItem {
-            Text(
-              text = status,
-              style = small(),
-              color = JewelTheme.globalColors.text.info,
-              modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-            )
-          }
-        }
-        if (base) {
-          separator()
-          passiveItem {
-            // `originControl`, BranchPicker.tsx: a new worktree can start from the remote branch
-            CheckboxRow(
-              text = "Start from origin",
-              checked = state.startFromOrigin,
-              onCheckedChange = actions.onStartFromOrigin,
-              modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-            )
-          }
-        }
+      }
+    }
+    state.refsStatus?.let { status ->
+      passiveItem {
+        Text(
+          text = status,
+          style = small(),
+          color = JewelTheme.globalColors.text.info,
+          modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+        )
+      }
+    }
+    if (base) {
+      separator()
+      passiveItem {
+        // `originControl`, BranchPicker.tsx: a new worktree can start from the remote branch
+        CheckboxRow(
+          text = "Start from origin",
+          checked = state.startFromOrigin,
+          onCheckedChange = actions.onStartFromOrigin,
+          modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+        )
       }
     }
   }

@@ -49,6 +49,7 @@ const val SETTLE_ACTION: String = "T3Code.ToggleSettle"
 const val RENAME_ACTION: String = "T3Code.RenameThread"
 const val SNOOZE_GROUP: String = "T3Code.Snooze"
 const val WAKE_ACTION: String = "T3Code.Wake"
+const val OPEN_IN_IDE_ACTION: String = "T3Code.OpenInIde"
 
 private fun threadContext(
   project: Project,
