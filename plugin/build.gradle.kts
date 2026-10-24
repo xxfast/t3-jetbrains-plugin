@@ -116,7 +116,7 @@ intellijPlatform {
       <b>0.1.0</b>
       <ul>
         <li>Pair with a T3 Code server using a pairing code or link.</li>
-        <li>The Sidebar and the ChatView as tool windows, live as threads run.</li>
+        <li>The Sidebar and Thread Details as tool windows, the ChatView as an editor tab, live as threads run.</li>
         <li>Send, steer and stop. Answer approvals and questions from the composer.</li>
         <li>Start threads, in the current checkout or a new worktree.</li>
         <li>The desktop's thread menu: pin, settle, snooze, rename, archive, delete.</li>

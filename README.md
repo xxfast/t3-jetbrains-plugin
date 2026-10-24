@@ -52,6 +52,8 @@ See the roadmap for what's next.
    banner in the T3 Sidebar tool window, or Settings > Tools > T3 Code > Pair.
 4. The server URL defaults to the desktop app's `http://127.0.0.1:3773`. Change it in
    Settings > Tools > T3 Code for any other server.
+5. Paired before and a control is locked, the branch picker say? The plugin asked for fewer scopes
+   back then. Settings > Tools > T3 Code > Forget, then pair again.
 
 ## Why
 
