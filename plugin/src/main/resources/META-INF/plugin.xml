@@ -42,6 +42,8 @@
     <editorNotificationProvider
       implementation="io.github.xxfast.t3code.plugin.ide.T3FileNotificationProvider"/>
     <notificationGroup id="T3 Code" displayType="BALLOON"/>
+    <!-- "Report to T3 Code" in the IDE's error dialog: a prefilled GitHub issue in the browser -->
+    <errorHandler implementation="io.github.xxfast.t3code.plugin.ide.T3ErrorReportSubmitter"/>
     <!-- Puts T3Code.PasteAttachment and T3Code.PasteAsText ahead of $Paste and Paste from
          History while the composer has focus -->
     <actionPromoter implementation="io.github.xxfast.t3code.plugin.actions.PasteAttachmentPromoter"/>
@@ -54,6 +56,14 @@
   </extensions>
 
   <actions>
+    <!-- Harness only (fixture mode): throws so the error dialog and its report button show -->
+    <action
+      id="T3Code.ThrowTestError"
+      class="io.github.xxfast.t3code.plugin.actions.ThrowTestErrorAction"
+      text="Throw T3 test error"
+      description="Throws an exception to try the error report button">
+      <add-to-group group-id="ToolsMenu" anchor="last"/>
+    </action>
     <!-- Not in upstream's menu: the composer's stop button and `stopThreadSession`. Registered
          for Find Action and the keymap -->
     <action

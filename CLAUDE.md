@@ -70,6 +70,9 @@ How it fits together:
   "running" thread visibly grows, which is the only way to design streaming.
 - The fixture client watches its directory. Edit a JSON file, the tool window updates. No rebuild
   for data changes; a rebuild for Kotlin changes.
+- Tools > "Throw T3 test error" exists only in fixture mode. It brings up the IDE's error dialog
+  with "Report to T3 Code" (#64), which opens a prefilled GitHub issue in the browser: trimmed
+  trace, plugin version, IDE build, OS and JBR. Nothing is posted and no token is involved.
 - A Gradle task `runHarness` (an `intellijPlatformTesting.runIde` registration) launches the
   sandbox on `harness/scenarios/default` (`-Pt3.scenario=pairing` for another folder) with its own
   sandbox dir, so harness state never mixes with `runIde` against a real server.
