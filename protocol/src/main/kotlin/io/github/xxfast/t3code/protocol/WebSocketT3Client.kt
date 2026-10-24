@@ -6,6 +6,7 @@ import io.github.xxfast.t3code.protocol.generated.DispatchCommandResult
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
+import io.github.xxfast.t3code.protocol.generated.ProjectScript
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesResult
 import io.github.xxfast.t3code.protocol.generated.PullRequestDetail
 import io.github.xxfast.t3code.protocol.generated.PullRequestListInput
@@ -341,9 +342,34 @@ public class WebSocketT3Client internal constructor(
       environmentLabel = environment?.string("label"),
       environmentId = environment?.string("environmentId"),
       machine = settings?.string("environmentIcon") ?: platform?.string("machine") ?: "server",
+      scriptSettings = settings?.let(::scriptSettings) ?: ProjectScriptSettings(),
     )
     info = rpc to fresh
     return fresh
+  }
+
+  /** The four script fields of `settings`, each with upstream's decoding default when absent. */
+  private fun scriptSettings(settings: JsonObject): ProjectScriptSettings {
+    val legacy: Map<String, List<ProjectScript>?> =
+      (settings["projectScriptOverrides"] as? JsonObject).orEmpty().mapValues { (_, scripts) ->
+        if (scripts is JsonNull) null else decodeEach(ProjectScript.serializer(), scripts)
+      }
+    val overrides: Map<String, List<ProjectScript>> =
+      (settings["projectSettingsOverrides"] as? JsonObject).orEmpty()
+        .mapNotNull { (id, override) ->
+          val scripts: JsonElement = (override as? JsonObject)?.get("defaultProjectScripts")
+            ?: return@mapNotNull null
+          if (scripts is JsonNull) null else id to decodeEach(ProjectScript.serializer(), scripts)
+        }
+        .toMap()
+    return ProjectScriptSettings(
+      defaultProjectScripts =
+        decodeEach(ProjectScript.serializer(), settings["defaultProjectScripts"]),
+      projectScriptOverrides = legacy,
+      projectSettingsScripts = overrides,
+      projectSettingsFolded =
+        (settings["projectSettingsFolded"] as? JsonPrimitive)?.booleanOrNull ?: false,
+    )
   }
 
   override suspend fun refreshProviders(instanceId: String?, cwd: String?): List<ServerProvider> {

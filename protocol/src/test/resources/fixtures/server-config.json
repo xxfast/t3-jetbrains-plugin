@@ -2,9 +2,15 @@
   "environment": {
     "environmentId": "env-1",
     "label": "Local",
-    "platform": { "os": "darwin", "arch": "arm64" },
+    "platform": {
+      "os": "darwin",
+      "arch": "arm64"
+    },
     "serverVersion": "0.1.1",
-    "capabilities": { "repositoryIdentity": true, "serverResolvedCommandContext": true }
+    "capabilities": {
+      "repositoryIdentity": true,
+      "serverResolvedCommandContext": true
+    }
   },
   "cwd": "/repo",
   "keybindings": [],
@@ -17,13 +23,66 @@
       "installed": true,
       "version": "0.50.0",
       "status": "ready",
-      "auth": { "status": "authenticated" },
+      "auth": {
+        "status": "authenticated"
+      },
       "checkedAt": "2026-10-19T06:00:00.000Z",
       "models": [
-        { "slug": "gpt-5", "name": "GPT-5", "isCustom": false, "capabilities": null },
-        { "slug": "gpt-5-mini", "name": "GPT-5 mini", "isCustom": false, "capabilities": null }
+        {
+          "slug": "gpt-5",
+          "name": "GPT-5",
+          "isCustom": false,
+          "capabilities": null
+        },
+        {
+          "slug": "gpt-5-mini",
+          "name": "GPT-5 mini",
+          "isCustom": false,
+          "capabilities": null
+        }
       ]
     },
-    { "instanceId": "broken", "driver": "from-the-future" }
-  ]
+    {
+      "instanceId": "broken",
+      "driver": "from-the-future"
+    }
+  ],
+  "settings": {
+    "environmentIcon": "laptop",
+    "defaultProjectScripts": [
+      {
+        "id": "scr_default",
+        "name": "Lint",
+        "command": "npm run lint",
+        "icon": "lint",
+        "runOnWorktreeCreate": false
+      }
+    ],
+    "projectScriptOverrides": {
+      "prj_legacy": null,
+      "prj_own": [
+        {
+          "id": "scr_own",
+          "name": "Own",
+          "command": "make",
+          "icon": "run",
+          "runOnWorktreeCreate": false
+        }
+      ]
+    },
+    "projectSettingsOverrides": {
+      "prj_new": {
+        "defaultProjectScripts": [
+          {
+            "id": "scr_new",
+            "name": "Run IDE",
+            "command": "./gradlew runIde",
+            "icon": "run",
+            "runOnWorktreeCreate": false
+          }
+        ]
+      }
+    },
+    "projectSettingsFolded": false
+  }
 }

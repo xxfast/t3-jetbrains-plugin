@@ -9,6 +9,7 @@ import java.net.URI
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -285,6 +286,14 @@ class WebSocketT3ClientTest {
     assertEquals(listOf("gpt-5", "gpt-5-mini"), info.providers.single().models.map { it.slug })
     assertSame(info, client.serverInfo())
     assertEquals(1, rpc.requests("server.getConfig").size)
+    assertEquals("laptop", info.machine)
+    val scripts: ProjectScriptSettings = info.scriptSettings
+    assertEquals(listOf("Lint"), scripts.defaultProjectScripts.map { it.name })
+    assertEquals(setOf("prj_legacy", "prj_own"), scripts.projectScriptOverrides.keys)
+    assertNull(scripts.projectScriptOverrides["prj_legacy"], "null means use the defaults")
+    assertEquals(listOf("Own"), scripts.projectScriptOverrides["prj_own"]?.map { it.name })
+    assertEquals(listOf("Run IDE"), scripts.projectSettingsScripts["prj_new"]?.map { it.name })
+    assertFalse(scripts.projectSettingsFolded)
   }
 
   @Test

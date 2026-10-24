@@ -2,6 +2,7 @@ package io.github.xxfast.t3code.protocol
 
 import io.github.xxfast.t3code.protocol.generated.AuthSessionState
 import io.github.xxfast.t3code.protocol.generated.ProjectReadFileResult
+import io.github.xxfast.t3code.protocol.generated.ProjectScript
 import io.github.xxfast.t3code.protocol.generated.ProjectShell
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.ThreadShell
@@ -126,4 +127,39 @@ public data class ServerInfo(
    * `settings.environmentIcon`, else `environment.platform.machine`, else `server`.
    */
   val machine: String = "server",
+  /** The settings that decide a project's scripts, see [ProjectScriptSettings]. */
+  val scriptSettings: ProjectScriptSettings = ProjectScriptSettings(),
 )
+
+/**
+ * Upstream's `ProjectScriptSettings` (packages/shared/src/projectScripts.ts:3), the four
+ * `settings` fields of `server.getConfig` that `resolveProjectScripts` reads. A project's
+ * scripts live here more often than on its row: the desktop's script editor writes the
+ * per-project override, or the defaults every project inherits.
+ */
+public data class ProjectScriptSettings(
+  /** `defaultProjectScripts`: what a project without its own scripts inherits. */
+  val defaultProjectScripts: List<ProjectScript> = emptyList(),
+  /**
+   * `projectScriptOverrides`, the legacy per-project list: a key with a null value means
+   * "use the defaults", an absent key means "look at the row".
+   */
+  val projectScriptOverrides: Map<String, List<ProjectScript>?> = emptyMap(),
+  /** `projectSettingsOverrides[id].defaultProjectScripts`, by project id, where defined. */
+  val projectSettingsScripts: Map<String, List<ProjectScript>> = emptyMap(),
+  /** `projectSettingsFolded`: the legacy overrides have been folded into the defaults. */
+  val projectSettingsFolded: Boolean = false,
+)
+
+/** `resolveProjectScripts`, packages/shared/src/projectScripts.ts:11, precedence and all. */
+public fun resolveProjectScripts(
+  settings: ProjectScriptSettings,
+  project: Project,
+): List<ProjectScript> {
+  settings.projectSettingsScripts[project.id]?.let { return it }
+  if (settings.projectSettingsFolded) return settings.defaultProjectScripts
+  if (project.id in settings.projectScriptOverrides) {
+    return settings.projectScriptOverrides[project.id] ?: settings.defaultProjectScripts
+  }
+  return project.scripts.ifEmpty { settings.defaultProjectScripts }
+}

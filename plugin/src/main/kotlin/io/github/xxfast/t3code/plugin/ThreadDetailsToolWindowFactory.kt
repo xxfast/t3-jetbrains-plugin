@@ -77,8 +77,10 @@ import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.ProjectScript
 import io.github.xxfast.t3code.protocol.generated.VcsRef
 import io.github.xxfast.t3code.protocol.has
+import io.github.xxfast.t3code.protocol.resolveProjectScripts
 import java.nio.file.Path
 import java.util.UUID
 import kotlin.io.path.isDirectory
@@ -285,6 +287,10 @@ private fun rememberThreadDetailsPanel(
         canChangeBranch = canChangeThreadBranch(session),
       )
     }
+    // `resolveProjectScripts`: the settings decide, the row is one input; the row alone until
+    // the catalog answers
+    val scripts: List<ProjectScript> =
+      catalog?.let { resolveProjectScripts(it.scriptSettings, t3Project) } ?: t3Project.scripts
     val cwdPath: Path? = gitCwd(row, projects)
     val inWindow: Boolean = cwdPath != null && serverIsLocal && belongsIn(cwdPath, roots)
     // This window's run configurations count as the checkout's scripts once it's open here
@@ -307,9 +313,9 @@ private fun rememberThreadDetailsPanel(
         label = "Open in $ideName",
         reason = openInIdeReason(row, cwdPath, serverIsLocal, Path::isDirectory),
       ),
-      scripts = t3Project.scripts,
+      scripts = scripts,
       runConfigurations = configurations,
-      primaryRun = resolvePrimaryRunItem(t3Project.scripts, preferredScriptId, configurations),
+      primaryRun = resolvePrimaryRunItem(scripts, preferredScriptId, configurations),
       runScriptsReason = if (session?.has(TERMINAL_OPERATE) == true) null else
         "Pair this client again with permission to run terminal commands.",
       gitCwd = cwd,

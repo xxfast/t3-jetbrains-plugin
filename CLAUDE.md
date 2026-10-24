@@ -58,8 +58,9 @@ How it fits together:
   `pull-requests.json` with KStore's pull requests for `#`, listed and older ones only
   `pullRequests.detail` finds; KStore has a repository identity, Decompose-Router doesn't, so
   its `#` says pull requests aren't available; KStore has three scripts in `list.json`, one a
-  worktree hook, so T3 Thread Details shows "Run tests" and Decompose-Router shows "Add
-  project script"), and its `connection.json` grants the
+  worktree hook, so T3 Thread Details shows "Run tests", while Decompose-Router inherits the
+  fixture server's `defaultProjectScripts` ("Lint") the way `resolveProjectScripts` has it),
+  and its `connection.json` grants the
   operate, terminal and `source-control:write` scopes so every action is live, the branch
   pickers included. `disconnected/`, `pairing/`, `auth-error/`, `read-only/` (no operate) and
   `empty-server/` cover connection-level states; the ones with threads carry a byte-for-byte copy

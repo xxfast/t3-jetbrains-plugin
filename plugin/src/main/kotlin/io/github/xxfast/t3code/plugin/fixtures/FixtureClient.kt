@@ -15,6 +15,7 @@ import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.ProviderSession
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
+import io.github.xxfast.t3code.protocol.ProjectScriptSettings
 import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.T3Exception
@@ -34,6 +35,7 @@ import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
+import io.github.xxfast.t3code.protocol.generated.ProjectScript
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesResult
 import io.github.xxfast.t3code.protocol.generated.PullRequestDetail
 import io.github.xxfast.t3code.protocol.generated.PullRequestListEntry
@@ -1329,6 +1331,18 @@ class FixtureClient(
     environmentLabel = "Fixture MacBook",
     environmentId = FIXTURE_ENVIRONMENT_ID,
     machine = "laptop",
+    // `defaultProjectScripts`: what Decompose-Router, with no scripts of its own, inherits
+    scriptSettings = ProjectScriptSettings(
+      defaultProjectScripts = listOf(
+        ProjectScript(
+          id = "scr_01JC5M0DEFAULTLINT",
+          name = "Lint",
+          command = "./gradlew check",
+          icon = "lint",
+          runOnWorktreeCreate = false,
+        ),
+      ),
+    ),
   ).let { info -> info.copy(providers = info.providers.map(::withSkills)) }
 
   /**
