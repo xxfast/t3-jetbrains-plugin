@@ -35,6 +35,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateMap
@@ -133,7 +134,8 @@ fun ChatView(
   footerActions: ComposerFooterActions,
   onClearReview: () -> Unit, // drop the review comments going with the next message
   onRollback: (Run) -> Unit, // back to the state after this run, from a prompt's revert
-  onSend: (text: String, mode: ComposerDispatchMode) -> Unit,
+  // The sent message's id to anchor on, null when it queues behind a run or didn't go out
+  onSend: (text: String, mode: ComposerDispatchMode) -> String?,
   onInterrupt: () -> Unit, // the composer's stop button, on the newest run
   onRetry: () -> Unit, // resubscribe after an error
   onOpenFile: (path: String) -> Unit, // a changed file's path
@@ -238,7 +240,7 @@ fun ChatView(
               .map { it.toPromptHistoryMessage() }
           },
           mentions = mentions,
-          onSend = onSend,
+          onSend = { text, mode -> onSend(text, mode)?.let(follow::anchorNewTurn) },
           onInterrupt = onInterrupt,
           onSteerQueued = queue?.let { state -> queuedSteerShortcut(state, queueActions) },
           onEditQueued = queue?.let { state -> queuedEditShortcut(state, queueActions) },
@@ -629,7 +631,17 @@ private fun MessagesTimeline(
       expansion = expansion.copy(workGroupIds = expansion.workGroupIds.toggle(groupId))
     },
   )
-  FollowTail(state, follow)
+  val anchored: Int? = anchoredIndex(rows, follow.anchor)
+  FollowTail(state, follow, anchored)
+  AnchorNewTurn(state, follow, anchored)
+  // `useTimelineFollow`'s release: once the running run does work, the anchor gives way
+  val runningRunId: String? = running?.id
+  LaunchedEffect(follow.mode, follow.anchor, runningRunId, entries) {
+    if (follow.mode != TimelineScrollMode.AnchoringNewTurn) return@LaunchedEffect
+    if (shouldReleaseTimelineAnchor(follow.anchor, follow.following, runningRunId, entries)) {
+      follow.scrollToEnd()
+    }
+  }
 
   BoxWithConstraints(modifier.fillMaxSize()) {
     // `.messages-timeline-scroll`: 12px a side when narrow, 48px from 640px up
@@ -725,10 +737,11 @@ private fun TimelineRow.bottomPadding(continuesWorkLog: Boolean): Dp = when (thi
  * (MessagesTimeline.tsx).
  */
 @Composable
-private fun FollowTail(state: LazyListState, follow: TimelineFollow) {
+private fun FollowTail(state: LazyListState, follow: TimelineFollow, anchored: Int?) {
   val threshold: Int = with(LocalDensity.current) {
     TIMELINE_FOLLOW_REARM_THRESHOLD_DP.dp.roundToPx()
   }
+  val currentAnchored: Int? by rememberUpdatedState(anchored)
   LaunchedEffect(state, follow, threshold) {
     snapshotFlow { state.layoutInfo }.collect { info ->
       val last: LazyListItemInfo? = info.visibleItemsInfo.lastOrNull()
@@ -739,10 +752,26 @@ private fun FollowTail(state: LazyListState, follow: TimelineFollow) {
         afterContentPadding = info.afterContentPadding,
         viewportEnd = info.viewportEndOffset,
       )
-      if (follow.onLayout(gap, threshold)) {
+      if (follow.onLayout(gap, threshold, anchored = currentAnchored != null)) {
         state.scrollToItem(info.totalItemsCount - 1, Int.MAX_VALUE)
       }
     }
+  }
+}
+
+/**
+ * `onTimelineAnchorReady`: scrolls the anchored row to the top once, then leaves it. Upstream
+ * reserves end space below the row so it can sit at the top whatever follows; the first prompt
+ * is all but always the plugin's first row, so it goes without and the list clamps otherwise.
+ */
+@Composable
+private fun AnchorNewTurn(state: LazyListState, follow: TimelineFollow, anchored: Int?) {
+  val messageId: String? = follow.anchor?.takeIf { anchored != null }
+  LaunchedEffect(state, follow, messageId) {
+    if (messageId == null || anchored == null || !follow.positionAnchor(messageId)) {
+      return@LaunchedEffect
+    }
+    state.animateScrollToItem(anchored)
   }
 }
 

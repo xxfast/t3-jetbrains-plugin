@@ -225,9 +225,12 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
         view?.let { current -> confirmRollback(project, controller, current, run) { latest } }
       },
       onSend = onSend@{ text, mode ->
-        val current: ThreadView = view ?: return@onSend
+        val current: ThreadView = view ?: return@onSend null
         // Edit mode repurposes the composer: a send saves the queued message in place
-        if (editing != null) return@onSend queuedRuns.saveEdit(threadId, text)
+        if (editing != null) {
+          queuedRuns.saveEdit(threadId, text)
+          return@onSend null
+        }
         // `compactBeforeSend`, ChatView.tsx:6370: a `/compact` of its own doesn't compact twice
         val compactFirst: Boolean = contextWindow.compactBeforeSendTokens != null &&
           !contextWindow.keepFullHistory &&
@@ -239,8 +242,10 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
           resolveSendEnvMode(workspace?.envMode ?: EnvMode.LOCAL, isGitRepo = workspace != null)
         val worktree: ChatController.WorktreeLaunch? =
           if (workspace != null && footer != null && shouldCreateWorktree(current, sendEnvMode)) {
-            val base: String = workspace.baseBranch
-              ?: return@onSend controller.blocked(current.thread.id, SELECT_BASE_BRANCH_ERROR)
+            val base: String = workspace.baseBranch ?: run {
+              controller.blocked(current.thread.id, SELECT_BASE_BRANCH_ERROR)
+              return@onSend null
+            }
             ChatController.WorktreeLaunch(
               baseBranch = base,
               startFromOrigin = workspace.startFromOrigin,
@@ -253,7 +258,11 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
         // In local mode a picked branch lands on the row with the send
         val nextBranch: String? =
           if (worktree == null && workspace != null) pending.workspace.branch else null
-        controller.send(current, text, mode, compactFirst, worktree, nextBranch)
+        val messageId: String =
+          controller.send(current, text, mode, compactFirst, worktree, nextBranch)
+        // `shouldQueueBehindActiveRun` (ChatView.logic.ts): a queued message doesn't move the
+        // timeline; the composer only asks to queue while a run is going
+        messageId.takeUnless { compactFirst || mode == ComposerDispatchMode.QUEUE }
       },
       onInterrupt = {
         view?.let { current ->

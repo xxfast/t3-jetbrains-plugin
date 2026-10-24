@@ -806,7 +806,8 @@ class ChatController(private val project: Project, private val scope: CoroutineS
    * Sends [text] as a follow-up on [view]'s thread. It shows at once until the server
    * acknowledges it; a refusal takes it back out and puts the text back in the draft. With
    * [compactFirst] a `/compact` goes out first and the message queues behind it, as upstream's
-   * `compactBeforeSend` (`ChatView.tsx:6370`): steering into a compaction is refused.
+   * `compactBeforeSend` (`ChatView.tsx:6370`): steering into a compaction is refused. Answers
+   * the message's id.
    */
   fun send(
     view: ThreadView,
@@ -815,7 +816,7 @@ class ChatController(private val project: Project, private val scope: CoroutineS
     compactFirst: Boolean = false,
     worktree: WorktreeLaunch? = null,
     nextBranch: String? = null, // the branch picked for this turn, `persistThreadSettingsForNextTurn`
-  ) {
+  ): String {
     val threadId: String = view.thread.id
     val messageId: String = UUID.randomUUID().toString()
     // Attachments and context ride along; the pinned server always advertises
@@ -904,6 +905,7 @@ class ChatController(private val project: Project, private val scope: CoroutineS
         }
       }
     }
+    return messageId
   }
 
   /**

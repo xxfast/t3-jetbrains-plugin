@@ -63,6 +63,65 @@ class ChatViewLogicTest {
   }
 
   @Test
+  fun `a send returns to the end after scrolling away`() {
+    val follow = TimelineFollow()
+    follow.cancelForUserNavigation()
+    assertFalse(follow.onLayout(gap = 400, thresholdPx = 40))
+    follow.anchorNewTurn("m-2")
+    assertEquals(TimelineScrollMode.AnchoringNewTurn, follow.mode)
+    assertTrue(follow.onLayout(gap = 400, thresholdPx = 40)) // a follow-up isn't anchored
+  }
+
+  @Test
+  fun `an anchored first prompt holds while its reply streams past the end`() {
+    val follow = TimelineFollow()
+    follow.anchorNewTurn("m-1")
+    assertFalse(follow.onLayout(gap = 0, thresholdPx = 40, anchored = true))
+    assertFalse(follow.onLayout(gap = 400, thresholdPx = 40, anchored = true))
+    // leaving the end without the user doesn't count, so coming back doesn't let go either
+    assertFalse(follow.onLayout(gap = 0, thresholdPx = 40, anchored = true))
+    assertEquals("m-1", follow.anchor)
+    assertTrue(follow.positionAnchor("m-1"))
+    assertFalse(follow.positionAnchor("m-1")) // scrolled into place once
+  }
+
+  @Test
+  fun `scrolling away keeps the anchor, coming back to the end lets it go`() {
+    val follow = TimelineFollow()
+    follow.anchorNewTurn("m-1")
+    follow.cancelForUserNavigation()
+    assertFalse(follow.onLayout(gap = 400, thresholdPx = 40, anchored = true))
+    assertEquals("m-1", follow.anchor)
+    assertTrue(follow.onLayout(gap = 20, thresholdPx = 40, anchored = false))
+    assertEquals(TimelineScrollMode.FollowingEnd, follow.mode)
+    assertEquals(null, follow.anchor)
+  }
+
+  @Test
+  fun `only the first prompt is anchored`() {
+    val rows: List<TimelineRow> = listOf(prompt("m-1"), prompt("m-2"))
+    assertEquals(0, anchoredIndex(rows, "m-1"))
+    assertEquals(null, anchoredIndex(rows, "m-2"))
+    assertEquals(null, anchoredIndex(rows, null))
+  }
+
+  @Test
+  fun `the running run's work lets the anchor go`() {
+    val work = TimelineEntry.Work(
+      WorkLogEntry(
+        item = item<TurnItem>("""{"type":"command_execution","runId":"r-1"}"""),
+        label = "Ran command",
+        tone = WorkTone.Tool,
+        status = null,
+      ),
+    )
+    assertTrue(shouldReleaseTimelineAnchor("m-1", true, "r-1", listOf(work)))
+    assertFalse(shouldReleaseTimelineAnchor("m-1", true, "r-2", listOf(work)))
+    assertFalse(shouldReleaseTimelineAnchor("m-1", false, "r-1", listOf(work)))
+    assertFalse(shouldReleaseTimelineAnchor(null, true, "r-1", listOf(work)))
+  }
+
+  @Test
   fun `follow the end only when pinned and it's off screen`() {
     assertTrue(shouldFollowTimelineEnd(pinned = true, gap = 200))
     assertTrue(shouldFollowTimelineEnd(pinned = true, gap = null))
@@ -82,6 +141,21 @@ class ChatViewLogicTest {
       change.copy(changes = listOf(FileChangeDetail(operation = "update", path = "src/A.kt")))
     assertEquals("src/A.kt", moved.openPath())
   }
+
+  private fun prompt(messageId: String): TimelineRow = TimelineRow.Message(
+    entry = TimelineEntry.Message(
+      item<TurnItem>(
+        """
+          {
+            "id": "$messageId", "type": "user_message", "text": "hi", "messageId": "$messageId",
+            "createdBy": "user", "creationSource": "web", "inputIntent": "turn_start",
+            "attachments": []
+          }
+        """,
+      ),
+    ),
+    showMeta = false,
+  )
 
   /** A turn item from [json] plus the fields every item requires. */
   private inline fun <reified T : TurnItem> item(json: String): T {

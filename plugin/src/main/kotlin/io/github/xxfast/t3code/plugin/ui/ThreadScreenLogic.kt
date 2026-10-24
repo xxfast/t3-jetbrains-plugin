@@ -1,5 +1,8 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.time.Instant
@@ -48,31 +51,103 @@ fun timelineEndGap(
 /** `resolveTimelineIsAtEnd`, MessagesTimeline.logic.ts: within the re-arm band of the end. */
 fun isTimelineAtEnd(gap: Int?, thresholdPx: Int): Boolean = gap != null && gap <= thresholdPx
 
+/** `TimelineScrollMode`, timelineScrollAnchoring.ts. */
+enum class TimelineScrollMode { FollowingEnd, AnchoringNewTurn, FreeScrolling }
+
 /**
- * Whether the timeline follows its end, upstream's follow mode (ChatView.tsx:4162). Only the
- * user's navigation away from the end breaks it (`cancelTimelineLiveFollowForUserNavigation`);
- * rows arriving, regrouping or streaming never do. Coming back into the end band re-arms it, on
- * the change only, as `onIsAtEndChange` does, so a small scroll up inside the band holds. One per
- * thread.
+ * How the timeline scrolls, upstream's `useTimelineFollow` (chat/useTimelineFollow.ts). It
+ * follows its end until the user navigates away (`cancelTimelineLiveFollowForUserNavigation`);
+ * rows arriving, regrouping or streaming never break it. Coming back into the end band re-arms
+ * it, on the change only, as `onIsAtEndChange` does, so a small scroll up inside the band holds.
+ * A send anchors its message ([anchorNewTurn]); the anchor only holds the row in place when it's
+ * the thread's first prompt ([anchoredIndex]), otherwise the send just returns to the end. One
+ * per thread.
  */
 class TimelineFollow {
-  var following: Boolean = true
+  var mode: TimelineScrollMode by mutableStateOf(TimelineScrollMode.FollowingEnd)
     private set
 
+  /** The sent message's id, upstream's `timelineAnchor.messageId`. Free scrolling keeps it. */
+  var anchor: String? by mutableStateOf(null)
+    private set
+
+  /** `timelineLiveFollowEnabled`: following the end, or anchoring a send. */
+  val following: Boolean get() = mode != TimelineScrollMode.FreeScrolling
+
   private var atEnd: Boolean = true
+  private var positioned: String? = null // `positionedTimelineAnchorRef`
 
   /** `cancelTimelineLiveFollowForUserNavigation`: a wheel step or scrollbar drag up. */
   fun cancelForUserNavigation() {
-    following = false
+    mode = TimelineScrollMode.FreeScrolling
+    positioned = null
   }
 
-  /** After a layout, [gap] as [timelineEndGap] has it: whether to scroll to the true end. */
-  fun onLayout(gap: Int?, thresholdPx: Int): Boolean {
-    val nowAtEnd: Boolean = isTimelineAtEnd(gap, thresholdPx)
-    if (nowAtEnd && !atEnd) following = true
-    atEnd = nowAtEnd
-    return shouldFollowTimelineEnd(following, gap)
+  /** `anchorNewTurn`: a message the user just sent, before its run exists. */
+  fun anchorNewTurn(messageId: String) {
+    atEnd = true
+    mode = TimelineScrollMode.AnchoringNewTurn
+    anchor = messageId
   }
+
+  /** `scrollToEnd`: back to following the end, the anchor let go. */
+  fun scrollToEnd() {
+    atEnd = true
+    mode = TimelineScrollMode.FollowingEnd
+    anchor = null
+  }
+
+  /**
+   * After a layout, [gap] as [timelineEndGap] has it: whether to scroll to the true end. An
+   * [anchored] row holds instead, as `maintainScrollAtEnd` is off while the anchored end space
+   * is (MessagesTimeline.tsx).
+   */
+  fun onLayout(gap: Int?, thresholdPx: Int, anchored: Boolean = false): Boolean {
+    val nowAtEnd: Boolean = isTimelineAtEnd(gap, thresholdPx)
+    // `onIsAtEndChange`: leaving the end only counts once the user has broken the follow
+    if (nowAtEnd != atEnd && (nowAtEnd || mode == TimelineScrollMode.FreeScrolling)) {
+      atEnd = nowAtEnd
+      if (nowAtEnd) scrollToEnd()
+    }
+    return shouldFollowTimelineEnd(following && !anchored, gap)
+  }
+
+  /** `onTimelineAnchorReady`: whether the anchored row still has to be scrolled into place. */
+  fun positionAnchor(messageId: String): Boolean {
+    if (positioned == messageId) return false
+    positioned = messageId
+    return true
+  }
+}
+
+/**
+ * `resolveChatListAnchoredEndSpace`, packages/shared/src/chatList.ts: [anchor]'s index when it's
+ * the first user message, else null. Only a thread's first prompt is held near the top; a
+ * follow-up returns to the end (upstream #7897).
+ */
+fun anchoredIndex(rows: List<TimelineRow>, anchor: String?): Int? {
+  if (anchor == null) return null
+  val index: Int = rows.indexOfFirst { row -> row.userMessageId() != null }
+  return index.takeIf { it >= 0 && rows[it].userMessageId() == anchor }
+}
+
+private fun TimelineRow.userMessageId(): String? =
+  ((this as? TimelineRow.Message)?.entry?.item as? TurnItem.UserMessage)?.messageId
+
+/**
+ * `shouldReleaseTimelineAnchorForToolActivity`, ChatView.logic.ts, with `useTimelineFollow`'s
+ * reasoning check: the running run did work, so the anchor gives way to following the end.
+ * Every work entry here carries its item's type, as upstream's do, so any one of the run's
+ * counts, reasoning included.
+ */
+fun shouldReleaseTimelineAnchor(
+  anchor: String?,
+  following: Boolean,
+  runningRunId: String?,
+  entries: List<TimelineEntry>,
+): Boolean {
+  if (anchor == null || !following || runningRunId == null) return false
+  return entries.any { entry -> entry is TimelineEntry.Work && entry.runId == runningRunId }
 }
 
 /**
