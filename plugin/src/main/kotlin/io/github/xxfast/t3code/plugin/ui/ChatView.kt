@@ -172,6 +172,7 @@ fun ChatView(
     composer.reviewComments > 0 ||
     extras.attachments.isNotEmpty() ||
     extras.comments.isNotEmpty() ||
+    extras.selection != null ||
     extras.notice != null ||
     extras.blockReason != null
   val collapseEligible: Boolean = !hasMultilinePrompt && !hasExpandedChrome

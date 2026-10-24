@@ -69,6 +69,40 @@ class ComposerContextLogicTest {
   }
 
   @Test
+  fun anEditorSelectionIsTheSameCommentAsTheWholeFileGives() {
+    val selection = EditorSelection(
+      id = "file-comment-1700000000000-1",
+      path = Path.of("/repo/plugin/src/Paths.kt"),
+      lines = 10..12,
+      text = "line 10\nline 11\nline 12",
+    )
+
+    val comment: ReviewCommentContext? = selectionComment(selection, "/repo", "/repo")
+
+    val expected: ReviewCommentContext =
+      fileReviewComment(selection.id, "plugin/src/Paths.kt", 10, 12, "", contents)
+    assertEquals(expected, comment)
+  }
+
+  @Test
+  fun aSelectionInTheMainCheckoutGoesToAWorktreeThreadByItsRelativePath() {
+    val selection = EditorSelection("c", Path.of("/repo/src/a.kt"), 1..1, "line 1")
+
+    val comment: ReviewCommentContext? =
+      selectionComment(selection, cwd = "/worktrees/feature", workspaceRoot = "/repo")
+
+    assertEquals("src/a.kt", comment?.filePath)
+  }
+
+  @Test
+  fun aSelectionOutsideTheThreadsProjectIsNotOffered() {
+    val selection = EditorSelection("c", Path.of("/elsewhere/a.kt"), 1..1, "line 1")
+
+    assertNull(selectionComment(selection, cwd = "/repo", workspaceRoot = "/repo"))
+    assertNull(selectionComment(selection, cwd = null, workspaceRoot = null))
+  }
+
+  @Test
   fun fenceLanguageFollowsUpstream() {
     assertEquals("kt", inferReviewCommentFenceLanguage("src/Main.KT"))
     assertEquals("gitignore", inferReviewCommentFenceLanguage("repo/.gitignore"))

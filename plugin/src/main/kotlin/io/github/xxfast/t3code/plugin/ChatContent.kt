@@ -24,6 +24,7 @@ import io.github.xxfast.t3code.plugin.actions.RENAME_ACTION
 import io.github.xxfast.t3code.plugin.actions.performThreadAction
 import io.github.xxfast.t3code.plugin.actions.showThreadMenu
 import io.github.xxfast.t3code.plugin.ui.ChatHeaderActions
+import io.github.xxfast.t3code.plugin.ide.EditorSelections
 import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ide.VcsStatuses
 import io.github.xxfast.t3code.plugin.ide.notify
@@ -42,6 +43,7 @@ import io.github.xxfast.t3code.plugin.ui.ComposerState
 import io.github.xxfast.t3code.plugin.ui.ContextWindowSnapshot
 import io.github.xxfast.t3code.plugin.settings.ComposerDrafts
 import io.github.xxfast.t3code.plugin.ui.DraftExtras
+import io.github.xxfast.t3code.plugin.ui.EditorSelection
 import io.github.xxfast.t3code.plugin.ui.PromptStashEntry
 import io.github.xxfast.t3code.plugin.ui.parentThreadLink
 import io.github.xxfast.t3code.plugin.ui.LocalMessageImages
@@ -62,6 +64,7 @@ import io.github.xxfast.t3code.plugin.ui.latestRun
 import io.github.xxfast.t3code.plugin.ui.resolveSendEnvMode
 import io.github.xxfast.t3code.plugin.ui.resolveVisibleWorktreeSetup
 import io.github.xxfast.t3code.plugin.ui.resolveWorktreeSetupProgress
+import io.github.xxfast.t3code.plugin.ui.selectionComment
 import io.github.xxfast.t3code.plugin.ui.shouldShowComposerContextStrip
 import io.github.xxfast.t3code.plugin.ui.shouldCreateWorktree
 import io.github.xxfast.t3code.plugin.ui.workspaceControlState
@@ -191,6 +194,12 @@ fun ChatContent(
   val projectId: String? = view?.thread?.projectId
   // One subscription per checkout, shared by every tab showing it
   val cwd: String? = threadCwd(view?.thread, projects)
+  val workspaceRoot: String? = projects.find { it.id == projectId }?.workspaceRoot
+  val selections: EditorSelections = EditorSelections.getInstance(project)
+  val editorSelection: EditorSelection? by selections.selection.collectAsState()
+  val selection: ReviewCommentContext? = remember(editorSelection, cwd, workspaceRoot) {
+    editorSelection?.let { selectionComment(it, cwd, workspaceRoot) }
+  }
   val vcs: VcsSummary? by remember(cwd) { VcsStatuses.getInstance(project).summary(cwd) }
     .collectAsState()
   val setup: WorktreeSetupState = rememberWorktreeSetup(view, pending, client)
@@ -271,8 +280,12 @@ fun ChatContent(
         // In local mode a picked branch lands on the row with the send
         val nextBranch: String? =
           if (worktree == null && workspace != null) pending.workspace.branch else null
-        val messageId: String =
-          controller.send(current, text, mode, compactFirst, worktree, nextBranch, isDraft)
+        // The selection as it is now, not as this composition saw it
+        val selected: ReviewCommentContext? =
+          selections.selection.value?.let { selectionComment(it, cwd, workspaceRoot) }
+        val messageId: String = controller.send(
+          current, text, mode, compactFirst, worktree, nextBranch, isDraft, selected,
+        )
         // `shouldQueueBehindActiveRun` (ChatView.logic.ts): a queued message doesn't move the
         // timeline; the composer only asks to queue while a run is going
         messageId.takeUnless { compactFirst || mode == ComposerDispatchMode.QUEUE }
@@ -313,7 +326,11 @@ fun ChatContent(
         onOpenThread = { parentId -> opener.openThread(parentId) },
       ),
       // A queued message's edit is text only: the thread's draft attachments stay out of it
-      extras = if (editing != null) DraftExtras() else extras[threadId] ?: DraftExtras(),
+      extras = if (editing != null) {
+        DraftExtras()
+      } else {
+        (extras[threadId] ?: DraftExtras()).copy(selection = selection)
+      },
       attachmentActions = rememberAttachmentActions(project, threadId, controller)
         .takeIf { editing == null } ?: AttachmentActions(),
       stashCount = stash.size,

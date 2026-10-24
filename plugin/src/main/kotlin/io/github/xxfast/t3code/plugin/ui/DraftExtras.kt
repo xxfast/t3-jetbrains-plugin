@@ -14,6 +14,11 @@ data class DraftExtras(
   val notice: String? = null,
   /** Threads mentioned with `@`, upstream's `threadContexts`. */
   val threads: List<ThreadContextRecord> = emptyList(),
+  /**
+   * The editor's selection, shown as a chip until the send makes it a comment. Only the view's
+   * copy has it; the controller's drafts never do, so it's never saved or restored.
+   */
+  val selection: ReviewCommentContext? = null,
 ) {
   /** The attachments that go out with the message, as the server knows them. */
   val ready: List<ChatAttachment>

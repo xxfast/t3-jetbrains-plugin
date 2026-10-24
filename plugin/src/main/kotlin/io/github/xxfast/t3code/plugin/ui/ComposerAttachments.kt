@@ -82,21 +82,23 @@ class AttachmentActions(
 )
 
 /**
- * The draft's images as tiles, then its review comments and other files as chips, above the
- * text field. Images are upstream's composer tiles (`ChatComposer.tsx:6763`): a wrapping row
+ * The draft's images as tiles, then the editor's selection, its review comments and other files
+ * as chips, above the text field. Images are upstream's composer tiles (`ChatComposer.tsx:6763`): a wrapping row
  * with `gap-2`, each `h-16 w-16 rounded-lg border` with the picture cropped to fill, a click to
  * see it whole, the upload's percentage along the bottom, a retry when it failed and a remove
  * button in the corner; videos join them as play tiles. The chips are like upstream's composer
  * context chips: a comment by its label (`Paths.kt L10 to L20`), a file by name and
  * `formatAttachmentSize` (its percentage while it uploads), the error colour when it failed
- * (click to retry), and a remove button on each. Then why the last attach was refused, or why
- * Send waits.
+ * (click to retry), and a remove button on each. The selection is ours, a comment's chip marked
+ * "selected". Then why the last attach was refused, or why Send waits.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ComposerChips(extras: DraftExtras, enabled: Boolean, actions: AttachmentActions) {
   val note: String? = extras.notice ?: extras.blockReason
-  if (extras.comments.isEmpty() && extras.attachments.isEmpty() && note == null) return
+  val selection: ReviewCommentContext? = extras.selection
+  val empty: Boolean = extras.comments.isEmpty() && extras.attachments.isEmpty()
+  if (empty && selection == null && note == null) return
   val (images: List<DraftAttachment>, others: List<DraftAttachment>) =
     extras.attachments.partition { it.kind == AttachmentKind.IMAGE }
   // `composerOtherFilesForPresentation`: videos are tiles beside the images
@@ -113,10 +115,16 @@ fun ComposerChips(extras: DraftExtras, enabled: Boolean, actions: AttachmentActi
         videos.forEach { video -> VideoTile(video, enabled, actions) }
       }
     }
-    if (extras.comments.isNotEmpty() || files.isNotEmpty()) Row(
+    if (selection != null || extras.comments.isNotEmpty() || files.isNotEmpty()) Row(
       modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
       horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+      if (selection != null) Chip(
+        label = selection.label,
+        detail = "selected",
+        enabled = enabled,
+        onRemove = { actions.onRemoveContext(selection.contextId) },
+      )
       extras.comments.forEach { comment ->
         Chip(
           label = comment.label,

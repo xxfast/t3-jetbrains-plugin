@@ -881,7 +881,8 @@ private fun slashMenuItem(item: SlashSearchItem, onPick: () -> Unit): ComposerMe
  * images, files, terminal and preview contexts and review comments.
  */
 private fun hasNonPromptContent(state: ComposerState, extras: DraftExtras): Boolean =
-  extras.attachments.isNotEmpty() || extras.comments.isNotEmpty() || state.reviewComments > 0
+  extras.attachments.isNotEmpty() || extras.comments.isNotEmpty() || extras.selection != null ||
+    state.reviewComments > 0
 
 /** How far a resting prompt's one line sits from the row's top to look centred in 32dp. */
 private val RESTING_TEXT_INSET: Dp = 6.dp

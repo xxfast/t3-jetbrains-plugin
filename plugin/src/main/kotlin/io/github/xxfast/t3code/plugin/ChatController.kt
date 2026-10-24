@@ -5,6 +5,7 @@ import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.placeCursorAtEnd
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.snapshotFlow
+import io.github.xxfast.t3code.plugin.ide.EditorSelections
 import io.github.xxfast.t3code.plugin.settings.ComposerDrafts
 import io.github.xxfast.t3code.plugin.ui.PersistedComposerDraft
 import io.github.xxfast.t3code.plugin.ui.PromptStashEntry
@@ -39,6 +40,7 @@ import io.github.xxfast.t3code.plugin.ui.ProviderWorkspaceSnapshotRefresh
 import io.github.xxfast.t3code.plugin.ui.hasCompleteProviderWorkspaceSnapshot
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.plugin.ui.ReviewCommentContext
+import io.github.xxfast.t3code.plugin.ui.contextId
 import io.github.xxfast.t3code.plugin.ui.BranchSelectionTarget
 import io.github.xxfast.t3code.plugin.ui.WorkspaceDraft
 import io.github.xxfast.t3code.plugin.ui.deriveLocalBranchNameFromRemoteRef
@@ -294,6 +296,7 @@ class ChatController(private val project: Project, private val scope: CoroutineS
   }
 
   fun removeContext(threadId: String, contextId: String) {
+    EditorSelections.getInstance(project).dismiss(contextId)
     updateExtras(threadId) { extras -> extras.withoutComment(contextId) }
   }
 
@@ -807,7 +810,8 @@ class ChatController(private val project: Project, private val scope: CoroutineS
    * acknowledges it; a refusal takes it back out and puts the text back in the draft. With
    * [compactFirst] a `/compact` goes out first and the message queues behind it, as upstream's
    * `compactBeforeSend` (`ChatView.tsx:6370`): steering into a compaction is refused. A
-   * [create] is a draft's first message, which brings the thread into being. Answers the
+   * [create] is a draft's first message, which brings the thread into being. The editor's
+   * [selection] goes as one more comment, and a refusal keeps it in the draft. Answers the
    * message's id.
    */
   fun send(
@@ -818,6 +822,7 @@ class ChatController(private val project: Project, private val scope: CoroutineS
     worktree: WorktreeLaunch? = null,
     nextBranch: String? = null, // the branch picked for this turn, `persistThreadSettingsForNextTurn`
     create: Boolean = false,
+    selection: ReviewCommentContext? = null,
   ): String {
     val threadId: String = view.thread.id
     val messageId: String = UUID.randomUUID().toString()
@@ -825,6 +830,8 @@ class ChatController(private val project: Project, private val scope: CoroutineS
     // `inlineMessageContext` (apps/server/src/environment/ServerEnvironment.ts:226), so the
     // records go as `context`, never the legacy text serialisation
     val extras: DraftExtras = extrasOf(threadId)
+      .let { draft -> if (selection != null) draft.withComment(selection) else draft }
+    selection?.let { EditorSelections.getInstance(project).dismiss(it.contextId) }
     val outgoing: String = outgoingText(text, extras)
     val context: MessageContext? = messageContext(extras.records(outgoing))
     val attachments: List<ChatAttachment> = extras.ready

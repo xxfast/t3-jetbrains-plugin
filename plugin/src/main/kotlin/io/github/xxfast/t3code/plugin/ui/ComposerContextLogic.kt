@@ -79,7 +79,18 @@ fun fileReviewComment(
   val end: Int = maxOf(start, maxOf(startLine, endLine))
   val lines: List<String> = contents.split("\n")
   val selected: List<String> = lines.subList(minOf(start - 1, lines.size), minOf(end, lines.size))
-  return ReviewCommentContext(
+  return fileReviewComment(id, filePath, start, end, text, selected)
+}
+
+private fun fileReviewComment(
+  id: String,
+  filePath: String,
+  start: Int,
+  end: Int,
+  text: String,
+  selected: List<String>,
+): ReviewCommentContext =
+  ReviewCommentContext(
     id = id,
     sectionId = "file:$filePath",
     sectionTitle = "File comment",
@@ -90,6 +101,36 @@ fun fileReviewComment(
     text = text.trim(),
     diff = selected.joinToString("\n"),
     fenceLanguage = inferReviewCommentFenceLanguage(filePath),
+  )
+
+/**
+ * The editor's last selection: [path]'s 1-based [lines] and their [text]. [id] is new each time
+ * the selection changes, so its comment is a new context.
+ */
+data class EditorSelection(val id: String, val path: Path, val lines: IntRange, val text: String)
+
+/**
+ * [selection] as the file comment a send carries for a thread running in [cwd], or null when the
+ * file is under neither [cwd] nor the project's [workspaceRoot]. A thread in a worktree still
+ * gets the main checkout's files, by the same relative path. Ours, not upstream's: the web app
+ * has no editor, so this is Claude Code's IDE selection on upstream's `buildFileReviewComment`.
+ */
+fun selectionComment(
+  selection: EditorSelection,
+  cwd: String?,
+  workspaceRoot: String?,
+): ReviewCommentContext? {
+  val root: String = listOfNotNull(cwd, workspaceRoot).firstOrNull { root ->
+    val path: Path? = runCatching { Path.of(root) }.getOrNull()
+    path != null && isUnder(path, selection.path)
+  } ?: return null
+  return fileReviewComment(
+    id = selection.id,
+    filePath = commentFilePath(root, selection.path),
+    start = selection.lines.first,
+    end = selection.lines.last,
+    text = "",
+    selected = selection.text.split("\n"),
   )
 }
 
