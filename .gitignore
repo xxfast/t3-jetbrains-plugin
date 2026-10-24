@@ -18,3 +18,6 @@ local.properties
 # contracts/ tooling: npm deps and the upstream checkout export.ts clones
 contracts/node_modules/
 contracts/.upstream/
+
+# Signing key and certificate for signPlugin, never committed
+/keys/
