@@ -1,10 +1,12 @@
 package io.github.xxfast.t3code.plugin.ide
 
 import com.intellij.ide.BrowserUtil
+import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.diagnostic.ErrorReportSubmitter
 import com.intellij.openapi.diagnostic.IdeaLoggingEvent
 import com.intellij.openapi.diagnostic.SubmittedReportInfo
+import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.util.Consumer
@@ -27,7 +29,8 @@ class T3ErrorReportSubmitter : ErrorReportSubmitter() {
     val event: IdeaLoggingEvent = events.firstOrNull() ?: return false
     val info: ApplicationInfo = ApplicationInfo.getInstance()
     val environment = ErrorReportEnvironment(
-      pluginVersion = pluginDescriptor?.version ?: "unknown",
+      // getPluginDescriptor() is override-only on 2025.3, so look the plugin up by id instead
+      pluginVersion = PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID))?.version ?: "unknown",
       ide = "${info.fullApplicationName} (${info.build.asString()})",
       os = "${SystemInfo.getOsNameAndVersion()} ${SystemInfo.OS_ARCH}",
       jbr = SystemInfo.JAVA_RUNTIME_VERSION,
@@ -39,3 +42,5 @@ class T3ErrorReportSubmitter : ErrorReportSubmitter() {
     return true
   }
 }
+
+private const val PLUGIN_ID: String = "io.github.xxfast.t3code"
