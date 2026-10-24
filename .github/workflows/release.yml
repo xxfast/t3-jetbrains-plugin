@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["[0-9]*"] # bare versions, 0.1.0, matching the plugin version and the zip name
 
 permissions:
   contents: write
