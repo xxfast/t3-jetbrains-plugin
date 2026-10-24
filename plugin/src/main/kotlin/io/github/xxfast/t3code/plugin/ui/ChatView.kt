@@ -28,6 +28,8 @@ import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.DisableSelection
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -706,22 +708,28 @@ private fun MessagesTimeline(
       onScrollUp = follow::cancelForUserNavigation,
       modifier = Modifier.fillMaxSize(),
     ) {
-      LazyColumn(
-        state = state,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp + bottomInset),
-        horizontalAlignment = Alignment.CenterHorizontally,
-      ) {
-        itemsIndexed(rows, key = { _, row -> row.id }) { index, row ->
-          val continues: Boolean = row.isWorkLog() && rows.getOrNull(index + 1).isWorkLog()
-          Box(
-            Modifier
-              .widthIn(max = MAX_CONTENT_WIDTH)
-              .fillMaxWidth()
-              .padding(horizontal = side)
-              .padding(bottom = row.bottomPadding(continues)),
-          ) {
-            TimelineRowContent(row, context)
+      // The timeline is browser text upstream: drag selects it, Cmd/Ctrl+C and the right-click
+      // menu copy it. `SelectionContainer` is that here; its menu is Jewel's `TextContextMenu`
+      // (Copy, Select All), which `DefaultComponentStyling` provides. Rows upstream marks
+      // `select-none` opt out with `DisableSelection`.
+      SelectionContainer(Modifier.fillMaxSize()) {
+        LazyColumn(
+          state = state,
+          modifier = Modifier.fillMaxSize(),
+          contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp + bottomInset),
+          horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+          itemsIndexed(rows, key = { _, row -> row.id }) { index, row ->
+            val continues: Boolean = row.isWorkLog() && rows.getOrNull(index + 1).isWorkLog()
+            Box(
+              Modifier
+                .widthIn(max = MAX_CONTENT_WIDTH)
+                .fillMaxWidth()
+                .padding(horizontal = side)
+                .padding(bottom = row.bottomPadding(continues)),
+            ) {
+              TimelineRowContent(row, context)
+            }
           }
         }
       }
@@ -916,27 +924,32 @@ private fun WorkingRow(row: TimelineRow.Working, now: Instant) {
   }
 }
 
-/** `TurnFoldTimelineRow`, MessagesTimeline.tsx:2544: the label and a chevron over a hairline. */
+/**
+ * `TurnFoldTimelineRow`, MessagesTimeline.tsx:2544: the label and a chevron over a hairline.
+ * The button is `select-none`, so a drag that starts on it selects nothing.
+ */
 @Composable
 private fun TurnFoldRow(row: TimelineRow.TurnFold, onToggle: () -> Unit) {
   val source: MutableInteractionSource = remember { MutableInteractionSource() }
   val hovered: Boolean by source.collectIsHoveredAsState()
   val tint: Color = if (hovered) JewelTheme.globalColors.text.normal else muted()
-  Row(
-    modifier = Modifier.fillMaxWidth().bottomHairline().padding(top = 4.dp, bottom = 8.dp),
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
+  DisableSelection {
     Row(
-      modifier = Modifier
-        .clip(RoundedCornerShape(8.dp))
-        .hoverable(source)
-        .clickable(onClick = onToggle)
-        .padding(horizontal = 4.dp),
-      horizontalArrangement = Arrangement.spacedBy(4.dp),
+      modifier = Modifier.fillMaxWidth().bottomHairline().padding(top = 4.dp, bottom = 8.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      Text(row.label, color = tint)
-      Glyph(if (row.expanded) "chevron-down" else "chevron-right", tint)
+      Row(
+        modifier = Modifier
+          .clip(RoundedCornerShape(8.dp))
+          .hoverable(source)
+          .clickable(onClick = onToggle)
+          .padding(horizontal = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Text(row.label, color = tint)
+        Glyph(if (row.expanded) "chevron-down" else "chevron-right", tint)
+      }
     }
   }
 }
@@ -1210,51 +1223,54 @@ private fun WorkLogLine(
     LabelTone.Warning -> JewelTheme.globalColors.text.warning
     LabelTone.Error -> JewelTheme.globalColors.text.error
   }
-  Row(
-    modifier = Modifier
-      .fillMaxWidth()
-      .heightIn(min = 24.dp)
-      .clip(RoundedCornerShape(8.dp))
-      .hoverable(source)
-      .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-      .padding(horizontal = 2.dp),
-    horizontalArrangement = Arrangement.spacedBy(6.dp),
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
+  // `select-none` on the line (WorkLog.tsx:57); the details it opens stay `select-text`
+  DisableSelection {
     Row(
       modifier = Modifier
-        .weight(1f, fill = shimmer == null)
-        .activityShimmer(shimmer == Shimmer.ActivityFocus, Shimmer.ActivityFocus),
+        .fillMaxWidth()
+        .heightIn(min = 24.dp)
+        .clip(RoundedCornerShape(8.dp))
+        .hoverable(source)
+        .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+        .padding(horizontal = 2.dp),
       horizontalArrangement = Arrangement.spacedBy(6.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
-        val tint: Color =
-          if (tone == LabelTone.Error || tone == LabelTone.Warning) labelColor else muted()
-        Glyph(icon, tint, 16.dp)
-      }
-      Text(
-        text = label,
-        color = labelColor,
-        fontWeight = if (tone == LabelTone.Warning || tone == LabelTone.Error) FontWeight.Medium
-        else null,
+      Row(
         modifier = Modifier
-          .weight(1f, fill = false)
-          .activityShimmer(shimmer == Shimmer.ToolShine, Shimmer.ToolShine),
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-      )
-    }
-    if (failed) Glyph("x", JewelTheme.globalColors.text.error.copy(alpha = 0.4f), 12.dp)
-    if (hovered && timestamp != null && now != null) Timestamp(timestamp, now)
-    if (expanded != null) {
-      Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) {
-        Glyph(
-          name = "chevron-right",
-          tint = muted().copy(alpha = 0.7f),
-          size = 12.dp,
-          modifier = Modifier.rotate(if (expanded) 90f else 0f),
+          .weight(1f, fill = shimmer == null)
+          .activityShimmer(shimmer == Shimmer.ActivityFocus, Shimmer.ActivityFocus),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+          val tint: Color =
+            if (tone == LabelTone.Error || tone == LabelTone.Warning) labelColor else muted()
+          Glyph(icon, tint, 16.dp)
+        }
+        Text(
+          text = label,
+          color = labelColor,
+          fontWeight = if (tone == LabelTone.Warning || tone == LabelTone.Error) FontWeight.Medium
+          else null,
+          modifier = Modifier
+            .weight(1f, fill = false)
+            .activityShimmer(shimmer == Shimmer.ToolShine, Shimmer.ToolShine),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
         )
+      }
+      if (failed) Glyph("x", JewelTheme.globalColors.text.error.copy(alpha = 0.4f), 12.dp)
+      if (hovered && timestamp != null && now != null) Timestamp(timestamp, now)
+      if (expanded != null) {
+        Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) {
+          Glyph(
+            name = "chevron-right",
+            tint = muted().copy(alpha = 0.7f),
+            size = 12.dp,
+            modifier = Modifier.rotate(if (expanded) 90f else 0f),
+          )
+        }
       }
     }
   }
