@@ -2,6 +2,10 @@ package io.github.xxfast.t3code.plugin.ui
 
 import io.github.xxfast.t3code.protocol.generated.ChatFileAttachment
 import io.github.xxfast.t3code.protocol.generated.ChatImageAttachment
+import io.github.xxfast.t3code.protocol.generated.ModelSelection
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -19,6 +23,32 @@ class ComposerDraftStoreLogicTest {
     draft("a.png", kind = AttachmentKind.IMAGE, mimeType = "image/png")
   private val comment: ReviewCommentContext =
     fileReviewComment("c1", "src/a.kt", 1, 2, "look", "one\ntwo")
+
+  @Test
+  fun theLastPickPerProviderIsRememberedAndTheLatestProviderIsActive() {
+    val fast = buildJsonArray { }
+    val sonnet = selection("claude", "sonnet", options = fast)
+    val sticky: StickyModelSelection = StickyModelSelection()
+      .picked(sonnet)
+      .picked(selection("codex", "gpt"))
+    assertEquals(selection("codex", "gpt"), sticky.selection)
+    assertEquals(sonnet, sticky.selectionByProvider["claude"])
+    // A model-only pick keeps the provider's last traits
+    assertEquals(
+      selection("claude", "opus", options = fast),
+      sticky.picked(selection("claude", "opus")).selection,
+    )
+    // Traits change on the remembered model, not the current one
+    assertEquals(
+      selection("claude", "opus", options = null),
+      sticky
+        .picked(selection("claude", "opus"))
+        .optionsPicked(selection("claude", "haiku"))
+        .selection,
+    )
+    assertEquals(sticky, decodeSticky(encodeSticky(sticky)))
+    assertEquals(StickyModelSelection(), decodeSticky("not json"))
+  }
 
   @Test
   fun anEmptyDraftIsNotKeptButWhitespaceIs() {
@@ -236,3 +266,10 @@ class ComposerDraftStoreLogicTest {
   private fun entry(id: String, prompt: String = "p $id"): PromptStashEntry =
     PromptStashEntry(id = id, createdAt = 0, server = "s", prompt = prompt)
 }
+
+private fun selection(instance: String, model: String, options: JsonElement? = null) =
+  ModelSelection(
+    instanceId = JsonPrimitive(instance),
+    model = JsonPrimitive(model),
+    options = options,
+  )

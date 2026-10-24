@@ -278,7 +278,10 @@ fun ChatContent(project: Project, threadId: String, load: ThreadLoad, onRetry: (
         onNewThreadInProject = if (operable) {
           {
             view?.let { current ->
-              NewThread.getInstance(project).start(current.thread.projectId)
+              // Upstream carries the composer's pick, else the row's (`carryModelSelection`)
+              val carry: ModelSelection =
+                pending.modelDraft ?: pending.settings.modelSelection(current.thread)
+              NewThread.getInstance(project).start(current.thread.projectId, carry = carry)
             }
           }
         } else {
@@ -595,6 +598,8 @@ private fun rememberComposerFooter(
         controller.dispatchForThread(current, command)
       }
     }
+    // The next new thread starts on it, `setStickyModelSelection` after `onProviderModelSelect`
+    if (block == null) ComposerDrafts.get().rememberModel(next)
   }
 
   val actions = ComposerFooterActions(
@@ -626,7 +631,9 @@ private fun rememberComposerFooter(
     onModelOptions = onModelOptions@{ options ->
       val current: ThreadView = view ?: return@onModelOptions
       val base: ModelSelection = selection ?: return@onModelOptions
-      controller.draftModel(current.thread.id, base.copy(options = optionsJson(options)))
+      val next: ModelSelection = base.copy(options = optionsJson(options))
+      controller.draftModel(current.thread.id, next)
+      ComposerDrafts.get().rememberModelOptions(next)
     },
     onRuntimeMode = { mode ->
       view?.let { current ->

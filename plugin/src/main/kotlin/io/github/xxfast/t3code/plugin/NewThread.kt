@@ -7,11 +7,13 @@ import com.intellij.openapi.project.Project
 import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ide.launchReporting
 import io.github.xxfast.t3code.plugin.ide.notify
+import io.github.xxfast.t3code.plugin.settings.ComposerDrafts
 import io.github.xxfast.t3code.plugin.ui.createThread
 import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import java.util.UUID
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
@@ -29,8 +31,17 @@ class NewThread(private val project: Project, private val scope: CoroutineScope)
     showNewThreadIn(project) { projectId -> if (projectId != null) start(projectId) }
   }
 
-  /** Starts a thread in [projectId], on [branch] and [worktreePath] when given. */
-  fun start(projectId: String, branch: String? = null, worktreePath: String? = null) {
+  /**
+   * Starts a thread in [projectId], on [branch] and [worktreePath] when given. [carry] is the
+   * model of the thread it starts from, upstream's `carryModelSelection`; the last pick anywhere
+   * stands in without one.
+   */
+  fun start(
+    projectId: String,
+    branch: String? = null,
+    worktreePath: String? = null,
+    carry: ModelSelection? = null,
+  ) {
     scope.launchReporting(project, "Couldn't start a thread") {
       val controller: ChatController = ChatController.getInstance(project)
       if (controller.catalog.value == null) controller.loadCatalog()
@@ -48,6 +59,8 @@ class NewThread(private val project: Project, private val scope: CoroutineScope)
           commandId,
           branch,
           worktreePath,
+          sticky = ComposerDrafts.get().stickyModel().selection,
+          carry = carry,
         )
       if (command == null) {
         val hint = "No provider is ready. Set one up in the T3 Code desktop app."

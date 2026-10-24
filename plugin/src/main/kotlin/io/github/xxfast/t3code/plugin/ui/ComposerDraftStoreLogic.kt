@@ -1,6 +1,7 @@
 package io.github.xxfast.t3code.plugin.ui
 
 import io.github.xxfast.t3code.protocol.T3Json
+import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -77,6 +78,55 @@ data class PromptStashEntry(
 
 /** Upstream's scoped thread key: the server and the thread, so another server never sees it. */
 fun composerDraftKey(server: String, threadId: String): String = "$server|$threadId"
+
+/**
+ * `stickyModelSelectionByProvider` and `stickyActiveProvider`: the last model picked on each
+ * provider, and which provider the last pick was on. What a new thread starts with
+ * (`applyStickyState`) unless the project's default or a carried selection says otherwise.
+ * Upstream also keeps `stickyOptionsByModelByProvider`, the traits per model; the plugin
+ * remembers the provider's last traits only, as the picker's `nextModelSelection` does.
+ */
+@Serializable
+data class StickyModelSelection(
+  val selectionByProvider: Map<String, ModelSelection> = emptyMap(),
+  val activeProvider: String? = null,
+) {
+  /** What `applyStickyState` hands a new draft: the active provider's last pick. */
+  val selection: ModelSelection? get() = activeProvider?.let(selectionByProvider::get)
+
+  /**
+   * `setStickyModelSelection`: [picked] replaces the provider's entry and becomes the active one.
+   * A model-only pick carries no options, so the provider's last traits stay, the way Fast/Normal
+   * survives a model change upstream.
+   */
+  fun picked(picked: ModelSelection): StickyModelSelection {
+    val instance: String = picked.instance ?: return this
+    val options = picked.options ?: selectionByProvider[instance]?.options
+    val next: ModelSelection = picked.copy(options = options)
+    return StickyModelSelection(selectionByProvider + (instance to next), instance)
+  }
+
+  /**
+   * `setProviderModelOptions` with `persistSticky`: the traits change on the provider's remembered
+   * pick, whose model stays; [picked] only stands in when nothing was remembered yet.
+   */
+  fun optionsPicked(picked: ModelSelection): StickyModelSelection {
+    val instance: String = picked.instance ?: return this
+    val base: ModelSelection = selectionByProvider[instance] ?: picked
+    val next: ModelSelection = base.copy(options = picked.options)
+    return StickyModelSelection(selectionByProvider + (instance to next), instance)
+  }
+}
+
+fun encodeSticky(sticky: StickyModelSelection): String =
+  T3Json.encodeToString(StickyModelSelection.serializer(), sticky)
+
+/** Nothing remembered for what this build can't read. */
+fun decodeSticky(raw: String?): StickyModelSelection {
+  if (raw.isNullOrEmpty()) return StickyModelSelection()
+  return runCatching { T3Json.decodeFromString(StickyModelSelection.serializer(), raw) }
+    .getOrDefault(StickyModelSelection())
+}
 
 private fun DraftAttachment.persisted(): PersistedComposerAttachment = PersistedComposerAttachment(
   id = id,
