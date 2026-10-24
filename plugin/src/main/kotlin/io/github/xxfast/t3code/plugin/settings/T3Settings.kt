@@ -23,6 +23,7 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
     var confirmThreadDelete: Boolean by property(true)
     var showSkillsInSlashMenu: Boolean by property(true)
     var composerRichTextEnabled: Boolean by property(true)
+    var followUpBehavior: String? by string(FOLLOW_UP_QUEUE)
 
     // Upstream's `favorites` (`ModelFavorites`, settings.ts:277), as `instanceId:slug` keys
     var modelFavorites: MutableList<String> by list()
@@ -58,6 +59,13 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
       state.composerRichTextEnabled = value
     }
 
+  /** Upstream's `followUpBehavior`: [FOLLOW_UP_QUEUE] or [FOLLOW_UP_STEER]. */
+  var followUpBehavior: String
+    get() = state.followUpBehavior.takeIf { it == FOLLOW_UP_STEER } ?: FOLLOW_UP_QUEUE
+    set(value) {
+      state.followUpBehavior = value
+    }
+
   /** The favourite models in the picker, keyed by `providerModelKey`. */
   var modelFavorites: Set<String>
     get() = state.modelFavorites.toSet()
@@ -67,6 +75,8 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
 
   companion object {
     const val DEFAULT_SERVER_URL: String = "http://127.0.0.1:3773"
+    const val FOLLOW_UP_QUEUE: String = "queue"
+    const val FOLLOW_UP_STEER: String = "steer"
 
     fun get(): T3Settings = service()
   }

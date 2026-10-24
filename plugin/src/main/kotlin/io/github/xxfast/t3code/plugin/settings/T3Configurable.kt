@@ -6,12 +6,15 @@ import com.intellij.openapi.application.asContextElement
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.openapi.util.SystemInfo
 import com.intellij.ui.dsl.builder.Cell
+import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.COLUMNS_LARGE
 import com.intellij.ui.dsl.builder.panel
+import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import io.github.xxfast.t3code.plugin.T3
 import io.github.xxfast.t3code.protocol.ConnectionState
 import javax.swing.JComponent
@@ -52,6 +55,22 @@ class T3Configurable : BoundConfigurable("T3 Code") {
         checkBox("Rich text composer")
           .bindSelected(T3Settings.get()::composerRichTextEnabled)
           .comment("Show formatted Markdown as you type.")
+      }
+      row("Follow-up behavior") {
+        // Upstream's follow-up behavior row, SettingsPanels.tsx:1507
+        comboBox(listOf(T3Settings.FOLLOW_UP_QUEUE, T3Settings.FOLLOW_UP_STEER))
+          .bindItem(
+            getter = { T3Settings.get().followUpBehavior },
+            setter = { value -> value?.let { T3Settings.get().followUpBehavior = it } },
+          )
+          .applyToComponent {
+            renderer = textListCellRenderer { value -> value?.replaceFirstChar(Char::uppercase) }
+          }
+          .comment(
+            "Queue follow-ups while the agent runs or steer the current run. " +
+              "Press ${if (SystemInfo.isMac) "⌘" else "Ctrl"} + Enter to do the opposite " +
+              "for one message.",
+          )
       }
       row {
         button("Pair...") {

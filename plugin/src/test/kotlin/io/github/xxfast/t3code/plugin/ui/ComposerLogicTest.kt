@@ -83,6 +83,15 @@ class ComposerLogicTest {
   }
 
   @Test
+  fun `follow-ups queue by the setting, but steer while an approval is pending`() {
+    val approval = PendingApproval("a1", "command", null, null, null, true)
+
+    assertTrue(followUpQueues("queue", approvals = emptyList()))
+    assertFalse(followUpQueues("steer", approvals = emptyList()))
+    assertFalse(followUpQueues("queue", approvals = listOf(approval)))
+  }
+
+  @Test
   fun `delivery intent is the requested mode when the server resolves and it isn't a queue`() {
     assertEquals("auto", deliveryIntent(true, ComposerDispatchMode.AUTO))
     assertEquals("steer", deliveryIntent(true, ComposerDispatchMode.STEER))

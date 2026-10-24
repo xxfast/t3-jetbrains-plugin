@@ -87,6 +87,7 @@ import io.github.xxfast.t3code.plugin.ui.contextId
 import io.github.xxfast.t3code.plugin.ui.derivePendingThreadRequests
 import io.github.xxfast.t3code.plugin.ui.deriveReportedModelSelection
 import io.github.xxfast.t3code.plugin.ui.dismissal
+import io.github.xxfast.t3code.plugin.ui.followUpQueues
 import io.github.xxfast.t3code.plugin.ui.getStartedThreadModelChangeBlockReason
 import io.github.xxfast.t3code.plugin.ui.instance
 import io.github.xxfast.t3code.plugin.ui.mergeOptimistic
@@ -199,8 +200,8 @@ fun ChatContent(
     // A worktree being prepared holds the composer, upstream's `blocksSend`
     sending = pending.sending || setup.blocksSend || threadId in queueSaving,
     error = pending.error,
-    // Upstream's `followUpBehavior` default; Ctrl/Cmd sends the other
-    queue = false,
+    // Ctrl/Cmd sends the other
+    queue = followUpQueues(T3Settings.get().followUpBehavior, requests.approvals),
     reviewComments = comments.size,
   ).copy(editingQueuedMessage = editing != null)
   val (request: PendingRequest?, actions: PendingActions) =
