@@ -93,7 +93,9 @@ fun ProviderModelPicker(
   ) {
     val xs: Boolean = LocalComposerControlSize.current == ComposerControlSize.XS
     val icon: Dp = if (xs) 12.dp else 16.dp
-    state.provider?.let { provider: ServerProvider -> ProviderIcon(provider, icon) }
+    state.provider?.let { provider: ServerProvider ->
+      ProviderIcon(provider, icon, badge = state.providerBadge)
+    }
     ComposerControlLabel(state.modelLabel, maxWidth = 192.dp)
     ComposerControlChevron()
   }

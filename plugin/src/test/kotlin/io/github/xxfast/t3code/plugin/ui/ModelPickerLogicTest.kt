@@ -301,6 +301,22 @@ class ModelPickerLogicTest {
     assertFalse(claude.showInteractionModeToggle)
     assertEquals("default", claude.interactionMode, "No toggle, no plan mode")
   }
+
+  @Test
+  fun `the footer badges an instance that shares its driver`() {
+    val work: ServerProvider = provider("codex_work", driver = "codex")
+    val personal: ServerProvider = provider("codex_personal", driver = "codex")
+    val claude: ServerProvider = provider("claude", driver = "claudeAgent")
+    val off: ServerProvider = provider("codex_off", driver = "codex", enabled = false)
+
+    fun badge(providers: List<ServerProvider>, instance: String): Boolean =
+      composerFooter(providers, instance, null, "auto", "default").providerBadge
+
+    assertTrue(badge(listOf(work, personal, claude), "codex_work"))
+    assertFalse(badge(listOf(work, personal, claude), "claude"))
+    assertFalse(badge(listOf(work, off), "codex_work"), "A disabled sibling doesn't count")
+    assertTrue(badge(listOf(work, off), "codex_off"), "A disabled one still tells them apart")
+  }
 }
 
 private fun provider(

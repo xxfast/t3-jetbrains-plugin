@@ -361,12 +361,15 @@ fun providerInitials(label: String): String {
 }
 
 /**
- * `shouldShowInstanceBadge`, providerInstanceDisplay.ts:45: an instance with an accent colour,
- * or one of several on the same driver, wears its initials.
+ * `shouldShowInstanceBadge`, providerInstanceDisplay.ts:57: an instance with an accent colour,
+ * or one of several on the same driver, wears its initials. An enabled instance only counts
+ * enabled siblings. Upstream's `acpRegistryAgentId` check is left out, the wire doesn't have it.
  */
 fun showInstanceBadge(entry: ServerProvider, entries: Collection<ServerProvider>): Boolean {
   if (!entry.accentColor.isNullOrBlank()) return true
-  return entries.count { it.driver == entry.driver } > 1
+  return entries.count { candidate: ServerProvider ->
+    candidate.driver == entry.driver && (!entry.enabled || candidate.enabled)
+  } > 1
 }
 
 /**

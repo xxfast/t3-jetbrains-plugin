@@ -353,6 +353,8 @@ fun updateThreadModelSelection(
 /** What the composer's footer shows for the thread's settings. Built by [composerFooter]. */
 data class ComposerFooterState(
   val provider: ServerProvider?,
+  /** [provider] wears its initials badge, [showInstanceBadge]. */
+  val providerBadge: Boolean = false,
   val modelLabel: String,
   val models: List<ModelPickerGroup>,
   val runtimeModes: List<RuntimeModeOption>,
@@ -399,6 +401,7 @@ fun composerFooter(
     resolveComposerInteractionMode(provider, interactionMode)
   return ComposerFooterState(
     provider = provider,
+    providerBadge = provider != null && showInstanceBadge(provider, providers),
     modelLabel = modelPickerLabel(providers, instanceId, model),
     models = modelPickerItems(providers, instanceId, model),
     runtimeModes = modes,
