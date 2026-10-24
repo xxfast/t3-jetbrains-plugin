@@ -2,8 +2,10 @@
 
 Audience: agents implementing `io.github.xxfast.t3code`. Read this file instead of the docs.
 Snapshot: 2026-10-19. Repo state: IntelliJ Platform Gradle Plugin `2.19.0`, Kotlin `2.2.20`,
-`sinceBuild = 253`, builds against a local IntelliJ IDEA 2026.3 EAP (`IU-263.6259.32`, runs on
-JBR 25.0.4.1) via `local(...)` read from the `t3.localIde` Gradle property or `local.properties`.
+`sinceBuild = 253`, ran the sandbox on a local IntelliJ IDEA 2026.3 EAP (`IU-263.6259.32`, runs on
+JBR 25.0.4.1) read from the `t3.localIde` Gradle property or `local.properties`. Until 2026-10-24
+that local IDE was also the compile target via `local(...)`; since #63 the compile target is always
+`intellijIdea("2025.3")` and `t3.localIde` only sets `runHarness`'s `localPath`.
 
 Conventions: `[local]` = verified 2026-10-19 with `javap` / `unzip -l` on the jars in
 `/Users/xxfast/Applications/IntelliJ IDEA.app/Contents/lib` (263.6259.32) or this repo's files;
@@ -577,8 +579,9 @@ jobs:
 ```
 
 Notes:
-- No `t3.localIde` on CI, so the build falls back to `intellijIdea("2025.3")`, which is what we ship
-  against. Good: CI is the honest compile check for 253. [local: plugin/build.gradle.kts]
+- The compile target is `intellijIdea("2025.3")` everywhere since 2026-10-24 (#63); `t3.localIde`
+  only picks the IDE `runHarness` launches. A local zip and the CI zip are the same zip.
+  [local: plugin/build.gradle.kts]
 - Caching: `setup-gradle` caches the Gradle user home, where the IntelliJ Platform Gradle Plugin
   stores downloaded IDEs (`~/.gradle/caches/...`) by default. Plugin Verifier IDEs go to
   `~/.pluginVerifier/ides` by default (**UNVERIFIED** path for 2.19.0); add an `actions/cache` step

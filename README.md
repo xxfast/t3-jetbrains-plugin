@@ -14,8 +14,9 @@ Unofficial, built for my own use. Will publish if it turns out useful to others.
 ## Status
 
 0.1.0 is the first release. Built and tested on IntelliJ IDEA, against T3 Code
-`v0.1.1-preview.20261021.3449`. Other IDEs on IntelliJ Platform 2025.3 and later should work but
-haven't had a pass. What works:
+`v0.1.1-preview.20261021.3449`. Android Studio and Rider are checked by the plugin verifier on
+every build. Other IDEs on IntelliJ Platform 2025.3 and later share IDEA's platform build and
+should work; report it if one doesn't. What works:
 
 - Pair with a T3 server, browse its threads in the Sidebar, read a thread live as it runs.
 - Open the files and diffs a thread touches, in the IDE's own editor and diff viewer.

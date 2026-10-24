@@ -72,9 +72,9 @@ How it fits together:
 - A Gradle task `runHarness` (an `intellijPlatformTesting.runIde` registration) launches the
   sandbox on `harness/scenarios/default` (`-Pt3.scenario=pairing` for another folder) with its own
   sandbox dir, so harness state never mixes with `runIde` against a real server.
-- Point the Gradle plugin at a locally installed IDE with `local(...)` when one exists (via a
-  Gradle property, see "Things learned"). That skips the 1 GB platform download for the harness.
-  The release build still targets `intellijIdea("2025.3")`.
+- `runHarness` launches a locally installed IDE when `t3.localIde` is set (Gradle property or
+  `local.properties`), which skips the platform download for the sandbox. The compile target is
+  always `intellijIdea("2025.3")` whatever is installed, see "Things learned".
 
 The loop: pick a scenario, look, change Kotlin or JSON, look again. When a screen settles, its
 scenario becomes the test fixture and the PR gets a screenshot from the harness.
@@ -128,11 +128,12 @@ Hard-won, so recorded here rather than rediscovered.
 - Upstream preview tags aren't a linear history. `v0.1.1-preview.20261021.3449` isn't a
   descendant of `.20261019.3339`, and it dropped remote delegation (`delegatedFrom`, `linkOrigin`,
   the `link_request` item). Bumping can remove fields as well as add them; diff the schema first.
-- The IntelliJ Platform Gradle Plugin can build against an installed IDE: `local(path)` instead of
-  `intellijIdea(version)`. Read the path from a Gradle property (`t3.localIde`) or
-  `local.properties`, fall back to the download when unset. An installed 2026.3 is fine for the
-  harness even though the plugin targets 2025.3; `sinceBuild` is about what we ship, not what we
-  run locally.
+- The local IDE (`t3.localIde`, Gradle property or `local.properties`) is only the sandbox for
+  `runHarness`, via the run task's `localPath`. It used to be the compile target too
+  (`local(path)` instead of `intellijIdea(version)`), and a zip built that way linked 262's
+  Jewel overloads and crashed Android Studio 261 with `NoSuchMethodError` (#63). Compiling
+  against 2025.3 always is what makes a local zip the same as the CI zip. An installed 2026.3 is
+  fine to run against; `sinceBuild` is about what we ship, not what we run locally.
 - The IDE bundles Jewel's Swing bridge as `org.jetbrains.jewel.bridge.JewelComposePanelWrapper`
   in `intellij.platform.jewel.ideLafBridge.jar`, and `com.intellij.platform.compose.JBComposePanel`
   in `intellij.platform.compose.jar`. The tool window content is one of those.
@@ -207,9 +208,12 @@ Hard-won, so recorded here rather than rediscovered.
 - The JDK `HttpClient` must be built with `version(HTTP_1_1)`. On plain http it otherwise sends
   an h2c `Upgrade` on the first request and the T3 server's WebSocket upgrade handler answers
   with an empty 400. `curl --http2` reproduces it; `curl --http1.1` gets the real answer.
-- Building against the local 263 can link 263-only APIs (Jewel `MenuComboBox`, `Icon(iconDescriptor=)`,
-  `AnActionEvent.coroutineScope`) that don't exist on 253. CI compiling against `intellijIdea("2025.3")`
-  plus `verifyPlugin` with a `pluginVerification { ides { } }` block is the guard.
+- Newer platforms have APIs 253 doesn't (Jewel `MenuComboBox`, `Icon(iconDescriptor=)`,
+  `AnActionEvent.coroutineScope`). Compiling against 2025.3 turns using one into a compile error.
+  `verifyPlugin` covers IDEA 2025.3, the newest IDEA EAP, the newest Android Studio and Rider
+  releases and Android Studio 2026.1 (261). The other JetBrains IDEs share IDEA's platform build.
+  Jewel is experimental and its overloads move between builds, so a product only counts as
+  supported once it's in that list.
 - Testing tiers: plain JUnit for everything IDE-free (most of it); `com.intellij.testFramework.junit5`
   (`@TestApplication`, `projectFixture()`) for services and `PersistentStateComponent`, which needs
   `opentest4j` and `junit:junit:4.13.2` on the test runtime; Starter + Driver (`testIdeUi`) is a

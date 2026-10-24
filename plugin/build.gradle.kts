@@ -47,8 +47,6 @@ kotlin {
   jvmToolchain(21)
   compilerOptions {
     jvmTarget = JvmTarget.JVM_21
-    // A newer local IDE ships stdlib metadata our compiler can't read yet
-    if (localIde != null) freeCompilerArgs.add("-Xskip-metadata-version-check")
   }
 }
 
@@ -66,7 +64,10 @@ dependencies {
   implementation(libs.kotlinx.serialization.json)
 
   intellijPlatform {
-    if (localIde != null) local(localIde) else intellijIdea("2025.3")
+    // Always compile against the lowest platform we ship for. A zip compiled against a newer
+    // local IDE links Jewel overloads that older IDEs don't have (#63). The local IDE only
+    // runs the sandbox, see runHarness below.
+    intellijIdea("2025.3")
     bundledModules.forEach { module -> bundledModule(module) }
     // Optional at runtime, see t3code-terminal.xml
     bundledPlugin("org.jetbrains.plugins.terminal")
@@ -128,12 +129,20 @@ intellijPlatform {
 
   pluginVerification {
     ides {
-      // The lowest platform we ship for, and whatever the newest EAP is today
+      // The lowest platform we ship for, and whatever the newest EAP is today. The other
+      // JetBrains IDEs share IDEA's platform build, so these two cover them.
       create(IntelliJPlatformType.IntellijIdea, "2025.3")
       latest {
         types = listOf(IntelliJPlatformType.IntellijIdea)
         channels = listOf(ProductRelease.Channel.EAP)
       }
+      // Android Studio lags the platform and bundles its own Jewel; 261 is where #63 broke.
+      // Rider is the other product with a frontend of its own.
+      latest {
+        types = listOf(IntelliJPlatformType.AndroidStudio, IntelliJPlatformType.Rider)
+        channels = listOf(ProductRelease.Channel.RELEASE)
+      }
+      create(IntelliJPlatformType.AndroidStudio, "2026.1.3.7")
     }
   }
 
@@ -166,6 +175,9 @@ intellijPlatformTesting {
       sandboxDirectory = layout.buildDirectory.dir("harness-sandbox")
       // Custom run tasks take disabled plugins from here, not from the withType above
       plugins { disablePlugins(distractingPlugins) }
+      // An installed IDE runs the sandbox without the platform download. It never changes
+      // what the plugin compiles against.
+      if (localIde != null) localPath = file(localIde)
       // A scenario is a folder under harness/scenarios, picked with -Pt3.scenario=<name>
       val scenario: String = providers.gradleProperty("t3.scenario").getOrElse("default")
       val scenarios: File = rootProject.layout.projectDirectory.dir("harness/scenarios").asFile
