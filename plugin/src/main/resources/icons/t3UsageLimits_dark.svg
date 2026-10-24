@@ -1,0 +1,5 @@
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- T3 usage limits: lucide's gauge, what upstream's usage limits banner shows (GaugeIcon) -->
+  <path d="m12 14 4-4" stroke="#CED0D6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M3.34 19a10 10 0 1 1 17.32 0" stroke="#CED0D6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

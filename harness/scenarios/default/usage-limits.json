@@ -1,0 +1,57 @@
+{
+  "providerUsageLimits": {
+    "claude": {
+      "checkedAt": "2026-10-24T06:00:00.000Z",
+      "windows": [
+        {
+          "id": "five_hour",
+          "kind": "session",
+          "label": "5-hour",
+          "usedPercent": 42,
+          "resetsAt": "2026-10-24T02:00:00.000Z",
+          "windowDurationMins": 300
+        },
+        {
+          "id": "seven_day",
+          "kind": "weekly",
+          "label": "Weekly",
+          "usedPercent": 9,
+          "resetsAt": "2026-10-20T00:00:00.000Z",
+          "windowDurationMins": 10080
+        }
+      ]
+    },
+    "codex": {
+      "checkedAt": "2026-10-24T06:00:00.000Z",
+      "windows": [
+        {
+          "id": "primary",
+          "kind": "session",
+          "label": "5-hour",
+          "usedPercent": 83,
+          "resetsAt": "2026-10-24T01:00:00.000Z",
+          "windowDurationMins": 300
+        },
+        {
+          "id": "secondary",
+          "kind": "weekly",
+          "label": "Weekly",
+          "usedPercent": 47,
+          "resetsAt": "2026-10-22T00:00:00.000Z",
+          "windowDurationMins": 10080
+        }
+      ],
+      "externalUsage": {
+        "label": "ChatGPT",
+        "url": "https://chatgpt.com/#settings/Usage"
+      }
+    },
+    "cursor": {
+      "checkedAt": "2026-10-24T06:00:00.000Z",
+      "windows": [],
+      "unavailable": {
+        "reason": "probeFailed"
+      }
+    }
+  }
+}

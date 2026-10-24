@@ -44,6 +44,11 @@
     <editorNotificationProvider
       implementation="io.github.xxfast.t3code.plugin.ide.T3FileNotificationProvider"/>
     <notificationGroup id="T3 Code" displayType="BALLOON"/>
+    <!-- Not upstream's: every provider's usage limits at a glance, the banner's body on a click -->
+    <statusBarWidgetFactory
+      id="T3Code.UsageLimits"
+      implementation="io.github.xxfast.t3code.plugin.UsageLimitsWidgetFactory"
+      order="before Position"/>
     <!-- "Report to T3 Code" in the IDE's error dialog: a prefilled GitHub issue in the browser -->
     <errorHandler implementation="io.github.xxfast.t3code.plugin.ide.T3ErrorReportSubmitter"/>
     <!-- Puts T3Code.PasteAttachment and T3Code.PasteAsText ahead of $Paste and Paste from

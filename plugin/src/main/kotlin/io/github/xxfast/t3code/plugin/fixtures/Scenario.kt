@@ -18,6 +18,7 @@ import io.github.xxfast.t3code.protocol.generated.ProjectEntry
 import io.github.xxfast.t3code.protocol.generated.PullRequestListEntry
 import io.github.xxfast.t3code.protocol.generated.ServerAuthDescriptor
 import io.github.xxfast.t3code.protocol.generated.ServerProviderSkill
+import io.github.xxfast.t3code.protocol.generated.ServerProviderUsageLimits
 import io.github.xxfast.t3code.protocol.generated.ServerProviderWorkspaceSnapshot
 import io.github.xxfast.t3code.protocol.generated.TerminalSummary
 import io.github.xxfast.t3code.protocol.generated.TurnItem
@@ -46,6 +47,11 @@ class ScenarioFile(
   val providerSkills: Map<String, List<ServerProviderSkill>> = emptyMap(),
   /** Workspace snapshots per provider instance, `ServerProvider.workspaceSnapshots`. */
   val providerWorkspaceSnapshots: Map<String, List<ServerProviderWorkspaceSnapshot>> = emptyMap(),
+  /**
+   * Usage limits per provider instance, `ServerProvider.usageLimits`. A window whose `resetsAt`
+   * has passed rolls forward by its `windowDurationMins`, so the file doesn't go stale.
+   */
+  val providerUsageLimits: Map<String, ServerProviderUsageLimits> = emptyMap(),
   /** The projection's conversation messages per thread, what a queued run's text comes from. */
   val messages: Map<String, List<ConversationMessage>> = emptyMap(),
   /** The projection's provider turns per thread, what says a run can be steered. */
@@ -91,6 +97,7 @@ class Scenario(
   val worktreeSetups: Map<String, WorktreeSetupSnapshot> = emptyMap(),
   val providerSkills: Map<String, List<ServerProviderSkill>> = emptyMap(),
   val providerWorkspaceSnapshots: Map<String, List<ServerProviderWorkspaceSnapshot>> = emptyMap(),
+  val providerUsageLimits: Map<String, ServerProviderUsageLimits> = emptyMap(),
   val messages: Map<String, List<ConversationMessage>> = emptyMap(),
   val providerTurns: Map<String, List<ProviderTurn>> = emptyMap(),
   val subagents: Map<String, List<Subagent>> = emptyMap(),
@@ -116,6 +123,7 @@ class Scenario(
         worktreeSetups = file.worktreeSetups,
         providerSkills = file.providerSkills,
         providerWorkspaceSnapshots = file.providerWorkspaceSnapshots,
+        providerUsageLimits = file.providerUsageLimits,
         messages = file.messages,
         providerTurns = file.providerTurns,
         subagents = file.subagents,
@@ -148,6 +156,9 @@ class Scenario(
       providerSkills = parts.map { it.providerSkills }.fold(emptyMap(), ::append),
       providerWorkspaceSnapshots =
         parts.map { it.providerWorkspaceSnapshots }.fold(emptyMap(), ::append),
+      providerUsageLimits = parts.map { it.providerUsageLimits }.fold(emptyMap()) { into, from ->
+        from + into
+      },
       messages = parts.map { it.messages }.fold(emptyMap(), ::append),
       providerTurns = parts.map { it.providerTurns }.fold(emptyMap(), ::append),
       subagents = parts.map { it.subagents }.fold(emptyMap(), ::append),

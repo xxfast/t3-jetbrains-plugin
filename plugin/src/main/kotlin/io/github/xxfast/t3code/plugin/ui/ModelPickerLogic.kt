@@ -147,6 +147,9 @@ private fun humanizeSlug(slug: String): String = slug
   .trim()
   .replace(Regex("\\b\\w")) { it.value.uppercase() }
 
+/** A driver's name, `PROVIDER_DISPLAY_NAMES` else the humanized driver. */
+fun providerKindName(driver: String): String = PROVIDER_DISPLAY_NAMES[driver] ?: humanizeSlug(driver)
+
 /**
  * `resolveProviderInstanceDisplayName`,
  * `packages/client-runtime/src/state/providerInstanceDisplay.ts`. A default instance's id is its
@@ -154,7 +157,7 @@ private fun humanizeSlug(slug: String): String = slug
  */
 fun resolveProviderInstanceDisplayName(provider: ServerProvider): String {
   val named: String? = provider.displayName?.trim()?.takeIf { it.isNotEmpty() }
-  val kind: String = PROVIDER_DISPLAY_NAMES[provider.driver] ?: humanizeSlug(provider.driver)
+  val kind: String = providerKindName(provider.driver)
   if (named != null && named != kind) return named
   if (provider.instanceId != provider.driver) {
     val humanized: String = humanizeSlug(provider.instanceId)

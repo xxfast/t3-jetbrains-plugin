@@ -48,6 +48,7 @@ import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.ServerProviderAuth
 import io.github.xxfast.t3code.protocol.generated.ServerProviderModel
 import io.github.xxfast.t3code.protocol.generated.ServerProviderSlashCommand
+import io.github.xxfast.t3code.protocol.generated.ServerProviderUsageLimits
 import io.github.xxfast.t3code.protocol.generated.ServerProviderWorkspaceSnapshot
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
@@ -1289,6 +1290,7 @@ class FixtureClient(
         displayName = "Codex",
         showInteractionModeToggle = true,
         supportedRuntimeModes = listOf("approval-required", "full-access"),
+        plan = "Plus",
         models = listOf(
           model("gpt-5", "GPT-5", capabilities = CODEX_TRAITS),
           model("gpt-5-mini", "GPT-5 mini", badge = "new", capabilities = CODEX_TRAITS),
@@ -1303,6 +1305,7 @@ class FixtureClient(
         driver = "claudeAgent",
         displayName = "Claude",
         showInteractionModeToggle = false,
+        plan = "Max",
         models = listOf(
           model("opus", "Opus", capabilities = CLAUDE_TRAITS),
           model("sonnet", "Sonnet", capabilities = CLAUDE_TRAITS),
@@ -1346,7 +1349,8 @@ class FixtureClient(
   ).let { info -> info.copy(providers = info.providers.map(::withSkills)) }
 
   /**
-   * [provider] with the scenario's `providerSkills` and `providerWorkspaceSnapshots` for it,
+   * [provider] with the scenario's `providerSkills`, `providerWorkspaceSnapshots` and
+   * `providerUsageLimits` for it,
    * and the snapshots [refreshProviders] took since the directory loaded on top, by cwd.
    */
   private fun withSkills(provider: ServerProvider): ServerProvider {
@@ -1361,6 +1365,21 @@ class FixtureClient(
     return provider.copy(
       skills = scenario.providerSkills[provider.instanceId] ?: provider.skills,
       workspaceSnapshots = snapshots,
+      usageLimits = scenario.providerUsageLimits[provider.instanceId]?.let(::rolledForward),
+    )
+  }
+
+  /** [limits] with every window that has reset moved on to its next reset. */
+  private fun rolledForward(limits: ServerProviderUsageLimits): ServerProviderUsageLimits {
+    val now: Instant = Instant.now()
+    return limits.copy(
+      windows = limits.windows.map { window ->
+        val resetsAt: Instant = window?.resetsAt?.let(Instant::parse) ?: return@map window
+        val minutes: Long = window.windowDurationMins?.takeIf { it > 0 } ?: return@map window
+        var next: Instant = resetsAt
+        while (!next.isAfter(now)) next = next.plusSeconds(minutes * 60)
+        window.copy(resetsAt = next.toString())
+      },
     )
   }
 
@@ -1508,6 +1527,7 @@ private fun provider(
   slashCommands: List<ServerProviderSlashCommand>? = null,
   status: String = "ready",
   message: String? = null,
+  plan: String? = null,
 ): ServerProvider = ServerProvider(
   instanceId = instanceId,
   driver = driver,
@@ -1518,7 +1538,7 @@ private fun provider(
   installed = true,
   version = "fixture",
   status = status,
-  auth = ServerProviderAuth(status = "authenticated"),
+  auth = ServerProviderAuth(status = "authenticated", label = plan),
   checkedAt = "2026-10-19T06:00:00.000Z",
   message = message,
   models = models,
