@@ -7,21 +7,20 @@ Guidance for Claude Code when working in this repository.
 A native JetBrains plugin that is a client for T3 Code's server. Nothing is built yet; this repo holds
 the design and the decisions so far. Read `GOALS.md` first (what the project is for and how to
 settle a faithful-versus-native call), then `README.md`, then `contracts/README.md`. Work items are
-GitHub issues, grouped into [milestones](https://github.com/xxfast/t3-jetbrains-plugin/milestones)
-(one per phase, plus "Release 0.1" and "Later"). When asked to do an issue, its **Done when** is
-the acceptance test.
+GitHub issues, under one [milestone](https://github.com/xxfast/t3-jetbrains-plugin/milestones)
+per release ("Release 0.1" today). When asked to do an issue, its **Done when** is the
+acceptance test.
 
 Working an item:
 
 - The issue body has **Goal**, **Done when** and **Notes**. An agent should be able to finish
   from the issue, `README.md`, `CLAUDE.md` and `contracts/README.md` alone.
-- Issues in a milestone are roughly in order; do the lowest-numbered open one unless the issue
-  says otherwise. One issue, one commit.
+- Do the lowest-numbered open issue unless the issue says otherwise. One issue, one commit.
 - Issues close as they land, with the commit in the close comment.
 - Issues name upstream RPC methods (`orchestration.subscribeThread`) and HTTP routes
   (`/api/auth/session`). Those come from `packages/contracts/src/rpc.ts` and `environmentHttp.ts`
   at the tag in `contracts/T3CODE_VERSION`. Verify against that tag, not `main`.
-- Scope creep goes to a new issue (milestone "Later" if unscheduled), not into the item you're on.
+- Scope creep goes to a new issue, not into the item you're on.
 - UI items start in the design harness: add or extend a scenario in `harness/scenarios`, design
   against it, then wire the real client. See "Design harness" below.
 
@@ -39,9 +38,9 @@ Don't relitigate these. Change them only if the user asks.
 - Target IntelliJ Platform 2025.3 and later (`sinceBuild = 253`, no `untilBuild`). Jewel is bundled from
   251.2, Android Studio is on 262.
 - Phase 1 scope: pair with a server, thread list, thread view, open file and diff. Nothing else.
-  Phases are GitHub milestones since 2026-10-24 (`ROADMAP.md` went; it was version-controlled
-  state about state), and they aren't versions. No public release, and no version numbers,
-  until it's ready for other people.
+  Phases went with `ROADMAP.md` on 2026-10-24 (it was version-controlled state about state);
+  issues sit under a release milestone now. No public release, and no version numbers, until
+  it's ready for other people.
 - Visual design happens in the **design harness**: the real plugin, in a sandbox IDE, fed by fixture
   data. Not in HTML mockups, not in Claude Design, not in a Compose Desktop standalone. Int UI is
   the design system and it does most of the design work; what's left is layout and states, and
