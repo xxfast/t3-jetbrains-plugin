@@ -42,16 +42,17 @@ fun ProviderIcon(
 ) {
   val initials: String = providerInitials(resolveProviderInstanceDisplayName(provider))
   val normal: Color = JewelTheme.globalColors.text.normal
+  val logo: ProviderLogo? = providerLogo(provider.driver)
   Box(contentAlignment = Alignment.Center) {
     Box(Modifier.alpha(alpha), contentAlignment = Alignment.Center) {
-      when (provider.driver) {
-        "codex" -> Logo("openai", normal, size) // upstream's `fill-current`
-        "claudeAgent" -> Logo("claude", if (muted) normal else CLAUDE, size)
-        else -> Text(
+      if (logo != null) {
+        Logo(logo.name, logo.brand?.takeUnless { muted } ?: normal, size)
+      } else {
+        Text(
           text = initials,
-          fontSize = 8.sp,
+          fontSize = INITIALS_SIZE.sp,
           fontWeight = FontWeight.SemiBold,
-          lineHeight = 8.sp,
+          lineHeight = INITIALS_SIZE.sp,
           color = normal,
         )
       }
@@ -62,9 +63,9 @@ fun ProviderIcon(
       Box(
         modifier = Modifier
           .align(Alignment.BottomEnd)
-          .offset(x = 3.dp, y = 3.dp)
-          .heightIn(min = 12.dp)
-          .widthIn(min = 12.dp)
+          .offset(x = BADGE_OFFSET.dp, y = BADGE_OFFSET.dp)
+          .heightIn(min = BADGE_SIZE.dp)
+          .widthIn(min = BADGE_SIZE.dp)
           .clip(CircleShape)
           .background(accent ?: panel)
           .border(1.dp, panel, CircleShape)
@@ -73,8 +74,8 @@ fun ProviderIcon(
       ) {
         Text(
           text = initials,
-          fontSize = 7.sp,
-          lineHeight = 7.sp,
+          fontSize = BADGE_INITIALS_SIZE.sp,
+          lineHeight = BADGE_INITIALS_SIZE.sp,
           fontWeight = FontWeight.SemiBold,
           color = if (accent != null) Color.White else JewelTheme.globalColors.text.info,
           maxLines = 1,
@@ -95,7 +96,28 @@ private fun Logo(name: String, tint: Color, size: Dp) {
   )
 }
 
-/** Upstream's `fill-[#d97757]` on the Claude mark. */
+/**
+ * A driver's logo under `icons/providers/` and its brand colour, null when it follows the text.
+ * Shared with the model picker's Swing rows so both draw the same icon.
+ */
+class ProviderLogo(val name: String, val brand: Color?)
+
+/** Upstream's `PROVIDER_ICON_BY_PROVIDER` and `PROVIDER_TEXT_COLOR_BY_PROVIDER`. */
+fun providerLogo(driver: String): ProviderLogo? = when (driver) {
+  "codex" -> ProviderLogo("openai", brand = null) // upstream's `text-black dark:text-white`
+  "claudeAgent" -> ProviderLogo("claude", brand = CLAUDE)
+  else -> null
+}
+
+/** Upstream's `text-3xs`, the initials when a driver has no logo. */
+const val INITIALS_SIZE: Float = 8f
+
+/** The badge: a disc at least this wide and tall, hanging this far off the bottom right. */
+const val BADGE_SIZE: Int = 12
+const val BADGE_OFFSET: Int = 3
+const val BADGE_INITIALS_SIZE: Float = 7f
+
+/** Upstream's `text-[#d97757]` on the Claude mark. */
 private val CLAUDE: Color = Color(0xFFD97757)
 
 /** `#rgb` or `#rrggbb`, else null. */
