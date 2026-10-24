@@ -88,6 +88,7 @@ import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.TextField
 import org.jetbrains.jewel.ui.component.Tooltip
 import org.jetbrains.jewel.ui.component.VerticallyScrollableContainer
+import org.jetbrains.jewel.ui.component.separator
 import org.jetbrains.jewel.ui.icon.IconKey
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import org.jetbrains.jewel.ui.typography
@@ -110,6 +111,7 @@ fun Sidebar(
   // A row was right-clicked at x, y on screen
   onContextMenu: (threadId: String, x: Int, y: Int) -> Unit = { _, _, _ -> },
   filter: ProjectFilter = ProjectFilter.All, // which projects' threads to list
+  open: Set<String> = emptySet(), // the projects this window has open, first in the picker
   onFilterChange: (ProjectFilter) -> Unit = {},
   onNewThread: (() -> Unit)? = null, // null disables the button, as upstream does with no project
   onAddProject: (() -> Unit)? = null, // null hides the button: the desktop app owns projects
@@ -131,7 +133,9 @@ fun Sidebar(
   }
   Column(Modifier.fillMaxSize()) {
     header()
-    ThreadHeader(search, projects, favicons, filter, onFilterChange, onNewThread, onAddProject)
+    ThreadHeader(
+      search, projects, favicons, filter, open, onFilterChange, onNewThread, onAddProject,
+    )
     Box(Modifier.weight(1f)) {
       when {
         sections.inbox.isNotEmpty() || sections.snoozed.isNotEmpty() ||
@@ -160,6 +164,7 @@ private fun ThreadHeader(
   projects: List<Project>,
   favicons: Map<String, ImageBitmap>,
   filter: ProjectFilter,
+  open: Set<String>,
   onFilterChange: (ProjectFilter) -> Unit,
   onNewThread: (() -> Unit)?,
   onAddProject: (() -> Unit)?,
@@ -171,7 +176,7 @@ private fun ThreadHeader(
   ) {
     SearchField(search, Modifier.weight(1f))
     if (projects.isNotEmpty()) {
-      ProjectScope(projects, favicons, filter, onFilterChange)
+      ProjectScope(projects, favicons, filter, open, onFilterChange)
       if (onAddProject != null) {
         IconActionButton(
           key = AllIconsKeys.Actions.NewFolder,
@@ -226,9 +231,11 @@ private fun ProjectScope(
   projects: List<Project>,
   favicons: Map<String, ImageBitmap>,
   filter: ProjectFilter,
+  open: Set<String>,
   onFilterChange: (ProjectFilter) -> Unit,
 ) {
-  val choices: FilterChoices = remember(projects, filter) { filterChoices(projects, filter) }
+  val choices: FilterChoices =
+    remember(projects, filter, open) { filterChoices(projects, filter, open) }
   val byId: Map<String, Project> = remember(projects) { projects.associateBy { it.id } }
   val scoped: Project? = filter.singleProject(byId)
   val tooltip: String = when {
@@ -236,10 +243,10 @@ private fun ProjectScope(
     choices.names.isNotEmpty() -> choices.names.joinToString("\n")
     else -> "Filter threads by project"
   }
-  var open: Boolean by remember { mutableStateOf(false) }
+  var expanded: Boolean by remember { mutableStateOf(false) }
   Box {
     Tooltip(tooltip = { Text(tooltip) }) {
-      IconButton(onClick = { open = !open }, modifier = Modifier.size(24.dp)) {
+      IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(24.dp)) {
         if (scoped != null) {
           ProjectIcon(scoped, favicons[scoped.id])
         } else {
@@ -247,20 +254,21 @@ private fun ProjectScope(
         }
       }
     }
-    if (open) {
+    if (expanded) {
       PopupMenu(
         onDismissRequest = {
-          open = false
+          expanded = false
           return@PopupMenu true
         },
         horizontalAlignment = Alignment.Start,
       ) {
         choices.filters.forEachIndexed { index, choice ->
+          if (index == choices.divider) separator()
           val project: Project? = choice.singleProject(byId)
           selectableItem(
             selected = index == choices.selected,
             onClick = {
-              open = false
+              expanded = false
               if (choice != filter) onFilterChange(choice)
             },
           ) {

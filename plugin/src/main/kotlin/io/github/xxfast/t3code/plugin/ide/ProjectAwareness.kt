@@ -17,19 +17,23 @@ import java.nio.file.Path
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
  * Which T3 projects and thread this IDE window is about, from its content roots: the Sidebar's
- * default filter, and on open, the thread whose worktree this window is. Rules in
- * [matchProjects] and [threadForWorkspace]. Content roots are re-read when they change.
+ * default filter and the projects its picker puts first, and on open, the thread whose worktree
+ * this window is. Rules in [openProjects], [matchProjects] and [threadForWorkspace]. Content
+ * roots are re-read when they change.
  */
 @Service(Service.Level.PROJECT)
 class ProjectAwareness(
@@ -42,9 +46,15 @@ class ProjectAwareness(
   private val roots: MutableStateFlow<List<Path>?> = MutableStateFlow(null)
   private val chosen: MutableStateFlow<List<String>?> = MutableStateFlow(state.filter)
   private val matched: MutableStateFlow<ProjectFilter> = MutableStateFlow(ProjectFilter.All)
+  private val opened: MutableStateFlow<Set<String>?> = MutableStateFlow(null)
 
   /** What the Sidebar lists. */
   val filter: StateFlow<ProjectFilter> = matched.asStateFlow()
+
+  /** The T3 projects this window has open, whatever the filter says. */
+  val open: StateFlow<Set<String>> = opened
+    .map { it.orEmpty() }
+    .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
   init {
     project.messageBus.connect(this).subscribe(
@@ -57,15 +67,17 @@ class ProjectAwareness(
     )
     scope.launch { refreshRoots() }
     scope.launch {
-      combine(roots, chosen, client.projects) { roots, chosen, projects ->
-        Triple(roots, chosen, projects)
-      }.collectLatest { (roots, chosen, projects) ->
-        if (roots == null) return@collectLatest
-        // gitCommonDir reads files, so off the read action and off the EDT
-        matched.value = withContext(Dispatchers.IO) {
-          matchProjects(chosen, comparable(roots), projects)
+      combine(roots, client.projects) { roots, projects -> roots to projects }
+        .collectLatest { (roots, projects) ->
+          if (roots == null) return@collectLatest
+          // gitCommonDir reads files, so off the read action and off the EDT
+          opened.value = withContext(Dispatchers.IO) { openProjects(comparable(roots), projects) }
         }
-      }
+    }
+    scope.launch {
+      combine(chosen, client.projects, opened) { chosen, projects, open ->
+        if (open == null) null else matchProjects(chosen, projects, open)
+      }.collect { if (it != null) matched.value = it }
     }
     scope.launch { selectWorkspaceThread() }
   }

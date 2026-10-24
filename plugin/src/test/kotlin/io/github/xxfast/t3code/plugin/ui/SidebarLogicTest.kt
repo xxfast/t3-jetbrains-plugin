@@ -335,6 +335,22 @@ class SidebarLogicTest {
   }
 
   @Test
+  fun `the picker puts this window's projects first, a divider before the rest`() {
+    val projects: List<Project> = listOf(
+      project("kstore", "KStore"), project("router", "Router"), project("nuget", "NuGet"),
+    )
+    val open: FilterChoices = filterChoices(projects, ProjectFilter.All, setOf("nuget"))
+    assertEquals(listOf("All projects", "NuGet", "KStore", "Router"), open.labels)
+    assertEquals(ProjectFilter.Only(setOf("nuget")), open.filters[1])
+    assertEquals(2, open.divider)
+    val router: ProjectFilter = ProjectFilter.Only(setOf("router"))
+    assertEquals(3, filterChoices(projects, router, setOf("nuget")).selected)
+    assertNull(filterChoices(projects, ProjectFilter.All).divider, "Nothing open, no divider")
+    val everything: Set<String> = setOf("kstore", "router", "nuget")
+    assertNull(filterChoices(projects, ProjectFilter.All, everything).divider, "Nothing else")
+  }
+
+  @Test
   fun `unread is a run completed after the last visit`() {
     assertTrue(thread(completedAt = "2026-10-19T12:00:00Z", visitedAt = TEN_TO).unread)
     assertFalse(thread(completedAt = TEN_TO, visitedAt = "2026-10-19T12:00:00Z").unread)

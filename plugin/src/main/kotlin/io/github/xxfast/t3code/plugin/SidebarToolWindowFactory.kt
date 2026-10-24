@@ -56,6 +56,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
     val renamer: SidebarRename = SidebarRename.getInstance(project)
     val panel: JComponent = JewelComposePanel {
       val filter: ProjectFilter by awareness.filter.collectAsState()
+      val open: Set<String> by awareness.open.collectAsState()
       val connection by client.connection.collectAsState()
       val projects by client.projects.collectAsState()
       val threads by client.threads.collectAsState()
@@ -127,6 +128,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         header = header,
         onContextMenu = { threadId, x, y -> showThreadMenu(project, threadId, x, y) },
         filter = filter,
+        open = open,
         onFilterChange = awareness::choose,
         onNewThread = if (operable) NewThread.getInstance(project)::open else null,
         onOpenSettings = { T3.openSettings(project) },

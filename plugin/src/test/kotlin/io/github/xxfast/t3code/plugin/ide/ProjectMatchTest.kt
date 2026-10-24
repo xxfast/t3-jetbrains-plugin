@@ -58,30 +58,31 @@ class ProjectMatchTest {
 
   @Test
   fun `a persisted choice wins, an empty one is all`() {
-    val roots: List<Path> = listOf(path("/code/kstore"))
-    val chosen: ProjectFilter = matchProjects(listOf("router"), roots, PROJECTS, NO_GIT, false)
+    val open: Set<String> = setOf("kstore")
+    val chosen: ProjectFilter = matchProjects(listOf("router"), PROJECTS, open)
     assertEquals(ProjectFilter.Only(setOf("router")), chosen)
-    assertEquals(ProjectFilter.All, matchProjects(emptyList(), roots, PROJECTS, NO_GIT, false))
-    val loading: ProjectFilter = matchProjects(listOf("x"), roots, emptyList(), NO_GIT, false)
+    assertEquals(ProjectFilter.All, matchProjects(emptyList(), PROJECTS, open))
+    val loading: ProjectFilter = matchProjects(listOf("x"), emptyList(), open)
     assertEquals(ProjectFilter.Only(setOf("x")), loading, "Kept until projects arrive")
   }
 
   @Test
-  fun `a persisted choice of projects that are all gone falls through`() {
-    val roots: List<Path> = listOf(path("/code/kstore"))
-    val gone: ProjectFilter = matchProjects(listOf("deleted"), roots, PROJECTS, NO_GIT, false)
-    assertEquals(ProjectFilter.Only(setOf("kstore")), gone)
+  fun `without a choice the open projects are the filter, else all`() {
+    val gone: ProjectFilter = matchProjects(listOf("deleted"), PROJECTS, setOf("kstore"))
+    assertEquals(ProjectFilter.Only(setOf("kstore")), gone, "A choice all gone falls through")
+    val open: ProjectFilter = matchProjects(null, PROJECTS, setOf("kstore"))
+    assertEquals(ProjectFilter.Only(setOf("kstore")), open)
+    assertEquals(ProjectFilter.All, matchProjects(null, PROJECTS, emptySet()))
   }
 
   @Test
   fun `content roots match T3 roots either way round, a monorepo gets all of them`() {
-    fun match(vararg roots: String): ProjectFilter =
-      matchProjects(null, roots.map(::path), PROJECTS, NO_GIT, false)
-    assertEquals(ProjectFilter.Only(setOf("kstore")), match("/code/kstore/library"))
-    assertEquals(ProjectFilter.Only(setOf("kstore", "router")), match("/code"))
-    val both: ProjectFilter = match("/x", "/code/kstore", "/code/router")
-    assertEquals(ProjectFilter.Only(setOf("kstore", "router")), both)
-    assertEquals(ProjectFilter.All, match("/code/kstore2"))
+    fun open(vararg roots: String): Set<String> =
+      openProjects(roots.map(::path), PROJECTS, NO_GIT, false)
+    assertEquals(setOf("kstore"), open("/code/kstore/library"))
+    assertEquals(setOf("kstore", "router"), open("/code"))
+    assertEquals(setOf("kstore", "router"), open("/x", "/code/kstore", "/code/router"))
+    assertEquals(emptySet(), open("/code/kstore2"))
   }
 
   @Test
@@ -89,11 +90,10 @@ class ProjectMatchTest {
     val main: Path = dir.resolve("main")
     val worktree: Path = worktree(main, dir.resolve("wt"), "wt")
     val projects: List<Project> = listOf(project("kstore", main.toString()))
-    val fromWorktree: ProjectFilter = matchProjects(null, listOf(worktree), projects)
-    assertEquals(ProjectFilter.Only(setOf("kstore")), fromWorktree)
+    assertEquals(setOf("kstore"), openProjects(listOf(worktree), projects))
     val other: List<Project> = listOf(project("kstore", worktree.toString()))
-    assertEquals(ProjectFilter.Only(setOf("kstore")), matchProjects(null, listOf(main), other))
-    assertEquals(ProjectFilter.All, matchProjects(null, listOf(dir.resolve("none")), projects))
+    assertEquals(setOf("kstore"), openProjects(listOf(main), other))
+    assertEquals(emptySet(), openProjects(listOf(dir.resolve("none")), projects))
   }
 
   @Test

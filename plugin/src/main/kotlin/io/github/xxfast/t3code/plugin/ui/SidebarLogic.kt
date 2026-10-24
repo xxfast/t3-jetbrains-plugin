@@ -108,32 +108,43 @@ fun ProjectFilter.allows(projectId: String): Boolean = when (this) {
 
 /**
  * The project picker's entries: "All projects", then "N projects" while a match picked several,
- * then each project. [filters] runs parallel to [labels]; [selected] indexes both.
+ * then the projects this window has [open], then the rest, with a [divider] before the rest when
+ * both are there. Ours, not upstream's: an IDE window is about its own projects. [filters] runs
+ * parallel to [labels]; [selected] and [divider] index both.
  */
 data class FilterChoices(
   val labels: List<String>,
   val filters: List<ProjectFilter>,
   val selected: Int,
   val names: List<String>, // what the current filter lists, for the tooltip
+  val divider: Int? = null, // the entry a separator goes above
 )
 
-fun filterChoices(projects: List<Project>, filter: ProjectFilter): FilterChoices {
+fun filterChoices(
+  projects: List<Project>,
+  filter: ProjectFilter,
+  open: Set<String> = emptySet(),
+): FilterChoices {
   val chosen: List<Project> = projects.filter { filter.allows(it.id) }
   val several: Boolean = filter is ProjectFilter.Only && chosen.size > 1
+  val (ours: List<Project>, rest: List<Project>) = projects.partition { it.id in open }
+  val ordered: List<Project> = ours + rest
   val labels: List<String> = buildList {
     add(ALL_PROJECTS)
     if (several) add("${chosen.size} projects")
-    projects.forEach { add(it.title) }
+    ordered.forEach { add(it.title) }
   }
   val filters: List<ProjectFilter> = buildList {
     add(ProjectFilter.All)
     if (several) add(filter)
-    projects.forEach { add(ProjectFilter.Only(setOf(it.id))) }
+    ordered.forEach { add(ProjectFilter.Only(setOf(it.id))) }
   }
   val selected: Int = filters.indexOf(filter).coerceAtLeast(0)
   val names: List<String> =
     if (filter == ProjectFilter.All) emptyList() else chosen.map { it.title }
-  return FilterChoices(labels, filters, selected, names)
+  val divider: Int? =
+    if (ours.isNotEmpty() && rest.isNotEmpty()) labels.size - rest.size else null
+  return FilterChoices(labels, filters, selected, names, divider)
 }
 
 const val ALL_PROJECTS: String = "All projects"
