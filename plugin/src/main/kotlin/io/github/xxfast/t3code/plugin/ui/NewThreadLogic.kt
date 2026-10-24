@@ -24,8 +24,8 @@ const val NEW_THREAD_TITLE: String = "New thread"
  * then the composer's: its footer changes them on the row, and a New worktree pick sends the
  * first message as an `orchestration.launchThread` that reuses the thread ([launchThreadInput]).
  * [branch] and [worktreePath] carry over from "New thread on <branch>", as upstream's
- * `handleNewThread` options do. The model is [newThreadModelSelection]'s. Null when no provider
- * can run it.
+ * `handleNewThread` options do. The model is [newThreadModelSelection]'s, with [projectDefault]
+ * the project's resolved `defaultModelSelection`. Null when no provider can run it.
  */
 fun createThread(
   project: Project,
@@ -34,11 +34,12 @@ fun createThread(
   commandId: String,
   branch: String? = null,
   worktreePath: String? = null,
+  projectDefault: ModelSelection? = null,
   sticky: ModelSelection? = null,
   carry: ModelSelection? = null,
 ): Command.ThreadCreate? {
   val modelSelection: ModelSelection =
-    newThreadModelSelection(project, providers, sticky, carry) ?: return null
+    newThreadModelSelection(projectDefault, providers, sticky, carry) ?: return null
   return Command.ThreadCreate(
     createdBy = "user",
     creationSource = "web",
@@ -55,21 +56,21 @@ fun createThread(
 }
 
 /**
- * What a new thread in [project] runs, as `useNewThreadHandler` (useHandleNewThread.ts) sets
- * up a draft: the [sticky] last pick (`applyStickyState`), replaced by
+ * What a new thread runs, as `useNewThreadHandler` (useHandleNewThread.ts) sets up a draft: the
+ * [sticky] last pick (`applyStickyState`), replaced by
  * [resolveNewThreadModelSelectionOverride] when that has one, else [defaultModelSelection].
  * Upstream's draft resolves a stale pick when it renders; the plugin creates the thread at once,
  * so a remembered or carried pick on a provider that isn't ready is skipped here instead.
  */
 fun newThreadModelSelection(
-  project: Project,
+  projectDefault: ModelSelection?,
   providers: List<ServerProvider>,
   sticky: ModelSelection?,
   carry: ModelSelection?,
 ): ModelSelection? {
   val override: ModelSelection? =
-    resolveNewThreadModelSelectionOverride(project.defaultModelSelection, carry?.ready(providers))
-  return override ?: sticky?.ready(providers) ?: defaultModelSelection(project, providers)
+    resolveNewThreadModelSelectionOverride(projectDefault, carry?.ready(providers))
+  return override ?: sticky?.ready(providers) ?: defaultModelSelection(projectDefault, providers)
 }
 
 /**
@@ -88,12 +89,15 @@ private fun ModelSelection.ready(providers: List<ServerProvider>): ModelSelectio
   takeIf { providers.any { it.instanceId == instance && it.pickerReady() } }
 
 /**
- * What a new thread in [project] runs without a pick to go on: the project's own default, else
+ * What a new thread runs without a pick to go on: the project's [projectDefault], else
  * `getDefaultServerModel` (apps/web/src/providerModels.ts:87) on the first ready provider. Null
  * with none ready.
  */
-fun defaultModelSelection(project: Project, providers: List<ServerProvider>): ModelSelection? {
-  project.defaultModelSelection?.let { return it }
+fun defaultModelSelection(
+  projectDefault: ModelSelection?,
+  providers: List<ServerProvider>,
+): ModelSelection? {
+  projectDefault?.let { return it }
   val provider: ServerProvider = providers.firstOrNull { it.pickerReady() } ?: return null
   val slug: String = getDefaultServerModel(provider.models) ?: return null
   return ModelSelection(

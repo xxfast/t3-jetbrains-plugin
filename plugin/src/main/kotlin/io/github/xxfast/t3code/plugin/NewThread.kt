@@ -10,6 +10,7 @@ import io.github.xxfast.t3code.plugin.ide.notify
 import io.github.xxfast.t3code.plugin.settings.ComposerDrafts
 import io.github.xxfast.t3code.plugin.ui.createThread
 import io.github.xxfast.t3code.protocol.ServerInfo
+import io.github.xxfast.t3code.protocol.resolveProjectDefaultModelSelection
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.generated.Command
@@ -48,6 +49,10 @@ class NewThread(private val project: Project, private val scope: CoroutineScope)
       val catalog: ServerInfo? = controller.catalog.value
       val target: T3Project = client.projects.value.find { it.id == projectId }
         ?: return@launchReporting
+      // `resolveProjectSettings`: the settings decide, the row only until they're folded
+      val projectDefault: ModelSelection? = catalog
+        ?.let { resolveProjectDefaultModelSelection(it.modelSettings, target) }
+        ?: target.defaultModelSelection
       // Ids are the client's to mint, as upstream's `randomUUID()`
       val threadId: String = UUID.randomUUID().toString()
       val commandId: String = UUID.randomUUID().toString()
@@ -59,6 +64,7 @@ class NewThread(private val project: Project, private val scope: CoroutineScope)
           commandId,
           branch,
           worktreePath,
+          projectDefault = projectDefault,
           sticky = ComposerDrafts.get().stickyModel().selection,
           carry = carry,
         )

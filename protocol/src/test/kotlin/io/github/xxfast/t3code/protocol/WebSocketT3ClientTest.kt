@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 
 class WebSocketT3ClientTest {
@@ -294,6 +295,11 @@ class WebSocketT3ClientTest {
     assertEquals(listOf("Own"), scripts.projectScriptOverrides["prj_own"]?.map { it.name })
     assertEquals(listOf("Run IDE"), scripts.projectSettingsScripts["prj_new"]?.map { it.name })
     assertFalse(scripts.projectSettingsFolded)
+    val models: ProjectModelSettings = info.modelSettings
+    assertEquals(JsonPrimitive("gpt-5"), models.defaultModelSelection?.model)
+    assertEquals(setOf("prj_none", "prj_new"), models.projectSettingsModels.keys)
+    assertNull(models.projectSettingsModels["prj_none"], "null overrides to none")
+    assertEquals(JsonPrimitive("opus"), models.projectSettingsModels["prj_new"]?.model)
   }
 
   @Test

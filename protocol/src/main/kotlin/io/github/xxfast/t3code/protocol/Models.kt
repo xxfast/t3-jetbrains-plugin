@@ -1,6 +1,7 @@
 package io.github.xxfast.t3code.protocol
 
 import io.github.xxfast.t3code.protocol.generated.AuthSessionState
+import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.ProjectReadFileResult
 import io.github.xxfast.t3code.protocol.generated.ProjectScript
 import io.github.xxfast.t3code.protocol.generated.ProjectShell
@@ -129,6 +130,8 @@ public data class ServerInfo(
   val machine: String = "server",
   /** The settings that decide a project's scripts, see [ProjectScriptSettings]. */
   val scriptSettings: ProjectScriptSettings = ProjectScriptSettings(),
+  /** The settings that decide a project's default model, see [ProjectModelSettings]. */
+  val modelSettings: ProjectModelSettings = ProjectModelSettings(),
 )
 
 /**
@@ -162,4 +165,37 @@ public fun resolveProjectScripts(
     return settings.projectScriptOverrides[project.id] ?: settings.defaultProjectScripts
   }
   return project.scripts.ifEmpty { settings.defaultProjectScripts }
+}
+
+/**
+ * The `settings` fields of `server.getConfig` that decide `defaultModelSelection` in
+ * `resolveProjectSettings` (packages/shared/src/projectSettings.ts:70). The project row's own
+ * `defaultModelSelection` is legacy: once the server has folded it into the settings, the row
+ * is stale and the settings alone decide.
+ */
+public data class ProjectModelSettings(
+  /** `defaultModelSelection`, the environment's default for every project. */
+  val defaultModelSelection: ModelSelection? = null,
+  /**
+   * `projectSettingsOverrides[id].defaultModelSelection`, by project id, where the key is
+   * present. A null value overrides the default to none.
+   */
+  val projectSettingsModels: Map<String, ModelSelection?> = emptyMap(),
+  /** `projectSettingsFolded`: the rows' legacy fields have been folded into the overrides. */
+  val projectSettingsFolded: Boolean = false,
+)
+
+/**
+ * `resolveProjectSettings(...).settings.defaultModelSelection`, as `resolveProjectOverrides`
+ * (projectSettings.ts:114) has it: the project's override, then the row's legacy field until the
+ * fold, then the environment's default. Upstream also drops an override on a provider instance
+ * the project disables; the plugin skips a pick whose provider isn't ready instead.
+ */
+public fun resolveProjectDefaultModelSelection(
+  settings: ProjectModelSettings,
+  project: Project,
+): ModelSelection? {
+  if (project.id in settings.projectSettingsModels) return settings.projectSettingsModels[project.id]
+  if (!settings.projectSettingsFolded) project.defaultModelSelection?.let { return it }
+  return settings.defaultModelSelection
 }

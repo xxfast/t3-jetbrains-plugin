@@ -3,6 +3,7 @@ package io.github.xxfast.t3code.protocol
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
 import io.github.xxfast.t3code.protocol.generated.DispatchCommandResult
+import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
@@ -343,6 +344,7 @@ public class WebSocketT3Client internal constructor(
       environmentId = environment?.string("environmentId"),
       machine = settings?.string("environmentIcon") ?: platform?.string("machine") ?: "server",
       scriptSettings = settings?.let(::scriptSettings) ?: ProjectScriptSettings(),
+      modelSettings = settings?.let(::modelSettings) ?: ProjectModelSettings(),
     )
     info = rpc to fresh
     return fresh
@@ -367,6 +369,26 @@ public class WebSocketT3Client internal constructor(
         decodeEach(ProjectScript.serializer(), settings["defaultProjectScripts"]),
       projectScriptOverrides = legacy,
       projectSettingsScripts = overrides,
+      projectSettingsFolded =
+        (settings["projectSettingsFolded"] as? JsonPrimitive)?.booleanOrNull ?: false,
+    )
+  }
+
+  /** The model fields of `settings`; null, or a selection this build can't read, is none. */
+  private fun modelSettings(settings: JsonObject): ProjectModelSettings {
+    fun selection(element: JsonElement?): ModelSelection? =
+      decodeOrNull(ModelSelection.serializer(), element)
+    val overrides: Map<String, ModelSelection?> =
+      (settings["projectSettingsOverrides"] as? JsonObject).orEmpty()
+        .mapNotNull { (id, override) ->
+          val model: JsonElement = (override as? JsonObject)?.get("defaultModelSelection")
+            ?: return@mapNotNull null
+          id to selection(model)
+        }
+        .toMap()
+    return ProjectModelSettings(
+      defaultModelSelection = selection(settings["defaultModelSelection"]),
+      projectSettingsModels = overrides,
       projectSettingsFolded =
         (settings["projectSettingsFolded"] as? JsonPrimitive)?.booleanOrNull ?: false,
     )

@@ -49,6 +49,7 @@
   ],
   "settings": {
     "environmentIcon": "laptop",
+    "defaultModelSelection": { "instanceId": "codex", "model": "gpt-5" },
     "defaultProjectScripts": [
       {
         "id": "scr_default",
@@ -71,7 +72,9 @@
       ]
     },
     "projectSettingsOverrides": {
+      "prj_none": { "defaultModelSelection": null },
       "prj_new": {
+        "defaultModelSelection": { "instanceId": "claude", "model": "opus" },
         "defaultProjectScripts": [
           {
             "id": "scr_new",

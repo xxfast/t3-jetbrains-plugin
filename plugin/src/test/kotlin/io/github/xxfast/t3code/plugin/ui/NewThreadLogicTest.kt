@@ -21,13 +21,13 @@ class NewThreadLogicTest {
   @Test
   fun `the project's default wins`() {
     val own = ModelSelection(instanceId = JsonPrimitive("codex"), model = JsonPrimitive("gpt"))
-    assertEquals(own, defaultModelSelection(project(default = own), listOf(ready)))
+    assertEquals(own, defaultModelSelection(own, listOf(ready)))
   }
 
   @Test
   fun `the first ready provider's default model`() {
     val providers: List<ServerProvider> = listOf(provider("off", enabled = false), ready)
-    val selection: ModelSelection? = defaultModelSelection(project(), providers)
+    val selection: ModelSelection? = defaultModelSelection(null, providers)
     assertEquals(JsonPrimitive("claude"), selection?.instanceId)
     assertEquals(JsonPrimitive("opus"), selection?.model)
   }
@@ -35,14 +35,14 @@ class NewThreadLogicTest {
   @Test
   fun `the first non custom model without a default`() {
     val models: List<ServerProviderModel> = listOf(model("custom", isCustom = true), model("haiku"))
-    val selection: ModelSelection? = defaultModelSelection(project(), listOf(provider("c", models)))
+    val selection: ModelSelection? = defaultModelSelection(null, listOf(provider("c", models)))
     assertEquals(JsonPrimitive("haiku"), selection?.model)
   }
 
   @Test
   fun `the last pick stands in for the server default`() {
     val sticky = selection("claude", "sonnet")
-    assertEquals(sticky, newThreadModelSelection(project(), listOf(ready), sticky, carry = null))
+    assertEquals(sticky, newThreadModelSelection(null, listOf(ready), sticky, carry = null))
   }
 
   @Test
@@ -50,15 +50,15 @@ class NewThreadLogicTest {
     val sticky = selection("claude", "sonnet")
     val carry = selection("claude", "opus")
     val own = selection("codex", "gpt")
-    assertEquals(carry, newThreadModelSelection(project(), listOf(ready), sticky, carry))
-    assertEquals(own, newThreadModelSelection(project(default = own), listOf(ready), sticky, carry))
+    assertEquals(carry, newThreadModelSelection(null, listOf(ready), sticky, carry))
+    assertEquals(own, newThreadModelSelection(own, listOf(ready), sticky, carry))
   }
 
   @Test
   fun `a pick on a provider that isn't ready is skipped`() {
     val stale = selection("off", "gpt")
     val providers: List<ServerProvider> = listOf(provider("off", enabled = false), ready)
-    val selection: ModelSelection? = newThreadModelSelection(project(), providers, stale, stale)
+    val selection: ModelSelection? = newThreadModelSelection(null, providers, stale, stale)
     assertEquals(JsonPrimitive("opus"), selection?.model)
   }
 
@@ -68,7 +68,7 @@ class NewThreadLogicTest {
       provider("off", listOf(model("a")), enabled = false),
       provider("busy", listOf(model("b")), status = "error"),
     )
-    assertNull(defaultModelSelection(project(), providers))
+    assertNull(defaultModelSelection(null, providers))
     assertNull(createThread(project(), providers, "t", "c"))
   }
 
@@ -92,7 +92,7 @@ class NewThreadLogicTest {
 private fun selection(instance: String, model: String): ModelSelection =
   ModelSelection(instanceId = JsonPrimitive(instance), model = JsonPrimitive(model))
 
-private fun project(default: ModelSelection? = null): Project = T3Json.decodeFromString(
+private fun project(): Project = T3Json.decodeFromString(
   Project.serializer(),
   """
     {
@@ -100,7 +100,7 @@ private fun project(default: ModelSelection? = null): Project = T3Json.decodeFro
       "createdAt": "1970-01-01T00:00:00Z", "updatedAt": "1970-01-01T00:00:00Z"
     }
   """,
-).copy(defaultModelSelection = default)
+)
 
 private fun provider(
   instanceId: String,
