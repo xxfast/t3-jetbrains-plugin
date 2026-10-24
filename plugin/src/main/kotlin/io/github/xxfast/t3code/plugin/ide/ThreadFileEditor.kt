@@ -56,13 +56,16 @@ class ThreadFileEditor(
 
   private val panel: JComponent = JewelComposePanel {
     val current: ThreadLoad by load.collectAsState()
-    ChatContent(
-      project = project,
-      threadId = file.threadId,
-      load = current,
-      onRetry = { attempt.update { it + 1 } },
-      memory = memory,
-    )
+    // Side by side with code in the editor area, so it reads at the editor's size
+    EditorSizedText {
+      ChatContent(
+        project = project,
+        threadId = file.threadId,
+        load = current,
+        onRetry = { attempt.update { it + 1 } },
+        memory = memory,
+      )
+    }
   }
 
   // The thread actions on top, acting on this tab's thread
