@@ -193,8 +193,20 @@ fun ChatView(
     // A stream that fails after rendering keeps the thread and says so on top
     if (error != null && view != null) ErrorLine(error, onRetry)
     // The composer floats over the timeline's bottom, as upstream's overlay does, so its fold
-    // and unfold never resize the timeline
-    Box(Modifier.weight(1f).fillMaxWidth()) {
+    // and unfold never resize the timeline. The whole pane takes a file drop, as upstream's
+    // `ThreadFindCanvas` does; the composer shows it, see `ChatComposer`'s `dropActive`.
+    var dropActive: Boolean by remember { mutableStateOf(false) }
+    Box(
+      Modifier
+        .weight(1f)
+        .fillMaxWidth()
+        .fileDropTarget(
+          enabled = view != null && composer.enabled && pending == null,
+          onFiles = attachmentActions.onFiles,
+          onRefused = attachmentActions.onRefused,
+          onDragActive = { active -> dropActive = active },
+        ),
+    ) {
       when {
         view == null && error != null -> LoadError(error, onRetry)
         view == null -> Unit // upstream draws nothing while a thread loads
@@ -275,6 +287,7 @@ fun ChatView(
           attachmentActions = attachmentActions,
           contextWindow = contextWindow,
           stashCount = stashCount,
+          dropActive = dropActive,
           resting = resting,
           onPromptFocus = { scrollCollapse.expandForEditor(System.currentTimeMillis()) },
           onSettledHeight = { height ->

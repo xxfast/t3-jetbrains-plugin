@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
@@ -22,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import org.jetbrains.jewel.foundation.theme.JewelTheme
@@ -73,3 +75,26 @@ fun ScrollToEndButton(
 }
 
 private const val SHOW_DELAY_MS: Long = 150
+
+/**
+ * The pill from `WorkspaceFileDropOverlay`, chat/TimelineOverlays.tsx: a `rounded-full` glass
+ * chip with the paperclip and "Drop files to attach", `shadow-lg`. Upstream centres it in a
+ * dashed ring over the whole canvas; here it sits on the composer, which is where the file
+ * lands. Mouse events pass through it, so it never steals the drop.
+ */
+@Composable
+fun WorkspaceFileDropPill(modifier: Modifier = Modifier) {
+  Row(
+    modifier = modifier
+      .offset(y = (-1).dp) // sit on the box's ring rather than its glass
+      .clip(CircleShape)
+      .background(composerGlassSurface().copy(alpha = 0.95f)) // `bg-background/95`
+      .border(1.dp, accent().copy(alpha = 0.25f), CircleShape) // `border-primary/25`
+      .padding(horizontal = 16.dp, vertical = 10.dp), // `px-4 py-2.5`
+    horizontalArrangement = Arrangement.spacedBy(8.dp), // `gap-2`
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Glyph("paperclip", accent(), 16.dp) // `size-4 text-primary`
+    Text("Drop files to attach", style = small(), fontWeight = FontWeight.Medium)
+  }
+}

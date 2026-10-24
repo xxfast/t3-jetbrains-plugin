@@ -115,6 +115,7 @@ fun ChatComposer(
   onSteerQueued: (() -> Boolean)? = null,
   onEditQueued: (() -> Boolean)? = null,
   mentions: ComposerMentions = ComposerMentions(),
+  dropActive: Boolean = false, // a file drag is over the chat, the box lights up as its landing
 ) {
   // [alternate] is Ctrl/Cmd+Enter or Ctrl/Cmd-click while running: the other follow-up behaviour
   fun send(alternate: Boolean) {
@@ -213,15 +214,11 @@ fun ChatComposer(
         }
       },
     ) {
-    ComposerSurface(
-      modifier = Modifier
-        .fillMaxWidth()
-        .fileDropTarget(
-          enabled = state.enabled && pending == null,
-          onFiles = attachmentActions.onFiles,
-          onRefused = attachmentActions.onRefused,
-        ),
-    ) {
+    // The drop target is the whole chat (`fileDropTarget` on the ChatView), the feedback is here:
+    // upstream rings the canvas (`WorkspaceFileDropOverlay`), which looks like the conversation
+    // takes the file. The box is where it lands, so the box gets the ring and the pill.
+    Box {
+    ComposerSurface(modifier = Modifier.fillMaxWidth(), highlight = dropActive) {
       when (pending) {
         null -> ComposerBody(
           motion = motion,
@@ -298,6 +295,8 @@ fun ChatComposer(
           }
         }
       }
+    }
+    if (dropActive) WorkspaceFileDropPill(Modifier.align(Alignment.Center))
     }
     }
     }

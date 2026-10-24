@@ -335,8 +335,12 @@ fun AttachButton(enabled: Boolean, actions: AttachmentActions) {
   }
 }
 /**
- * Files dragged from outside the IDE onto the composer, as [onFiles]. A drop whose files can't be
- * read, a stale transferable on Windows say, goes to [onRefused] and never reaches AWT.
+ * Files dragged from outside the IDE onto the chat, as [onFiles]. Upstream's
+ * `makeWorkspaceFileDropHandlers` (chat/workspaceFileDrop.ts) on the whole chat canvas: the
+ * composer is a thin strip and a file let go over the timeline should still land in it.
+ * [onDragActive] is its `setDragActive`, true while a file drag is over the target, for the
+ * composer's highlight. A drop whose files can't be read, a stale transferable on Windows say,
+ * goes to [onRefused] and never reaches AWT.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -344,12 +348,22 @@ fun Modifier.fileDropTarget(
   enabled: Boolean,
   onFiles: (List<Path>) -> Unit,
   onRefused: (String) -> Unit,
+  onDragActive: (Boolean) -> Unit = {},
 ): Modifier {
   val files: State<(List<Path>) -> Unit> = rememberUpdatedState(onFiles)
   val refused: State<(String) -> Unit> = rememberUpdatedState(onRefused)
+  val active: State<(Boolean) -> Unit> = rememberUpdatedState(onDragActive)
   val target: DragAndDropTarget = remember {
     object : DragAndDropTarget {
+      override fun onEntered(event: DragAndDropEvent) = active.value(true)
+
+      override fun onExited(event: DragAndDropEvent) = active.value(false)
+
+      // A drag let go outside the target, or cancelled, gets no `onExited`
+      override fun onEnded(event: DragAndDropEvent) = active.value(false)
+
       override fun onDrop(event: DragAndDropEvent): Boolean {
+        active.value(false)
         val paths: List<Path>? = try {
           filesOf(event.awtTransferable)
         } catch (_: TransferFailed) {
