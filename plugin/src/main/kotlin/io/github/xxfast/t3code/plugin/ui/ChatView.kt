@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -83,6 +84,8 @@ import java.awt.datatransfer.StringSelection
 import java.awt.event.MouseEvent
 import java.time.Instant
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import org.jetbrains.jewel.bridge.toComposeColor
 import org.jetbrains.jewel.foundation.GlobalColors
@@ -216,6 +219,7 @@ fun ChatView(
                 onOpenSetupTerminal = onOpenSetupTerminal,
               ),
               worktreeSetup = worktreeSetup,
+              working = composer.running || composer.sending,
               bottomInset = with(LocalDensity.current) { inset.toDp() },
               modifier = Modifier.timelineWheel(timeline, scrollCollapse, follow, collapseEligible),
             )
@@ -585,6 +589,7 @@ private fun MessagesTimeline(
   operateReason: String?, // why nothing can change the thread, when it can't
   actions: TimelineActions,
   worktreeSetup: WorktreeSetupSnapshot?,
+  working: Boolean, // the composer's `isWorking`: a run going or a send on its way
   bottomInset: Dp,
   modifier: Modifier = Modifier,
 ) {
@@ -632,7 +637,7 @@ private fun MessagesTimeline(
     },
   )
   val anchored: Int? = anchoredIndex(rows, follow.anchor)
-  FollowTail(state, follow, anchored)
+  FollowTail(state, follow, anchored, animated = working)
   AnchorNewTurn(state, follow, anchored)
   // `useTimelineFollow`'s release: once the running run does work, the anchor gives way
   val runningRunId: String? = running?.id
@@ -734,15 +739,23 @@ private fun TimelineRow.bottomPadding(continuesWorkLog: Boolean): Dp = when (thi
  * Keeps the timeline at its true end, the composer's inset included, while [follow] says so:
  * after every layout, so rows arriving, the last row streaming and the composer growing all
  * follow. Upstream's `maintainScrollAtEnd` with `TIMELINE_MAINTAIN_SCROLL_AT_END`
- * (MessagesTimeline.tsx).
+ * (MessagesTimeline.tsx), and its `_SMOOTH` twin while [animated]: the thread is working. The
+ * glide runs on its own, so a layout mid-way doesn't restart it and a wheel step stops it.
  */
 @Composable
-private fun FollowTail(state: LazyListState, follow: TimelineFollow, anchored: Int?) {
+private fun FollowTail(
+  state: LazyListState,
+  follow: TimelineFollow,
+  anchored: Int?,
+  animated: Boolean,
+) {
   val threshold: Int = with(LocalDensity.current) {
     TIMELINE_FOLLOW_REARM_THRESHOLD_DP.dp.roundToPx()
   }
   val currentAnchored: Int? by rememberUpdatedState(anchored)
+  val currentAnimated: Boolean by rememberUpdatedState(animated)
   LaunchedEffect(state, follow, threshold) {
+    var glide: Job? = null
     snapshotFlow { state.layoutInfo }.collect { info ->
       val last: LazyListItemInfo? = info.visibleItemsInfo.lastOrNull()
       val gap: Int? = timelineEndGap(
@@ -752,8 +765,15 @@ private fun FollowTail(state: LazyListState, follow: TimelineFollow, anchored: I
         afterContentPadding = info.afterContentPadding,
         viewportEnd = info.viewportEndOffset,
       )
-      if (follow.onLayout(gap, threshold, anchored = currentAnchored != null)) {
-        state.scrollToItem(info.totalItemsCount - 1, Int.MAX_VALUE)
+      if (!follow.onLayout(gap, threshold, anchored = currentAnchored != null)) return@collect
+      val end: Int = info.totalItemsCount - 1
+      if (!currentAnimated) {
+        state.scrollToItem(end, Int.MAX_VALUE)
+      } else if (glide?.isActive != true) {
+        // the last row on screen glides by its gap, else toward it and the next layout finishes
+        glide = launch {
+          if (gap != null) state.animateScrollBy(gap.toFloat()) else state.animateScrollToItem(end)
+        }
       }
     }
   }
@@ -800,10 +820,12 @@ private fun TimelineRowContent(row: TimelineRow, context: RowContext) {
     is TimelineRow.WorkLive -> WorkLogLine(
       icon = workEntryIcon(row.entry),
       label = row.entry.liveLabel(row.active),
+      shimmer = if (row.active) Shimmer.ToolShine else null,
       onClick = { context.onToggleGroup(row.groupId) },
     )
-    TimelineRow.Thinking -> WorkLogLine(icon = "brain", label = "Thinking")
-    is TimelineRow.ContextCompaction -> ContextCompactionRow(row.label)
+    TimelineRow.Thinking ->
+      WorkLogLine(icon = "brain", label = "Thinking", shimmer = Shimmer.ActivityFocus)
+    is TimelineRow.ContextCompaction -> ContextCompactionRow(row.label, row.active)
     is TimelineRow.Event -> EventRow(row.item, context)
     is TimelineRow.Plan -> PlanCard(row.item, context.processor)
     is TimelineRow.WorktreeSetup -> WorktreeSetupCard(
@@ -1091,7 +1113,9 @@ private fun WorkLogEntry.hasDetails(): Boolean = when (val item = item) {
 
 /**
  * `WorkLogLine`, WorkLog.tsx:53: a 16px icon in a 24px slot, the muted label, the time on hover
- * and a chevron that turns when the details are open.
+ * and a chevron that turns when the details are open. A [shimmer] is `LiveActivityRow`'s
+ * (TimelineWorkGroupRows.tsx:381): the tool shine on the label, the focus on icon and label,
+ * the two `w-fit` so the band crosses the text rather than the row.
  */
 @Composable
 private fun WorkLogLine(
@@ -1102,6 +1126,7 @@ private fun WorkLogLine(
   timestamp: String? = null,
   now: Instant? = null,
   expanded: Boolean? = null, // null when there's nothing to open
+  shimmer: Shimmer? = null,
   onClick: (() -> Unit)? = null,
 ) {
   val source: MutableInteractionSource = remember { MutableInteractionSource() }
@@ -1123,20 +1148,30 @@ private fun WorkLogLine(
     horizontalArrangement = Arrangement.spacedBy(6.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
-      val tint: Color =
-        if (tone == LabelTone.Error || tone == LabelTone.Warning) labelColor else muted()
-      Glyph(icon, tint, 16.dp)
+    Row(
+      modifier = Modifier
+        .weight(1f, fill = shimmer == null)
+        .activityShimmer(shimmer == Shimmer.ActivityFocus, Shimmer.ActivityFocus),
+      horizontalArrangement = Arrangement.spacedBy(6.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+        val tint: Color =
+          if (tone == LabelTone.Error || tone == LabelTone.Warning) labelColor else muted()
+        Glyph(icon, tint, 16.dp)
+      }
+      Text(
+        text = label,
+        color = labelColor,
+        fontWeight = if (tone == LabelTone.Warning || tone == LabelTone.Error) FontWeight.Medium
+        else null,
+        modifier = Modifier
+          .weight(1f, fill = false)
+          .activityShimmer(shimmer == Shimmer.ToolShine, Shimmer.ToolShine),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
     }
-    Text(
-      text = label,
-      color = labelColor,
-      fontWeight = if (tone == LabelTone.Warning || tone == LabelTone.Error) FontWeight.Medium
-      else null,
-      modifier = Modifier.weight(1f),
-      maxLines = 1,
-      overflow = TextOverflow.Ellipsis,
-    )
     if (failed) Glyph("x", JewelTheme.globalColors.text.error.copy(alpha = 0.4f), 12.dp)
     if (hovered && timestamp != null && now != null) Timestamp(timestamp, now)
     if (expanded != null) {
@@ -1306,7 +1341,7 @@ private fun groupIcon(kind: Pair<ToolGroupKind, ToolAction?>): String = when (ki
 
 /** The context compaction row, MessagesTimeline.tsx:1999: a label between two hairlines. */
 @Composable
-private fun ContextCompactionRow(label: String) {
+private fun ContextCompactionRow(label: String, active: Boolean) {
   Row(
     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1314,6 +1349,7 @@ private fun ContextCompactionRow(label: String) {
   ) {
     Hairline(Modifier.weight(1f))
     Row(
+      modifier = Modifier.activityShimmer(active, Shimmer.ActivityFocus),
       horizontalArrangement = Arrangement.spacedBy(6.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
