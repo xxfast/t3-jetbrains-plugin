@@ -169,11 +169,12 @@ private fun SetupLine(status: String, label: String, trailing: List<String>) {
         else -> Glyph(stageIcon(status), color, 16.dp)
       }
     }
+    // `ShimmerOverlay` on a running stage's label, which is `block`: the band crosses the slot
     Text(
       text = label,
       color = color,
       fontWeight = if (status == "failed" || status == "warning") FontWeight.Medium else null,
-      modifier = Modifier.weight(1f),
+      modifier = Modifier.weight(1f).activityShimmer(status == "running", Shimmer.ActivityFocus),
       maxLines = 1,
       overflow = TextOverflow.Ellipsis,
     )
