@@ -1,11 +1,14 @@
 package io.github.xxfast.t3code.plugin
 
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.diagnostic.Logger
@@ -19,6 +22,7 @@ import com.intellij.openapi.wm.StatusBarWidgetFactory
 import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtil
 import io.github.xxfast.t3code.plugin.ui.UsageLevel
 import io.github.xxfast.t3code.plugin.ui.UsageLimits
 import io.github.xxfast.t3code.plugin.ui.UsageSegment
@@ -49,9 +53,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.jewel.bridge.JewelComposePanel
+import org.jetbrains.jewel.foundation.theme.JewelTheme
+import org.jetbrains.jewel.ui.component.Text
 
 /**
  * Not upstream's: a glance at every provider's usage limits in the status bar, and upstream's
@@ -72,7 +79,9 @@ class UsageLimitsWidgetFactory : StatusBarWidgetFactory {
 
 private class UsageLimitsWidget(private val scope: CoroutineScope) : CustomStatusBarWidget {
   private val client: T3Client = T3.get().client
+  /** The last providers read, kept through a disconnect so the widget keeps its place. */
   private val providers: MutableStateFlow<List<ServerProvider>> = MutableStateFlow(emptyList())
+  private val connected: MutableStateFlow<Boolean> = MutableStateFlow(false)
   private var popup: JBPopup? = null
 
   /** A provider icon and its percent per segment; the labels take no mouse, so this gets it. */
@@ -94,10 +103,10 @@ private class UsageLimitsWidget(private val scope: CoroutineScope) : CustomStatu
   override fun install(statusBar: StatusBar) {
     scope.launch { follow() }
     scope.launch {
-      providers.collectLatest { latest ->
+      combine(providers, connected, ::Pair).collectLatest { (latest, online) ->
         // Ticks so "resets in" stays current between reads
         while (true) {
-          withContext(Dispatchers.EDT) { render(latest) }
+          withContext(Dispatchers.EDT) { render(latest, online) }
           delay(TICK)
         }
       }
@@ -110,10 +119,8 @@ private class UsageLimitsWidget(private val scope: CoroutineScope) : CustomStatu
    */
   private suspend fun follow() {
     client.connection.collectLatest { state ->
-      if (state !is ConnectionState.Connected) {
-        providers.value = emptyList()
-        return@collectLatest
-      }
+      connected.value = state is ConnectionState.Connected
+      if (state !is ConnectionState.Connected) return@collectLatest
       while (true) {
         try {
           providers.value = client.serverInfo().providers
@@ -127,7 +134,11 @@ private class UsageLimitsWidget(private val scope: CoroutineScope) : CustomStatu
     }
   }
 
-  private fun render(latest: List<ServerProvider>) {
+  /**
+   * A provider icon and what's left per segment. Offline, the last connection's providers with
+   * a dash, since their numbers can't be trusted; hidden until a first connection has any.
+   */
+  private fun render(latest: List<ServerProvider>, online: Boolean) {
     val now: Long = System.currentTimeMillis()
     val segments: List<UsageSegment> = usageSegments(latest)
     label.removeAll()
@@ -136,15 +147,19 @@ private class UsageLimitsWidget(private val scope: CoroutineScope) : CustomStatu
       val provider: ServerProvider = latest.first { it.instanceId == segment.instanceId }
       if (index > 0) label.add(Box.createHorizontalStrut(JBUI.scale(SEGMENT_GAP)))
       label.add(
-        JBLabel("${segment.remaining}%").apply {
+        JBLabel(if (online) "${segment.remaining}%" else "–").apply {
           icon = providerSwingIcon(provider, latest, JBUI.CurrentTheme.StatusBar.BACKGROUND)
           iconTextGap = JBUI.scale(3)
-          foreground = foregroundFor(segment.level)
+          foreground = if (online) foregroundFor(segment.level) else UIUtil.getInactiveTextColor()
         },
       )
     }
-    label.toolTipText = segments.joinToString("<br>", "<html>", "</html>") { segment ->
-      usageSegmentSummary(segment, now)
+    label.toolTipText = if (online) {
+      segments.joinToString("<br>", "<html>", "</html>") { segment ->
+        usageSegmentSummary(segment, now)
+      }
+    } else {
+      OFFLINE
     }
     label.revalidate()
     label.repaint()
@@ -154,6 +169,7 @@ private class UsageLimitsWidget(private val scope: CoroutineScope) : CustomStatu
     popup?.takeIf { it.isVisible }?.let { it.cancel(); return }
     val panel: JComponent = JewelComposePanel {
       val latest by providers.collectAsState()
+      val online by connected.collectAsState()
       var now: Long by remember { mutableLongStateOf(System.currentTimeMillis()) }
       LaunchedEffect(Unit) {
         while (true) {
@@ -161,9 +177,14 @@ private class UsageLimitsWidget(private val scope: CoroutineScope) : CustomStatu
           now = System.currentTimeMillis()
         }
       }
-      UsageLimits(providers = latest, now = now, onOpenUrl = BrowserUtil::browse)
+      if (online) {
+        UsageLimits(providers = latest, now = now, onOpenUrl = BrowserUtil::browse)
+      } else {
+        Text(OFFLINE, Modifier.padding(12.dp), color = JewelTheme.globalColors.text.info)
+      }
     }
-    val size = Dimension(JBUI.scale(POPUP_WIDTH), JBUI.scale(popupHeight(providers.value)))
+    val shown: List<ServerProvider> = if (connected.value) providers.value else emptyList()
+    val size = Dimension(JBUI.scale(POPUP_WIDTH), JBUI.scale(popupHeight(shown)))
     panel.preferredSize = size
     val opened: JBPopup = JBPopupFactory.getInstance()
       .createComponentPopupBuilder(panel, null)
@@ -190,6 +211,8 @@ private class UsageLimitsWidget(private val scope: CoroutineScope) : CustomStatu
     private const val POPUP_WIDTH: Int = 480
     private const val MAX_POPUP_HEIGHT: Int = 600
     private const val SEGMENT_GAP: Int = 8
+    private const val OFFLINE: String =
+      "Not connected to T3 Code. Usage limits are back once it is."
 
     private fun foregroundFor(level: UsageLevel): Color = when (level) {
       UsageLevel.Normal -> JBUI.CurrentTheme.StatusBar.Widget.FOREGROUND
