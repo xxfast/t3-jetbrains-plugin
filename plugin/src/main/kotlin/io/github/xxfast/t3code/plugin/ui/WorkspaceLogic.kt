@@ -50,8 +50,9 @@ fun resolveLockedWorkspaceLabel(activeWorktreePath: String?, effectiveEnvMode: E
   }
 
 /**
- * `resolveEffectiveEnvMode`, `BranchToolbar.logic.ts:156`, for a server thread (the plugin has
- * no local drafts): a worktree, or one being prepared, means worktree mode.
+ * `resolveEffectiveEnvMode`, `BranchToolbar.logic.ts:156`, without the draft's own env mode
+ * (the composer's [WorkspaceDraft] holds that): a worktree, or one being prepared, means
+ * worktree mode.
  */
 fun resolveEffectiveEnvMode(activeWorktreePath: String?, preparingWorktree: Boolean): EnvMode =
   if (activeWorktreePath != null || preparingWorktree) EnvMode.WORKTREE else EnvMode.LOCAL
@@ -111,8 +112,8 @@ fun canOverrideServerThreadEnvMode(view: ThreadView): Boolean =
 /**
  * `shouldShowComposerContextStrip`, `BranchToolbar.logic.ts:63`, with upstream's defaults: the
  * strip shows in the draft hero state and nowhere else (`persistComposerContextStrip` is off).
- * The plugin's draft hero state is a server thread that can still choose its workspace, since
- * its row exists from the start. A setup in flight means a message is out, so no strip.
+ * A draft, or a server thread that can still choose its workspace, is in that state. A setup in
+ * flight means a message is out, so no strip.
  */
 fun shouldShowComposerContextStrip(view: ThreadView, isGitRepo: Boolean): Boolean =
   isGitRepo && canOverrideServerThreadEnvMode(view)
@@ -309,10 +310,12 @@ fun shouldCreateWorktree(view: ThreadView, sendEnvMode: EnvMode): Boolean =
     view.thread.worktreePath == null
 
 /**
- * The `orchestration.launchThread` request for a first message that prepares a worktree on a
- * thread the server already has, as `startThreadTurn` builds it from a `bootstrap` with
- * `prepareWorktree` and no `createThread` (`commands.ts:634` to `686`): the thread is reused,
- * the title seed asks for a generated title, and the message rides as `initialMessage`.
+ * The `orchestration.launchThread` request for a thread's first message, as `startThreadTurn`
+ * builds it from a `bootstrap` (`commands.ts:634` to `686`). A [create] is a draft's
+ * `createThread`; without it the thread the server has is reused. A [baseBranch] prepares a
+ * new worktree from it (`prepareWorktree`), else the turn runs in the thread's worktree or
+ * the project's checkout on [branch]. The title seed asks for a generated title, and the
+ * message rides as `initialMessage`.
  */
 fun launchThreadInput(
   view: ThreadView,
@@ -324,26 +327,39 @@ fun launchThreadInput(
   modelSelection: ModelSelection?,
   runtimeMode: String,
   interactionMode: String,
-  baseBranch: String,
+  baseBranch: String?,
   startFromOrigin: Boolean,
   titleSeed: String?,
+  create: Boolean = false,
+  branch: String? = null,
 ): ThreadLaunchInput {
   val thread: Thread = view.thread
+  val worktreePath: String? = thread.worktreePath
+  val strategy: ThreadLaunchWorkspaceStrategy = when {
+    baseBranch != null -> ThreadLaunchWorkspaceStrategy.Worktree(
+      baseRef = baseBranch,
+      startFromOrigin = if (startFromOrigin) true else null,
+    )
+
+    worktreePath != null -> ThreadLaunchWorkspaceStrategy.ExistingWorktree(
+      worktreePath = worktreePath,
+      branch = branch ?: thread.branch,
+    )
+
+    else -> ThreadLaunchWorkspaceStrategy.Root(branch = branch ?: thread.branch)
+  }
   return ThreadLaunchInput(
     commandId = commandId,
     creationSource = "web",
     threadId = thread.id,
-    reuseExistingThread = true,
+    reuseExistingThread = if (create) null else true,
     projectId = thread.projectId,
     title = titleSeed ?: thread.title,
     generateTitle = titleSeed != null,
     modelSelection = modelSelection ?: thread.modelSelection,
     runtimeMode = runtimeMode,
     interactionMode = interactionMode,
-    workspaceStrategy = ThreadLaunchWorkspaceStrategy.Worktree(
-      baseRef = baseBranch,
-      startFromOrigin = if (startFromOrigin) true else null,
-    ),
+    workspaceStrategy = strategy,
     initialMessage = ThreadLaunchInput.InitialMessage(
       messageId = messageId,
       text = text,

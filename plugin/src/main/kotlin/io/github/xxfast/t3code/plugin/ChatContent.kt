@@ -55,6 +55,7 @@ import io.github.xxfast.t3code.plugin.ui.SELECT_BASE_BRANCH_ERROR
 import io.github.xxfast.t3code.plugin.ui.WorkspaceControlState
 import io.github.xxfast.t3code.plugin.ui.WorktreeSetupProgress
 import io.github.xxfast.t3code.plugin.ui.activeMessageCount
+import io.github.xxfast.t3code.plugin.ui.DraftThread
 import io.github.xxfast.t3code.plugin.ui.canOverrideServerThreadEnvMode
 import io.github.xxfast.t3code.plugin.ui.holdWorktreeSetup
 import io.github.xxfast.t3code.plugin.ui.latestRun
@@ -154,6 +155,9 @@ fun ChatContent(
   val pending: PendingMessages = outboxes[threadId] ?: PendingMessages()
   val draft: TextFieldState = remember(threadId) { controller.draft(threadId) }
   val stash: List<PromptStashEntry> by ComposerDrafts.get().stash.collectAsState()
+  val drafts: Map<String, DraftThread> by DraftThreads.get().drafts.collectAsState()
+  // Not on the server yet: the first send creates it
+  val isDraft: Boolean = threadId in drafts
   LaunchedEffect(projects) { ProjectIcons.get().ensure(projects) }
   val queuedRuns: QueuedRuns = QueuedRuns.getInstance(project)
   val editingAll: Map<String, EditingQueuedRun> by queuedRuns.editing.collectAsState()
@@ -202,7 +206,7 @@ fun ChatContent(
   val (request: PendingRequest?, actions: PendingActions) =
     rememberPendingRequest(view, requests, pending.responding, controller)
   val (footer: ComposerFooterState?, footerActions: ComposerFooterActions) =
-    rememberComposerFooter(project, view, pending, connection, controller, cwd, vcs, setup)
+    rememberComposerFooter(project, view, isDraft, pending, connection, controller, cwd, vcs, setup)
   val contextWindow: ComposerContextWindow =
     rememberContextWindow(view, footer, composer, connection, controller)
   val images: AttachmentImages = AttachmentImages.get()
@@ -267,7 +271,7 @@ fun ChatContent(
         val nextBranch: String? =
           if (worktree == null && workspace != null) pending.workspace.branch else null
         val messageId: String =
-          controller.send(current, text, mode, compactFirst, worktree, nextBranch)
+          controller.send(current, text, mode, compactFirst, worktree, nextBranch, isDraft)
         // `shouldQueueBehindActiveRun` (ChatView.logic.ts): a queued message doesn't move the
         // timeline; the composer only asks to queue while a run is going
         messageId.takeUnless { compactFirst || mode == ComposerDispatchMode.QUEUE }
@@ -287,7 +291,7 @@ fun ChatContent(
       // a new thread from the project. Each only with the operate scope, as `canOperateThread`
       header = ChatHeaderActions(
         onOpenMenu = { x, y -> showThreadMenu(project, threadId, x, y, view = latest) },
-        onRename = if (operable) {
+        onRename = if (operable && !isDraft) {
           { performThreadAction(project, threadId, RENAME_ACTION, fromSidebar = false) }
         } else {
           null
@@ -537,6 +541,7 @@ private fun rememberPendingRequest(
 private fun rememberComposerFooter(
   project: Project,
   view: ThreadView?,
+  isDraft: Boolean, // a draft's picks stay on the draft until its first send
   pending: PendingMessages,
   connection: ConnectionState,
   controller: ChatController,
@@ -601,6 +606,8 @@ private fun rememberComposerFooter(
     when {
       block != null -> controller.blocked(row.id, block.toString())
 
+      isDraft -> DraftThreads.get().update(row.id) { it.copy(modelSelection = next) }
+
       // Mid-run, the pick rides on the next message instead
       activeRun(current.runs) != null -> controller.draftModel(row.id, next)
 
@@ -617,6 +624,15 @@ private fun rememberComposerFooter(
     }
     // The next new thread starts on it, `setStickyModelSelection` after `onProviderModelSelect`
     if (block == null) ComposerDrafts.get().rememberModel(next)
+  }
+
+  fun setInteractionMode(current: ThreadView, mode: String) {
+    if (isDraft) {
+      DraftThreads.get().update(current.thread.id) { it.copy(interactionMode = mode) }
+      return
+    }
+    val command: Command = setThreadInteractionMode(current.thread.id, mode, commandId())
+    controller.dispatchForThread(current, command)
   }
 
   val actions = ComposerFooterActions(
@@ -652,17 +668,18 @@ private fun rememberComposerFooter(
       controller.draftModel(current.thread.id, next)
       ComposerDrafts.get().rememberModelOptions(next)
     },
-    onRuntimeMode = { mode ->
-      view?.let { current ->
-        val command: Command = setThreadRuntimeMode(current.thread.id, mode, commandId())
-        controller.dispatchForThread(current, command)
+    onRuntimeMode = onRuntimeMode@{ mode ->
+      val current: ThreadView = view ?: return@onRuntimeMode
+      if (isDraft) {
+        DraftThreads.get().update(current.thread.id) { it.copy(runtimeMode = mode) }
+        return@onRuntimeMode
       }
+      val command: Command = setThreadRuntimeMode(current.thread.id, mode, commandId())
+      controller.dispatchForThread(current, command)
     },
     onToggleInteractionMode = {
       if (view != null && footer != null) {
-        val next: String = toggledInteractionMode(footer.interactionMode)
-        val command: Command = setThreadInteractionMode(view.thread.id, next, commandId())
-        controller.dispatchForThread(view, command)
+        setInteractionMode(view, toggledInteractionMode(footer.interactionMode))
       }
     },
     // `handleInteractionModeChange`, ChatView.tsx:3732: no plan without the toggle, nothing for
@@ -670,10 +687,7 @@ private fun rememberComposerFooter(
     onInteractionMode = onInteractionMode@{ mode ->
       if (view == null || footer == null) return@onInteractionMode
       if (mode == "plan" && !footer.showInteractionModeToggle) return@onInteractionMode
-      if (mode != footer.interactionMode) {
-        val command: Command = setThreadInteractionMode(view.thread.id, mode, commandId())
-        controller.dispatchForThread(view, command)
-      }
+      if (mode != footer.interactionMode) setInteractionMode(view, mode)
     },
     // `onEnvModeChange`, `setPendingServerThreadBranch` and the origin toggle, ChatView.tsx:4620:
     // composer-side until the first message, which launches with them

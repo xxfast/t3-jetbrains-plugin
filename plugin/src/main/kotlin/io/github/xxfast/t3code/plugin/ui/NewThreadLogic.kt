@@ -1,7 +1,9 @@
 package io.github.xxfast.t3code.plugin.ui
 
 import io.github.xxfast.t3code.protocol.Project
-import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.Thread
+import io.github.xxfast.t3code.protocol.ThreadView
+import io.github.xxfast.t3code.protocol.generated.AppThreadLineage
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.ServerProviderModel
@@ -17,50 +19,101 @@ const val DEFAULT_PROVIDER_INTERACTION_MODE: String = "default"
 const val NEW_THREAD_TITLE: String = "New thread"
 
 /**
- * `createThread`, packages/client-runtime/src/operations/commands.ts:386: a `thread.create` on
- * the current checkout, no worktree. Upstream's picker is draft-first and only creates the thread
- * on the first send; the plugin has no local drafts, so it creates the row at once, the way
- * "implement plan in new thread" does. The provider, model, runtime mode and workspace are
- * then the composer's: its footer changes them on the row, and a New worktree pick sends the
- * first message as an `orchestration.launchThread` that reuses the thread ([launchThreadInput]).
- * [branch] and [worktreePath] carry over from "New thread on <branch>", as upstream's
- * `handleNewThread` options do. The model is [newThreadModelSelection]'s, with [projectDefault]
- * the project's resolved `defaultModelSelection`. Null when no provider can run it.
+ * A new thread before its first message, upstream's `DraftThreadState` (composerDraftStore.ts):
+ * the server knows nothing of it until the first send launches it with [threadId], minted
+ * here as upstream's `newThreadId()` does. One per T3 project, as upstream keys drafts by
+ * logical project. The composer's picks land here instead of on a row.
  */
-fun createThread(
+data class DraftThread(
+  val threadId: String,
+  val projectId: String,
+  val createdAt: String,
+  val modelSelection: ModelSelection,
+  val runtimeMode: String = DEFAULT_RUNTIME_MODE,
+  val interactionMode: String = DEFAULT_PROVIDER_INTERACTION_MODE,
+  val branch: String? = null,
+  val worktreePath: String? = null,
+)
+
+/**
+ * The draft `useNewThreadHandler` (useHandleNewThread.ts) sets up for [project]. [branch] and
+ * [worktreePath] carry over from "New thread on <branch>", as upstream's `handleNewThread`
+ * options do. The model is [newThreadModelSelection]'s, with [projectDefault] the project's
+ * resolved `defaultModelSelection`. Null when no provider can run it.
+ */
+fun newDraftThread(
   project: Project,
   providers: List<ServerProvider>,
   threadId: String,
-  commandId: String,
+  createdAt: String,
   branch: String? = null,
   worktreePath: String? = null,
   projectDefault: ModelSelection? = null,
   sticky: ModelSelection? = null,
   carry: ModelSelection? = null,
-): Command.ThreadCreate? {
+): DraftThread? {
   val modelSelection: ModelSelection =
     newThreadModelSelection(projectDefault, providers, sticky, carry) ?: return null
-  return Command.ThreadCreate(
-    createdBy = "user",
-    creationSource = "web",
-    commandId = commandId,
+  return DraftThread(
     threadId = threadId,
     projectId = project.id,
-    title = NEW_THREAD_TITLE,
+    createdAt = createdAt,
     modelSelection = modelSelection,
-    runtimeMode = DEFAULT_RUNTIME_MODE,
-    interactionMode = DEFAULT_PROVIDER_INTERACTION_MODE,
     branch = branch,
     worktreePath = worktreePath,
   )
 }
 
 /**
+ * `buildLocalDraftThread`, apps/web/src/components/ChatView.logic.ts:527: the row the ChatView
+ * shows for [draft] until the server has one.
+ */
+fun buildLocalDraftThread(draft: DraftThread): Thread = Thread(
+  id = draft.threadId,
+  projectId = draft.projectId,
+  title = NEW_THREAD_TITLE,
+  providerInstanceId = draft.modelSelection.instance.orEmpty(),
+  modelSelection = draft.modelSelection,
+  runtimeMode = draft.runtimeMode,
+  interactionMode = draft.interactionMode,
+  branch = draft.branch,
+  worktreePath = draft.worktreePath,
+  activeProviderThreadId = null,
+  lineage = AppThreadLineage(
+    rootThreadId = draft.threadId,
+    parentThreadId = null,
+    relationshipToParent = null,
+  ),
+  forkedFrom = null,
+  createdBy = "user",
+  creationSource = "web",
+  latestRunId = null,
+  activeRunId = null,
+  status = "idle",
+  pendingRuntimeRequest = null,
+  latestVisibleMessage = null,
+  latestUserMessageAt = null,
+  hasActionableProposedPlan = false,
+  itemCount = 0,
+  visibleItemCount = 0,
+  createdAt = draft.createdAt,
+  updatedAt = draft.createdAt,
+  archivedAt = null,
+  settledOverride = null,
+  settledAt = null,
+  deletedAt = null,
+)
+
+/** [draft] as a thread with nothing in it, what the ChatView renders for a draft. */
+fun draftThreadView(draft: DraftThread): ThreadView =
+  ThreadView(thread = buildLocalDraftThread(draft), runs = emptyList(), items = emptyList())
+
+/**
  * What a new thread runs, as `useNewThreadHandler` (useHandleNewThread.ts) sets up a draft: the
  * [sticky] last pick (`applyStickyState`), replaced by
  * [resolveNewThreadModelSelectionOverride] when that has one, else [defaultModelSelection].
- * Upstream's draft resolves a stale pick when it renders; the plugin creates the thread at once,
- * so a remembered or carried pick on a provider that isn't ready is skipped here instead.
+ * Upstream's draft resolves a stale pick when it renders; the plugin picks once, when the draft
+ * is made, so a remembered or carried pick on a provider that isn't ready is skipped here.
  */
 fun newThreadModelSelection(
   projectDefault: ModelSelection?,
@@ -76,8 +129,8 @@ fun newThreadModelSelection(
 /**
  * `resolveNewThreadModelSelectionOverride`, apps/web/src/lib/chatThreadActions.ts:46: the
  * project's default above the selection carried from the thread the new one starts from.
- * Upstream also drops a carry that comes from the destination draft itself; the plugin has no
- * drafts, so the carry is always another thread's.
+ * Upstream also drops a carry that comes from the destination draft itself; the plugin only
+ * carries from a thread the server lists, so it's always another thread's.
  */
 fun resolveNewThreadModelSelectionOverride(
   projectDefaultSelection: ModelSelection?,

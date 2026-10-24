@@ -11,6 +11,7 @@ import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.UserDataHolderBase
 import io.github.xxfast.t3code.plugin.ChatContent
+import io.github.xxfast.t3code.plugin.DraftThreads
 import io.github.xxfast.t3code.plugin.T3
 import io.github.xxfast.t3code.plugin.ThreadLoad
 import io.github.xxfast.t3code.plugin.ThreadSelection
@@ -48,7 +49,9 @@ class ThreadFileEditor(
   private val attempt: MutableStateFlow<Int> = MutableStateFlow(0)
 
   private val load: StateFlow<ThreadLoad> = attempt
-    .flatMapLatest { T3.get().client.threadLoad(file.threadId) }
+    .flatMapLatest {
+      T3.get().client.threadLoad(file.threadId, DraftThreads.get().draft(file.threadId))
+    }
     .stateIn(scope, SharingStarted.Eagerly, ThreadLoad())
 
   /** Where the timeline was, kept while the panel's composition comes and goes with the tab. */

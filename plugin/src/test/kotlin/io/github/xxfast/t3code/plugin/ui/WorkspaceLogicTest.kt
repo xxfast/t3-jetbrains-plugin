@@ -7,9 +7,11 @@ import io.github.xxfast.t3code.protocol.T3JsonOut
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
+import io.github.xxfast.t3code.protocol.generated.ThreadLaunchWorkspaceStrategy
 import io.github.xxfast.t3code.protocol.generated.VcsRef
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -247,6 +249,55 @@ class WorkspaceLogicTest {
     val json: JsonObject =
       T3JsonOut.encodeToJsonElement(ThreadLaunchInput.serializer(), input).jsonObject
     assertNull(json.getValue("workspaceStrategy").jsonObject["startFromOrigin"])
+  }
+
+  @Test
+  fun `a draft's launch creates the thread on the checkout's picked branch`() {
+    val input: ThreadLaunchInput = launchThreadInput(
+      view = view(),
+      commandId = "cmd",
+      messageId = "msg",
+      text = "hello",
+      context = null,
+      attachments = emptyList(),
+      modelSelection = null,
+      runtimeMode = "full-access",
+      interactionMode = "default",
+      baseBranch = null,
+      startFromOrigin = false,
+      titleSeed = "hello",
+      create = true,
+      branch = "feature",
+    )
+    val json: JsonObject =
+      T3JsonOut.encodeToJsonElement(ThreadLaunchInput.serializer(), input).jsonObject
+    assertNull(json["reuseExistingThread"])
+    assertEquals("p", json.getValue("projectId").jsonPrimitive.content)
+    val strategy: JsonObject = json.getValue("workspaceStrategy").jsonObject
+    assertEquals("root", strategy.getValue("type").jsonPrimitive.content)
+    assertEquals("feature", strategy.getValue("branch").jsonPrimitive.content)
+  }
+
+  @Test
+  fun `a draft on a worktree launches in it`() {
+    val input: ThreadLaunchInput = launchThreadInput(
+      view = view(worktreePath = "/wt"),
+      commandId = "cmd",
+      messageId = "msg",
+      text = "hello",
+      context = null,
+      attachments = emptyList(),
+      modelSelection = null,
+      runtimeMode = "full-access",
+      interactionMode = "default",
+      baseBranch = null,
+      startFromOrigin = false,
+      titleSeed = null,
+      create = true,
+    )
+    val strategy: ThreadLaunchWorkspaceStrategy.ExistingWorktree =
+      assertIs<ThreadLaunchWorkspaceStrategy.ExistingWorktree>(input.workspaceStrategy)
+    assertEquals("/wt", strategy.worktreePath)
   }
 
   private fun view(

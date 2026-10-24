@@ -69,23 +69,39 @@ class NewThreadLogicTest {
       provider("busy", listOf(model("b")), status = "error"),
     )
     assertNull(defaultModelSelection(null, providers))
-    assertNull(createThread(project(), providers, "t", "c"))
+    assertNull(newDraftThread(project(), providers, "t", "1970-01-01T00:00:00Z"))
   }
 
   @Test
-  fun `the command's fixed fields`() {
-    val command = assertNotNull(createThread(project(), listOf(ready), "t", "c"))
-    assertEquals("thread.create", command.type)
-    assertEquals("user", command.createdBy)
-    assertEquals("web", command.creationSource)
-    assertEquals("t", command.threadId)
-    assertEquals("c", command.commandId)
-    assertEquals("p", command.projectId)
-    assertEquals("New thread", command.title)
-    assertEquals("full-access", command.runtimeMode)
-    assertEquals("default", command.interactionMode)
-    assertNull(command.branch)
-    assertNull(command.worktreePath)
+  fun `a draft's fixed fields`() {
+    val draft: DraftThread =
+      assertNotNull(newDraftThread(project(), listOf(ready), "t", "1970-01-01T00:00:00Z"))
+    assertEquals("t", draft.threadId)
+    assertEquals("p", draft.projectId)
+    assertEquals("full-access", draft.runtimeMode)
+    assertEquals("default", draft.interactionMode)
+    assertNull(draft.branch)
+    assertNull(draft.worktreePath)
+  }
+
+  @Test
+  fun `the local draft thread is an idle new thread with the draft's picks`() {
+    val draft = DraftThread(
+      threadId = "t",
+      projectId = "p",
+      createdAt = "1970-01-01T00:00:00Z",
+      modelSelection = selection("claude", "opus"),
+      interactionMode = "plan",
+      branch = "main",
+    )
+    val thread = buildLocalDraftThread(draft)
+    assertEquals("New thread", thread.title)
+    assertEquals("claude", thread.providerInstanceId)
+    assertEquals("plan", thread.interactionMode)
+    assertEquals("main", thread.branch)
+    assertEquals("idle", thread.status)
+    assertEquals("t", thread.lineage.rootThreadId)
+    assertEquals(0, draftThreadView(draft).items.size)
   }
 }
 

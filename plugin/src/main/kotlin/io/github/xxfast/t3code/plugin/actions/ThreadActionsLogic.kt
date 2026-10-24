@@ -39,8 +39,8 @@ enum class ThreadActionKind {
 /**
  * `threadActionRequiresOperate`, threadActionMenu.logic.ts:92: read markers and copying stay
  * available to a read-only pairing. Filter by project isn't on upstream's list, so it greys too.
- * Upstream's new thread on a branch is a local draft until its first send; the plugin's is a
- * `thread.create` at once, so it needs operate here.
+ * Upstream's new thread on a branch is a draft a read-only pairing could open; the plugin greys
+ * it, as the draft could never be sent.
  */
 val ThreadActionKind.requiresOperate: Boolean
   get() = this != ThreadActionKind.MarkUnread && this != ThreadActionKind.Copy

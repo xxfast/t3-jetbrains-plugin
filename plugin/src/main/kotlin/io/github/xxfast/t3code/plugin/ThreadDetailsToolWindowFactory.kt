@@ -105,7 +105,8 @@ class ThreadDetailsToolWindowFactory : ToolWindowFactory, DumbAware {
         else -> {
           // Keyed, so a new thread starts from a fresh state instead of the last one's view
           val load: ThreadLoad = key(id) {
-            remember { client.threadLoad(id) }.collectAsState(initial = ThreadLoad()).value
+            remember { client.threadLoad(id, DraftThreads.get().draft(id)) }
+              .collectAsState(initial = ThreadLoad()).value
           }
           ThreadDetailsContent(project, id, load.view)
         }

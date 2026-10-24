@@ -806,8 +806,9 @@ class ChatController(private val project: Project, private val scope: CoroutineS
    * Sends [text] as a follow-up on [view]'s thread. It shows at once until the server
    * acknowledges it; a refusal takes it back out and puts the text back in the draft. With
    * [compactFirst] a `/compact` goes out first and the message queues behind it, as upstream's
-   * `compactBeforeSend` (`ChatView.tsx:6370`): steering into a compaction is refused. Answers
-   * the message's id.
+   * `compactBeforeSend` (`ChatView.tsx:6370`): steering into a compaction is refused. A
+   * [create] is a draft's first message, which brings the thread into being. Answers the
+   * message's id.
    */
   fun send(
     view: ThreadView,
@@ -816,6 +817,7 @@ class ChatController(private val project: Project, private val scope: CoroutineS
     compactFirst: Boolean = false,
     worktree: WorktreeLaunch? = null,
     nextBranch: String? = null, // the branch picked for this turn, `persistThreadSettingsForNextTurn`
+    create: Boolean = false,
   ): String {
     val threadId: String = view.thread.id
     val messageId: String = UUID.randomUUID().toString()
@@ -838,8 +840,25 @@ class ChatController(private val project: Project, private val scope: CoroutineS
       try {
         val info: ServerInfo = client.serverInfo()
         _catalog.value = info
-        if (worktree != null) {
-          launch(view, worktree, messageId, outgoing, context, attachments, model, text, extras)
+        if (worktree != null || create) {
+          val input: ThreadLaunchInput = launchThreadInput(
+            view = view,
+            commandId = UUID.randomUUID().toString(),
+            messageId = messageId,
+            text = outgoing,
+            context = context,
+            attachments = attachments,
+            modelSelection = model,
+            runtimeMode = worktree?.runtimeMode ?: view.thread.runtimeMode,
+            interactionMode = worktree?.interactionMode ?: view.thread.interactionMode,
+            baseBranch = worktree?.baseBranch,
+            startFromOrigin = worktree?.startFromOrigin ?: false,
+            titleSeed = titleSeed(text, extras),
+            create = create,
+            branch = nextBranch,
+          )
+          launch(threadId, input, messageId, extras)
+          if (create) DraftThreads.get().promoted(threadId)
           return@launch
         }
         // `resolveThreadMetadataUpdateForNextTurn`: the picked branch lands on the row first
@@ -909,38 +928,18 @@ class ChatController(private val project: Project, private val scope: CoroutineS
   }
 
   /**
-   * The first message of a thread that wants a new worktree: `orchestration.launchThread`
-   * with `reuseExistingThread`, the way upstream's `startThreadTurn` goes when the send
-   * carries `bootstrap.prepareWorktree` (`commands.ts:634`). The worktree's progress streams
-   * on `subscribeWorktreeSetup`; the hosts show it. The answer carries no command sequence,
-   * so the optimistic message retires only once the thread stream acknowledges it.
+   * A thread's first message as `orchestration.launchThread`, the way upstream's
+   * `startThreadTurn` goes when the send carries a `bootstrap` (`commands.ts:634`): a draft's
+   * `createThread`, or `prepareWorktree` on a thread the server has. A worktree's progress
+   * streams on `subscribeWorktreeSetup`; the hosts show it. The answer carries no command
+   * sequence, so the optimistic message retires only once the thread stream acknowledges it.
    */
   private suspend fun launch(
-    view: ThreadView,
-    worktree: WorktreeLaunch,
+    threadId: String,
+    input: ThreadLaunchInput,
     messageId: String,
-    outgoing: String,
-    context: MessageContext?,
-    attachments: List<ChatAttachment>,
-    model: ModelSelection?,
-    text: String,
     extras: DraftExtras,
   ) {
-    val threadId: String = view.thread.id
-    val input: ThreadLaunchInput = launchThreadInput(
-      view = view,
-      commandId = UUID.randomUUID().toString(),
-      messageId = messageId,
-      text = outgoing,
-      context = context,
-      attachments = attachments,
-      modelSelection = model,
-      runtimeMode = worktree.runtimeMode,
-      interactionMode = worktree.interactionMode,
-      baseBranch = worktree.baseBranch,
-      startFromOrigin = worktree.startFromOrigin,
-      titleSeed = titleSeed(text, extras),
-    )
     try {
       client.launchThread(input)
     } finally {

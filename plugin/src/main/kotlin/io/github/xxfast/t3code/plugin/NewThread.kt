@@ -8,33 +8,33 @@ import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ide.launchReporting
 import io.github.xxfast.t3code.plugin.ide.notify
 import io.github.xxfast.t3code.plugin.settings.ComposerDrafts
-import io.github.xxfast.t3code.plugin.ui.createThread
+import io.github.xxfast.t3code.plugin.ui.DraftThread
+import io.github.xxfast.t3code.plugin.ui.newDraftThread
 import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.resolveProjectDefaultModelSelection
 import io.github.xxfast.t3code.protocol.T3Client
-import io.github.xxfast.t3code.protocol.Thread
-import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
+import java.time.Instant
 import java.util.UUID
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withTimeoutOrNull
 import io.github.xxfast.t3code.protocol.Project as T3Project
 
-/** Starts a thread in a T3 project and opens it once the server lists it. */
+/**
+ * Opens a new thread in a T3 project as a draft, upstream's `useNewThreadHandler`
+ * (useHandleNewThread.ts). The server only hears of it when its first message is sent.
+ */
 @Service(Service.Level.PROJECT)
 class NewThread(private val project: Project, private val scope: CoroutineScope) {
   private val client: T3Client get() = T3.get().client
 
-  /** Opens the "New thread in..." picker; a pick starts the thread. */
+  /** Opens the "New thread in..." picker; a pick opens the draft. */
   fun open() {
     showNewThreadIn(project) { projectId -> if (projectId != null) start(projectId) }
   }
 
   /**
-   * Starts a thread in [projectId], on [branch] and [worktreePath] when given. [carry] is the
-   * model of the thread it starts from, upstream's `carryModelSelection`; the last pick anywhere
+   * Opens [projectId]'s draft, on [branch] and [worktreePath] when given. [carry] is the model
+   * of the thread it starts from, upstream's `carryModelSelection`; the last pick anywhere
    * stands in without one.
    */
   fun start(
@@ -44,6 +44,22 @@ class NewThread(private val project: Project, private val scope: CoroutineScope)
     carry: ModelSelection? = null,
   ) {
     scope.launchReporting(project, "Couldn't start a thread") {
+      val drafts: DraftThreads = DraftThreads.get()
+      // Upstream reuses the project's draft while the server doesn't list it. It starts a
+      // fresh one when that draft has text, leaving the old one in the Sidebar's draft block;
+      // the plugin has no draft block, so any unsent draft comes back
+      val stored: DraftThread? = drafts.forProject(projectId)?.takeIf { draft ->
+        val listed: Boolean = client.threads.value.any { it.id == draft.threadId }
+        if (listed) drafts.promoted(draft.threadId)
+        !listed
+      }
+      if (stored != null) {
+        if (branch != null || worktreePath != null) {
+          drafts.update(stored.threadId) { it.copy(branch = branch, worktreePath = worktreePath) }
+        }
+        T3Opener.getInstance(project).openThread(stored.threadId)
+        return@launchReporting
+      }
       val controller: ChatController = ChatController.getInstance(project)
       if (controller.catalog.value == null) controller.loadCatalog()
       val catalog: ServerInfo? = controller.catalog.value
@@ -53,36 +69,25 @@ class NewThread(private val project: Project, private val scope: CoroutineScope)
       val projectDefault: ModelSelection? = catalog
         ?.let { resolveProjectDefaultModelSelection(it.modelSettings, target) }
         ?: target.defaultModelSelection
-      // Ids are the client's to mint, as upstream's `randomUUID()`
-      val threadId: String = UUID.randomUUID().toString()
-      val commandId: String = UUID.randomUUID().toString()
-      val command: Command.ThreadCreate? =
-        createThread(
-          target,
-          catalog?.providers.orEmpty(),
-          threadId,
-          commandId,
-          branch,
-          worktreePath,
-          projectDefault = projectDefault,
-          sticky = ComposerDrafts.get().stickyModel().selection,
-          carry = carry,
-        )
-      if (command == null) {
+      val draft: DraftThread? = newDraftThread(
+        target,
+        catalog?.providers.orEmpty(),
+        // Ids are the client's to mint, as upstream's `newThreadId()`
+        threadId = UUID.randomUUID().toString(),
+        createdAt = Instant.now().toString(),
+        branch = branch,
+        worktreePath = worktreePath,
+        projectDefault = projectDefault,
+        sticky = ComposerDrafts.get().stickyModel().selection,
+        carry = carry,
+      )
+      if (draft == null) {
         val hint = "No provider is ready. Set one up in the T3 Code desktop app."
         notify(project, hint, NotificationType.WARNING)
         return@launchReporting
       }
-      client.dispatch(command)
-      val listed: List<Thread>? = withTimeoutOrNull(10.seconds) {
-        client.threads.first { threads -> threads.any { it.id == threadId } }
-      }
-      if (listed == null) {
-        val late = "The new thread didn't show up. It may still appear in the T3 Sidebar."
-        notify(project, late, NotificationType.WARNING)
-        return@launchReporting
-      }
-      T3Opener.getInstance(project).openThread(threadId)
+      drafts.put(draft)
+      T3Opener.getInstance(project).openThread(draft.threadId)
     }
   }
 

@@ -83,8 +83,7 @@ class InterruptRunAction : ThreadAction(ThreadActionKind.Interrupt) {
 
 /**
  * "New thread on <branch>", `useThreadActionMenu.ts:195`: a thread in the same project on this
- * thread's branch and worktree. Upstream opens a draft and creates on the first send; the plugin
- * has no drafts, so [NewThread] creates it now. Only on a thread with a branch.
+ * thread's branch and worktree, as a draft [NewThread] opens. Only on a thread with a branch.
  */
 class NewThreadOnBranchAction : ThreadAction(ThreadActionKind.NewThreadOnBranch) {
   override fun visible(row: Thread?): Boolean = row?.branch != null
