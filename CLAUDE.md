@@ -271,7 +271,11 @@ Hard-won, so recorded here rather than rediscovered.
   `Vcs.UpdateProject`, `Github.Create.Pull.Request`, and the Changes row opens the Commit tool
   window. Only when the thread's `gitCwd` is open in this window and the server is local;
   otherwise the rows are disabled with the reason. A script runs in a fresh thread terminal
-  (`ThreadTerminals.run`), typed as upstream's `projectScriptTerminalInput`.
+  (`ThreadTerminals.run`), typed as upstream's `projectScriptTerminalInput`. The scripts menu
+  also lists this window's run configurations (`RunManager`, run via `ProgramRunnerUtil`)
+  where upstream lists importable `package.json` scripts; a T3 script stays the primary, the
+  selected run configuration takes over only when the project has none
+  (`resolvePrimaryRunItem`).
 - `LiveServerTest` (skipped unless `T3_LIVE_TOKEN` and `T3_LIVE_THREAD` are set) is how wire
   changes get checked against the real server. Last passed 2026-10-20 against the local desktop.
 - A Search Everywhere-shaped chooser is `com.intellij.ide.actions.BigPopupUI` (public, what

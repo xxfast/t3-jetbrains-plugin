@@ -333,7 +333,7 @@ private fun MenuRow(icon: String, label: String) {
 
 /** `MenuGroupLabel`: the group's heading, small and muted. */
 @Composable
-private fun MenuGroupLabel(text: String) {
+internal fun MenuGroupLabel(text: String) {
   Text(
     text = text,
     style = small(),

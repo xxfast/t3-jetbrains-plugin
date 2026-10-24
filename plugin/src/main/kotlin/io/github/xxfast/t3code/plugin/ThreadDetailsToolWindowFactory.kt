@@ -29,6 +29,8 @@ import io.github.xxfast.t3code.plugin.actions.performThreadAction
 import io.github.xxfast.t3code.plugin.actions.stopCommands
 import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ide.VcsStatuses
+import io.github.xxfast.t3code.plugin.ide.ideRunConfigurations
+import io.github.xxfast.t3code.plugin.ide.runIdeConfiguration
 import io.github.xxfast.t3code.plugin.ide.localRoots
 import io.github.xxfast.t3code.plugin.ide.notify
 import io.github.xxfast.t3code.plugin.ide.runIdeAction
@@ -42,7 +44,9 @@ import io.github.xxfast.t3code.plugin.ui.Hint
 import io.github.xxfast.t3code.plugin.ui.LineageBusyAction
 import io.github.xxfast.t3code.plugin.ui.LineageSubagent
 import io.github.xxfast.t3code.plugin.ui.OpenInState
+import io.github.xxfast.t3code.plugin.ui.IdeRunConfiguration
 import io.github.xxfast.t3code.plugin.ui.RefPickerActions
+import io.github.xxfast.t3code.plugin.ui.RunItem
 import io.github.xxfast.t3code.plugin.ui.THREAD_STOP
 import io.github.xxfast.t3code.plugin.ui.ThreadDetails
 import io.github.xxfast.t3code.plugin.ui.ThreadDetailsPanelActions
@@ -59,7 +63,7 @@ import io.github.xxfast.t3code.plugin.ui.ideActionForGitAction
 import io.github.xxfast.t3code.plugin.ui.mergeBackCommand
 import io.github.xxfast.t3code.plugin.ui.operateBlockReason
 import io.github.xxfast.t3code.plugin.ui.resolveBranchSelectionTarget
-import io.github.xxfast.t3code.plugin.ui.resolvePrimaryScript
+import io.github.xxfast.t3code.plugin.ui.resolvePrimaryRunItem
 import io.github.xxfast.t3code.plugin.ui.resolveQuickAction
 import io.github.xxfast.t3code.plugin.ui.subagentStopCommand
 import io.github.xxfast.t3code.plugin.ui.supports
@@ -283,6 +287,9 @@ private fun rememberThreadDetailsPanel(
     }
     val cwdPath: Path? = gitCwd(row, projects)
     val inWindow: Boolean = cwdPath != null && serverIsLocal && belongsIn(cwdPath, roots)
+    // This window's run configurations count as the checkout's scripts once it's open here
+    val configurations: List<IdeRunConfiguration> =
+      remember(threadId, inWindow) { if (inWindow) ideRunConfigurations(project) else emptyList() }
     val gitActionsReason: String? = when {
       !serverIsLocal -> "Server is on another machine"
       !inWindow -> "${cwd ?: "The checkout"} isn't open in this window"
@@ -301,7 +308,8 @@ private fun rememberThreadDetailsPanel(
         reason = openInIdeReason(row, cwdPath, serverIsLocal, Path::isDirectory),
       ),
       scripts = t3Project.scripts,
-      primaryScript = resolvePrimaryScript(t3Project.scripts, preferredScriptId),
+      runConfigurations = configurations,
+      primaryRun = resolvePrimaryRunItem(t3Project.scripts, preferredScriptId, configurations),
       runScriptsReason = if (session?.has(TERMINAL_OPERATE) == true) null else
         "Pair this client again with permission to run terminal commands.",
       gitCwd = cwd,
@@ -341,9 +349,16 @@ private fun rememberThreadDetailsPanel(
     onOpenInIde = {
       performThreadAction(project, threadId, OPEN_IN_IDE_ACTION, fromSidebar = false)
     },
-    onRunScript = { script ->
-      preferredScriptId = script.id
-      ThreadTerminals.getInstance(project).run(threadId, script)
+    onRun = { item ->
+      when (item) {
+        is RunItem.Script -> {
+          preferredScriptId = item.script.id
+          ThreadTerminals.getInstance(project).run(threadId, item.script)
+        }
+        is RunItem.Configuration -> if (!runIdeConfiguration(project, item.configuration.id)) {
+          notify(project, "Run configuration ${item.name} is gone", NotificationType.WARNING)
+        }
+      }
     },
     onGitAction = { action ->
       val actionId: String? = ideActionForGitAction(action)

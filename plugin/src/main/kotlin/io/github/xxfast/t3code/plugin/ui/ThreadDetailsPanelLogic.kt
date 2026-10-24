@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import androidx.compose.ui.graphics.ImageBitmap
 import io.github.xxfast.t3code.protocol.generated.ProjectScript
 import io.github.xxfast.t3code.protocol.generated.VcsStatusLocalResult
 import io.github.xxfast.t3code.protocol.generated.VcsStatusRemoteResult
@@ -295,6 +296,45 @@ fun primaryProjectScript(scripts: List<ProjectScript>): ProjectScript? =
  */
 fun resolvePrimaryScript(scripts: List<ProjectScript>, preferredScriptId: String?): ProjectScript? =
   preferredScriptId?.let { id -> scripts.find { it.id == id } } ?: primaryProjectScript(scripts)
+
+/**
+ * One of this IDE window's run configurations, the IDE's own answer to a project script.
+ * Upstream's menu offers `package.json` scripts next to the stored ones (`fileScripts`); the
+ * IDE's equivalent is what Run/Debug already knows. [selected] is the run widget's current pick.
+ */
+data class IdeRunConfiguration(
+  val id: String,
+  val name: String,
+  val icon: ImageBitmap?,
+  val selected: Boolean,
+)
+
+/** What the scripts row can run: a T3 script in the thread's terminal, or a run configuration. */
+sealed interface RunItem {
+  val name: String
+
+  data class Script(val script: ProjectScript) : RunItem {
+    override val name: String get() = script.name
+  }
+
+  data class Configuration(val configuration: IdeRunConfiguration) : RunItem {
+    override val name: String get() = configuration.name
+  }
+}
+
+/**
+ * The row's primary: upstream's pick among the T3 scripts ([resolvePrimaryScript]) first, since
+ * that's the contract; with none, the IDE's selected run configuration, else its first. Null
+ * with nothing to run, which is where upstream shows "Add project script".
+ */
+fun resolvePrimaryRunItem(
+  scripts: List<ProjectScript>,
+  preferredScriptId: String?,
+  configurations: List<IdeRunConfiguration>,
+): RunItem? =
+  resolvePrimaryScript(scripts, preferredScriptId)?.let(RunItem::Script)
+    ?: (configurations.find { it.selected } ?: configurations.firstOrNull())
+      ?.let(RunItem::Configuration)
 
 /** `projectScriptTerminalInput`, packages/shared/src/projectScripts.ts:88: a leading space keeps
  * it out of the shell's history, the return runs it. */

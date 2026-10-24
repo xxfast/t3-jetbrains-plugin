@@ -128,6 +128,19 @@ class ThreadDetailsPanelLogicTest {
   }
 
   @Test
+  fun `a T3 script outranks run configurations, the selected configuration comes next`() {
+    val test = script("test")
+    val gradle = IdeRunConfiguration("g", "Gradle build", icon = null, selected = false)
+    val app = IdeRunConfiguration("a", "App", icon = null, selected = true)
+    val none: List<ProjectScript> = emptyList()
+    assertEquals(RunItem.Script(test), resolvePrimaryRunItem(listOf(test), null, listOf(app)))
+    assertEquals(RunItem.Configuration(app), resolvePrimaryRunItem(none, null, listOf(gradle, app)))
+    assertEquals(RunItem.Configuration(gradle), resolvePrimaryRunItem(none, null, listOf(gradle)))
+    val settle: ProjectScript = script("settle", runOnSettle = true)
+    assertNull(resolvePrimaryRunItem(listOf(settle), null, emptyList()))
+  }
+
+  @Test
   fun `script input keeps the command out of history and runs it`() {
     assertEquals(" ./gradlew build\r", projectScriptTerminalInput("./gradlew build"))
   }

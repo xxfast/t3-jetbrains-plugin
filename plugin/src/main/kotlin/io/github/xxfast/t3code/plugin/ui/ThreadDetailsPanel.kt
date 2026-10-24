@@ -1,6 +1,7 @@
 package io.github.xxfast.t3code.plugin.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
@@ -29,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -44,6 +46,7 @@ import org.jetbrains.jewel.ui.component.MenuScope
 import org.jetbrains.jewel.ui.component.PopupMenu
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.Tooltip
+import org.jetbrains.jewel.ui.component.separator
 
 // T3 Thread Details' Workspace and Version Control sections, upstream's ThreadDetailsPanel.tsx
 // over threadDetailsPanelStyles.ts: 32dp rows with 8dp corners, a 16dp muted icon, 13px medium
@@ -70,9 +73,11 @@ class ThreadDetailsPanelState(
   /** The Open in row, null when the thread already belongs in this window. */
   val openIn: OpenInState?,
   val scripts: List<ProjectScript>,
-  /** The script the row runs, `primaryScript`. */
-  val primaryScript: ProjectScript?,
-  /** Why scripts can't run, `hasTerminalWriteAccess` failing, or null. */
+  /** This window's run configurations, when the thread's checkout is open in it. */
+  val runConfigurations: List<IdeRunConfiguration>,
+  /** What the row runs, [resolvePrimaryRunItem]. */
+  val primaryRun: RunItem?,
+  /** Why T3 scripts can't run, `hasTerminalWriteAccess` failing, or null. */
   val runScriptsReason: String?,
   /** `gitCwd`: the worktree, else the project root. No Version Control section without one. */
   val gitCwd: String?,
@@ -96,7 +101,7 @@ class ThreadDetailsPanelActions(
   val onEnvMode: (EnvMode) -> Unit = {},
   val refPicker: RefPickerActions = RefPickerActions({}, {}, {}, {}, {}),
   val onOpenInIde: () -> Unit = {},
-  val onRunScript: (ProjectScript) -> Unit = {},
+  val onRun: (RunItem) -> Unit = {},
   /** A stacked git action by name (`commit`, `push`, `create_pr`, ...), or `pull`. */
   val onGitAction: (action: String) -> Unit = {},
   val onOpenChanges: () -> Unit = {},
@@ -146,7 +151,7 @@ fun WorkspaceSection(state: ThreadDetailsPanelState, actions: ThreadDetailsPanel
   ThreadDetailsSection(separated = false) {
     RunContextRow(state, actions.onEnvMode)
     state.openIn?.let { openIn -> OpenInRow(openIn, actions.onOpenInIde) }
-    ProjectScriptsRow(state, actions.onRunScript)
+    ProjectScriptsRow(state, actions.onRun)
   }
 }
 
@@ -226,16 +231,15 @@ private fun OpenInRow(openIn: OpenInState, onOpenInIde: () -> Unit) {
 }
 
 /**
- * `ProjectScriptsControl` in panel mode: the primary script as a split group whose chevron lists
- * every script; "Add project script" when the project has none, which upstream opens an editor
- * for and the plugin can't (scripts are edited in the desktop app, `project.update`).
+ * `ProjectScriptsControl` in panel mode: the primary as a split group whose chevron lists
+ * every T3 script and, the IDE's own kind of script, this window's run configurations (where
+ * upstream lists importable `package.json` scripts). "Add project script" when there's nothing
+ * to run, which upstream opens an editor for and the plugin can't (scripts are edited in the
+ * desktop app, `project.update`).
  */
 @Composable
-private fun ProjectScriptsRow(
-  state: ThreadDetailsPanelState,
-  onRunScript: (ProjectScript) -> Unit,
-) {
-  val primary: ProjectScript? = state.primaryScript
+private fun ProjectScriptsRow(state: ThreadDetailsPanelState, onRun: (RunItem) -> Unit) {
+  val primary: RunItem? = state.primaryRun
   if (primary == null) {
     PanelRow(
       leading = { PanelIcon("plus") },
@@ -245,13 +249,14 @@ private fun ProjectScriptsRow(
     )
     return
   }
-  val canRun: Boolean = state.runScriptsReason == null
+  val canRunScripts: Boolean = state.runScriptsReason == null
+  val enabled: Boolean = primary !is RunItem.Script || canRunScripts
   PanelSplitGroup(
-    leading = { PanelIcon(scriptGlyph(primary.icon)) },
+    leading = { RunItemIcon(primary) },
     label = primary.name,
-    enabled = canRun,
-    tooltip = state.runScriptsReason ?: "Run ${primary.name}",
-    onClick = { onRunScript(primary) },
+    enabled = enabled,
+    tooltip = if (enabled) "Run ${primary.name}" else state.runScriptsReason,
+    onClick = { onRun(primary) },
     menuTooltip = "Script actions",
   ) { close ->
     PopupMenu(
@@ -261,17 +266,60 @@ private fun ProjectScriptsRow(
       },
       horizontalAlignment = Alignment.End,
     ) {
-      state.scripts.forEach { script ->
-        selectableItem(
-          selected = script.id == primary.id,
-          enabled = canRun,
-          onClick = {
-            close()
-            onRunScript(script)
-          },
-        ) {
-          MenuItemRow(scriptGlyph(script.icon), "Run ${script.name}")
+      if (state.scripts.isNotEmpty()) {
+        passiveItem { MenuGroupLabel("Project scripts") }
+        state.scripts.forEach { script ->
+          val item = RunItem.Script(script)
+          selectableItem(
+            selected = item == primary,
+            enabled = canRunScripts,
+            onClick = {
+              close()
+              onRun(item)
+            },
+          ) {
+            MenuItemRow(scriptGlyph(script.icon), "Run ${script.name}")
+          }
         }
+      }
+      if (state.runConfigurations.isNotEmpty()) {
+        if (state.scripts.isNotEmpty()) separator()
+        passiveItem { MenuGroupLabel("Run configurations") }
+        state.runConfigurations.forEach { configuration ->
+          val item = RunItem.Configuration(configuration)
+          selectableItem(
+            selected = item == primary,
+            onClick = {
+              close()
+              onRun(item)
+            },
+          ) {
+            Row(
+              modifier = Modifier.padding(vertical = 2.dp),
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              RunItemIcon(item)
+              Text("Run ${configuration.name}")
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/** A script's `ScriptIcon` glyph, or the run configuration's own icon, 16dp either way. */
+@Composable
+private fun RunItemIcon(item: RunItem) {
+  when (item) {
+    is RunItem.Script -> PanelIcon(scriptGlyph(item.script.icon))
+    is RunItem.Configuration -> {
+      val bitmap: ImageBitmap? = item.configuration.icon
+      if (bitmap == null) {
+        PanelIcon("play")
+      } else {
+        Image(bitmap = bitmap, contentDescription = null, modifier = Modifier.size(16.dp))
       }
     }
   }
