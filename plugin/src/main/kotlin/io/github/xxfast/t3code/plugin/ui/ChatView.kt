@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -70,6 +71,7 @@ import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.ide.CopyPasteManager
 import io.github.xxfast.t3code.plugin.review.checkpointForRun
@@ -80,6 +82,7 @@ import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.ChatAttachment
+import io.github.xxfast.t3code.protocol.generated.ServerProviderSkill
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
 import java.awt.datatransfer.StringSelection
@@ -88,6 +91,7 @@ import java.time.Instant
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import org.jetbrains.jewel.bridge.toComposeColor
 import org.jetbrains.jewel.foundation.GlobalColors
@@ -104,7 +108,9 @@ import org.jetbrains.jewel.markdown.extensions.github.strikethrough.GitHubStrike
 import org.jetbrains.jewel.markdown.extensions.github.tables.GfmTableStyling
 import org.jetbrains.jewel.markdown.extensions.github.tables.GitHubTableProcessorExtension
 import org.jetbrains.jewel.markdown.extensions.github.tables.GitHubTableRendererExtension
+import org.jetbrains.jewel.markdown.extensions.markdownBlockRenderer
 import org.jetbrains.jewel.markdown.processing.MarkdownProcessor
+import org.jetbrains.jewel.markdown.rendering.InlinesStyling
 import org.jetbrains.jewel.markdown.rendering.MarkdownBlockRenderer
 import org.jetbrains.jewel.markdown.rendering.MarkdownStyling
 import org.jetbrains.jewel.ui.component.Icon
@@ -159,6 +165,8 @@ fun ChatView(
   queueActions: QueuedRunsActions = QueuedRunsActions(),
   mentions: ComposerMentions = ComposerMentions(), // what the composer's `@` and `#` menus read
   memory: TimelineMemory = remember { TimelineMemory() }, // where the timeline was left
+  linkFavicons: LinkFaviconSource = NoLinkFavicons, // the favicons in front of external links
+  chipActions: MessageChipActions = MessageChipActions(), // what a click on a chip does
 ) {
   val threadId: String? = view?.thread?.id
   val timeline: LazyListState = remember(threadId) { LazyListState(memory.index, memory.offset) }
@@ -212,11 +220,16 @@ fun ChatView(
         view == null -> Unit // upstream draws nothing while a thread loads
         view.items.isEmpty() -> Hint("Send a message to start the conversation.")
         else -> {
-          val processor: MarkdownProcessor = remember { chatMarkdownProcessor() }
-          val styling: MarkdownStyling = chatMarkdownStyling()
-          val renderer: MarkdownBlockRenderer = remember(styling) {
-            chatMarkdownRenderer(styling)
+          // `timelineSkills` (ChatView.tsx:2694): the provider's skills for the thread's cwd
+          val skills: List<ServerProviderSkill> = remember(footer?.provider, footer?.cwd) {
+            footer?.provider?.let { resolveProviderSkillsForCwd(it, footer.cwd) }.orEmpty()
           }
+          val processor: MarkdownProcessor = remember(skills) { chatMarkdownProcessor(skills) }
+          val styling: MarkdownStyling = chatMarkdownStyling()
+          val renderer: MarkdownBlockRenderer = remember(styling, linkFavicons) {
+            chatMarkdownRenderer(styling, linkFavicons)
+          }
+          CompositionLocalProvider(LocalMessageChipActions provides chipActions) {
           ProvideMarkdownStyling(
             markdownStyling = styling,
             markdownProcessor = processor,
@@ -242,6 +255,7 @@ fun ChatView(
               bottomInset = with(LocalDensity.current) { inset.toDp() },
               modifier = Modifier.timelineWheel(timeline, scrollCollapse, follow, collapseEligible),
             )
+          }
           }
         }
       }
@@ -931,12 +945,18 @@ private fun TurnFoldRow(row: TimelineRow.TurnFold, onToggle: () -> Unit) {
 @Composable
 private fun UserMessageRow(row: TimelineRow.Message, context: RowContext) {
   val message: TurnItem.UserMessage = row.entry.item as TurnItem.UserMessage
-  val text: String = remember(message.text) { stripContextReferences(message.text) }
+  // Context links stay in the text and draw as chips; `copyText` is what the Copy action takes
+  val text: String = message.text
+  val copyText: String = remember(text) { stripContextReferences(text) }
+  val records: Map<String, JsonElement> = remember(message.context) {
+    messageContextRecords(message.context)
+  }
   // Upstream's `userImages` go in the grid; files and unknown types stay names
   val (images: List<ChatAttachment>, others: List<ChatAttachment>) =
     remember(message.attachments) { message.attachments.partition(::isImageAttachment) }
   val extras: List<String> = remember(message.context, others) {
-    contextLabels(message.context) + others.map { it.name }
+    // Records the text doesn't cite would be invisible otherwise
+    uncitedContextLabels(message.context, text) + others.map { it.name }
   }
   val collapsible: Boolean = remember(text) { shouldCollapseUserMessage(text) }
   var showAll: Boolean by remember(row.id) { mutableStateOf(false) }
@@ -973,7 +993,9 @@ private fun UserMessageRow(row: TimelineRow.Message, context: RowContext) {
           val clip: Modifier =
             if (collapsible && !showAll) Modifier.heightIn(max = 176.dp).clip(RectangleClip)
             else Modifier
-          Box(clip) { MarkdownText(text, context.processor, fill = false) }
+          ProvideMessageContextRecords(records) {
+            Box(clip) { MarkdownText(text, context.processor, fill = false) }
+          }
         }
         if (collapsible) {
           Box(Modifier.fillMaxWidth().padding(top = 6.dp), contentAlignment = Alignment.CenterEnd) {
@@ -1003,7 +1025,7 @@ private fun UserMessageRow(row: TimelineRow.Message, context: RowContext) {
               onClick = { context.actions.onRollback(target) },
             )
           }
-          if (text.isNotBlank()) CopyAction(text)
+          if (copyText.isNotBlank()) CopyAction(copyText)
         }
       }
     }
@@ -1557,20 +1579,32 @@ private fun Modifier.bottomHairline(): Modifier {
 
 
 // GFM, as upstream's ChatMarkdown.tsx renders with remark-gfm: tables, strikethrough, autolinks
-private fun chatMarkdownProcessor(): MarkdownProcessor = MarkdownProcessor(
+private fun chatMarkdownProcessor(
+  skills: List<ServerProviderSkill>,
+): MarkdownProcessor = MarkdownProcessor(
   listOf(
     GitHubTableProcessorExtension,
     GitHubStrikethroughProcessorExtension(),
     AutolinkProcessorExtension,
+    // Chips first: the favicon processor turns the images it doesn't know into text
+    MessageChipsProcessorExtension(skills),
+    ExternalLinkFaviconProcessorExtension,
   ),
 )
 
-private fun chatMarkdownRenderer(styling: MarkdownStyling): MarkdownBlockRenderer =
+private fun chatMarkdownRenderer(
+  styling: MarkdownStyling,
+  linkFavicons: LinkFaviconSource,
+): MarkdownBlockRenderer =
   MarkdownBlockRenderer.create(
     styling,
     listOf(
       GitHubTableRendererExtension(GfmTableStyling.create(), styling),
       GitHubStrikethroughRendererExtension,
+      // Jewel asks the first image renderer only, so the chips' one wraps the favicons'
+      MessageChipsRendererExtension(
+        ExternalLinkFaviconRendererExtension(linkFavicons).imageRendererExtension,
+      ),
     ),
   )
 
@@ -1586,6 +1620,7 @@ private fun chatMarkdownStyling(): MarkdownStyling {
   return remember(colors, base) {
     MarkdownStyling.create(
       baseTextStyle = base,
+      heading = chatMarkdownHeading(base, colors),
       blockQuote = MarkdownStyling.BlockQuote.create(
         lineWidth = 2.dp,
         lineColor = colors.borders.normal,
@@ -1595,11 +1630,48 @@ private fun chatMarkdownStyling(): MarkdownStyling {
   }
 }
 
+// The bridge's headings are GitHub's README sizes (h1 2em, h2 1.5em) with a rule under h1 and h2,
+// which swamp a short reply. Upstream's index.css sizes them over a `text-sm` (0.875rem) body:
+// h1 1.25rem, h2 1.125rem, h3 1rem, h4 to h6 0.875rem, all semibold at line-height 1.3, no rule.
+// Same ratios over [base] here; spacing stays the bridge's. Its h6 is GitHub's fixed light grey,
+// upstream's is `--contrast-muted-foreground`, so it takes the quote's info colour.
+private fun chatMarkdownHeading(base: TextStyle, colors: GlobalColors): MarkdownStyling.Heading {
+  fun inlines(rem: Float, color: Color = base.color): InlinesStyling = InlinesStyling.create(
+    base.copy(
+      color = color,
+      fontSize = base.fontSize * (rem / 0.875f),
+      lineHeight = base.fontSize * (rem / 0.875f) * 1.3f,
+      fontWeight = FontWeight.SemiBold,
+    ),
+  )
+  return MarkdownStyling.Heading.create(
+    baseTextStyle = base,
+    h1 = MarkdownStyling.Heading.H1.create(base, inlines(1.25f), underlineWidth = 0.dp),
+    h2 = MarkdownStyling.Heading.H2.create(base, inlines(1.125f), underlineWidth = 0.dp),
+    h3 = MarkdownStyling.Heading.H3.create(base, inlines(1f)),
+    h4 = MarkdownStyling.Heading.H4.create(base, inlines(0.875f)),
+    h5 = MarkdownStyling.Heading.H5.create(base, inlines(0.875f)),
+    h6 = MarkdownStyling.Heading.H6.create(base, inlines(0.875f, colors.text.info)),
+  )
+}
+
 @Composable
 private fun MarkdownText(text: String, processor: MarkdownProcessor, fill: Boolean = true) {
   val blocks: List<MarkdownBlock> = remember(text) { processor.processMarkdownDocument(text) }
   val modifier: Modifier = if (fill) Modifier.fillMaxWidth() else Modifier
-  Markdown(markdownBlocks = blocks, markdown = text, modifier = modifier)
+  // Jewel's default `onUrlClick` is a no-op, so a link does nothing until it's told where to go.
+  // Upstream's markdown anchors open in the system browser; the IDE's `BrowserUtil` is that here.
+  // The renderer goes in by hand: on 2025.3 this overload's default is a bare
+  // `DefaultMarkdownBlockRenderer(styling)` with no extensions, not the one
+  // `ProvideMarkdownStyling` set, so chips and favicons rendered as their markdown there. 263
+  // reads `JewelTheme.markdownBlockRenderer` for the default, which hid it under `runHarness`.
+  Markdown(
+    markdownBlocks = blocks,
+    markdown = text,
+    modifier = modifier,
+    onUrlClick = { url -> BrowserUtil.browse(url) },
+    blockRenderer = JewelTheme.markdownBlockRenderer,
+  )
 }
 
 @Composable

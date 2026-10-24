@@ -318,6 +318,22 @@ Hard-won, so recorded here rather than rediscovered.
   (`resolvePrimaryRunItem`).
 - `LiveServerTest` (skipped unless `T3_LIVE_TOKEN` and `T3_LIVE_THREAD` are set) is how wire
   changes get checked against the real server. Last passed 2026-10-20 against the local desktop.
+- Jewel's `Markdown(markdownBlocks, ...)` on 2025.3 defaults `blockRenderer` to a bare
+  `DefaultMarkdownBlockRenderer(styling)`, not the one `ProvideMarkdownStyling` set, so renderer
+  extensions (image renderers for chips and favicons) silently do nothing and an inline image
+  prints as its markdown. 263 reads `JewelTheme.markdownBlockRenderer` instead. Pass
+  `blockRenderer = JewelTheme.markdownBlockRenderer` by hand (2026-10-24, two hours lost).
+  `runHarness` boots the local IDE (263 here) while `runIde` and users run 2025.3, so a
+  Jewel-level change only counts once it's seen on 2025.3: drop `t3.localIde` from the
+  worktree's `local.properties` for that run.
+- `IntelliJIconKey.fromPlatformIcon` on 2025.3 loads the Swing icon's resource through the
+  plugin's classloader, so another plugin's icon (Kotlin, Markdown file types) logs a SEVERE
+  per use and draws a square. Paint the `javax.swing.Icon` into a `BufferedImage` at the
+  density and show it with `toComposeImageBitmap()` (`MessageChips.kt`).
+- Jewel asks only the first renderer extension that has an `imageRendererExtension`, so chips
+  and favicons share one (`MessageChipsRendererExtension` wraps the favicon one). An inline
+  content placeholder's width goes through `sp` and rounds; give it a whole pixel of slack or
+  the label ellipsises.
 - A Search Everywhere-shaped chooser is `com.intellij.ide.actions.BigPopupUI` (public, what
   `SearchEverywhereUI` and `RunAnythingPopupUI` extend), shown with `createComponentPopupBuilder`
   and `showCenteredInCurrentWindow`. Learned on the model picker, 2026-10-21:

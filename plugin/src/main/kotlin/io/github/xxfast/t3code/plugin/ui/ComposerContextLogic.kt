@@ -5,6 +5,7 @@ import io.github.xxfast.t3code.protocol.generated.MessageContext
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -278,6 +279,29 @@ fun messageContext(records: List<JsonObject>): MessageContext? =
 /** The labels of a message's context records, in order. Undecodable records are skipped. */
 fun contextLabels(context: MessageContext?): List<String> = context?.records.orEmpty()
   .mapNotNull { record -> ((record as? JsonObject)?.get("label") as? JsonPrimitive)?.contentOrNull }
+
+/** A message's context records by `contextId`, the first one when two share an id. */
+fun messageContextRecords(context: MessageContext?): Map<String, JsonElement> {
+  val records: MutableMap<String, JsonElement> = linkedMapOf()
+  for (record in context?.records.orEmpty()) {
+    val id: String = ((record as? JsonObject)?.get("contextId") as? JsonPrimitive)
+      ?.contentOrNull ?: continue
+    records.putIfAbsent(id, record)
+  }
+  return records
+}
+
+/**
+ * The labels of the records [text] doesn't cite with a context link. Upstream shows a record
+ * only where its link is; one the text lost would be invisible, so its label is listed.
+ */
+fun uncitedContextLabels(context: MessageContext?, text: String): List<String> {
+  val cited: Set<String> = inlineContextIds(text).toSet()
+  return context?.records.orEmpty()
+    .mapNotNull { record -> record as? JsonObject }
+    .filter { record -> (record["contextId"] as? JsonPrimitive)?.contentOrNull !in cited }
+    .mapNotNull { record -> (record["label"] as? JsonPrimitive)?.contentOrNull }
+}
 
 /** `formatComposerContextReference`: the markdown link a message's text cites a record by. */
 fun contextReference(kind: String, contextId: String, label: String): String {

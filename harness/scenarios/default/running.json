@@ -244,7 +244,64 @@
             "sizeBytes": 4210
           }
         ],
-        "text": "Bump kotlinx-io to 0.8 and fix whatever breaks in :kstore-file.",
+        "text": "Bump kotlinx-io to 0.8 and fix whatever breaks in `kstore-file/build.gradle.kts`. Follow [ROADMAP.md](t3-context://v1/mention/mention_ROADMAP-md) and the note at [ROADMAP.md L25](t3-context://v1/review-comment/review-comment_file-comment-1) like we did for [#41](t3-context://v1/review-comment/review-comment_pull-request-41), then run $gh-fix-ci and $kmp-targets too. A record this message lost: [old selection](t3-context://v1/review-comment/review-comment_gone)",
+        "context": {
+          "version": 1,
+          "records": [
+            {
+              "version": 1,
+              "contextId": "mention_ROADMAP-md",
+              "kind": "mention",
+              "label": "ROADMAP.md",
+              "path": "ROADMAP.md"
+            },
+            {
+              "version": 1,
+              "contextId": "review-comment_file-comment-1",
+              "kind": "review-comment",
+              "label": "ROADMAP.md L25",
+              "sectionId": "file:ROADMAP.md",
+              "sectionTitle": "File comment",
+              "filePath": "ROADMAP.md",
+              "startIndex": 24,
+              "endIndex": 24,
+              "rangeLabel": "L25",
+              "text": "ah forgot that we got this ROADMAP.md, lets migrate these to milestones",
+              "diff": "- [ ] Phase 2: approvals and questions",
+              "fenceLanguage": "md"
+            },
+            {
+              "version": 1,
+              "contextId": "review-comment_pull-request-41",
+              "kind": "review-comment",
+              "label": "#41",
+              "sectionId": "pull-request:41",
+              "sectionTitle": "Pull request",
+              "filePath": "PR #41",
+              "startIndex": 0,
+              "endIndex": 0,
+              "rangeLabel": "",
+              "text": "",
+              "diff": "",
+              "pullRequest": {
+                "number": 41,
+                "title": "Bump kotlinx-io to 0.7",
+                "url": "https://github.com/xxfast/KStore/pull/41",
+                "headBranch": "deps/kotlinx-io-0.7",
+                "baseBranch": "master",
+                "state": "merged",
+                "isDraft": false
+              }
+            },
+            {
+              "version": 1,
+              "contextId": "skill_kmp-targets",
+              "kind": "skill",
+              "label": "KMP Targets",
+              "name": "kmp-targets"
+            }
+          ]
+        },
         "startedAt": "2026-10-19T08:30:12.000Z",
         "completedAt": "2026-10-19T08:30:12.000Z",
         "updatedAt": "2026-10-19T08:30:12.000Z"

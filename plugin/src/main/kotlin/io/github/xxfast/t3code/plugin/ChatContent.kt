@@ -16,6 +16,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import com.intellij.notification.NotificationType
+import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
@@ -44,6 +45,7 @@ import io.github.xxfast.t3code.plugin.ui.ContextWindowSnapshot
 import io.github.xxfast.t3code.plugin.settings.ComposerDrafts
 import io.github.xxfast.t3code.plugin.ui.DraftExtras
 import io.github.xxfast.t3code.plugin.ui.EditorSelection
+import io.github.xxfast.t3code.plugin.ui.MessageChipActions
 import io.github.xxfast.t3code.plugin.ui.PromptStashEntry
 import io.github.xxfast.t3code.plugin.ui.parentThreadLink
 import io.github.xxfast.t3code.plugin.ui.LocalMessageImages
@@ -236,6 +238,12 @@ fun ChatContent(
       error = load.error,
       project = projects.find { it.id == projectId },
       favicon = favicons[projectId],
+      linkFavicons = LinkFavicons.get(),
+      chipActions = MessageChipActions(
+        onOpenFile = { path, line -> view?.let { opener.openFile(it, path, line) } },
+        onOpenUrl = { url -> BrowserUtil.browse(url) },
+        onOpenThread = opener::openThread,
+      ),
       composer = composer,
       draft = composerDraft,
       pending = request,
