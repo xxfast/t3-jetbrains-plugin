@@ -32,7 +32,8 @@ should work; report it if one doesn't. What works:
 - The desktop's composer: model, effort, runtime mode and Plan/Build in its footer, a context
   window meter with "Compact context", and an offer to compact a big, cold Claude thread first.
 - Attach files and images: drop them on the composer, paste them, or pick them with the paperclip. A
-  selection in the editor goes along as context through "Add to T3 thread".
+  selection in the editor goes along as context through "Add to T3 thread" (Cmd+Opt+K or
+  Ctrl+Alt+K).
 - Review a diff in the IDE's viewer and leave comments on its lines; they go with the next
   message. Revert to before a prompt from its hover row, behind a confirmation.
 - A thread timeline laid out like the desktop's: finished turns fold behind "Worked for", tool
