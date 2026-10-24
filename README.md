@@ -13,8 +13,7 @@ Unofficial, built for my own use. Will publish if it turns out useful to others.
 
 ## Status
 
-0.1.0 is the first release. Built and tested on IntelliJ IDEA, against T3 Code
-`v0.1.1-preview.20261021.3449`. Android Studio and Rider are checked by the plugin verifier on
+0.1.0 is the first release. Built and tested on IntelliJ IDEA, against T3 Code 0.1.2. Android Studio and Rider are checked by the plugin verifier on
 every build. Other IDEs on IntelliJ Platform 2025.3 and later share IDEA's platform build and
 should work; report it if one doesn't. What works:
 

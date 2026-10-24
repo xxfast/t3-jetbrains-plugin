@@ -7903,6 +7903,30 @@
                 }
               ]
             },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "fullAccessOverride": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "ask_rule",
+                    "provider_check"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "appName": {
               "anyOf": [
                 {

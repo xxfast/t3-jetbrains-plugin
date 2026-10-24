@@ -1118,6 +1118,16 @@
             }
           ]
         },
+        "latestRunStopRequested": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "activeRunId": {
           "anyOf": [
             {
@@ -1225,6 +1235,23 @@
                     "validation_error",
                     "unknown"
                   ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lastErrorCode": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "string"
                 },
                 {
                   "type": "null"
@@ -1808,6 +1835,9 @@
       "type": "object",
       "properties": {
         "canonicalKey": {
+          "type": "string"
+        },
+        "remoteUrl": {
           "type": "string"
         },
         "displayName": {

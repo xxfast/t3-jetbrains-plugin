@@ -128,6 +128,10 @@ Hard-won, so recorded here rather than rediscovered.
 - Upstream preview tags aren't a linear history. `v0.1.1-preview.20261021.3449` isn't a
   descendant of `.20261019.3339`, and it dropped remote delegation (`delegatedFrom`, `linkOrigin`,
   the `link_request` item). Bumping can remove fields as well as add them; diff the schema first.
+- Contracts pin upstream's stable releases (`vX.Y.Z`, `v0.1.2` since 2026-10-24), not previews
+  or nightlies. The desktop's default update channel is stable, so that's what users run;
+  nightlies ship several times a day and their schemas churn. The drift job tracks the newest
+  stable tag too. Nightly users still work through `ignoreUnknownKeys` and the generic renderer.
 - The local IDE (`t3.localIde`, Gradle property or `local.properties`) is only the sandbox for
   `runHarness`, via the run task's `localPath`. It used to be the compile target too
   (`local(path)` instead of `intellijIdea(version)`), and a zip built that way linked 262's
@@ -237,7 +241,7 @@ Hard-won, so recorded here rather than rediscovered.
   stays locked with a tooltip until the plugin is paired again.
 - Generated union discriminators carry `@EncodeDefault(ALWAYS)` because `T3Json` drops defaults,
   and the server rejects a command without `type`.
-- `thread.stop` is a client command from `.20261021.3449`, sent by upstream's interrupt when
+- `thread.stop` is a client command since `.20261021.3449` (in `v0.1.2`), sent by upstream's interrupt when
   the server advertises `capabilities.threadStop` and there's no run id (`commands.ts:786`).
   The plugin hasn't adopted it yet; stop session still detaches, upstream's `stopThreadSession`.
 - Streams only wait for a reconnect when `RpcConnection.closed` is complete. A server `Die` or

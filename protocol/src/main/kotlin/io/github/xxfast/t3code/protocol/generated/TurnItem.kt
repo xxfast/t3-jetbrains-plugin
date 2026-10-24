@@ -1,4 +1,4 @@
-// Generated from v0.1.1-preview.20261021.3449 by contracts/generate.ts, do not edit.
+// Generated from v0.1.2 by contracts/generate.ts, do not edit.
 
 @file:OptIn(ExperimentalSerializationApi::class)
 
@@ -363,6 +363,8 @@ public sealed interface TurnItem {
     val requestId: String,
     val requestKind: String,
     val prompt: String? = null,
+    val reason: String? = null,
+    val fullAccessOverride: String? = null,
     val appName: String? = null,
     val options: List<ProviderApprovalOption>? = null,
   ) : TurnItem

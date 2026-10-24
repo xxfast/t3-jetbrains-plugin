@@ -1,4 +1,4 @@
-// Generated from v0.1.1-preview.20261021.3449 by contracts/generate.ts, do not edit.
+// Generated from v0.1.2 by contracts/generate.ts, do not edit.
 
 @file:OptIn(ExperimentalSerializationApi::class)
 
@@ -1841,6 +1841,7 @@ public data class RepositoryIdentityLocator(
 @Serializable
 public data class RepositoryOrigin(
   val canonicalKey: String,
+  val remoteUrl: String? = null,
   val displayName: String? = null,
 )
 

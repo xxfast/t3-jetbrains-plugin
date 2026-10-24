@@ -305,6 +305,9 @@
         "canonicalKey": {
           "type": "string"
         },
+        "remoteUrl": {
+          "type": "string"
+        },
         "displayName": {
           "type": "string"
         }

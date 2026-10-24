@@ -1,4 +1,4 @@
-// Generated from v0.1.1-preview.20261021.3449 by contracts/generate.ts, do not edit.
+// Generated from v0.1.2 by contracts/generate.ts, do not edit.
 
 @file:OptIn(ExperimentalSerializationApi::class)
 
@@ -536,6 +536,14 @@ public sealed interface Command {
   ) : Command
 
   @Serializable
+  public data class QueuedRunStart(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "queued-run.start",
+    override val commandId: String,
+    val threadId: String,
+    val runId: String,
+  ) : Command
+
+  @Serializable
   public data class QueuedRunReorder(
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "queued-run.reorder",
     override val commandId: String,
@@ -820,6 +828,7 @@ public object CommandSerializer : KSerializer<Command> {
       "run.interrupt" -> Command.RunInterrupt.serializer()
       "queued-message.promote-to-steer" -> Command.QueuedMessagePromoteToSteer.serializer()
       "queue.resume" -> Command.QueueResume.serializer()
+      "queued-run.start" -> Command.QueuedRunStart.serializer()
       "queued-run.reorder" -> Command.QueuedRunReorder.serializer()
       "queued-run.cancel" -> Command.QueuedRunCancel.serializer()
       "queued-run.edit" -> Command.QueuedRunEdit.serializer()
@@ -906,6 +915,7 @@ public object CommandSerializer : KSerializer<Command> {
       is Command.QueuedMessagePromoteToSteer ->
         Command.QueuedMessagePromoteToSteer.serializer().serialize(encoder, value)
       is Command.QueueResume -> Command.QueueResume.serializer().serialize(encoder, value)
+      is Command.QueuedRunStart -> Command.QueuedRunStart.serializer().serialize(encoder, value)
       is Command.QueuedRunReorder -> Command.QueuedRunReorder.serializer().serialize(encoder, value)
       is Command.QueuedRunCancel -> Command.QueuedRunCancel.serializer().serialize(encoder, value)
       is Command.QueuedRunEdit -> Command.QueuedRunEdit.serializer().serialize(encoder, value)

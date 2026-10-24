@@ -63,8 +63,9 @@ keeps going.
 
 ## Nightly
 
-The `nightly` job in `.github/workflows/contracts.yml` resolves the newest upstream `v*-preview.*`
-tag. It exports that tag into a temp dir and diffs the result against `schema/`. On any drift it
+The `nightly` job in `.github/workflows/contracts.yml` resolves the newest upstream stable tag
+(`vX.Y.Z`, no `-preview` or `-nightly` suffix; the desktop's default update channel is stable, and
+the nightly schemas churn daily). It exports that tag into a temp dir and diffs the result against `schema/`. On any drift it
 opens one issue, "Upstream contracts drifted", labelled `contracts`. Later runs comment on that
 issue only when the drift changes. The `check` job, on every PR and push to `main`, regenerates at
 the pinned tag and fails if the checked-in output is out of sync.

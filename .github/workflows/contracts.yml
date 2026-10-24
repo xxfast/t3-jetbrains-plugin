@@ -46,7 +46,9 @@ jobs:
             exit 1
           fi
 
-  # Exports the newest upstream preview and keeps one issue open while it differs from ours.
+  # Exports the newest upstream stable release and keeps one issue open while it differs from
+  # ours. Previews and nightlies are skipped: the desktop's default update channel is stable,
+  # and the nightly schemas churn daily (2026-10-24).
   nightly:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -69,13 +71,15 @@ jobs:
         working-directory: contracts
         run: npm ci
 
-      - name: Resolve the newest upstream preview tag
+      - name: Resolve the newest upstream stable tag
         id: tag
         run: |
+          # Stable tags are vX.Y.Z with no suffix; -preview and -nightly carry one
           latest="$(git ls-remote --tags --refs --sort=v:refname \
-            https://github.com/pingdotgg/t3code.git 'v*-preview.*' | tail -n 1 | sed 's|.*refs/tags/||')"
+            https://github.com/pingdotgg/t3code.git 'v[0-9]*.[0-9]*.[0-9]*' \
+            | sed 's|.*refs/tags/||' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | tail -n 1)"
           if [ -z "$latest" ]; then
-            echo "No upstream tag matches v*-preview.*"
+            echo "No upstream tag matches vX.Y.Z"
             exit 1
           fi
           echo "latest=$latest" >> "$GITHUB_OUTPUT"

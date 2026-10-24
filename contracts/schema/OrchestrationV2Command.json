@@ -1867,6 +1867,33 @@
         "type": {
           "type": "string",
           "enum": [
+            "queued-run.start"
+          ]
+        },
+        "commandId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "runId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "commandId",
+        "threadId",
+        "runId"
+      ],
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
             "queued-run.reorder"
           ]
         },
