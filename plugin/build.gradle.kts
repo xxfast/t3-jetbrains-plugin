@@ -23,11 +23,17 @@ repositories {
   }
 }
 
+val localProperties: Properties? = rootProject.file("local.properties")
+  .takeIf { it.exists() }
+  ?.let { file -> Properties().apply { file.inputStream().use(::load) } }
+
 val localIde: String? = providers.gradleProperty("t3.localIde").orNull
-  ?: rootProject.file("local.properties")
-    .takeIf { it.exists() }
-    ?.let { file -> Properties().apply { file.inputStream().use(::load) } }
-    ?.getProperty("t3.localIde")
+  ?: localProperties?.getProperty("t3.localIde")
+
+// Thread ids for runIde and runHarness to open on launch, comma-separated, see LaunchOpen
+val openThreads: String = providers.gradleProperty("t3.open").orNull
+  ?: localProperties?.getProperty("t3.open")
+  ?: ""
 
 val bundledModules: List<String> = listOf(
   "intellij.platform.jewel.foundation",
@@ -167,6 +173,7 @@ tasks.withType<PrepareSandboxTask>().configureEach {
 tasks.runIde {
   // Open this repo as the project, the tool windows don't exist on the welcome screen
   args(rootProject.projectDir.absolutePath)
+  systemProperty("t3code.open", openThreads)
 }
 
 intellijPlatformTesting {
@@ -191,6 +198,7 @@ intellijPlatformTesting {
         // Open this repo as the project, the tool window doesn't exist on the welcome screen
         args(rootProject.projectDir.absolutePath)
         systemProperty("t3code.fixtures", fixtures.absolutePath)
+        systemProperty("t3code.open", openThreads)
       }
     }
   }

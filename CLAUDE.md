@@ -79,6 +79,10 @@ How it fits together:
 - `runHarness` launches a locally installed IDE when `t3.localIde` is set (Gradle property or
   `local.properties`), which skips the platform download for the sandbox. The compile target is
   always `intellijIdea("2025.3")` whatever is installed, see "Things learned".
+- `runIde` and `runHarness` come up with T3 Sidebar and T3 Thread Details open, plus a Chat View
+  tab per thread id in `t3.open` (comma-separated, Gradle property or `local.properties`), e.g.
+  `-Pt3.open=thr_01JC4A1F0QWMIGRATE` for the harness's running thread. They pass it as
+  `-Dt3code.open`; `LaunchOpen` does nothing without it, so it ships inert.
 
 The loop: pick a scenario, look, change Kotlin or JSON, look again. When a screen settles, its
 scenario becomes the test fixture and the PR gets a screenshot from the harness.

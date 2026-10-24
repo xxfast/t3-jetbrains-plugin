@@ -32,6 +32,8 @@
       doNotActivateOnStart="true"
       icon="/icons/t3ThreadDetails.svg"
       factoryClass="io.github.xxfast.t3code.plugin.ThreadDetailsToolWindowFactory"/>
+    <!-- Only with -Dt3code.open, which runIde and runHarness set: opens the T3 windows -->
+    <postStartupActivity implementation="io.github.xxfast.t3code.plugin.LaunchOpen"/>
     <fileEditorProvider
       implementation="io.github.xxfast.t3code.plugin.ide.ThreadFileEditorProvider"/>
     <applicationConfigurable
