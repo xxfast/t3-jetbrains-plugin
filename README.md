@@ -6,7 +6,7 @@ permission prompts in a tool window; files, diffs and terminals in the IDE you a
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="docs/screenshot-light.png">
-  <img alt="T3 Sidebar and T3 Chat View tool windows" src="docs/screenshot-light.png">
+  <img alt="T3 Sidebar, a Chat View tab and T3 Thread Details in IntelliJ IDEA" src="docs/screenshot-light.png">
 </picture>
 
 Unofficial, built for my own use. Will publish if it turns out useful to others.
