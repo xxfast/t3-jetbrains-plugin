@@ -4,6 +4,7 @@ import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.BooleanProviderOptionDescriptor
 import io.github.xxfast.t3code.protocol.generated.ModelCapabilities
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
+import io.github.xxfast.t3code.protocol.generated.ProviderOptionChoice
 import io.github.xxfast.t3code.protocol.generated.ProviderOptionDescriptor
 import io.github.xxfast.t3code.protocol.generated.ProviderThread
 import io.github.xxfast.t3code.protocol.generated.SelectProviderOptionDescriptor
@@ -205,17 +206,38 @@ private val REASONING_SELECT_DESCRIPTOR_IDS: Set<String> =
   setOf("reasoningEffort", "reasoning", "effort", "variant", "thinking")
 
 /**
- * `getProviderModelCapabilities`, `apps/web/src/providerModels.ts:52`, with `planModeEnabled`
- * on, as [resolveComposerInteractionMode] has it.
+ * `getProviderModelCapabilities`, `apps/web/src/providerModels.ts:52`. With plan mode off, the
+ * agent select loses its "plan" choice, [withoutPlanAgentOption].
  */
 fun getProviderModelCapabilities(
   models: List<ServerProviderModel>,
   model: String?,
   driver: String?,
+  planModeEnabled: Boolean = true,
 ): ModelCapabilities? {
   if (model == null) return null
-  return resolveModelPickerSelectedModel(driver, model, models)?.capabilities
+  val caps: ModelCapabilities? =
+    resolveModelPickerSelectedModel(driver, model, models)?.capabilities
+  return if (planModeEnabled) caps else caps?.let(::withoutPlanAgentOption)
 }
+
+/**
+ * `withoutPlanAgentOption`, providerModels.ts:67: drops "plan" from the `agent` select, the select
+ * itself when that empties it, and moves a current value of "plan" to the default (else first).
+ */
+fun withoutPlanAgentOption(caps: ModelCapabilities): ModelCapabilities = caps.copy(
+  optionDescriptors = caps.optionDescriptors.orEmpty().flatMap { descriptor ->
+    if (descriptor !is SelectProviderOptionDescriptor || descriptor.id != "agent") {
+      return@flatMap listOf(descriptor)
+    }
+    val options: List<ProviderOptionChoice> = descriptor.options.filter { it.id != "plan" }
+    if (options.isEmpty()) return@flatMap emptyList()
+    val currentValue: String? = descriptor.currentValue?.takeIf { current ->
+      options.any { it.id == current }
+    } ?: options.find { it.isDefault == true }?.id ?: options.firstOrNull()?.id
+    listOf(descriptor.copy(options = options, currentValue = currentValue))
+  },
+)
 
 /**
  * `getSelectedTraits` and `getTraitsSectionVisibility`, TraitsPicker.tsx:142 and 222, for the

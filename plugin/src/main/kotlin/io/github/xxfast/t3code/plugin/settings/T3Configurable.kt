@@ -56,6 +56,12 @@ class T3Configurable : BoundConfigurable("T3 Code") {
           .bindSelected(T3Settings.get()::composerRichTextEnabled)
           .comment("Show formatted Markdown as you type.")
       }
+      row {
+        // Upstream's legacy plan mode row, SettingsPanels.tsx:734, off by default
+        checkBox("Plan mode (legacy)")
+          .bindSelected(T3Settings.get()::planModeEnabled)
+          .comment("Restore Build/Plan, /plan, /default, and Shift+Tab. Off uses build mode.")
+      }
       row("Follow-up behavior") {
         // Upstream's follow-up behavior row, SettingsPanels.tsx:1507
         comboBox(listOf(T3Settings.FOLLOW_UP_QUEUE, T3Settings.FOLLOW_UP_STEER))

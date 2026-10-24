@@ -600,6 +600,7 @@ private fun rememberComposerFooter(
       model = selection?.slug,
       runtimeMode = pending.settings.runtimeMode(thread),
       interactionMode = pending.settings.interactionMode(thread),
+      planModeEnabled = T3Settings.get().planModeEnabled,
       selection = selection,
       reported = view?.let(::deriveReportedModelSelection),
       favorites = favorites,

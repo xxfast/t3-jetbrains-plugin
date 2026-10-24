@@ -73,14 +73,16 @@ fun compatibleRuntimeMode(current: String, options: List<RuntimeModeOption>): St
 data class InteractionModeResolution(val enabled: Boolean, val interactionMode: String)
 
 /**
- * `resolveComposerInteractionMode`, `apps/web/src/components/ChatView.logic.ts:612`, with
- * `planModeEnabled` on: that's a desktop setting, and this plugin keeps no copy of it.
+ * `resolveComposerInteractionMode`, `apps/web/src/components/ChatView.logic.ts:621`. The toggle
+ * shows when the "Plan mode (legacy)" setting is on and the provider doesn't turn it off.
  */
 fun resolveComposerInteractionMode(
+  planModeEnabled: Boolean,
   provider: ServerProvider?,
   interactionMode: String,
 ): InteractionModeResolution {
-  val enabled: Boolean = provider != null && provider.showInteractionModeToggle != false
+  val enabled: Boolean =
+    planModeEnabled && provider != null && provider.showInteractionModeToggle != false
   return InteractionModeResolution(enabled, if (enabled) interactionMode else "default")
 }
 
@@ -386,7 +388,8 @@ data class ComposerFooterState(
 
 /**
  * The footer for a thread on [instanceId] running [model], from the server's [providers]. The
- * provider limits the runtime modes and decides on the Plan/Build toggle.
+ * provider limits the runtime modes; the Plan/Build toggle needs [planModeEnabled] (upstream's
+ * "Plan mode (legacy)" setting, off by default) and a provider that doesn't turn it off.
  */
 fun composerFooter(
   providers: List<ServerProvider>,
@@ -394,6 +397,7 @@ fun composerFooter(
   model: String?,
   runtimeMode: String,
   interactionMode: String,
+  planModeEnabled: Boolean = false,
   selection: ModelSelection? = null,
   reported: ModelSelection? = null,
   favorites: Set<String> = emptySet(),
@@ -401,7 +405,7 @@ fun composerFooter(
   val provider: ServerProvider? = selectedProvider(providers, instanceId)
   val modes: List<RuntimeModeOption> = compatibleRuntimeModeOptions(provider)
   val interaction: InteractionModeResolution =
-    resolveComposerInteractionMode(provider, interactionMode)
+    resolveComposerInteractionMode(planModeEnabled, provider, interactionMode)
   return ComposerFooterState(
     provider = provider,
     providerBadge = provider != null && showInstanceBadge(provider, providers),
@@ -411,7 +415,9 @@ fun composerFooter(
     runtimeMode = compatibleRuntimeMode(runtimeMode, modes),
     showInteractionModeToggle = interaction.enabled,
     interactionMode = interaction.interactionMode,
-    capabilities = provider?.let { getProviderModelCapabilities(it.models, model, it.driver) },
+    capabilities = provider?.let {
+      getProviderModelCapabilities(it.models, model, it.driver, planModeEnabled)
+    },
     selection = selection,
     reported = reported,
     pickerEntries = modelPickerEntries(providers),

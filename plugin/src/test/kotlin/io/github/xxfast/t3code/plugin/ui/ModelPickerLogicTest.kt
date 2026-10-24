@@ -62,19 +62,24 @@ class ModelPickerLogicTest {
   }
 
   @Test
-  fun `the plan toggle shows unless the provider turns it off, and without it there's no plan`() {
+  fun `the plan toggle needs the setting and a provider that doesn't turn it off`() {
     assertEquals(
       InteractionModeResolution(false, "default"),
-      resolveComposerInteractionMode(null, "plan"),
+      resolveComposerInteractionMode(true, null, "plan"),
     )
-    assertTrue(resolveComposerInteractionMode(provider(toggle = null), "plan").enabled)
+    assertTrue(resolveComposerInteractionMode(true, provider(toggle = null), "plan").enabled)
     assertEquals(
       InteractionModeResolution(true, "plan"),
-      resolveComposerInteractionMode(provider(toggle = true), "plan"),
+      resolveComposerInteractionMode(true, provider(toggle = true), "plan"),
     )
     assertEquals(
       InteractionModeResolution(false, "default"),
-      resolveComposerInteractionMode(provider(toggle = false), "plan"),
+      resolveComposerInteractionMode(true, provider(toggle = false), "plan"),
+    )
+    assertEquals(
+      InteractionModeResolution(false, "default"),
+      resolveComposerInteractionMode(false, provider(toggle = true), "plan"),
+      "Plan mode is a legacy setting, off by default",
     )
     assertEquals("plan", toggledInteractionMode("default"))
     assertEquals("default", toggledInteractionMode("plan"))
@@ -289,17 +294,23 @@ class ModelPickerLogicTest {
       provider("claude", "claudeAgent", "Claude", toggle = false, models = listOf(model("o", "O"))),
     )
 
-    val codex: ComposerFooterState = composerFooter(providers, "codex", "gpt-5", "auto", "plan")
+    val codex: ComposerFooterState =
+      composerFooter(providers, "codex", "gpt-5", "auto", "plan", planModeEnabled = true)
     assertEquals("GPT-5", codex.modelLabel)
     assertEquals("approval-required", codex.runtimeMode, "Not Codex's, so the first is shown")
     assertEquals(2, codex.runtimeModes.size)
     assertTrue(codex.showInteractionModeToggle)
     assertEquals("plan", codex.interactionMode)
 
-    val claude: ComposerFooterState = composerFooter(providers, "claude", "o", "auto", "plan")
+    val claude: ComposerFooterState =
+      composerFooter(providers, "claude", "o", "auto", "plan", planModeEnabled = true)
     assertEquals("auto", claude.runtimeMode)
     assertFalse(claude.showInteractionModeToggle)
     assertEquals("default", claude.interactionMode, "No toggle, no plan mode")
+
+    val off: ComposerFooterState = composerFooter(providers, "codex", "gpt-5", "auto", "plan")
+    assertFalse(off.showInteractionModeToggle, "Plan mode is off by default")
+    assertEquals("default", off.interactionMode)
   }
 
   @Test

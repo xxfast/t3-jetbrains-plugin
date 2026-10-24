@@ -24,6 +24,7 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
     var showSkillsInSlashMenu: Boolean by property(true)
     var composerRichTextEnabled: Boolean by property(true)
     var followUpBehavior: String? by string(FOLLOW_UP_QUEUE)
+    var planModeEnabled: Boolean by property(false)
 
     // Upstream's `favorites` (`ModelFavorites`, settings.ts:277), as `instanceId:slug` keys
     var modelFavorites: MutableList<String> by list()
@@ -64,6 +65,13 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
     get() = state.followUpBehavior.takeIf { it == FOLLOW_UP_STEER } ?: FOLLOW_UP_QUEUE
     set(value) {
       state.followUpBehavior = value
+    }
+
+  /** Upstream's "Plan mode (legacy)": the Plan/Build toggle, `/plan`, `/default` and Shift+Tab. */
+  var planModeEnabled: Boolean
+    get() = state.planModeEnabled
+    set(value) {
+      state.planModeEnabled = value
     }
 
   /** The favourite models in the picker, keyed by `providerModelKey`. */

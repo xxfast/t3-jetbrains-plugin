@@ -43,6 +43,32 @@ class TraitsLogicTest {
   )
 
   @Test
+  fun `plan mode off drops the plan agent, and the agent select when that empties it`() {
+    val agent = SelectProviderOptionDescriptor(
+      id = "agent",
+      label = "Agent",
+      options = listOf(
+        ProviderOptionChoice("default", "Default", isDefault = true),
+        ProviderOptionChoice("plan", "Plan"),
+      ),
+      currentValue = "plan",
+    )
+    val filtered: ModelCapabilities =
+      withoutPlanAgentOption(ModelCapabilities(optionDescriptors = listOf(agent, effort)))
+    val select: SelectProviderOptionDescriptor = assertIs(filtered.optionDescriptors?.first())
+    assertEquals(listOf("default"), select.options.map { it.id })
+    assertEquals("default", select.currentValue, "A current value of plan moves to the default")
+    assertEquals(effort, filtered.optionDescriptors?.last(), "Other selects are untouched")
+
+    val planOnly = agent.copy(options = listOf(ProviderOptionChoice("plan", "Plan")))
+    assertEquals(
+      emptyList(),
+      withoutPlanAgentOption(ModelCapabilities(optionDescriptors = listOf(planOnly)))
+        .optionDescriptors,
+    )
+  }
+
+  @Test
   fun `options round trip through the wire shape`() {
     val picked: ModelSelection = selection("effort" to "high", "fastMode" to true)
     assertEquals(
