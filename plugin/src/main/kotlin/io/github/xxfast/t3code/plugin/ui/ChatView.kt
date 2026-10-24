@@ -741,6 +741,8 @@ private fun TimelineRow.bottomPadding(continuesWorkLog: Boolean): Dp = when (thi
  * follow. Upstream's `maintainScrollAtEnd` with `TIMELINE_MAINTAIN_SCROLL_AT_END`
  * (MessagesTimeline.tsx), and its `_SMOOTH` twin while [animated]: the thread is working. The
  * glide runs on its own, so a layout mid-way doesn't restart it and a wheel step stops it.
+ * Opening a thread lands at its end without one, as `initialScrollAtEnd` does: only a list that
+ * has reached its end once glides.
  */
 @Composable
 private fun FollowTail(
@@ -756,6 +758,7 @@ private fun FollowTail(
   val currentAnimated: Boolean by rememberUpdatedState(animated)
   LaunchedEffect(state, follow, threshold) {
     var glide: Job? = null
+    var settled: Boolean = false // reached the end once, so the opening jump is behind it
     snapshotFlow { state.layoutInfo }.collect { info ->
       val last: LazyListItemInfo? = info.visibleItemsInfo.lastOrNull()
       val gap: Int? = timelineEndGap(
@@ -765,9 +768,10 @@ private fun FollowTail(
         afterContentPadding = info.afterContentPadding,
         viewportEnd = info.viewportEndOffset,
       )
+      if (gap != null && gap <= 0) settled = true
       if (!follow.onLayout(gap, threshold, anchored = currentAnchored != null)) return@collect
       val end: Int = info.totalItemsCount - 1
-      if (!currentAnimated) {
+      if (!currentAnimated || !settled) {
         state.scrollToItem(end, Int.MAX_VALUE)
       } else if (glide?.isActive != true) {
         // the last row on screen glides by its gap, else toward it and the next layout finishes
