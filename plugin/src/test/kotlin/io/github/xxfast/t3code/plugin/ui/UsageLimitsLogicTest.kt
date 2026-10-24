@@ -82,13 +82,80 @@ class UsageLimitsLogicTest {
   }
 
   @Test
-  fun `the account label adds the instance only when it's another name`() {
-    assertEquals("Claude", usageAccountLabel(provider("claude", driver = "claudeAgent")))
-    assertEquals(
-      "Codex · Work",
-      usageAccountLabel(provider("codex_work", driver = "codex", displayName = "Work")),
+  fun `an account is named by its instance, its email, then its driver`() {
+    val work: ServerProvider = provider("codex_work", driver = "codex", displayName = "Work")
+    assertEquals("Work", limitAccountName(work))
+    assertEquals("Claude", limitAccountName(provider("claude", driver = "claudeAgent")))
+  }
+
+  @Test
+  fun `codex pools two accounts by kind, with a column each`() {
+    val session = window("primary", 40.0, "2026-10-24T08:00:00Z", 300)
+    val weekly = window("secondary", 10.0, "2026-10-28T00:00:00Z", 10080, kind = "weekly")
+    val limits = ServerProviderUsageLimits("2026-10-24T06:00:00Z", listOf(session, weekly))
+    val work = provider("codex_work", driver = "codex", usageLimits = limits)
+    val home = provider(
+      "codex",
+      usageLimits = limits.copy(
+        windows = listOf(session.copy(id = "secondary", usedPercent = 60.0)),
+      ),
     )
-    assertEquals("Codex · codex_work", usageAccountLabel(provider("codex_work", driver = "codex")))
+    val pool: LimitPool = collectLimitPools(listOf(work, home), now).single()
+    assertEquals(listOf("session", "weekly"), pool.windows.map { it.id })
+    val pooled: LimitPoolWindow = pool.windows.first()
+    assertEquals(50, pooled.remainingPercent)
+    assertEquals(2, pooled.columns.size)
+    // Same reset, so by name: `codex` first, and it has no weekly window
+    assertEquals(listOf("codex", "codex_work"), pool.accounts.map { it.instanceId })
+    assertEquals(listOf(false, true), pool.windows.last().columns.map { it.member != null })
+  }
+
+  @Test
+  fun `a session counts as spent while the weekly window is`() {
+    val session = window("five_hour", 20.0, "2026-10-24T08:00:00Z", 300)
+    val weekly = window("seven_day", 100.0, "2026-10-26T00:00:00Z", 10080, kind = "weekly")
+    val claude = provider(
+      "claude",
+      driver = "claudeAgent",
+      usageLimits = ServerProviderUsageLimits("2026-10-24T06:00:00Z", listOf(session, weekly)),
+    )
+    val pooled: LimitPoolWindow = collectLimitPools(listOf(claude), now).single().windows.first()
+    assertEquals(0, pooled.remainingPercent)
+    // The session resets first, so the weekly reset is when it comes back, all of it
+    assertEquals("2026-10-26T00:00:00Z", pooled.members.single().window.resetsAt)
+    assertEquals(100.0, pooled.members.single().refillPercent)
+    assertNull(pooled.pace)
+  }
+
+  @Test
+  fun `cursor drops overall when both pools report, and notices skip unsupported`() {
+    val windows = listOf("totalPercentUsed", "apiPercentUsed", "autoPercentUsed")
+      .map { id -> window(id, 10.0, kind = "monthly") }
+    val cursor = provider(
+      "cursor",
+      usageLimits = ServerProviderUsageLimits("2026-10-24T06:00:00Z", windows),
+    )
+    val pool: LimitPool = collectLimitPools(listOf(cursor), now).single()
+    assertEquals(
+      listOf("autoPercentUsed", "apiPercentUsed"),
+      displayLimitWindows(pool).map { it.id },
+    )
+    val unsupported = ServerProviderUsageLimits(
+      checkedAt = "2026-10-24T06:00:00Z",
+      windows = emptyList(),
+      unavailable = ServerProviderUsageLimits.Unavailable(reason = "unsupported"),
+    )
+    val failed =
+      unsupported.copy(unavailable = ServerProviderUsageLimits.Unavailable("probeFailed"))
+    assertEquals(
+      listOf("Pi: Could not read limits."),
+      collectLimitNotices(
+        listOf(
+          provider("claude", usageLimits = unsupported),
+          provider("pi", displayName = "Pi", usageLimits = failed),
+        ),
+      ),
+    )
   }
 
   @Test
@@ -121,9 +188,10 @@ class UsageLimitsLogicTest {
     usedPercent: Double = 0.0,
     resetsAt: String? = null,
     windowDurationMins: Long? = null,
+    kind: String = "session",
   ) = ServerProviderUsageWindow(
     id = id,
-    kind = "session",
+    kind = kind,
     label = id,
     usedPercent = usedPercent,
     resetsAt = resetsAt,

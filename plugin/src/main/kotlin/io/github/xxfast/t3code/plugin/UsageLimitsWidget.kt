@@ -12,20 +12,22 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
-import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.wm.CustomStatusBarWidget
 import com.intellij.openapi.wm.StatusBar
 import com.intellij.openapi.wm.StatusBarWidget
 import com.intellij.openapi.wm.StatusBarWidgetFactory
-import com.intellij.ui.SimpleColoredComponent
-import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.awt.RelativePoint
+import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import io.github.xxfast.t3code.plugin.ui.UsageLevel
 import io.github.xxfast.t3code.plugin.ui.UsageLimits
 import io.github.xxfast.t3code.plugin.ui.UsageSegment
-import io.github.xxfast.t3code.plugin.ui.limitsNotice
-import io.github.xxfast.t3code.plugin.ui.providersWithLimits
+import io.github.xxfast.t3code.plugin.ui.collectExternalUsageLinks
+import io.github.xxfast.t3code.plugin.ui.collectLimitAccounts
+import io.github.xxfast.t3code.plugin.ui.collectLimitNotices
+import io.github.xxfast.t3code.plugin.ui.collectLimitPools
+import io.github.xxfast.t3code.plugin.ui.cursorUsageWindowDetails
+import io.github.xxfast.t3code.plugin.ui.displayLimitWindows
 import io.github.xxfast.t3code.plugin.ui.usageSegmentSummary
 import io.github.xxfast.t3code.plugin.ui.usageSegments
 import io.github.xxfast.t3code.protocol.ConnectionState
@@ -36,8 +38,10 @@ import java.awt.Dimension
 import java.awt.Point
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
-import javax.swing.Icon
+import javax.swing.Box
+import javax.swing.BoxLayout
 import javax.swing.JComponent
+import javax.swing.JPanel
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
@@ -71,7 +75,9 @@ private class UsageLimitsWidget(private val scope: CoroutineScope) : CustomStatu
   private val providers: MutableStateFlow<List<ServerProvider>> = MutableStateFlow(emptyList())
   private var popup: JBPopup? = null
 
-  private val label: SimpleColoredComponent = SimpleColoredComponent().apply {
+  /** A provider icon and its percent per segment; the labels take no mouse, so this gets it. */
+  private val label: JPanel = JPanel().apply {
+    layout = BoxLayout(this, BoxLayout.X_AXIS)
     border = JBUI.CurrentTheme.StatusBar.Widget.border()
     isOpaque = false
     isVisible = false
@@ -124,13 +130,18 @@ private class UsageLimitsWidget(private val scope: CoroutineScope) : CustomStatu
   private fun render(latest: List<ServerProvider>) {
     val now: Long = System.currentTimeMillis()
     val segments: List<UsageSegment> = usageSegments(latest)
-    label.clear()
+    label.removeAll()
     label.isVisible = segments.isNotEmpty()
-    if (segments.isEmpty()) return
-    label.icon = ICON
     segments.forEachIndexed { index, segment ->
-      label.append(if (index == 0) segment.label else "  ${segment.label}")
-      label.append(" ${segment.remaining}%", attributesFor(segment.level))
+      val provider: ServerProvider = latest.first { it.instanceId == segment.instanceId }
+      if (index > 0) label.add(Box.createHorizontalStrut(JBUI.scale(SEGMENT_GAP)))
+      label.add(
+        JBLabel("${segment.remaining}%").apply {
+          icon = providerSwingIcon(provider, latest, JBUI.CurrentTheme.StatusBar.BACKGROUND)
+          iconTextGap = JBUI.scale(3)
+          foreground = foregroundFor(segment.level)
+        },
+      )
     }
     label.toolTipText = segments.joinToString("<br>", "<html>", "</html>") { segment ->
       usageSegmentSummary(segment, now)
@@ -175,33 +186,41 @@ private class UsageLimitsWidget(private val scope: CoroutineScope) : CustomStatu
 
   companion object {
     private val LOG: Logger = Logger.getInstance(UsageLimitsWidget::class.java)
-    private val ICON: Icon =
-      IconLoader.getIcon("/icons/t3UsageLimits.svg", UsageLimitsWidget::class.java)
     private val TICK = 15.seconds
-    private const val POPUP_WIDTH: Int = 440
+    private const val POPUP_WIDTH: Int = 480
+    private const val MAX_POPUP_HEIGHT: Int = 600
+    private const val SEGMENT_GAP: Int = 8
 
-    private fun attributesFor(level: UsageLevel): SimpleTextAttributes {
-      val color: Color = when (level) {
-        UsageLevel.Normal -> return SimpleTextAttributes.REGULAR_ATTRIBUTES
-        UsageLevel.Low -> JBUI.CurrentTheme.Label.warningForeground()
-        UsageLevel.Exhausted -> JBUI.CurrentTheme.Label.errorForeground()
-      }
-      return SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, color)
+    private fun foregroundFor(level: UsageLevel): Color = when (level) {
+      UsageLevel.Normal -> JBUI.CurrentTheme.StatusBar.Widget.FOREGROUND
+      UsageLevel.Low -> JBUI.CurrentTheme.Label.warningForeground()
+      UsageLevel.Exhausted -> JBUI.CurrentTheme.Label.errorForeground()
     }
 
     /**
      * A Swing popup doesn't follow its Compose content's size, so this sizes it up front, as
-     * the command palette does, from [UsageLimits]'s layout: the padding and title, then per
-     * provider the gap, its label, a 16 px row per window (2 apart) or the notice, and the link.
-     * The content scrolls if this comes up short.
+     * the command palette does, from [UsageLimits]'s layout: the padding, then per driver its
+     * header and a card per window (a label, the large share, the refill line when shared, a
+     * description for Cursor's), the link sections and the notices, 16 apart. At most
+     * [MAX_POPUP_HEIGHT]; the content scrolls past that or if this comes up short.
      */
-    private fun popupHeight(providers: List<ServerProvider>): Int =
-      12 + 16 + providersWithLimits(providers).sumOf { provider ->
-        val limits = provider.usageLimits ?: return@sumOf 0
-        val windows: Int = limits.windows.filterNotNull().size
-        val rows: Int = if (limitsNotice(limits) != null) 13 else windows * 18 - 2
-        val link: Int = if (limits.externalUsage != null) 4 + 15 else 0
-        12 + 13 + 4 + rows + link
-      } + 12
+    private fun popupHeight(providers: List<ServerProvider>): Int {
+      val now: Long = System.currentTimeMillis()
+      val sections: List<Int> =
+        collectLimitPools(collectLimitAccounts(providers), now).map { pool ->
+          val cards: List<Int> = displayLimitWindows(pool).map { window ->
+            val refill: Int = if (pool.accounts.size > 1) 18 else 0
+            val description: Int =
+              if (pool.driver == "cursor" && cursorUsageWindowDetails(window.id) != null) 22 else 0
+            24 + 16 + 2 + 24 + refill + description
+          }
+          18 + cards.sumOf { it + 8 }
+        } + collectExternalUsageLinks(providers).map { 24 + 16 + 16 } +
+          collectLimitNotices(providers).let { notices ->
+            if (notices.isEmpty()) emptyList() else listOf(notices.size * 18)
+          }
+      val content: Int = sections.sum() + 16 * (sections.size - 1).coerceAtLeast(0)
+      return (24 + content).coerceIn(80, MAX_POPUP_HEIGHT)
+    }
   }
 }

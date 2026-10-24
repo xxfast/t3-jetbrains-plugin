@@ -16,6 +16,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -30,7 +31,8 @@ import org.jetbrains.jewel.ui.icon.PathIconKey
  * Upstream's `ProviderInstanceIcon` (apps/web/src/components/chat/ProviderInstanceIcon.tsx):
  * the driver's logo, else the display name's initials, at [size] and [alpha]; [muted] is its
  * `grayscale`. With [badge] the initials sit in a small disc at the bottom right, in the
- * instance's accent colour when it has one. Antigravity's logo is a bitmap upstream, not ported.
+ * instance's accent colour when it has one. A logo with its own colours (a provider package's,
+ * Antigravity's bitmap) isn't tinted; muted turns it grey, as upstream's `grayscale`.
  */
 @Composable
 fun ProviderIcon(
@@ -46,7 +48,7 @@ fun ProviderIcon(
   Box(contentAlignment = Alignment.Center) {
     Box(Modifier.alpha(alpha), contentAlignment = Alignment.Center) {
       if (logo != null) {
-        Logo(logo.name, logo.brand?.takeUnless { muted } ?: normal, size)
+        Logo(logo, tint = logo.brand?.takeUnless { muted } ?: normal, muted = muted, size = size)
       } else {
         Text(
           text = initials,
@@ -86,28 +88,55 @@ fun ProviderIcon(
 }
 
 @Composable
-private fun Logo(name: String, tint: Color, size: Dp) {
+private fun Logo(logo: ProviderLogo, tint: Color, muted: Boolean, size: Dp) {
+  val filter: ColorFilter? = when {
+    logo.tinted -> ColorFilter.tint(tint)
+    muted -> ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+    else -> null
+  }
   Icon(
-    key = PathIconKey("icons/providers/$name.svg", ProjectIconMarker::class.java),
+    key = PathIconKey(logo.path, ProjectIconMarker::class.java),
     contentDescription = null,
     modifier = Modifier.size(size),
     iconClass = ProjectIconMarker::class.java,
-    colorFilter = ColorFilter.tint(tint),
+    colorFilter = filter,
   )
 }
 
 /**
  * A driver's logo under `icons/providers/` and its brand colour, null when it follows the text.
- * Shared with the model picker's Swing rows so both draw the same icon.
+ * An untinted logo is drawn in its own colours, a PNG when [bitmap], else an SVG with a `_dark`
+ * twin the theme picks. Shared with the Swing icons so both draw the same one.
  */
-class ProviderLogo(val name: String, val brand: Color?)
+class ProviderLogo(
+  val name: String,
+  val brand: Color?,
+  val bitmap: Boolean = false,
+  val tinted: Boolean = !bitmap,
+) {
+  val path: String = "icons/providers/$name.${if (bitmap) "png" else "svg"}"
+}
 
-/** Upstream's `PROVIDER_ICON_BY_PROVIDER` and `PROVIDER_TEXT_COLOR_BY_PROVIDER`. */
+/**
+ * `ProviderInstanceIcon`'s precedence (apps/web/src/components/chat/ProviderInstanceIcon.tsx):
+ * the provider package's `icon` first, then `PROVIDER_ICON_BY_PROVIDER` and
+ * `PROVIDER_TEXT_COLOR_BY_PROVIDER`. A package icon is its `client.ts` paths with the light and
+ * dark fills baked into `<driver>.svg` and `<driver>_dark.svg`. The ACP registry's per-agent
+ * icons come from a CDN upstream; here every agent gets the registry's own mark, upstream's
+ * fallback.
+ */
 fun providerLogo(driver: String): ProviderLogo? = when (driver) {
+  in PACKAGE_ICONS -> ProviderLogo(driver, brand = null, tinted = false)
   "codex" -> ProviderLogo("openai", brand = null) // upstream's `text-black dark:text-white`
   "claudeAgent" -> ProviderLogo("claude", brand = CLAUDE)
+  // A 128 px PNG in an `<image>` upstream (`AntigravityIcon`, components/Icons.tsx), not tinted
+  "antigravity" -> ProviderLogo("antigravity", brand = null, bitmap = true)
   else -> null
 }
+
+/** The drivers whose provider package (`packages/provider-<name>/src/client.ts`) has an `icon`. */
+private val PACKAGE_ICONS: Set<String> =
+  setOf("grok", "cursor", "opencode", "pi", "muse", "acpRegistry")
 
 /** Upstream's `text-3xs`, the initials when a driver has no logo. */
 const val INITIALS_SIZE: Float = 8f
