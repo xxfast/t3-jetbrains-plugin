@@ -818,7 +818,10 @@ private fun RenameField(title: String, onEnd: (typed: String?) -> Unit, modifier
           else -> return@onPreviewKeyEvent false
         }
         true
-      },
+      }
+      // What the field doesn't use stops here. The row's clickable takes Space's key-up as a
+      // click, opens the thread, and its tab pulls focus out of the field mid-word.
+      .onKeyEvent { true },
   )
 }
 
