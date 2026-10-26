@@ -1,11 +1,14 @@
 package io.github.xxfast.t3code.plugin.actions
 
 import io.github.xxfast.t3code.plugin.ui.READ_ONLY as COMPOSER_READ_ONLY
+import io.github.xxfast.t3code.plugin.ui.OrderKeyAssignment
 import io.github.xxfast.t3code.plugin.ui.ProjectFilter
+import io.github.xxfast.t3code.plugin.ui.SidebarThreadDropPlan
 import io.github.xxfast.t3code.plugin.ui.operateBlockReason
 import io.github.xxfast.t3code.plugin.ui.SnoozePreset
 import io.github.xxfast.t3code.plugin.ui.canSnooze
 import io.github.xxfast.t3code.plugin.ui.settled
+import io.github.xxfast.t3code.plugin.ui.topOfPinnedRunOrderKey
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Run
@@ -153,13 +156,80 @@ fun archiveCommand(row: Thread, commandId: String): Command =
 fun unarchiveCommand(row: Thread, commandId: String): Command =
   Command.ThreadUnarchive(commandId = commandId, threadId = row.id)
 
-/** `pinThread` without an order key, or `unpinThread`. */
-fun pinCommand(row: Thread, commandId: String): Command =
+/**
+ * `pinThread` or `unpinThread`. A pin carries [orderKey] only to a server that stores pin orders,
+ * where it's [topOfPinnedRunOrderKey] (useThreadActions.ts's `pinThread`).
+ */
+fun pinCommand(row: Thread, commandId: String, orderKey: String? = null): Command =
   if (row.pinned) {
     Command.ThreadUnpin(commandId = commandId, threadId = row.id)
   } else {
-    Command.ThreadPin(commandId = commandId, threadId = row.id)
+    Command.ThreadPin(commandId = commandId, threadId = row.id, orderKey = orderKey)
   }
+
+/** One command of a drop, and upstream's toast title when it fails. */
+data class DropStep(val command: Command, val failure: String)
+
+/**
+ * What dropping [row] by [plan] sends, in order, stopping at the first failure:
+ * `handleThreadDragEnd` (Sidebar.tsx). Lifecycle first (the server refuses an active reorder on
+ * a pinned or settled row, and a pin reorder on an unpinned one), then the order keys. A drop
+ * onto pinned is a `thread.pin` even for a row that's pinned already (a snoozed pin), which wakes
+ * it. A pin without a planned key takes the top of the pinned run, as `pinThread` does. A settle
+ * is [SETTLE_ACTION]'s business, for its undo, so it sends nothing here.
+ */
+fun dropCommands(
+  plan: SidebarThreadDropPlan,
+  row: Thread,
+  threads: List<Thread>,
+  commandId: () -> String,
+): List<DropStep> = buildList {
+  fun pinReorder(assignment: OrderKeyAssignment) = DropStep(
+    Command.ThreadPinReorder(
+      commandId = commandId(),
+      threadId = assignment.id,
+      orderKey = assignment.orderKey,
+    ),
+    "Failed to reorder pinned threads",
+  )
+  when (plan) {
+    SidebarThreadDropPlan.None, SidebarThreadDropPlan.Settle -> Unit
+
+    is SidebarThreadDropPlan.MoveActive -> {
+      if (plan.unpin) {
+        val unpin = Command.ThreadUnpin(commandId = commandId(), threadId = row.id)
+        add(DropStep(unpin, "Failed to unpin thread"))
+      }
+      if (plan.unsettle) {
+        val unsettle =
+          Command.ThreadUnsettle(commandId = commandId(), threadId = row.id, reason = "user")
+        add(DropStep(unsettle, "Failed to un-settle thread"))
+      }
+      if (plan.unsnooze) {
+        val wake =
+          Command.ThreadUnsnooze(commandId = commandId(), threadId = row.id, reason = "user")
+        add(DropStep(wake, "Failed to wake thread"))
+      }
+      plan.assignments.forEach { assignment ->
+        val reorder = Command.ThreadActiveReorder(
+          commandId = commandId(),
+          threadId = assignment.id,
+          orderKey = assignment.orderKey,
+        )
+        add(DropStep(reorder, "Failed to reorder active threads"))
+      }
+    }
+
+    is SidebarThreadDropPlan.Pin -> {
+      val orderKey: String? = plan.orderKey ?: topOfPinnedRunOrderKey(threads)
+      val pin = Command.ThreadPin(commandId = commandId(), threadId = row.id, orderKey = orderKey)
+      add(DropStep(pin, "Failed to pin thread"))
+      plan.extraAssignments.forEach { add(pinReorder(it)) }
+    }
+
+    is SidebarThreadDropPlan.ReorderPinned -> plan.assignments.forEach { add(pinReorder(it)) }
+  }
+}
 
 /**
  * `settleThread` or `unsettleThread` (commands.ts:438 and 499), by where [row] is now. Un-settle

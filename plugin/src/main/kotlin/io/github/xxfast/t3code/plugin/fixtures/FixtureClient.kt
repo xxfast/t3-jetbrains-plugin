@@ -2,7 +2,10 @@ package io.github.xxfast.t3code.plugin.fixtures
 
 import com.intellij.openapi.diagnostic.Logger
 import io.github.xxfast.t3code.plugin.ui.PULL_REQUESTS
+import io.github.xxfast.t3code.plugin.ui.THREAD_ACTIVE_REORDER
 import io.github.xxfast.t3code.plugin.ui.THREAD_AUTO_SETTLE_OPT_OUT
+import io.github.xxfast.t3code.plugin.ui.THREAD_PINNING
+import io.github.xxfast.t3code.plugin.ui.THREAD_PIN_REORDER
 import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SNOOZE
 import io.github.xxfast.t3code.plugin.ui.THREAD_TITLE_REGENERATION
@@ -374,6 +377,35 @@ class FixtureClient(
           pinOrderKey = null,
           updatedAt = if (alreadyUnpinned) row.updatedAt else now,
         )
+      }
+
+      // Orchestrator.ts:2796 rejects a reorder outside its section, then 3153 and 3161 apply it
+      is Command.ThreadPinReorder -> {
+        val row: Thread? = rowOf(overlay.value, command.threadId)
+        if (row?.pinnedAt == null) {
+          throw T3Exception.Rpc(
+            "OrchestratorDispatchError",
+            "Thread ${command.threadId} is not pinned and cannot be reordered.",
+          )
+        }
+        updateRow(command.threadId) { pinned ->
+          val keyUnchanged: Boolean = pinned.pinOrderKey == command.orderKey
+          pinned.copy(
+            pinOrderKey = command.orderKey,
+            updatedAt = if (keyUnchanged) pinned.updatedAt else now,
+          )
+        }
+      }
+
+      is Command.ThreadActiveReorder -> {
+        val row: Thread? = rowOf(overlay.value, command.threadId)
+        if (row?.pinnedAt != null || row?.settledOverride == "settled") {
+          throw T3Exception.Rpc(
+            "OrchestratorDispatchError",
+            "Thread ${command.threadId} is not active and cannot be reordered.",
+          )
+        }
+        updateRow(command.threadId) { active -> active.copy(activeOrderKey = command.orderKey) }
       }
 
       // Orchestrator.ts:2839
@@ -1329,6 +1361,9 @@ class FixtureClient(
       THREAD_AUTO_SETTLE_OPT_OUT,
       THREAD_SNOOZE,
       THREAD_TITLE_REGENERATION,
+      THREAD_PINNING,
+      THREAD_PIN_REORDER,
+      THREAD_ACTIVE_REORDER,
       PULL_REQUESTS,
     ),
     environmentLabel = "Fixture MacBook",

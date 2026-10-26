@@ -1,18 +1,21 @@
 package io.github.xxfast.t3code.plugin.ui
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.border
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -35,7 +38,9 @@ import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,22 +51,36 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.awtEventOrNull
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -76,6 +95,7 @@ import io.github.xxfast.t3code.protocol.pinned
 import java.awt.event.MouseEvent
 import java.time.Duration
 import java.time.Instant
+import kotlin.math.abs
 import org.jetbrains.jewel.bridge.toComposeColor
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.Orientation
@@ -141,8 +161,8 @@ fun Sidebar(
         sections.inbox.isNotEmpty() || sections.snoozed.isNotEmpty() ||
           sections.settled.isNotEmpty() ->
           Sections(
-            projects, favicons, providers, sections, selectedThreadId, onOpenThread, onContextMenu,
-            actions, shelves, onShelvesChange, renaming, details,
+            projects, favicons, providers, threads, sections, selectedThreadId, onOpenThread,
+            onContextMenu, actions, shelves, onShelvesChange, renaming, details, settlement,
           )
 
         else -> Hint(emptyHint(projects.isEmpty(), query, filter))
@@ -320,6 +340,7 @@ private fun Sections(
   projects: List<Project>,
   favicons: Map<String, ImageBitmap>,
   providers: Map<String, ServerProvider>,
+  threads: List<Thread>, // every row the server has, for the order keys hidden rows hold
   sections: ThreadSections,
   selectedThreadId: String?,
   onOpenThread: (String) -> Unit,
@@ -329,8 +350,10 @@ private fun Sections(
   onShelvesChange: (Shelves) -> Unit,
   renaming: String?,
   details: RowDetails,
+  settlement: Boolean,
 ) {
   val byId: Map<String, Project> = remember(projects) { projects.associateBy { it.id } }
+  val rowsById: Map<String, Thread> = remember(threads) { threads.associateBy { it.id } }
   // Only the Working and Waiting clocks need seconds; everything else is happy with minutes
   val ticking: Set<ThreadStatus> = setOf(ThreadStatus.Working, ThreadStatus.Waiting)
   val period: Long = if (sections.inbox.none { it.sidebarStatus() in ticking }) 30_000 else 1_000
@@ -338,78 +361,426 @@ private fun Sections(
   var shown: Int by remember { mutableIntStateOf(FIRST_PAGE) }
   val more: Int = moreCount(sections.settled.size, shown)
   val scroll: ScrollState = rememberScrollState()
+  val snoozedShown: List<Thread> = if (shelves.snoozed) sections.snoozed else emptyList()
+  val settledShown: List<Thread> =
+    if (shelves.settled) sections.settled.take(shown) else emptyList()
+  val list: List<SidebarListItem> = remember(sections, shelves, shown) {
+    sidebarListItems(sections, snoozedShown, settledShown)
+  }
+  val (pinned: List<Thread>, active: List<Thread>) = sections.inbox.partition { it.pinned }
+  val drag: SidebarDrag = remember { SidebarDrag() }
+  val dragging: Boolean = drag.key != null
+
+  // What `handleThreadDragOver` and the collision detection work out as the pointer moves: the
+  // nearest item, the drop that makes, and whether it does anything. A drop that doesn't is no
+  // target at all, as upstream filters those collisions out.
+  fun aim() {
+    val key: String = drag.key ?: return
+    val row: Thread? = rowsById[key]
+    val ids: Set<String> = list.map(::sidebarListItemId).toSet()
+    val over: String? = drag.bounds
+      .filterKeys { it in ids }
+      .minByOrNull { (_, span) -> abs(span.top + span.height / 2 - drag.pointer) }
+      ?.key
+    val target: SidebarDropTarget? = over?.let { resolveSidebarDropTarget(list, key, it) }
+    val plan: SidebarThreadDropPlan = if (row == null || target == null) {
+      SidebarThreadDropPlan.None
+    } else {
+      planSidebarThreadDrop(
+        activeKey = key,
+        activeSection = drag.from,
+        target = target,
+        pinnedOrder = pinned.map { it.id },
+        pinnedKeysById = threads.associate { it.id to it.pinOrderKey },
+        activeOrder = active.map { it.id },
+        activeKeysById = threads.associate { it.id to it.activeOrderKey },
+        activePinned = row.pinned,
+        activeSettled = row.settled,
+        supportsSettlement = settlement,
+        activeReorderableKeys = if (actions.reorderActive) null else emptySet(),
+      )
+    }
+    val valid: Boolean = plan != SidebarThreadDropPlan.None
+    drag.plan = plan
+    drag.over = if (valid) over else null
+    drag.target = if (valid) target?.section else null
+  }
+
+  // Upstream's `sortableDisabled`: no drag without the server's pin orders, or while renaming
+  fun rowDrag(thread: Thread, section: SidebarSection): RowDrag? {
+    val drop: (String, SidebarThreadDropPlan) -> Unit = actions.drop ?: return null
+    if (thread.id == renaming) return null
+    return RowDrag(
+      start = { y ->
+        val top: Float = drag.bounds[thread.id]?.top ?: y
+        drag.key = thread.id
+        drag.from = section
+        drag.grab = y - top
+        drag.slot = top
+        drag.pointer = y
+        aim()
+      },
+      move = { y ->
+        drag.pointer = y
+        aim()
+      },
+      end = { dropped ->
+        val plan: SidebarThreadDropPlan = drag.plan
+        drag.reset()
+        if (dropped) drop(thread.id, plan)
+      },
+    )
+  }
+
+  val line: Color = JewelTheme.globalColors.borders.focused
+
+  // Every list item sits in one: it reports where it is, draws the insertion line when a drop
+  // lands by it, and lifts the dragged row off the list to follow the pointer
+  @Composable
+  fun Slot(id: String, content: @Composable () -> Unit) {
+    val lifted: Boolean = drag.key == id
+    Box(
+      Modifier
+        .onGloballyPositioned { coordinates ->
+          val top: Float = coordinates.positionInRoot().y
+          drag.bounds[id] = Span(top, coordinates.size.height.toFloat())
+          if (id == drag.key) drag.slot = top
+        }
+        .drawWithContent {
+          drawContent()
+          val key: String = drag.key ?: return@drawWithContent
+          if (drag.over != id) return@drawWithContent
+          val below: Boolean = dropsBelow(list, key, id) ?: return@drawWithContent
+          val inset: Float = 8.dp.toPx() // the rows' own inset
+          val thickness: Float = 2.dp.toPx()
+          val y: Float = if (below) size.height else 0f
+          drawRect(
+            color = line,
+            topLeft = Offset(inset, y - thickness / 2),
+            size = Size(size.width - inset * 2, thickness),
+          )
+        }
+        .then(
+          if (lifted) {
+            Modifier.graphicsLayer {
+              translationY = drag.pointer - drag.grab - drag.slot
+              alpha = 0.85f
+            }
+          } else {
+            Modifier
+          },
+        ),
+    ) {
+      content()
+    }
+  }
+
+  SideEffect { drag.bounds.keys.retainAll(list.map(::sidebarListItemId).toSet()) }
+  val verb: SidebarDropVerb? =
+    if (dragging) resolveSidebarDropVerb(drag.from, drag.target) else null
+  fun motionKey(row: SidebarListItem.Row): String = when (row.section) {
+    SidebarSection.Pinned, SidebarSection.Active -> "inbox:${row.key}"
+    SidebarSection.Snoozed -> "${Shelf.Snoozed.name}:${row.key}"
+    SidebarSection.Settled -> "${Shelf.Settled.name}:${row.key}"
+  }
+
   // Upstream's first shelf header has mt-auto: it sits at the bottom until the list overflows,
   // then scrolls with everything else. A min-height column with a filling gap is the same thing.
   BoxWithConstraints(Modifier.fillMaxSize()) {
     val viewport: Dp = maxHeight
     VerticallyScrollableContainer(scrollState = scroll, modifier = Modifier.fillMaxSize()) {
       val items: List<MotionItem> = buildList {
-        for (thread in sections.inbox) {
-          add(
-            MotionItem("inbox:${thread.id}") {
-              InboxCard(
-                thread = thread,
-                project = byId[thread.projectId],
-                favicon = favicons[thread.projectId],
-                providers = providers,
-                now = now,
-                selected = thread.id == selectedThreadId,
-                onClick = { onOpenThread(thread.id) },
-                onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
-                actions = actions,
-                renaming = thread.id == renaming,
-                details = details,
-              )
-            },
-          )
-        }
-        if (sections.snoozed.isNotEmpty() || sections.settled.isNotEmpty()) {
+        var gap = false
+        fun shelfGap() {
+          if (gap) return
+          gap = true
           add(MotionItem("shelf-gap", fill = true))
         }
-        fun slim(thread: Thread, shelf: Shelf) = MotionItem("${shelf.name}:${thread.id}") {
-          SlimRow(
-            thread = thread,
-            shelf = shelf,
-            project = byId[thread.projectId],
-            favicon = favicons[thread.projectId],
-            now = now,
-            selected = thread.id == selectedThreadId,
-            onClick = { onOpenThread(thread.id) },
-            onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
-            actions = actions,
-            renaming = thread.id == renaming,
-            details = details,
-          )
-        }
-        if (sections.snoozed.isNotEmpty()) {
-          add(
-            MotionItem("snoozed-header") {
-              ShelfHeader(
-                label = shelfLabel("Snoozed", shelves.snoozed, sections.snoozed.size),
-                open = shelves.snoozed,
-                onToggle = { onShelvesChange(shelves.copy(snoozed = !shelves.snoozed)) },
+        for (item in list) {
+          when (item) {
+            is SidebarListItem.Row -> {
+              val thread: Thread = rowsById[item.key] ?: continue
+              val lifted: Boolean = drag.key == thread.id
+              val dropVerb: SidebarDropVerb? = if (lifted) verb else null
+              val rowDrag: RowDrag? = rowDrag(thread, item.section)
+              add(
+                MotionItem(motionKey(item)) {
+                  Slot(thread.id) {
+                    when (item.section) {
+                      SidebarSection.Pinned, SidebarSection.Active -> InboxCard(
+                        thread = thread,
+                        project = byId[thread.projectId],
+                        favicon = favicons[thread.projectId],
+                        providers = providers,
+                        now = now,
+                        selected = thread.id == selectedThreadId,
+                        onClick = { onOpenThread(thread.id) },
+                        onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
+                        actions = actions,
+                        renaming = thread.id == renaming,
+                        details = details,
+                        rowDrag = rowDrag,
+                        lifted = lifted,
+                        dropVerb = dropVerb,
+                      )
+
+                      SidebarSection.Snoozed, SidebarSection.Settled -> SlimRow(
+                        thread = thread,
+                        shelf = if (item.section == SidebarSection.Snoozed) {
+                          Shelf.Snoozed
+                        } else {
+                          Shelf.Settled
+                        },
+                        project = byId[thread.projectId],
+                        favicon = favicons[thread.projectId],
+                        now = now,
+                        selected = thread.id == selectedThreadId,
+                        onClick = { onOpenThread(thread.id) },
+                        onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
+                        actions = actions,
+                        renaming = thread.id == renaming,
+                        details = details,
+                        rowDrag = rowDrag,
+                        lifted = lifted,
+                        dropVerb = dropVerb,
+                      )
+                    }
+                  }
+                },
               )
-            },
-          )
-          if (shelves.snoozed) sections.snoozed.forEach { add(slim(it, Shelf.Snoozed)) }
+            }
+
+            is SidebarListItem.Marker -> {
+              val id: String = sidebarMarkerId(item.marker)
+              when (item.marker) {
+                SidebarListMarker.PinnedHeader, SidebarListMarker.PinnedDivider -> {
+                  val pins: Boolean = item.marker == SidebarListMarker.PinnedHeader
+                  val section: SidebarSection =
+                    if (pins) SidebarSection.Pinned else SidebarSection.Active
+                  add(
+                    MotionItem(item.marker.id) {
+                      Slot(id) {
+                        DragBoundary(
+                          label = if (pins) "Pinned" else "Active",
+                          visible = dragging,
+                          dropTarget = drag.target == section,
+                        )
+                      }
+                    },
+                  )
+                }
+
+                SidebarListMarker.ActivePlaceholder, SidebarListMarker.SettledPlaceholder -> {
+                  val settledShelf: Boolean = item.marker == SidebarListMarker.SettledPlaceholder
+                  val section: SidebarSection =
+                    if (settledShelf) SidebarSection.Settled else SidebarSection.Active
+                  val rows: List<Thread> = if (settledShelf) settledShown else active
+                  // Upstream's `showHint`: an empty section, or one whose only row is leaving
+                  val leaving: Boolean = drag.from == section && rows.size == 1 &&
+                    drag.target != null && drag.target != section
+                  val hint: Boolean = dragging && (!settledShelf || settlement) &&
+                    (rows.isEmpty() || leaving)
+                  add(
+                    MotionItem(item.marker.id) {
+                      Slot(id) {
+                        SectionPlaceholder(
+                          label = if (settledShelf) "Settled" else "Active",
+                          visible = hint,
+                          dropTarget = drag.target == section,
+                        )
+                      }
+                    },
+                  )
+                }
+
+                SidebarListMarker.SnoozedHeader -> {
+                  shelfGap()
+                  add(
+                    MotionItem(item.marker.id) {
+                      Slot(id) {
+                        ShelfHeader(
+                          label = shelfLabel("Snoozed", shelves.snoozed, sections.snoozed.size),
+                          open = shelves.snoozed,
+                          onToggle = { onShelvesChange(shelves.copy(snoozed = !shelves.snoozed)) },
+                        )
+                      }
+                    },
+                  )
+                }
+
+                // Shown while dragging even with no settled rows: it's where a drag settles
+                SidebarListMarker.SettledHeader -> {
+                  if (sections.settled.isEmpty() && !(dragging && settlement)) continue
+                  shelfGap()
+                  add(
+                    MotionItem(item.marker.id) {
+                      Slot(id) {
+                        ShelfHeader(
+                          label = shelfLabel("Settled", shelves.settled, sections.settled.size),
+                          open = shelves.settled,
+                          onToggle = { onShelvesChange(shelves.copy(settled = !shelves.settled)) },
+                          dragging = dragging,
+                          dropTarget = drag.target == SidebarSection.Settled,
+                        )
+                      }
+                    },
+                  )
+                }
+              }
+            }
+          }
         }
-        if (sections.settled.isEmpty()) return@buildList
-        add(
-          MotionItem("settled-header") {
-            ShelfHeader(
-              label = shelfLabel("Settled", shelves.settled, sections.settled.size),
-              open = shelves.settled,
-              onToggle = { onShelvesChange(shelves.copy(settled = !shelves.settled)) },
-            )
-          },
-        )
-        if (!shelves.settled) return@buildList
-        sections.settled.take(shown).forEach { add(slim(it, Shelf.Settled)) }
-        if (more > 0) add(MotionItem("settled-more") { MoreRow(more, onClick = { shown += more }) })
+        if (shelves.settled && more > 0) {
+          add(MotionItem("settled-more") { MoreRow(more, onClick = { shown += more }) })
+        }
       }
+      val lifted: String? = list
+        .firstOrNull { it is SidebarListItem.Row && it.key == drag.key }
+        ?.let { motionKey(it as SidebarListItem.Row) }
       // The container scrolls its content itself; a second verticalScroll here nests two
       // scrollables and the inner one gets infinite height
-      MotionColumn(items, Modifier.fillMaxWidth().heightIn(min = viewport))
+      MotionColumn(items, Modifier.fillMaxWidth().heightIn(min = viewport), lifted)
+    }
+  }
+}
+
+/**
+ * A row being dragged, upstream's `dragState`, and where every list item sits so the pointer
+ * can find the nearest one. Positions are in the root, where the rows report the pointer.
+ */
+private class SidebarDrag {
+  var key: String? by mutableStateOf(null) // the dragged thread
+  var from: SidebarSection by mutableStateOf(SidebarSection.Active)
+  var pointer: Float by mutableFloatStateOf(0f)
+  var grab: Float = 0f // how far below the row's top it was pressed
+  var slot: Float by mutableFloatStateOf(0f) // the dragged row's own top in the list
+  var over: String? by mutableStateOf(null) // the item a drop lands by
+  var target: SidebarSection? by mutableStateOf(null) // the section a drop lands in
+  var plan: SidebarThreadDropPlan = SidebarThreadDropPlan.None
+  val bounds: MutableMap<String, Span> = mutableMapOf() // by list item id
+
+  fun reset() {
+    key = null
+    over = null
+    target = null
+    plan = SidebarThreadDropPlan.None
+  }
+}
+
+/** What a row reports while it's dragged: the pointer's y in the root. */
+private class RowDrag(
+  val start: (y: Float) -> Unit,
+  val move: (y: Float) -> Unit,
+  val end: (dropped: Boolean) -> Unit,
+)
+
+/** Where a row was laid out, to turn the pointer into root coordinates. */
+private class Anchor {
+  var coordinates: LayoutCoordinates? = null
+}
+
+/** `SIDEBAR_DRAG_LABEL_HEIGHT`, Sidebar.tsx. */
+private val DRAG_LABEL_HEIGHT: Dp = 24.dp
+
+/**
+ * `SidebarDragBoundary` (sidebar/SidebarListMarkers.tsx): "Pinned" above the pinned rows and
+ * "Active" under them, only while a row is dragged, in the accent over the section it'd land in.
+ */
+@Composable
+private fun DragBoundary(label: String, visible: Boolean, dropTarget: Boolean) {
+  val height: Dp by animateDpAsState(if (visible) DRAG_LABEL_HEIGHT else 0.dp, tween(150))
+  Box(Modifier.fillMaxWidth().height(height)) {
+    if (!visible) return@Box
+    val color: Color =
+      if (dropTarget) accent() else JewelTheme.globalColors.text.normal.copy(alpha = 0.8f)
+    Row(
+      modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 4.dp).height(16.dp),
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Text(label, style = small(), color = color, fontWeight = FontWeight.Medium)
+      Box(
+        Modifier
+          .weight(1f)
+          .height(1.dp)
+          .background(if (dropTarget) accent().copy(alpha = 0.5f) else subtle(0.25f)),
+      )
+    }
+  }
+}
+
+/**
+ * `SidebarSectionPlaceholder` (sidebar/SidebarListMarkers.tsx): a dashed, slim-row high slot
+ * where an empty section takes a drop.
+ */
+@Composable
+private fun SectionPlaceholder(label: String, visible: Boolean, dropTarget: Boolean) {
+  if (!visible) return
+  val border: Color = if (dropTarget) accent().copy(alpha = 0.4f) else subtle(0.25f)
+  val fill: Color = if (dropTarget) accent().copy(alpha = 0.05f) else Color.Transparent
+  val text: Color =
+    if (dropTarget) accent() else JewelTheme.globalColors.text.normal.copy(alpha = 0.8f)
+  Box(
+    modifier = Modifier
+      .padding(horizontal = 8.dp)
+      .fillMaxWidth()
+      .height(36.dp)
+      .clip(RoundedCornerShape(6.dp))
+      .background(fill)
+      .drawBehind {
+        val stroke = Stroke(
+          width = 1.dp.toPx(),
+          pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())),
+        )
+        drawRoundRect(color = border, style = stroke, cornerRadius = CornerRadius(6.dp.toPx()))
+      },
+    contentAlignment = Alignment.Center,
+  ) {
+    Text(label, style = small(), color = text)
+  }
+}
+
+/** A dragged row's `dropVerbBadge` (sidebar/SidebarThreadRow.tsx): what dropping it here does. */
+@Composable
+private fun DropVerbBadge(verb: SidebarDropVerb) {
+  val color: Color = accent()
+  Row(
+    modifier = Modifier
+      .clip(RoundedCornerShape(4.dp))
+      .background(color.copy(alpha = 0.1f))
+      .border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+      .height(20.dp)
+      .padding(horizontal = 6.dp),
+    horizontalArrangement = Arrangement.spacedBy(4.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Glyph(verb.glyph, color, 12.dp)
+    Text(verb.label, style = small(), color = color, fontWeight = FontWeight.Medium)
+  }
+}
+
+/**
+ * The pin on a pinned row, SidebarThreadRow.tsx's `pinIndicator`: with [unpin] a button that
+ * turns to pin-off on hover and unpins, else just the glyph.
+ */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip sits on Compose's TooltipArea
+@Composable
+private fun PinGlyph(threadId: String, unpin: ((String) -> Unit)?) {
+  if (unpin == null) {
+    Glyph("pin", subtle(0.65f), 12.dp)
+    return
+  }
+  val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
+  val hovered: Boolean by interactions.collectIsHoveredAsState()
+  Tooltip(tooltip = { Text("Unpin thread") }) {
+    Box(
+      Modifier
+        .clip(RoundedCornerShape(4.dp))
+        .hoverable(interactions)
+        .clickable(interactionSource = interactions, indication = null) { unpin(threadId) },
+    ) {
+      val color: Color = if (hovered) JewelTheme.globalColors.text.normal else subtle(0.65f)
+      Glyph(if (hovered) "pin-off" else "pin", color, 12.dp)
     }
   }
 }
@@ -418,8 +789,9 @@ private fun Sections(
  * Upstream's card row (`SidebarThreadRow`, variant "card", Sidebar.tsx:2258 onwards): three
  * lines in a 78px surface. Project icon and name with the status at the right, the title, then
  * the branch (worktree glyph first) with the pull request badge and the provider stack at the
- * right. Pins show as a glyph; unpinning is in the context menu. On hover the status gives way
- * to the card's actions (Sidebar.tsx:2385 to 2442), except "Woke", which stays to be dismissed.
+ * right. A pin shows as a glyph that unpins. On hover the status gives way to the card's
+ * actions (Sidebar.tsx:2385 to 2442), except "Woke", which stays to be dismissed. [lifted] while
+ * it's dragged, when [dropVerb] says what dropping it does instead.
  */
 @Composable
 private fun InboxCard(
@@ -434,6 +806,9 @@ private fun InboxCard(
   actions: RowActions,
   renaming: Boolean,
   details: RowDetails,
+  rowDrag: RowDrag? = null,
+  lifted: Boolean = false,
+  dropVerb: SidebarDropVerb? = null,
 ) {
   val status: ThreadStatus = thread.sidebarStatus()
   val woke: Boolean = thread.woke(now)
@@ -457,6 +832,7 @@ private fun InboxCard(
     // A receding working card sits at 70% until hovered
     restAlpha = if (recede && status == ThreadStatus.Working) 0.7f else 1f,
     modifier = Modifier.padding(vertical = 2.dp), // the list item's `py-0.5`
+    rowDrag = rowDrag,
   ) { hovered ->
     Column(Modifier.height(CARD_HEIGHT).padding(horizontal = 10.dp, vertical = 8.dp)) {
       Row(
@@ -474,12 +850,15 @@ private fun InboxCard(
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
         )
-        if (thread.pinned) Glyph("pin", subtle(0.65f), 12.dp)
+        val unpin: ((String) -> Unit)? = actions.unpin?.takeIf { !lifted }
+        if (thread.pinned && dropVerb == null) PinGlyph(thread.id, unpin)
         val settle: ((String) -> Unit)? = actions.settle
         // `showSnoozeButton`, Sidebar.tsx:1896: not while it's asking or about to start a turn
         val snooze: ((String, Int, Int) -> Unit)? = actions.snooze?.takeIf { thread.canSnooze(now) }
-        val controls: Boolean = hovered && (settle != null || snooze != null)
-        if (top == TopStatus.Woke) {
+        val controls: Boolean = hovered && !lifted && (settle != null || snooze != null)
+        if (dropVerb != null) {
+          DropVerbBadge(dropVerb)
+        } else if (top == TopStatus.Woke) {
           val dismiss: ((String, String) -> Unit)? = actions.dismissWoke
           val at: String? = thread.wokeAt(now)
           TopStatusLabel(thread, top, now, onClick = if (dismiss != null && at != null) {
@@ -489,6 +868,7 @@ private fun InboxCard(
           })
         }
         when {
+          dropVerb != null -> Unit
           controls -> {
             if (snooze != null) {
               HoverAction("clock", null, "Snooze thread") { x, y -> snooze(thread.id, x, y) }
@@ -659,7 +1039,13 @@ private fun HoverAction(
  * that's closed says how many rows it holds.
  */
 @Composable
-private fun ShelfHeader(label: String, open: Boolean, onToggle: () -> Unit) {
+private fun ShelfHeader(
+  label: String,
+  open: Boolean,
+  onToggle: () -> Unit,
+  dragging: Boolean = false, // a row is being dragged: the label stands out, as upstream's tone
+  dropTarget: Boolean = false, // and it'd land on this shelf: the label takes the accent
+) {
   Row(
     modifier = Modifier
       .padding(top = 12.dp) // the thin spacer between the two sections
@@ -673,7 +1059,11 @@ private fun ShelfHeader(label: String, open: Boolean, onToggle: () -> Unit) {
     Text(
       text = label,
       style = small(),
-      color = JewelTheme.globalColors.text.info,
+      color = when {
+        dropTarget -> accent()
+        dragging -> JewelTheme.globalColors.text.normal
+        else -> JewelTheme.globalColors.text.info
+      },
       fontWeight = FontWeight.Medium,
     )
     Divider(Orientation.Horizontal, Modifier.weight(1f))
@@ -694,7 +1084,8 @@ private enum class Shelf { Snoozed, Settled }
  * Upstream's slim row (variant "slim", Sidebar.tsx:2100 onwards): 36px, icon, title, pin,
  * badge, time. Shelved rows read as secondary until hovered or open; the icon is at 40% and
  * grey the same way. A settled row shows when it settled and Un-settle on hover, a snoozed one
- * how long until it wakes and Wake on hover (Sidebar.tsx:2151 to 2245).
+ * how long until it wakes and Wake on hover (Sidebar.tsx:2151 to 2245). Dragged, it says what
+ * dropping it does instead.
  */
 @Composable
 private fun SlimRow(
@@ -709,6 +1100,9 @@ private fun SlimRow(
   actions: RowActions,
   renaming: Boolean,
   details: RowDetails,
+  rowDrag: RowDrag? = null,
+  lifted: Boolean = false,
+  dropVerb: SidebarDropVerb? = null,
 ) {
   val rename: (() -> Unit)? = actions.rename?.let { rename -> { rename(thread.id) } }
   Selectable(
@@ -716,7 +1110,9 @@ private fun SlimRow(
     onClick = onClick,
     onContextMenu = onContextMenu,
     onDoubleClick = rename,
-  ) { hovered ->
+    rowDrag = rowDrag,
+  ) { pointing ->
+    val hovered: Boolean = pointing && !lifted
     val lit: Boolean = selected || hovered
     val iconAlpha: Float by animateFloatAsState(if (lit) 1f else 0.4f, Transition)
     Row(
@@ -739,12 +1135,15 @@ private fun SlimRow(
         color = if (lit) JewelTheme.globalColors.text.normal else JewelTheme.globalColors.text.info,
         modifier = Modifier.weight(1f),
       )
-      if (thread.pinned) Glyph("pin", subtle(0.65f), 12.dp)
+      val unpin: ((String) -> Unit)? = actions.unpin?.takeIf { !lifted }
+      if (thread.pinned && dropVerb == null) PinGlyph(thread.id, unpin)
       TerminalButton(thread, details, onClick)
       thread.pullRequestBadge()?.let { PullRequestBadgeView(it) }
       val settle: ((String) -> Unit)? = actions.settle
       val wake: ((String) -> Unit)? = actions.wake
       when {
+        dropVerb != null -> DropVerbBadge(dropVerb)
+
         shelf == Shelf.Snoozed && hovered && wake != null ->
           HoverAction("alarm-clock-off", null, "Wake thread now") { _, _ -> wake(thread.id) }
 
@@ -863,7 +1262,9 @@ private fun indigo(): Color = if (JewelTheme.isDark) Color(0xFFA5B4FC) else Colo
 /**
  * A rounded, full-width clickable surface: accent tint when selected, a light fill on hover. It
  * takes keyboard focus and opens on Enter or Space, as a row's `handleKeyDown` (Sidebar.tsx:1782),
- * with upstream's inset focus ring.
+ * with upstream's inset focus ring. With [rowDrag] a primary press that moves drags it, as
+ * upstream's sortable rows start on movement rather than a long press; a press that doesn't
+ * move stays a click.
  */
 @Composable
 private fun Selectable(
@@ -874,9 +1275,13 @@ private fun Selectable(
   rest: Color = Color.Transparent,
   restAlpha: Float = 1f, // faded to fully opaque on hover
   modifier: Modifier = Modifier,
+  rowDrag: RowDrag? = null,
   content: @Composable (hovered: Boolean) -> Unit,
 ) {
   val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
+  // Read when the gesture runs, so a recomposition mid-drag doesn't restart it
+  val dragging: RowDrag? by rememberUpdatedState(rowDrag)
+  val anchor: Anchor = remember { Anchor() }
   val hovered: Boolean by interactions.collectIsHoveredAsState()
   // Only the row itself, not the rename field inside it: upstream checks the event's target
   var focused: Boolean by remember { mutableStateOf(false) }
@@ -902,6 +1307,7 @@ private fun Selectable(
       .then(
         if (focused) Modifier.border(2.dp, accent(), RoundedCornerShape(6.dp)) else Modifier,
       )
+      .onGloballyPositioned { coordinates -> anchor.coordinates = coordinates }
       // Ahead of clickable, so a menu gesture never also opens the thread. The platform says
       // which event opens it: the press on macOS and Linux (Ctrl+click too), the release on
       // Windows. A secondary press is swallowed either way.
@@ -922,6 +1328,31 @@ private fun Selectable(
             if (released) trailing = (mouse?.clickCount ?: 1) >= 2
             if (released && mouse?.clickCount == 2) double?.invoke()
           } while (event.changes.any { change -> change.pressed })
+        }
+      }
+      // Past the touch slop the moves are consumed, which cancels the click
+      .pointerInput(Unit) {
+        awaitEachGesture {
+          val down: PointerInputChange = awaitFirstDown(requireUnconsumed = false)
+          if (dragging == null || !currentEvent.buttons.isPrimaryPressed) return@awaitEachGesture
+          fun rootY(change: PointerInputChange): Float? =
+            anchor.coordinates?.takeIf { it.isAttached }?.localToRoot(change.position)?.y
+          val pressed: Float = rootY(down) ?: return@awaitEachGesture
+          val moved: PointerInputChange = awaitTouchSlopOrCancellation(down.id) { change, _ ->
+            change.consume()
+          } ?: return@awaitEachGesture
+          dragging?.start?.invoke(pressed) ?: return@awaitEachGesture
+          rootY(moved)?.let { y -> dragging?.move?.invoke(y) }
+          var dropped = false
+          try {
+            dropped = drag(moved.id) { change ->
+              change.consume()
+              rootY(change)?.let { y -> dragging?.move?.invoke(y) }
+            }
+          } finally {
+            // Ends on a cancelled gesture too, or the row would stay lifted
+            dragging?.end?.invoke(dropped)
+          }
         }
       }
       .hoverable(interactions)

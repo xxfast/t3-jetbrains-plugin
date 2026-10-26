@@ -13,6 +13,7 @@ import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.MessageDialogBuilder
 import com.intellij.openapi.ui.Messages
+import io.github.xxfast.t3code.plugin.ChatController
 import io.github.xxfast.t3code.plugin.NewThread
 import io.github.xxfast.t3code.plugin.SidebarRename
 import io.github.xxfast.t3code.plugin.T3
@@ -26,6 +27,7 @@ import io.github.xxfast.t3code.plugin.settings.T3Settings
 import io.github.xxfast.t3code.plugin.ui.ProjectFilter
 import io.github.xxfast.t3code.plugin.ui.SnoozePreset
 import io.github.xxfast.t3code.plugin.ui.THREAD_AUTO_SETTLE_OPT_OUT
+import io.github.xxfast.t3code.plugin.ui.THREAD_PIN_REORDER
 import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SNOOZE
 import io.github.xxfast.t3code.plugin.ui.THREAD_TITLE_REGENERATION
@@ -35,7 +37,10 @@ import io.github.xxfast.t3code.plugin.ui.sections
 import io.github.xxfast.t3code.plugin.ui.settled
 import io.github.xxfast.t3code.plugin.ui.snoozePresets
 import io.github.xxfast.t3code.plugin.ui.snoozed
+import io.github.xxfast.t3code.plugin.ui.supports
+import io.github.xxfast.t3code.plugin.ui.topOfPinnedRunOrderKey
 import io.github.xxfast.t3code.protocol.Project as T3Project
+import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.archived
@@ -128,8 +133,9 @@ class ArchiveThreadAction : ThreadAction(ThreadActionKind.Archive) {
 }
 
 /**
- * Pin or unpin: upstream's `pinThread` and `unpinThread`, commands.ts:444 and 493. Unpinning
- * offers an undo that pins it back in place, useThreadActions.ts:681.
+ * Pin or unpin: upstream's `pinThread` and `unpinThread`, commands.ts:444 and 493. A pin goes to
+ * the top of the pinned rows on a server that stores their order. Unpinning offers an undo that
+ * pins it back in place, useThreadActions.ts:681.
  */
 class PinThreadAction : ThreadAction(ThreadActionKind.Pin) {
   override fun present(presentation: Presentation, row: Thread?) {
@@ -143,7 +149,13 @@ class PinThreadAction : ThreadAction(ThreadActionKind.Pin) {
     val undos: ThreadUndos = ThreadUndos.getInstance(target.project)
     if (!row.pinned) {
       undos.undo.invalidate(UndoKind.PIN, row.id)
-      target.client.dispatch(pinCommand(row, target.commandId()))
+      val catalog: ServerInfo? = ChatController.getInstance(target.project).catalog.value
+      val orderKey: String? = if (catalog.supports(THREAD_PIN_REORDER)) {
+        topOfPinnedRunOrderKey(target.client.threads.value)
+      } else {
+        null
+      }
+      target.client.dispatch(pinCommand(row, target.commandId(), orderKey))
       return
     }
     undos.undoable(

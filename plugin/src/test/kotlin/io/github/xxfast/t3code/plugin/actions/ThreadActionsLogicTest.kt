@@ -1,7 +1,9 @@
 package io.github.xxfast.t3code.plugin.actions
 
 import io.github.xxfast.t3code.plugin.fixtures.Scenario
+import io.github.xxfast.t3code.plugin.ui.OrderKeyAssignment
 import io.github.xxfast.t3code.plugin.ui.ProjectFilter
+import io.github.xxfast.t3code.plugin.ui.SidebarThreadDropPlan
 import io.github.xxfast.t3code.plugin.ui.SnoozePreset
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.Project
@@ -163,7 +165,58 @@ class ThreadActionsLogicTest {
     assertIs<Command.ThreadArchive>(archiveCommand(row, "c"))
     assertIs<Command.ThreadUnarchive>(archiveCommand(row.copy(archivedAt = "x"), "c"))
     assertEquals(Command.ThreadPin(commandId = "c", threadId = row.id), pinCommand(row, "c"))
+    assertEquals(
+      Command.ThreadPin(commandId = "c", threadId = row.id, orderKey = "g"),
+      pinCommand(row, "c", orderKey = "g"),
+    )
     assertIs<Command.ThreadUnpin>(pinCommand(row.copy(pinnedAt = "x"), "c"))
+  }
+
+  @Test
+  fun `a drop sends its lifecycle first, then the order keys`() {
+    var next = 0
+    val ids: () -> String = { "c${next++}" }
+    val keys = listOf(OrderKeyAssignment(row.id, "g"))
+    val moveActive = SidebarThreadDropPlan.MoveActive(
+      order = listOf(row.id),
+      assignments = keys,
+      unpin = true,
+      unsettle = true,
+      unsnooze = true,
+    )
+    val unpinned: List<Command> = dropCommands(moveActive, row, emptyList(), ids).map { it.command }
+    assertEquals(
+      listOf(
+        Command.ThreadUnpin(commandId = "c0", threadId = row.id),
+        Command.ThreadUnsettle(commandId = "c1", threadId = row.id, reason = "user"),
+        Command.ThreadUnsnooze(commandId = "c2", threadId = row.id, reason = "user"),
+        Command.ThreadActiveReorder(commandId = "c3", threadId = row.id, orderKey = "g"),
+      ),
+      unpinned,
+    )
+    val pinned: List<DropStep> = dropCommands(
+      SidebarThreadDropPlan.Pin(listOf(row.id), orderKey = "g", extraAssignments = keys),
+      row, emptyList(), ids,
+    )
+    assertEquals(
+      listOf(
+        Command.ThreadPin(commandId = "c4", threadId = row.id, orderKey = "g"),
+        Command.ThreadPinReorder(commandId = "c5", threadId = row.id, orderKey = "g"),
+      ),
+      pinned.map { it.command },
+    )
+    val failures: List<String> = pinned.map { it.failure }
+    assertEquals(listOf("Failed to pin thread", "Failed to reorder pinned threads"), failures)
+    assertEquals(emptyList(), dropCommands(SidebarThreadDropPlan.Settle, row, emptyList(), ids))
+  }
+
+  @Test
+  fun `a drop onto pinned without a planned key takes the top of the pinned rows`() {
+    val head: Thread = row.copy(id = "head", pinnedAt = "2026-10-19T09:00:00Z", pinOrderKey = "m")
+    val plan = SidebarThreadDropPlan.Pin(listOf(row.id), orderKey = null, emptyList())
+    val pin = dropCommands(plan, row, listOf(head)) { "c" }.single().command
+    assertIs<Command.ThreadPin>(pin)
+    assertTrue(assertNotNull(pin.orderKey) < "m")
   }
 
   @Test

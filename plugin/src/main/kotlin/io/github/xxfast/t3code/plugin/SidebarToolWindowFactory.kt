@@ -12,10 +12,12 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
 import io.github.xxfast.t3code.plugin.actions.OPEN_TERMINAL_ACTION
+import io.github.xxfast.t3code.plugin.actions.PIN_ACTION
 import io.github.xxfast.t3code.plugin.actions.SETTLE_ACTION
 import io.github.xxfast.t3code.plugin.actions.SNOOZE_GROUP
 import io.github.xxfast.t3code.plugin.actions.WAKE_ACTION
 import io.github.xxfast.t3code.plugin.actions.blockedBy
+import io.github.xxfast.t3code.plugin.actions.dropThread
 import io.github.xxfast.t3code.plugin.actions.performThreadAction
 import io.github.xxfast.t3code.plugin.actions.showThreadMenu
 import io.github.xxfast.t3code.plugin.ide.ProjectAwareness
@@ -28,6 +30,9 @@ import io.github.xxfast.t3code.plugin.ui.RowActions
 import io.github.xxfast.t3code.plugin.ui.RowDetails
 import io.github.xxfast.t3code.plugin.ui.Shelves
 import io.github.xxfast.t3code.plugin.ui.Sidebar
+import io.github.xxfast.t3code.plugin.ui.THREAD_ACTIVE_REORDER
+import io.github.xxfast.t3code.plugin.ui.THREAD_PINNING
+import io.github.xxfast.t3code.plugin.ui.THREAD_PIN_REORDER
 import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SNOOZE
 import io.github.xxfast.t3code.plugin.ui.supports
@@ -105,6 +110,14 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
           },
           rename = if (operable) renamer::start else null,
           renamed = renamer::end,
+          unpin = action(THREAD_PINNING, PIN_ACTION),
+          // Upstream drags only where the server stores pin orders, `partitionSidebarThreads`
+          drop = if (can(THREAD_PINNING) && can(THREAD_PIN_REORDER)) {
+            { threadId, plan -> dropThread(project, threadId, plan) }
+          } else {
+            null
+          },
+          reorderActive = catalog.supports(THREAD_ACTIVE_REORDER),
         )
       }
       val terminals: Map<String, List<String>> by RunningTerminals.get().byThread.collectAsState()

@@ -42,6 +42,12 @@ class RowActions(
   val rename: ((threadId: String) -> Unit)? = null,
   /** Ends renaming in place: what was typed, or null for Escape. */
   val renamed: (threadId: String, typed: String?) -> Unit = { _, _ -> },
+  /** Unpins from the pin glyph. Null leaves the glyph a picture. */
+  val unpin: ((threadId: String) -> Unit)? = null,
+  /** Sends a drop. Null means rows don't drag: the server doesn't store pin orders. */
+  val drop: ((threadId: String, plan: SidebarThreadDropPlan) -> Unit)? = null,
+  /** Whether the server stores active orders; without it a drop can't arrange active rows. */
+  val reorderActive: Boolean = false,
 )
 
 /** What rows show besides the thread: their running terminals. */
