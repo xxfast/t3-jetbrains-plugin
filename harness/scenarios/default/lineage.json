@@ -608,6 +608,203 @@
       }
     ]
   },
+  "items": {
+    "thr_01JC5L1N1LINEAG1": [
+      {
+        "type": "user_message",
+        "id": "lin-u1",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R1MAIN",
+        "ordinal": 1,
+        "status": "completed",
+        "messageId": "msg_01JC5L1R1MAIN",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "Survey the open issues and run the iOS simulator tests before we cut 1.0.",
+        "startedAt": "2026-10-21T07:30:00.000Z",
+        "completedAt": "2026-10-21T07:30:00.000Z",
+        "updatedAt": "2026-10-21T07:30:00.000Z"
+      },
+      {
+        "type": "subagent",
+        "id": "lin-s3",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R1MAIN",
+        "providerTurnId": "ptn_01JC5L1T1",
+        "ordinal": 2,
+        "status": "completed",
+        "title": "Survey the open issues",
+        "subagentId": "sub_01JC5L1A3DONE",
+        "origin": "app_owned",
+        "driver": "codex",
+        "providerInstanceId": "codex",
+        "childThreadId": "thr_01JC5L1S2DONE001",
+        "prompt": "Survey the open issues",
+        "result": "Done",
+        "startedAt": "2026-10-21T07:31:02.000Z",
+        "completedAt": "2026-10-21T07:35:12.000Z",
+        "updatedAt": "2026-10-21T07:35:12.000Z"
+      },
+      {
+        "type": "subagent",
+        "id": "lin-s4",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R1MAIN",
+        "providerTurnId": "ptn_01JC5L1T1",
+        "ordinal": 3,
+        "status": "failed",
+        "title": "Run the iOS simulator tests",
+        "subagentId": "sub_01JC5L1A4FAILED",
+        "origin": "app_owned",
+        "driver": "claudeAgent",
+        "providerInstanceId": "claude",
+        "childThreadId": "thr_01JC5L1S3FAILED1",
+        "prompt": "Run the iOS simulator tests",
+        "result": "Tests failed on iOS",
+        "startedAt": "2026-10-21T07:32:01.000Z",
+        "completedAt": "2026-10-21T07:38:40.000Z",
+        "updatedAt": "2026-10-21T07:38:40.000Z"
+      },
+      {
+        "type": "assistant_message",
+        "id": "lin-a1",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R1MAIN",
+        "ordinal": 4,
+        "status": "completed",
+        "messageId": "msg_01JC5L1A1MAIN",
+        "text": "Three open issues block 1.0, and the iOS simulator tests fail on the file codec. I'll fork to try the IndexedDB codec separately.",
+        "startedAt": "2026-10-21T07:38:45.000Z",
+        "completedAt": "2026-10-21T07:39:00.000Z",
+        "updatedAt": "2026-10-21T07:39:00.000Z",
+        "streaming": false
+      },
+      {
+        "type": "user_message",
+        "id": "lin-u2",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "ordinal": 5,
+        "status": "completed",
+        "messageId": "msg_01JC5L1R2MAIN",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "Get the code reviewer on the diff, then write the migration guide and see how other stores version their files.",
+        "startedAt": "2026-10-21T07:45:00.000Z",
+        "completedAt": "2026-10-21T07:45:00.000Z",
+        "updatedAt": "2026-10-21T07:45:00.000Z"
+      },
+      {
+        "type": "dynamic_tool",
+        "id": "lin-d0",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "providerTurnId": "ptn_01JC5L1T2",
+        "ordinal": 6,
+        "status": "completed",
+        "toolName": "mcp__t3-code__delegate_task",
+        "input": {
+          "task": "Review the diff on this branch",
+          "title": "Code reviewer"
+        },
+        "output": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Delegated."
+            }
+          ],
+          "structuredContent": {
+            "taskId": "sub_01JC5L1A0RUNAPP",
+            "threadId": "thr_01JC5L1S0RUNAPP1"
+          }
+        },
+        "startedAt": "2026-10-21T07:45:50.000Z",
+        "completedAt": "2026-10-21T07:46:00.000Z",
+        "updatedAt": "2026-10-21T07:46:00.000Z"
+      },
+      {
+        "type": "subagent",
+        "id": "lin-s0",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "providerTurnId": "ptn_01JC5L1T2",
+        "ordinal": 7,
+        "status": "running",
+        "title": "Code reviewer",
+        "subagentId": "sub_01JC5L1A0RUNAPP",
+        "origin": "app_owned",
+        "driver": "codex",
+        "providerInstanceId": "codex",
+        "childThreadId": "thr_01JC5L1S0RUNAPP1",
+        "prompt": "Code reviewer",
+        "result": null,
+        "startedAt": "2026-10-21T07:46:00.000Z",
+        "completedAt": null,
+        "updatedAt": "2026-10-21T07:46:00.000Z",
+        "progress": "Reading `KStore.kt` and the codec tests"
+      },
+      {
+        "type": "assistant_message",
+        "id": "lin-a2",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "ordinal": 8,
+        "status": "completed",
+        "messageId": "msg_01JC5L1A2MAIN",
+        "text": "The reviewer is on it. Starting the guide and the survey side by side.",
+        "startedAt": "2026-10-21T07:46:30.000Z",
+        "completedAt": "2026-10-21T07:46:40.000Z",
+        "updatedAt": "2026-10-21T07:46:40.000Z",
+        "streaming": false
+      },
+      {
+        "type": "subagent",
+        "id": "lin-s1",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "providerTurnId": "ptn_01JC5L1T2",
+        "ordinal": 9,
+        "status": "running",
+        "title": "Write the migration guide",
+        "subagentId": "sub_01JC5L1A1RUNCLD",
+        "origin": "provider_native",
+        "driver": "claudeAgent",
+        "providerInstanceId": "claude",
+        "childThreadId": "thr_01JC5L1S1RUNCLD1",
+        "prompt": "Write the migration guide",
+        "result": null,
+        "startedAt": "2026-10-21T07:47:00.000Z",
+        "completedAt": null,
+        "updatedAt": "2026-10-21T07:47:00.000Z",
+        "progress": "Drafting the 0.x to 1.0 section"
+      },
+      {
+        "type": "subagent",
+        "id": "lin-s2",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "providerTurnId": "ptn_01JC5L1T2",
+        "ordinal": 10,
+        "status": "running",
+        "title": "Explore",
+        "subagentId": "sub_01JC5L1A2NOCHLD",
+        "origin": "provider_native",
+        "driver": "claudeAgent",
+        "providerInstanceId": "claude",
+        "childThreadId": null,
+        "prompt": "Explore how other stores version their files",
+        "result": null,
+        "startedAt": "2026-10-21T07:48:00.000Z",
+        "completedAt": null,
+        "updatedAt": "2026-10-21T07:48:00.000Z"
+      }
+    ]
+  },
   "subagents": {
     "thr_01JC5L1N1LINEAG1": [
       {

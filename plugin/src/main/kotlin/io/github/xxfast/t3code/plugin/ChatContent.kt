@@ -62,6 +62,7 @@ import io.github.xxfast.t3code.plugin.ui.canChangeThreadBranch
 import io.github.xxfast.t3code.plugin.ui.hasCompactableConversation
 import io.github.xxfast.t3code.plugin.ui.resolveBranchSelectionTarget
 import io.github.xxfast.t3code.plugin.ui.SELECT_BASE_BRANCH_ERROR
+import io.github.xxfast.t3code.plugin.ui.SubagentLookup
 import io.github.xxfast.t3code.plugin.ui.WorkspaceControlState
 import io.github.xxfast.t3code.plugin.ui.WorktreeSetupProgress
 import io.github.xxfast.t3code.plugin.ui.activeMessageCount
@@ -294,6 +295,11 @@ fun ChatContent(
       favicon = favicons[projectId],
       linkFavicons = LinkFavicons.get(),
       codeHighlighter = codeHighlighter,
+      subagentLookup = SubagentLookup(
+        providers = serverInfo?.providers.orEmpty(),
+        threads = threads,
+        projects = projects,
+      ),
       chipActions = MessageChipActions(
         onOpenFile = { path, line -> view?.let { opener.openFile(it, path, line) } },
         onOpenUrl = { url -> BrowserUtil.browse(url) },

@@ -128,7 +128,7 @@ import org.jetbrains.jewel.ui.typography
 
 /** The editor scheme's background, read again whenever the theme changes. */
 @Composable
-private fun editorBackground(): Color {
+internal fun editorBackground(): Color {
   return remember(JewelTheme.globalColors) {
     EditorColorsManager.getInstance().globalScheme.defaultBackground.toComposeColor()
   }
@@ -182,6 +182,7 @@ fun ChatView(
   linkFavicons: LinkFaviconSource = NoLinkFavicons, // the favicons in front of external links
   chipActions: MessageChipActions = MessageChipActions(), // what a click on a chip does
   codeHighlighter: CodeHighlighter = NoOpCodeHighlighter, // the IDE's, for code blocks
+  subagentLookup: SubagentLookup = SubagentLookup(), // what the subagent rows look up
 ) {
   val threadId: String? = view?.thread?.id
   val timeline: LazyListState = remember(threadId) { LazyListState(memory.index, memory.offset) }
@@ -265,7 +266,9 @@ fun ChatView(
                 onRollback = onRollback,
                 onCancelWorktreeSetup = onCancelWorktreeSetup,
                 onOpenSetupTerminal = onOpenSetupTerminal,
+                onOpenThread = header.onOpenThread,
               ),
+              subagentLookup = subagentLookup,
               worktreeSetup = worktreeSetup,
               working = composer.running || composer.sending,
               bottomInset = with(LocalDensity.current) { inset.toDp() },
@@ -377,6 +380,7 @@ private class TimelineActions(
   val onRollback: (Run) -> Unit,
   val onCancelWorktreeSetup: (() -> Unit)? = null,
   val onOpenSetupTerminal: ((String) -> Unit)? = null,
+  val onOpenThread: ((threadId: String) -> Unit)? = null, // a subagent row's child thread
 )
 
 @Composable
@@ -690,13 +694,17 @@ private fun MessagesTimeline(
   processor: MarkdownProcessor,
   operateReason: String?, // why nothing can change the thread, when it can't
   actions: TimelineActions,
+  subagentLookup: SubagentLookup,
   worktreeSetup: WorktreeSetupSnapshot?,
   working: Boolean, // the composer's `isWorking`: a run going or a send on its way
   bottomInset: Dp,
   modifier: Modifier = Modifier,
 ) {
   val running: Run? = activeRun(view.runs)
-  val now: Instant by rememberNow(if (running != null) 1_000 else 30_000)
+  // A subagent can keep working after its parent's run settles, and its row counts the seconds
+  val ticking: Boolean =
+    running != null || view.subagents.any { isOrchestrationV2WorkActive(it.status) }
+  val now: Instant by rememberNow(if (ticking) 1_000 else 30_000)
   var expansion: TimelineExpansion by memory::expansion
   val entries: List<TimelineEntry> = remember(view.items) { deriveTimelineEntries(view.items) }
   val rows: List<TimelineRow> = remember(
@@ -735,6 +743,14 @@ private fun MessagesTimeline(
     onToggleGroup = { groupId ->
       expansion = expansion.copy(workGroupIds = expansion.workGroupIds.toggle(groupId))
     },
+    expandedGroups = expansion.workGroupIds,
+    subagents = SubagentRowsContext(
+      live = view.subagents,
+      parentThread = view.thread,
+      lookup = subagentLookup,
+      nowMs = now.toEpochMilli(),
+      onOpenThread = actions.onOpenThread,
+    ),
   )
   val anchored: Int? = anchoredIndex(rows, follow.anchor)
   FollowTail(state, follow, memory, anchored, animated = working)
@@ -855,6 +871,8 @@ private class RowContext(
   val actions: TimelineActions,
   val onToggleRun: (String) -> Unit,
   val onToggleGroup: (String) -> Unit,
+  val expandedGroups: Set<String>,
+  val subagents: SubagentRowsContext,
 )
 
 private fun TimelineRow?.isWorkLog(): Boolean = this is TimelineRow.Work ||
@@ -978,7 +996,7 @@ private fun TimelineRowContent(row: TimelineRow, context: RowContext) {
     TimelineRow.Thinking ->
       WorkLogLine(icon = "brain", label = "Thinking", shimmer = Shimmer.ActivityFocus)
     is TimelineRow.ContextCompaction -> ContextCompactionRow(row.label, row.active)
-    is TimelineRow.Event -> EventRow(row.item, context)
+    is TimelineRow.Event -> EventRow(row, context)
     is TimelineRow.Plan -> PlanCard(row.item, context.processor)
     is TimelineRow.WorktreeSetup -> WorktreeSetupCard(
       snapshot = row.snapshot,
@@ -1528,9 +1546,28 @@ private fun ContextCompactionRow(label: String, active: Boolean) {
   }
 }
 
-/** `V2EventTimelineRow`: lifecycle events as dividers, the rest as a card. */
+/**
+ * `V2EventTimelineRow`: subagents as links or a group, lifecycle events as dividers, the rest as
+ * a card.
+ */
 @Composable
-private fun EventRow(item: TurnItem, context: RowContext) {
+private fun EventRow(row: TimelineRow.Event, context: RowContext) {
+  val item: TurnItem = row.item
+  val subagents: List<TurnItem.TurnItemSubagent>? = row.subagents
+  if (item is TurnItem.TurnItemSubagent) {
+    if (subagents != null && subagents.size > 1) {
+      val groupId: String = subagentGroupId(row.id)
+      V2SubagentGroup(
+        items = subagents,
+        context = context.subagents,
+        expanded = groupId in context.expandedGroups,
+        onToggle = { context.onToggleGroup(groupId) },
+      )
+    } else {
+      SubagentTimelineLink(item, context.subagents)
+    }
+    return
+  }
   when (item.type) {
     "run_interrupt_result" ->
       SystemDivider("x", "Run interrupted", JewelTheme.globalColors.text.error)

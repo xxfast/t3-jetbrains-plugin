@@ -12,8 +12,13 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import kotlin.math.roundToLong
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 
 /*
@@ -23,8 +28,8 @@ import kotlinx.serialization.json.contentOrNull
  * group summaries come from `packages/client-runtime/src/work-log/presentation.ts`.
  *
  * Not ported: superseded attempt folds (we don't decode attempts), T3 MCP tool presentations,
- * tool sources ("Used X integration"), subagent groups, html renders, mcp apps and worktree
- * setup rows. Those items fall through to the generic rows.
+ * tool sources ("Used X integration"), html renders, mcp apps and worktree setup rows. Those
+ * items fall through to the generic rows.
  */
 
 /** Upstream's `WorkLogToolLifecycleStatus`. */
@@ -630,7 +635,14 @@ sealed interface TimelineRow {
     override val id: String = "assistant-meta:${entry.id}"
   }
 
-  data class Event(val item: TurnItem) : TimelineRow {
+  /**
+   * A standalone item. A run of `subagent` items from one provider turn is one row, upstream's
+   * `subagents`: [subagents] holds them all, [item] is the first.
+   */
+  data class Event(
+    val item: TurnItem,
+    val subagents: List<TurnItem.TurnItemSubagent>? = null,
+  ) : TimelineRow {
     override val id: String = item.id
   }
 
@@ -720,6 +732,7 @@ private fun deriveTurnFolds(
   terminalIds: Set<String>,
   latestRun: Run?,
   unfoldedRunIds: Set<String>,
+  liveSubagentEntryIds: Set<String>,
 ): Map<String, TurnFold> {
   val interrupted: Set<String> = entries
     .filter { it is TimelineEntry.Event && it.item.type.startsWith("run_interrupt_") }
@@ -779,7 +792,9 @@ private fun deriveTurnFolds(
       val foldableTrailing: Boolean = entry is TimelineEntry.Work &&
         entry.entry.status != ToolStatus.InProgress && !entry.entry.indicatesFailure()
       if (!compaction && index > terminalIndex && !foldableTrailing) return@forEachIndexed
-      if (entry.isPersistentResourceCard()) return@forEachIndexed
+      if (entry.isPersistentResourceCard() || entry.id in liveSubagentEntryIds) {
+        return@forEachIndexed
+      }
       if (entry is TimelineEntry.Work && entry.entry.itemType == "notification") {
         return@forEachIndexed
       }
@@ -845,7 +860,9 @@ fun deriveMessagesTimelineRows(
   revertTarget: (Run) -> Run? = { null },
   worktreeSetup: WorktreeSetupSnapshot? = null,
 ): List<TimelineRow> {
-  val entries: List<TimelineEntry> = settleSupersededReasoning(timelineEntries)
+  // `timelineRowEntries`
+  val entries: List<TimelineEntry> =
+    withoutSubagentDelegationRows(settleSupersededReasoning(timelineEntries))
   val isWorking: Boolean = runningRun != null
   val latestRun: Run? = runs.maxByOrNull { it.ordinal }
   val runsById: Map<String, Run> = runs.associateBy { it.id }
@@ -862,8 +879,13 @@ fun deriveMessagesTimelineRows(
     if (!isWorking) return@buildSet
     entries.drop(lastBoundary + 1).mapNotNull { it.runId }.forEach(::add)
   }
-  val folds: Map<String, TurnFold> =
-    deriveTurnFolds(entries, terminalIds, latestRun, activeRunIds + failedRunIds)
+  val folds: Map<String, TurnFold> = deriveTurnFolds(
+    entries = entries,
+    terminalIds = terminalIds,
+    latestRun = latestRun,
+    unfoldedRunIds = activeRunIds + failedRunIds,
+    liveSubagentEntryIds = liveSubagentCardEntryIds(entries),
+  )
   val collapsed: Set<String> = folds.values
     .filter { it.runId !in expansion.runIds }
     .flatMap { it.hiddenEntryIds }
@@ -1030,7 +1052,20 @@ fun deriveMessagesTimelineRows(
       }
 
       is TimelineEntry.Plan -> rows += TimelineRow.Plan(entry.item)
-      is TimelineEntry.Event -> rows += TimelineRow.Event(entry.item)
+      is TimelineEntry.Event -> {
+        // MessagesTimeline.logic.ts:1856: consecutive subagents of one provider turn group
+        val item: TurnItem = entry.item
+        val previous: TimelineRow.Event? = rows.lastOrNull() as? TimelineRow.Event
+        val previousItem: TurnItem? = previous?.item
+        if (item is TurnItem.TurnItemSubagent && previous != null &&
+          previousItem is TurnItem.TurnItemSubagent && previousItem.sameTurn(item)
+        ) {
+          val members: List<TurnItem.TurnItemSubagent> = previous.subagents ?: listOf(previousItem)
+          rows[rows.lastIndex] = previous.copy(subagents = members + item)
+        } else {
+          rows += TimelineRow.Event(item)
+        }
+      }
     }
   }
   if (isWorking && headerIndex >= entries.size) rows += TimelineRow.Working(runningRun?.workStart())
@@ -1083,6 +1118,177 @@ private fun Run.workStart(): String = startedAt ?: requestedAt
 private fun WorkLogEntry.standalone(): Boolean = tone == WorkTone.Error ||
   sourceActivityKind == RUNTIME_ERROR || itemType == "system_notice" ||
   itemType == "notification"
+
+/** Subagent items group, and keep each other out of folds, per run and provider turn. */
+private fun TurnItem.sameTurn(other: TurnItem): Boolean =
+  runId == other.runId && providerTurnId == other.providerTurnId
+
+/**
+ * `liveSubagentCardEntryIds`, MessagesTimeline.logic.ts:862: every subagent card of a provider
+ * turn that still has one working stays out of its turn's fold until the child ends.
+ */
+private fun liveSubagentCardEntryIds(entries: List<TimelineEntry>): Set<String> {
+  val visible: MutableSet<String> = mutableSetOf()
+  val batch: MutableList<TimelineEntry.Event> = mutableListOf()
+  fun flush() {
+    if (batch.any { isLiveSubagentTurnItem(it.item) }) batch.forEach { visible += it.id }
+    batch.clear()
+  }
+  entries.forEach { entry ->
+    if (entry !is TimelineEntry.Event || entry.item !is TurnItem.TurnItemSubagent) {
+      flush()
+      return@forEach
+    }
+    val previous: TurnItem? = batch.lastOrNull()?.item
+    if (previous != null && !previous.sameTurn(entry.item)) flush()
+    batch += entry
+  }
+  flush()
+  return visible
+}
+
+/**
+ * `withoutSubagentDelegationRows`, MessagesTimeline.logic.ts:1325: an app-owned subagent already
+ * has its card, so the `delegate_task` call that started it goes, once its returned task id
+ * names a child of the same run. Pending calls can share a prompt, so nothing goes before that.
+ */
+fun withoutSubagentDelegationRows(entries: List<TimelineEntry>): List<TimelineEntry> {
+  val childrenByRun: Map<String, Set<String>> = entries
+    .mapNotNull { (it as? TimelineEntry.Event)?.item as? TurnItem.TurnItemSubagent }
+    .filter { it.origin == "app_owned" }
+    .mapNotNull { item -> item.runId?.let { runId -> runId to item.subagentId } }
+    .groupBy({ it.first }, { it.second })
+    .mapValues { it.value.toSet() }
+  return entries.filter { entry ->
+    if (entry !is TimelineEntry.Work || entry.entry.indicatesFailure()) return@filter true
+    val item: TurnItem.DynamicTool = entry.entry.item as? TurnItem.DynamicTool
+      ?: return@filter true
+    val runId: String = item.runId ?: return@filter true
+    if ((item.status != "running" && item.status != "completed") ||
+      resolveT3McpToolName(item.toolName) != DELEGATE_TASK
+    ) return@filter true
+    val output: CompactToolOutput = compactDynamicToolOutput(item.output) ?: return@filter true
+    if (output.isError) return@filter true
+    val taskId: String = output.taskId ?: return@filter true
+    taskId !in childrenByRun[runId].orEmpty()
+  }
+}
+
+/** The one T3 MCP tool whose `summaryAction` is `delegate`, t3McpToolPresentation.ts:127. */
+private const val DELEGATE_TASK: String = "delegate_task"
+
+/** `T3_MCP_SERVER_ALIASES`, t3McpToolPresentation.ts:85. */
+private val T3_MCP_SERVER_ALIASES: Set<String> = setOf("t3-code", "t3_code", "t3code")
+
+private val COMPLETE_SUFFIX: Regex =
+  Regex("\\s+(?:complete|completed)\\s*$", RegexOption.IGNORE_CASE)
+private val MCP_TOOL: Regex = Regex("^mcp__(.+?)__(.+)$", RegexOption.IGNORE_CASE)
+private val NAMESPACED_TOOL: Regex =
+  Regex("^(?:t3-code|t3_code|t3code)(?:[.:/]|\\s*·\\s*)(.+)$", RegexOption.IGNORE_CASE)
+private val PREFIXED_TOOL: Regex =
+  Regex("^(?:mcp[-_]{1,2})?t3[-_ ]?code(?:__|[-_.:/ ])(.+)$", RegexOption.IGNORE_CASE)
+
+/**
+ * `resolveT3McpToolName`, packages/shared/src/t3McpToolPresentation.ts:349: the T3 tool behind
+ * however an agent prefixed it. Upstream checks against its whole tool table; only
+ * `delegate_task` matters here, so that's the table.
+ */
+fun resolveT3McpToolName(toolName: String?): String? {
+  val label: String = toolName?.replace(COMPLETE_SUFFIX, "")?.trim() ?: return null
+  MCP_TOOL.find(label)?.let { match ->
+    val (server: String, tool: String) = match.destructured
+    return if (server.lowercase() in T3_MCP_SERVER_ALIASES) tool else null
+  }
+  NAMESPACED_TOOL.find(label)?.let { return it.groupValues[1] }
+  val candidate: String = PREFIXED_TOOL.find(label)?.groupValues?.get(1) ?: label
+  if (candidate == DELEGATE_TASK) return candidate
+  // OpenCode 2's one server per thread, `t3-code-<thread>_<tool>`
+  if (!label.startsWith("t3-code-", ignoreCase = true)) return null
+  return DELEGATE_TASK.takeIf { label.endsWith("_$DELEGATE_TASK") }
+}
+
+/** Upstream's `CompactToolOutput`, the two fields the delegation dedupe reads. */
+data class CompactToolOutput(val isError: Boolean, val taskId: String?)
+
+/**
+ * `compactDynamicToolOutput`, packages/shared/src/toolOutput.ts:111, for `isError` and `taskId`:
+ * the result is unwrapped through JSON strings, content blocks and `structuredContent ?? content`
+ * within upstream's depth and size budget.
+ */
+fun compactDynamicToolOutput(value: JsonElement?): CompactToolOutput? {
+  value ?: return null
+  val budget = ResultReadBudget()
+  val result: ResultEnvelope = readResult(value, budget, depth = 0)
+  val data: JsonObject? = result.data.takeUnless { budget.exceeded }
+  val taskId: String? = (data?.get("taskId") as? JsonPrimitive)
+    ?.takeIf { it.isString }
+    ?.content
+    ?.takeIf { it.length <= MAX_ID_LENGTH && it.isNotBlank() }
+  return CompactToolOutput(isError = result.failed, taskId = taskId)
+}
+
+private const val MAX_PARSED_BYTES: Int = 16_384
+private const val MAX_ID_LENGTH: Int = 256
+private const val MAX_CONTENT_BLOCKS: Int = 32
+private const val MAX_ENVELOPE_DEPTH: Int = 4
+private const val MAX_ENVELOPE_NODES: Int = 128
+
+private class ResultReadBudget(
+  var remainingBytes: Int = MAX_PARSED_BYTES,
+  var remainingNodes: Int = MAX_ENVELOPE_NODES,
+  var exceeded: Boolean = false,
+)
+
+private data class ResultEnvelope(val data: JsonObject? = null, val failed: Boolean = false)
+
+/** `readResult`, toolOutput.ts:46. */
+private fun readResult(value: JsonElement?, budget: ResultReadBudget, depth: Int): ResultEnvelope {
+  if (depth > MAX_ENVELOPE_DEPTH || budget.remainingNodes-- <= 0) {
+    budget.exceeded = true
+    return ResultEnvelope()
+  }
+  if (value is JsonPrimitive && value.isString) {
+    val bytes: Int = value.content.toByteArray(Charsets.UTF_8).size
+    if (bytes > budget.remainingBytes) {
+      budget.exceeded = true
+      return ResultEnvelope()
+    }
+    budget.remainingBytes -= bytes
+    val parsed: JsonElement = runCatching { Json.parseToJsonElement(value.content) }.getOrNull()
+      ?: return ResultEnvelope()
+    return readResult(parsed, budget, depth + 1)
+  }
+  if (value is JsonArray) {
+    if (value.size > MAX_CONTENT_BLOCKS) {
+      budget.exceeded = true
+      return ResultEnvelope()
+    }
+    var data: JsonObject? = null
+    var failed = false
+    for (block in value) {
+      val text: JsonElement? = (block as? JsonObject)?.get("text")
+      val inner: JsonElement? = (text as? JsonObject)?.let { it["text"] ?: it } ?: text
+      val result: ResultEnvelope = readResult(inner, budget, depth + 1)
+      data = data ?: result.data
+      failed = failed || result.failed
+      if (budget.exceeded) break
+    }
+    return ResultEnvelope(data, failed)
+  }
+  val record: JsonObject = value as? JsonObject ?: return ResultEnvelope()
+  val failed: Boolean = record["isError"].isTrue() || record["is_error"].isTrue() ||
+    (record["_tag"] as? JsonPrimitive)?.contentOrNull == "OrchestratorMcpFailure" ||
+    (record["error"] != null && record["error"] !is JsonNull)
+  val content: JsonElement? = record["structuredContent"]?.takeUnless { it is JsonNull }
+    ?: record["content"]?.takeUnless { it is JsonNull }
+  if (content != null) {
+    val nested: ResultEnvelope = readResult(content, budget, depth + 1)
+    return nested.copy(failed = failed || nested.failed)
+  }
+  return ResultEnvelope(record, failed)
+}
+
+private fun JsonElement?.isTrue(): Boolean = (this as? JsonPrimitive)?.booleanOrNull == true
 
 /** `settleSupersededReasoning`: only the last entry can still be thinking. */
 private fun settleSupersededReasoning(entries: List<TimelineEntry>): List<TimelineEntry> =
