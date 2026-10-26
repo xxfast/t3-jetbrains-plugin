@@ -7,25 +7,17 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -53,9 +45,10 @@ class BackgroundWorkActions(
 
 /**
  * The background work banner above the composer, upstream's `backgroundWorkBannerItem`
- * (`ThreadActivityBanners.tsx`) in its `ComposerBannerStack` slot: a drawer over the box with a
- * dot that pulses while the work holds completion, the title `presentPendingBackgroundWork`
- * gives it, the items as a muted line, and Stop. A subagent item is a link to its child thread,
+ * (`ThreadActivityBanners.tsx`) in its `ComposerBannerStack` slot: a drawer over the box, or a
+ * card above it behind a more urgent banner, with a dot that pulses while the work holds
+ * completion, the title `presentPendingBackgroundWork` gives it, the items as a muted line, and
+ * Stop. A subagent item is a link to its child thread,
  * "Show" when it's the only item. One nameless task has no description line. Nothing without
  * tasks.
  */
@@ -65,22 +58,12 @@ fun BackgroundWorkBanner(
   state: BackgroundWorkState,
   actions: BackgroundWorkActions,
   modifier: Modifier = Modifier,
+  attached: Boolean = true, // the front of the stack, a drawer over the box
 ) {
   val presentation: PendingBackgroundWorkPresentation =
     presentPendingBackgroundWork(state.tasks) ?: return
-  val dark: Boolean = JewelTheme.isDark
-  val outline: Color =
-    if (dark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f)
-  val shape: Shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
   Row(
-    modifier = modifier
-      .fillMaxWidth()
-      .padding(horizontal = DRAWER_INSET)
-      .clip(shape)
-      .background(composerGlassSurface())
-      .border(1.dp, outline, shape)
-      .padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = DRAWER_OVERLAP + 4.dp)
-      .heightIn(min = ROW_MIN_HEIGHT),
+    modifier = modifier.composerBannerSurface(attached, ComposerBannerVariant.DEFAULT),
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(4.dp),
   ) {
@@ -172,17 +155,8 @@ private fun StatusDot(pulsing: Boolean) {
   )
 }
 
-/** `--chat-composer-drawer-inset`, 1.375rem. */
-private val DRAWER_INSET: Dp = 22.dp
-
-/** `--chat-composer-attachment-overlap`, `calc(1rem+1px)`: the part behind the box. */
-private val DRAWER_OVERLAP: Dp = 17.dp
-
 /** `--composer-banner-icon-column`, `--spacing(6)`. */
 private val ICON_COLUMN: Dp = 24.dp
-
-/** A row's `min-h-5`. */
-private val ROW_MIN_HEIGHT: Dp = 20.dp
 
 /** `size-1.5`. */
 private val DOT: Dp = 6.dp

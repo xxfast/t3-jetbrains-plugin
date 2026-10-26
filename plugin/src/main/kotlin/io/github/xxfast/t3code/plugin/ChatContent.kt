@@ -4,6 +4,8 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
@@ -85,7 +87,16 @@ import io.github.xxfast.t3code.plugin.ui.PendingRequest
 import io.github.xxfast.t3code.plugin.ui.PendingThreadRequests
 import io.github.xxfast.t3code.plugin.ui.PendingUserInputDraftAnswer
 import io.github.xxfast.t3code.plugin.ui.ReviewCommentContext
+import io.github.xxfast.t3code.plugin.ui.VcsStatus
 import io.github.xxfast.t3code.plugin.ui.VcsSummary
+import io.github.xxfast.t3code.plugin.ui.BranchMismatch
+import io.github.xxfast.t3code.plugin.ui.BranchMismatchBannerActions
+import io.github.xxfast.t3code.plugin.ui.BranchMismatchBannerState
+import io.github.xxfast.t3code.plugin.ui.branchMismatch
+import io.github.xxfast.t3code.plugin.ui.branchMismatchKey
+import io.github.xxfast.t3code.plugin.ui.composerDraftHasUserContent
+import io.github.xxfast.t3code.plugin.ui.nextRevealedBranchMismatchKey
+import io.github.xxfast.t3code.plugin.ui.shouldShowBranchMismatchBanner
 import io.github.xxfast.t3code.plugin.ui.activeContextWindow
 import io.github.xxfast.t3code.plugin.ui.activeRun
 import io.github.xxfast.t3code.plugin.ui.advance
@@ -213,6 +224,8 @@ fun ChatContent(
   }
   val vcs: VcsSummary? by remember(cwd) { VcsStatuses.getInstance(project).summary(cwd) }
     .collectAsState()
+  val vcsStatus: VcsStatus? by remember(cwd) { VcsStatuses.getInstance(project).status(cwd) }
+    .collectAsState()
   val setup: WorktreeSetupState = rememberWorktreeSetup(view, pending, client)
   val composer: ComposerState = composerState(
     connection = connection,
@@ -230,6 +243,9 @@ fun ChatContent(
     rememberComposerFooter(project, view, isDraft, pending, connection, controller, cwd, vcs, setup)
   val contextWindow: ComposerContextWindow =
     rememberContextWindow(view, footer, composer, connection, controller)
+  val branchNotice: BranchMismatchBannerState? = rememberBranchMismatchNotice(
+    view, isDraft, pending, footer, vcsStatus, composerDraft, extras, controller,
+  )
   val images: AttachmentImages = AttachmentImages.get()
   val previews: Map<String, ImageBitmap> by images.previews.collectAsState()
   val imageState: MessageImageState = remember(previews, project) {
@@ -390,6 +406,21 @@ fun ChatContent(
         },
         onOpenThread = opener::openThread,
       ),
+      branchMismatch = branchNotice,
+      branchMismatchActions = BranchMismatchBannerActions(
+        onRestore = {
+          val current: ThreadView? = view
+          val mismatch: BranchMismatch? = branchNotice?.mismatch
+          if (current != null && mismatch != null && workspaceRoot != null &&
+            confirmBranchRestore(project, mismatch, vcsStatus)
+          ) {
+            controller.restoreThreadBranch(current, workspaceRoot, mismatch.threadBranch)
+          }
+        },
+        onDismiss = {
+          branchMismatchKey(threadId, branchNotice?.mismatch)?.let(controller::dismissBanner)
+        },
+      ),
       queueActions = QueuedRunsActions(
         onEdit = { queued -> view?.let { queuedRuns.beginEdit(it, queued) } },
         onCancelEdit = { queuedRuns.cancelEdit(threadId) },
@@ -402,6 +433,79 @@ fun ChatContent(
       ),
     )
   }
+}
+
+/**
+ * The branch mismatch notice for [view], or null when it doesn't show. Upstream's
+ * `localCheckoutBranchMismatch` (ChatView.tsx) only checks a server thread in local mode, with
+ * the checkout's `refName`, not the git line's "detached HEAD". It shows once the composer has
+ * content and stays for that mismatch until dismissed, `shouldShowBranchMismatchBanner` and the
+ * reveal latch in useThreadLifecycle.tsx. A thread that can still choose its workspace is on
+ * its pending pick, upstream's `activeThreadBranch`.
+ */
+@Composable
+private fun rememberBranchMismatchNotice(
+  view: ThreadView?,
+  isDraft: Boolean,
+  pending: PendingMessages,
+  footer: ComposerFooterState?,
+  vcsStatus: VcsStatus?,
+  draft: TextFieldState,
+  extras: Map<String, DraftExtras>,
+  controller: ChatController,
+): BranchMismatchBannerState? {
+  val threadId: String? = view?.thread?.id
+  val dismissed: Set<String> by controller.dismissedBanners.collectAsState()
+  val restoring: Set<String> by controller.restoringBranch.collectAsState()
+  val threadExtras: DraftExtras by rememberUpdatedState(extras[threadId] ?: DraftExtras())
+  // Derived, so a keystroke only recomposes this when the draft turns empty or not
+  val hasContent: Boolean by remember(draft) {
+    derivedStateOf { composerDraftHasUserContent(draft.text, threadExtras) }
+  }
+  val local: Boolean = !isDraft && footer?.workspace?.envMode != EnvMode.WORKTREE
+  val picked: String? =
+    pending.workspace.branch?.takeIf { view != null && canOverrideServerThreadEnvMode(view) }
+  val mismatch: BranchMismatch? = view?.thread?.takeIf { local }
+    ?.let { thread -> if (picked != null) thread.copy(branch = picked) else thread }
+    ?.let { thread -> branchMismatch(thread, vcsStatus?.local?.refName) }
+  val key: String? = branchMismatchKey(threadId, mismatch)
+  var revealed: String? by remember(threadId) { mutableStateOf(null) }
+  val show: Boolean = shouldShowBranchMismatchBanner(
+    hasMismatch = mismatch != null,
+    isDismissed = key != null && key in dismissed,
+    composerHasContent = hasContent,
+    wasShownForCurrentMismatch = revealed != null && revealed == key,
+  )
+  val next: String? = nextRevealedBranchMismatchKey(show, key, revealed)
+  SideEffect { if (revealed != next) revealed = next }
+  if (!show || mismatch == null) return null
+  return BranchMismatchBannerState(
+    mismatch = mismatch,
+    restoring = threadId in restoring,
+    canRestore = footer?.workspace?.canChangeBranch == true, // `canWriteSourceControl`
+  )
+}
+
+/**
+ * `handleRestoreThreadBranch` (ChatView.tsx) with `BranchRestoreConfirmHost`
+ * (ChatOverlayHosts.tsx): uncommitted changes ask first.
+ */
+private fun confirmBranchRestore(
+  project: Project,
+  mismatch: BranchMismatch,
+  status: VcsStatus?,
+): Boolean {
+  if (status?.local?.hasWorkingTreeChanges != true) return true
+  val answer: Int = Messages.showYesNoDialog(
+    project,
+    "You have uncommitted changes. They'll carry over to the other branch, or block the switch " +
+      "if they conflict.",
+    "Switch to ${mismatch.threadBranch}?",
+    "Switch branch",
+    "Cancel",
+    Messages.getQuestionIcon(),
+  )
+  return answer == Messages.YES
 }
 
 /** What [rememberWorktreeSetup] works out for the thread on screen. */

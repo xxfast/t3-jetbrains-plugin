@@ -463,12 +463,16 @@ class FixtureClient(
         )
       }
 
-      // Orchestrator.ts:2941, the title half. A regeneration stands in for the server's title
-      // generator: it runs a couple of seconds, then completes with a made-up title
+      // Orchestrator.ts:2941, the title and branch halves. A regeneration stands in for the
+      // server's title generator: it runs a couple of seconds, then completes with a made-up title
       is Command.ThreadMetadataUpdate -> {
         val title: String? = command.title
         if (title != null) {
           updateRow(command.threadId) { row -> row.copy(title = title, updatedAt = now) }
+        }
+        val branch: String? = command.branch
+        if (branch != null) {
+          updateRow(command.threadId) { row -> row.copy(branch = branch, updatedAt = now) }
         }
         if (command.regenerateTitle == true) {
           regenerateTitle(command.threadId, command.commandId, now)

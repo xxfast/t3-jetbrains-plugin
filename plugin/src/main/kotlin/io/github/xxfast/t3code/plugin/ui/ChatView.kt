@@ -171,6 +171,8 @@ fun ChatView(
   queueActions: QueuedRunsActions = QueuedRunsActions(),
   backgroundWork: BackgroundWorkState? = null, // the provider's pending work, above the composer
   backgroundWorkActions: BackgroundWorkActions = BackgroundWorkActions(),
+  branchMismatch: BranchMismatchBannerState? = null, // the checkout moved off the thread's branch
+  branchMismatchActions: BranchMismatchBannerActions = BranchMismatchBannerActions(),
   mentions: ComposerMentions = ComposerMentions(), // what the composer's `@` and `#` menus read
   memory: TimelineMemory = remember { TimelineMemory() }, // where the timeline was left
   linkFavicons: LinkFaviconSource = NoLinkFavicons, // the favicons in front of external links
@@ -306,14 +308,25 @@ fun ChatView(
           onInterrupt = onInterrupt,
           onSteerQueued = queue?.let { state -> queuedSteerShortcut(state, queueActions) },
           onEditQueued = queue?.let { state -> queuedEditShortcut(state, queueActions) },
-          // `ComposerBannerStack`: the queued drawer (`attachedAbove`) over the front banner
-          attachedAbove = if (queue == null && backgroundWork == null) {
-            null
-          } else {
+          // `ComposerBannerStack`: the queued drawer (`attachedAbove`) over the front banner,
+          // the items in `composerBannerItems`' order
+          attachedAbove = run {
+            val banners: List<ComposerBannerItem> = listOfNotNull(
+              backgroundWork?.let(ComposerBannerItem::BackgroundWork),
+              branchMismatch?.let(ComposerBannerItem::BranchMismatch),
+            )
+            if (queue == null && banners.isEmpty()) return@run null
             {
-              Column {
-                queue?.let { state -> QueuedRunsControl(state, queueActions) }
-                backgroundWork?.let { state -> BackgroundWorkBanner(state, backgroundWorkActions) }
+              ComposerBannerStack(
+                items = banners,
+                attachedAbove = queue?.let { state -> { QueuedRunsControl(state, queueActions) } },
+              ) { item, attached ->
+                when (item) {
+                  is ComposerBannerItem.BackgroundWork ->
+                    BackgroundWorkBanner(item.state, backgroundWorkActions, attached = attached)
+                  is ComposerBannerItem.BranchMismatch ->
+                    BranchMismatchBanner(item.state, branchMismatchActions, attached)
+                }
               }
             }
           },
