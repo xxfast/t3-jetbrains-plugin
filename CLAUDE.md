@@ -88,8 +88,9 @@ How it fits together:
   operate, terminal and `source-control:write` scopes so every action is live, the branch
   pickers included. `disconnected/`, `pairing/`, `auth-error/`, `read-only/` (no operate) and
   `empty-server/` cover connection-level states; the ones with threads carry a byte-for-byte copy
-  of `default/list.json`. Shapes are the same `:protocol` types the real client decodes, so
-  scenarios double as test fixtures.
+  of `default/list.json`. `disconnected/` lists them as the last snapshot, dimmed, read-only and
+  marked stale under the banner (`ShellSnapshotCache`, #71). Shapes are the same `:protocol`
+  types the real client decodes, so scenarios double as test fixtures.
 - Items may carry an `after` delay in milliseconds. The fixture client replays them in order so a
   "running" thread visibly grows, which is the only way to design streaming.
 - The fixture client watches its directory. Edit a JSON file, the tool window updates. No rebuild

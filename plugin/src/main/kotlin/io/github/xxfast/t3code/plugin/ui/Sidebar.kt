@@ -167,6 +167,7 @@ fun Sidebar(
   onOrderedThreadIds: (List<String>) -> Unit = {},
   // The jump shortcuts' labels by row, 1 to 9, while their modifier is held; null when unbound
   jumpLabels: List<String?> = emptyList(),
+  stale: Boolean = false, // the rows are the last snapshot, dimmed, see ShellSnapshotCache
 ) {
   val query: String = search.text.toString()
   // Snoozes wake on the minute; a half-minute tick is close enough to move them back in time
@@ -257,7 +258,7 @@ fun Sidebar(
       search, onSearchKey, onSearchFocus, projects, favicons, filter, open, onFilterChange,
       onNewThread, onAddProject,
     )
-    Box(Modifier.weight(1f)) {
+    Box(Modifier.weight(1f).alpha(if (stale) STALE_ALPHA else 1f)) {
       when {
         searching && results.isNotEmpty() -> SearchResults(
           results = results,
@@ -289,6 +290,9 @@ fun Sidebar(
     if (onOpenSettings != null) UtilityFooter(onOpenSettings)
   }
 }
+
+/** How far the last snapshot's rows fade while disconnected. Plugin only, upstream has none. */
+private const val STALE_ALPHA: Float = 0.6f
 
 /**
  * Upstream's `SidebarThreadHeader` (sidebar/SidebarThreadHeader.tsx): one row, the search field

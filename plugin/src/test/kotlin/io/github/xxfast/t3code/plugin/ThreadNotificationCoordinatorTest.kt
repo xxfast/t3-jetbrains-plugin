@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin
 
+import io.github.xxfast.t3code.plugin.fixtures.FixtureClient
 import io.github.xxfast.t3code.plugin.fixtures.Scenario
 import io.github.xxfast.t3code.plugin.ui.ThreadStatus
 import io.github.xxfast.t3code.protocol.Thread
@@ -8,10 +9,21 @@ import java.nio.file.Path
 import kotlin.io.path.readText
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 
 class ThreadNotificationCoordinatorTest {
   private val scenarios: Path = Path.of(System.getProperty("t3code.scenarios"))
+
+  @TempDir
+  lateinit var directory: Path
+
   private val idle: Thread = Scenario
     .decode(scenarios.resolve("default").resolve("list.json").readText())
     .threads
@@ -49,6 +61,34 @@ class ThreadNotificationCoordinatorTest {
     val stopped: Thread = completed(running).copy(latestRunStopRequested = true)
     val (_, changes: ThreadNotificationChanges) = seeded.next(listOf(stopped))
     assertEquals(emptyList(), changes.notify)
+  }
+
+  @Test
+  fun `a cached list, then the live list, notifies nothing`() = runTest {
+    val url = "http://127.0.0.1:3773"
+    val store = ShellSnapshotStore(directory)
+    store.save(ShellSnapshot(url, "2026-10-27T09:00:00Z", emptyList(), listOf(running)))
+    val fake = FakeShellClient(FixtureClient(scenarios.resolve("empty-server"), backgroundScope))
+    val cache = ShellSnapshotCache(
+      inner = fake,
+      serverUrl = { url },
+      store = store,
+      scope = backgroundScope,
+      io = StandardTestDispatcher(testScheduler),
+    )
+    val live: MutableList<String> = mutableListOf()
+    val shown: MutableList<String> = mutableListOf()
+    backgroundScope.launch { fold(cache.liveThreads.filterNotNull(), live) }
+    backgroundScope.launch { fold(cache.threads, shown) }
+    settle()
+    assertEquals(listOf(running), cache.threads.value)
+
+    fake.connection.value = connected()
+    fake.threads.value = listOf(approval(running, "r1"))
+    settle()
+
+    assertEquals(emptyList(), live, "The first live list is the baseline")
+    assertEquals(listOf("Approval needed"), shown, "What baselining on the cached list did")
   }
 
   @Test
@@ -139,6 +179,22 @@ class ThreadNotificationCoordinatorTest {
     assertEquals(listOf("c"), waitingThreads(listOf(auth, tool, question)).map { it.id })
     assertTrue(waitingThreads(emptyList()).isEmpty())
   }
+}
+
+/** What the coordinator does with [threads], keeping the balloons' titles in [titles]. */
+private suspend fun fold(threads: Flow<List<Thread>>, titles: MutableList<String>) {
+  var notifications = ThreadNotifications()
+  threads.collect { list ->
+    val (next: ThreadNotifications, changes: ThreadNotificationChanges) = notifications.next(list)
+    notifications = next
+    titles += changes.notify.map { it.title }
+  }
+}
+
+// Past the cache's debounce, without running the fixture client's poll forever
+private fun TestScope.settle() {
+  testScheduler.advanceTimeBy(2_000)
+  testScheduler.runCurrent()
 }
 
 private fun approval(thread: Thread, requestId: String, kind: String = "command"): Thread =

@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.Icon
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -58,7 +59,9 @@ class ThreadNotificationCoordinator(
       var shown = 0
       // What the IDE had before the badge went on, put back when it comes off
       var plain: Icon? = null
-      T3.get().client.threads.collect { threads ->
+      // Live lists only: a cached one would baseline the IDE's last session, and every thread
+      // waiting by now would look new once the server's list replaces it. Badge freezes too.
+      T3.get().liveThreads.filterNotNull().collect { threads ->
         val (next: ThreadNotifications, changes: ThreadNotificationChanges) =
           notifications.next(threads)
         notifications = next

@@ -1,6 +1,7 @@
 package io.github.xxfast.t3code.plugin.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,11 +10,13 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.xxfast.t3code.protocol.ConnectionState
+import java.time.Instant
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.DefaultButton
 import org.jetbrains.jewel.ui.component.Link
@@ -22,7 +25,8 @@ import org.jetbrains.jewel.ui.component.TextField
 
 /**
  * Connection state in the tool window header: disconnected, pairing, connected, auth error,
- * with Reconnect and an inline pairing input. Callbacks are fire-and-forget.
+ * with Reconnect and an inline pairing input. Callbacks are fire-and-forget. [staleSince] adds
+ * a line under it while the list is the last snapshot rather than the server's.
  */
 @Composable
 fun ConnectionBanner(
@@ -30,9 +34,37 @@ fun ConnectionBanner(
   onReconnect: () -> Unit,
   onPair: (String) -> Unit,
   onOpenSettings: () -> Unit,
+  staleSince: Instant? = null,
+) {
+  Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
+    State(connection, onReconnect, onPair, onOpenSettings)
+    if (staleSince != null) {
+      val now: Instant by rememberNow(30_000)
+      Text(
+        text = staleSnapshotLine(staleSince, now),
+        color = JewelTheme.globalColors.text.info,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+    }
+  }
+}
+
+/** "Showing the last snapshot from 5m ago.", or "from just now". */
+fun staleSnapshotLine(since: Instant, now: Instant): String {
+  val age: String = relativeTime(since, now)
+  return "Showing the last snapshot from ${if (age == "just now") age else "$age ago"}."
+}
+
+@Composable
+private fun State(
+  connection: ConnectionState,
+  onReconnect: () -> Unit,
+  onPair: (String) -> Unit,
+  onOpenSettings: () -> Unit,
 ) {
   Row(
-    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+    modifier = Modifier.fillMaxWidth(),
     horizontalArrangement = Arrangement.spacedBy(8.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {

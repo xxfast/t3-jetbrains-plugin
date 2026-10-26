@@ -54,6 +54,7 @@ import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.generated.SearchThreadsInput
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.T3Client
+import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.JComponent
 import kotlinx.coroutines.flow.Flow
@@ -88,6 +89,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
       val connection by client.connection.collectAsState()
       val projects by client.projects.collectAsState()
       val threads by client.threads.collectAsState()
+      val stale: Instant? by t3.stale.collectAsState()
       val selected: String? by selection.selected.collectAsState()
       val favicons by icons.favicons.collectAsState()
       LaunchedEffect(projects) { icons.ensure(projects) }
@@ -107,6 +109,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
             onReconnect = t3::reconnect,
             onPair = t3::pair,
             onOpenSettings = { T3.openSettings(project) },
+            staleSince = stale,
           )
         }
       }
@@ -212,6 +215,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         messages = messages,
         onOrderedThreadIds = navigation::order,
         jumpLabels = jumpLabels,
+        stale = stale != null,
       )
     }
     // Escape drops the multi-selection, as upstream's `_chat.tsx` keydown does. An action on the
