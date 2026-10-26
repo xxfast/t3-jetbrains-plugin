@@ -273,32 +273,41 @@ sealed interface ComposerPromptDecoration {
   val end: Int
 }
 
-/** What a chip's leading icon shows. */
-enum class ComposerPromptChipIcon {
-  SKILL,
-  FILE,
-  FOLDER,
-  IMAGE,
-  THREAD,
-  PULL_REQUEST,
-  PULL_REQUEST_MERGED,
-  REVIEW_COMMENT,
-  UNAVAILABLE,
-}
-
 /**
  * A reference drawn as a chip: its source range in the draft, upstream's chip [kind] (`skill`,
  * `mention` or the context kind), the [label] and, for images and files, the size in [detail].
- * It edits as one unit, see [atomicComposerPromptEdit].
+ * [icon], [iconPath], [accent] and [state] are [ContextChip]'s, so the prompt's chip looks like
+ * the one the message draws. It edits as one unit, see [atomicComposerPromptEdit].
  */
 data class ComposerPromptChip(
   override val start: Int,
   override val end: Int,
   val kind: String,
   val label: String,
-  val icon: ComposerPromptChipIcon,
+  val icon: ContextChipIcon,
   val detail: String? = null,
+  val iconPath: String? = null,
+  val accent: ContextChipKind = composerPromptChipAccent(kind, icon),
+  val state: ContextChipState = when (icon) {
+    ContextChipIcon.UNAVAILABLE -> ContextChipState.UNRESOLVED
+    else -> ContextChipState.NORMAL
+  },
 ) : ComposerPromptDecoration
+
+/** The `ContextChipKind` the node view for a chip of [kind] gives it; unresolved is neutral. */
+fun composerPromptChipAccent(kind: String, icon: ContextChipIcon): ContextChipKind {
+  if (icon == ContextChipIcon.UNAVAILABLE) return ContextChipKind.NEUTRAL
+  return when (kind) {
+    "skill" -> ContextChipKind.SKILL
+    "mention" -> ContextChipKind.MENTION
+    "image" -> ContextChipKind.IMAGE
+    "file" -> ContextChipKind.FILE
+    "thread" -> ContextChipKind.THREAD
+    "terminal" -> ContextChipKind.TERMINAL
+    "review-comment" -> ContextChipKind.REVIEW_COMMENT
+    else -> ContextChipKind.NEUTRAL
+  }
+}
 
 /**
  * The chips in [text]: [tokens] (from [collectComposerInlineTokens]) through
@@ -326,7 +335,7 @@ private fun inlineChip(
   skills: List<ServerProviderSkill>,
 ): ComposerPromptChip? = when (token.type) {
   ComposerInlineTokenType.SKILL -> composerSkillMeta(skills, token.value)?.let { meta ->
-    ComposerPromptChip(token.start, token.end, "skill", meta.label, ComposerPromptChipIcon.SKILL)
+    ComposerPromptChip(token.start, token.end, "skill", meta.label, ContextChipIcon.SKILL)
   }
 
   ComposerInlineTokenType.MENTION -> ComposerPromptChip(
@@ -335,11 +344,8 @@ private fun inlineChip(
     kind = "mention",
     label = basenameOfPath(token.value).ifEmpty { token.value },
     // Upstream's `FileTagChipContent` asks the workspace; a trailing `/` is all the text says
-    icon = if (token.value.endsWith('/')) {
-      ComposerPromptChipIcon.FOLDER
-    } else {
-      ComposerPromptChipIcon.FILE
-    },
+    icon = if (token.value.endsWith('/')) ContextChipIcon.FOLDER else ContextChipIcon.FILE,
+    iconPath = token.value,
   )
 }
 
@@ -348,44 +354,75 @@ private fun contextReferenceChip(
   reference: ComposerContextReferenceOccurrence,
   records: Map<String, ComposerDraftContextRecord>,
 ): ComposerPromptChip {
-  fun chip(label: String, icon: ComposerPromptChipIcon, detail: String? = null) =
-    ComposerPromptChip(reference.start, reference.end, reference.kind, label, icon, detail)
+  fun chip(
+    label: String,
+    icon: ContextChipIcon,
+    detail: String? = null,
+    iconPath: String? = null,
+    accent: ContextChipKind = composerPromptChipAccent(reference.kind, icon),
+    state: ContextChipState = ContextChipState.NORMAL,
+  ) = ComposerPromptChip(
+    start = reference.start,
+    end = reference.end,
+    kind = reference.kind,
+    label = label,
+    icon = icon,
+    detail = detail,
+    iconPath = iconPath,
+    accent = accent,
+    state = state,
+  )
 
   val record: ComposerDraftContextRecord? = records[reference.contextId]
   return when {
     reference.kind == "image" && record is ComposerDraftContextRecord.Image -> chip(
       label = record.attachment.name,
-      icon = ComposerPromptChipIcon.IMAGE,
+      icon = ContextChipIcon.IMAGE,
       detail = attachmentDetail(record.attachment),
     )
 
-    reference.kind == "file" && record is ComposerDraftContextRecord.File -> chip(
-      label = record.attachment.name,
-      // `contextChipPresentation`: a file that's an image looks like one
-      icon = if (isSupportedImageMimeType(record.attachment.mimeType)) {
-        ComposerPromptChipIcon.IMAGE
-      } else {
-        ComposerPromptChipIcon.FILE
-      },
-      detail = attachmentDetail(record.attachment),
-    )
+    reference.kind == "file" && record is ComposerDraftContextRecord.File -> {
+      // `contextChipPresentation`: a file that's an image looks like one, a video has its own
+      val image: Boolean = isSupportedImageMimeType(record.attachment.mimeType)
+      val video: Boolean = !image && record.attachment.mimeType.startsWith("video/")
+      chip(
+        label = record.attachment.name,
+        icon = when {
+          image -> ContextChipIcon.IMAGE
+          video -> ContextChipIcon.VIDEO
+          else -> ContextChipIcon.FILE
+        },
+        detail = attachmentDetail(record.attachment),
+        iconPath = record.attachment.name,
+        accent = when {
+          image -> ContextChipKind.IMAGE
+          video -> ContextChipKind.VIDEO
+          else -> ContextChipKind.FILE
+        },
+        // `FileChip`'s `error`
+        state = if (record.attachment.upload is Upload.Failed) {
+          ContextChipState.INVALID
+        } else {
+          ContextChipState.NORMAL
+        },
+      )
+    }
 
     reference.kind == "review-comment" && record is ComposerDraftContextRecord.ReviewComment -> {
-      val comment: ReviewCommentContext = record.comment
-      val pullRequest: Boolean = isPullRequestSummaryContext(comment)
-      val icon: ComposerPromptChipIcon = when {
-        !pullRequest -> ComposerPromptChipIcon.REVIEW_COMMENT
-        comment.pullRequest?.state == "merged" -> ComposerPromptChipIcon.PULL_REQUEST_MERGED
-        else -> ComposerPromptChipIcon.PULL_REQUEST
-      }
-      chip(reviewCommentContextLabel(comment), icon)
+      // The same chip a message draws, a pull request's in its state
+      val presented: MessageChip = reviewCommentChip(record.comment)
+      chip(presented.label, presented.icon, accent = presented.kind)
     }
 
     reference.kind == "thread" && record is ComposerDraftContextRecord.Thread ->
-      chip(record.record.title, ComposerPromptChipIcon.THREAD)
+      chip(record.record.title, ContextChipIcon.THREAD)
 
     // `UnresolvedContextChip`
-    else -> chip(reference.label, ComposerPromptChipIcon.UNAVAILABLE)
+    else -> chip(
+      label = reference.label,
+      icon = ContextChipIcon.UNAVAILABLE,
+      state = ContextChipState.UNRESOLVED,
+    )
   }
 }
 

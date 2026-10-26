@@ -441,7 +441,7 @@ class ComposerRichTextLogicTest {
 
   @Test
   fun `no wrapping around chips or styled text`() {
-    val chip = ComposerPromptChip(4, 10, "mention", "a.kt", ComposerPromptChipIcon.FILE)
+    val chip = ComposerPromptChip(4, 10, "mention", "a.kt", ContextChipIcon.FILE)
     noSurround("say [a.kt](a.kt) x", TextRange(2, 6), listOf(chip))
     val styled: List<ComposerRichStyledRange> = parseComposerInlineMarkdown("a **b** c").styled
     assertNull(composerSurroundEdit("a **b** c", TextRange(0, 5), "(", emptyList(), styled))

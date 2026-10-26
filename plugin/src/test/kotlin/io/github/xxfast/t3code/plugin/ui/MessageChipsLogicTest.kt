@@ -31,12 +31,12 @@ class MessageChipsLogicTest {
           "path":"docs/ROADMAP.md"}""",
       ),
     )
-    assertEquals(MessageChipKind.MENTION, chip.kind)
+    assertEquals(ContextChipKind.MENTION, chip.kind)
     assertEquals("ROADMAP.md", chip.label)
-    assertEquals(MessageChipIcon.FILE, chip.icon)
+    assertEquals(ContextChipIcon.FILE, chip.icon)
     assertEquals("docs/ROADMAP.md", chip.iconPath)
     assertEquals(MessageChipAction.OpenFile("docs/ROADMAP.md"), chip.action)
-    assertFalse(chip.unresolved)
+    assertEquals(ContextChipState.NORMAL, chip.state)
   }
 
   @Test
@@ -47,16 +47,16 @@ class MessageChipsLogicTest {
       "src/",
       record("""{"kind":"mention","contextId":"m","label":"src/","path":"src/"}"""),
     )
-    assertEquals(MessageChipIcon.FOLDER, chip.icon)
+    assertEquals(ContextChipIcon.FOLDER, chip.icon)
   }
 
   @Test
   fun `a missing record is an unresolved chip with the link's label`() {
     val chip: MessageChip = messageContextChip("review-comment", "gone", "old selection", null)
-    assertTrue(chip.unresolved)
+    assertEquals(ContextChipState.UNRESOLVED, chip.state)
     assertEquals("old selection", chip.label)
-    assertEquals(MessageChipIcon.UNAVAILABLE, chip.icon)
-    assertEquals(MessageChipKind.NEUTRAL, chip.kind)
+    assertEquals(ContextChipIcon.UNAVAILABLE, chip.icon)
+    assertEquals(ContextChipKind.NEUTRAL, chip.kind)
   }
 
   @Test
@@ -67,7 +67,7 @@ class MessageChipsLogicTest {
       "x",
       record("""{"kind":"skill","contextId":"x","name":"x"}"""),
     )
-    assertTrue(chip.unresolved)
+    assertEquals(ContextChipState.UNRESOLVED, chip.state)
   }
 
   @Test
@@ -101,9 +101,9 @@ class MessageChipsLogicTest {
           "startIndex":24,"endIndex":24,"rangeLabel":"L25","text":"note","diff":"- x"}""",
       ),
     )
-    assertEquals(MessageChipKind.REVIEW_COMMENT, chip.kind)
+    assertEquals(ContextChipKind.REVIEW_COMMENT, chip.kind)
     assertEquals("ROADMAP.md L25", chip.label)
-    assertEquals(MessageChipIcon.REVIEW_COMMENT, chip.icon)
+    assertEquals(ContextChipIcon.REVIEW_COMMENT, chip.icon)
     assertNull(chip.action)
   }
 
@@ -121,12 +121,12 @@ class MessageChipsLogicTest {
           "headBranch":"a","baseBranch":"b","state":"$state","isDraft":$draft}}""",
       ),
     )
-    assertEquals(MessageChipKind.PR_MERGED, chip("merged").kind)
-    assertEquals(MessageChipIcon.PULL_REQUEST_MERGED, chip("merged").icon)
-    assertEquals(MessageChipKind.PR_OPEN, chip("open").kind)
-    assertEquals(MessageChipKind.PR_DRAFT, chip("open", draft = true).kind)
-    assertEquals(MessageChipIcon.PULL_REQUEST_DRAFT, chip("open", draft = true).icon)
-    assertEquals(MessageChipKind.PR_CLOSED, chip("closed").kind)
+    assertEquals(ContextChipKind.PR_MERGED, chip("merged").kind)
+    assertEquals(ContextChipIcon.PULL_REQUEST_MERGED, chip("merged").icon)
+    assertEquals(ContextChipKind.PR_OPEN, chip("open").kind)
+    assertEquals(ContextChipKind.PR_DRAFT, chip("open", draft = true).kind)
+    assertEquals(ContextChipIcon.PULL_REQUEST_DRAFT, chip("open", draft = true).icon)
+    assertEquals(ContextChipKind.PR_CLOSED, chip("closed").kind)
     assertEquals("#41", chip("merged").label)
     assertEquals(MessageChipAction.OpenUrl("https://github.com/x/y/pull/41"), chip("merged").action)
   }
@@ -142,9 +142,9 @@ class MessageChipsLogicTest {
           "sizeBytes":2048}""",
       ),
     )
-    assertEquals(MessageChipKind.IMAGE, chip.kind)
+    assertEquals(ContextChipKind.IMAGE, chip.kind)
     assertEquals("2 KB", chip.detail)
-    assertEquals(MessageChipIcon.IMAGE, chip.icon)
+    assertEquals(ContextChipIcon.IMAGE, chip.icon)
   }
 
   @Test
@@ -158,8 +158,8 @@ class MessageChipsLogicTest {
           "sizeBytes":1}""",
       ),
     )
-    assertEquals(MessageChipKind.VIDEO, chip.kind)
-    assertEquals(MessageChipIcon.VIDEO, chip.icon)
+    assertEquals(ContextChipKind.VIDEO, chip.kind)
+    assertEquals(ContextChipIcon.VIDEO, chip.icon)
   }
 
   @Test
@@ -173,7 +173,7 @@ class MessageChipsLogicTest {
           "environmentId":"env"}""",
       ),
     )
-    assertEquals(MessageChipKind.THREAD, chip.kind)
+    assertEquals(ContextChipKind.THREAD, chip.kind)
     assertEquals(MessageChipAction.OpenThread("thr_1"), chip.action)
   }
 

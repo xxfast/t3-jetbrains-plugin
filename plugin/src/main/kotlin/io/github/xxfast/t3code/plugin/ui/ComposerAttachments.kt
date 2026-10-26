@@ -86,11 +86,12 @@ class AttachmentActions(
  * as chips, above the text field. Images are upstream's composer tiles (`ChatComposer.tsx:6763`): a wrapping row
  * with `gap-2`, each `h-16 w-16 rounded-lg border` with the picture cropped to fill, a click to
  * see it whole, the upload's percentage along the bottom, a retry when it failed and a remove
- * button in the corner; videos join them as play tiles. The chips are like upstream's composer
- * context chips: a comment by its label (`Paths.kt L10 to L20`), a file by name and
- * `formatAttachmentSize` (its percentage while it uploads), the error colour when it failed
- * (click to retry), and a remove button on each. The selection is ours, a comment's chip marked
- * "selected". Then why the last attach was refused, or why Send waits.
+ * button in the corner; videos join them as play tiles. The chips are upstream's composer
+ * context chips, each a [ContextChip] with `ContextChipAction`'s remove: a comment by its label
+ * (`Paths.kt L10 to L20`) or a pull request in its state ([reviewCommentChip]), a file as
+ * `FileChip` by name and `formatAttachmentSize`, its percentage while it uploads, `invalid` with
+ * "upload failed" when it failed (click to retry). The selection is ours, a comment's chip
+ * marked "selected". Then why the last attach was refused, or why Send waits.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -119,15 +120,15 @@ fun ComposerChips(extras: DraftExtras, enabled: Boolean, actions: AttachmentActi
       modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
       horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-      if (selection != null) Chip(
-        label = selection.label,
+      if (selection != null) ReviewCommentContextChip(
+        comment = selection,
         detail = "selected",
         enabled = enabled,
         onRemove = { actions.onRemoveContext(selection.contextId) },
       )
       extras.comments.forEach { comment ->
-        Chip(
-          label = comment.label,
+        ReviewCommentContextChip(
+          comment = comment,
           detail = null,
           enabled = enabled,
           onRemove = { actions.onRemoveContext(comment.contextId) },
@@ -136,19 +137,24 @@ fun ComposerChips(extras: DraftExtras, enabled: Boolean, actions: AttachmentActi
       files.forEach { attachment ->
         val failed: Upload.Failed? = attachment.upload as? Upload.Failed
         val uploading: Upload.Uploading? = attachment.upload as? Upload.Uploading
-        Chip(
-          label = attachment.name,
-          // `ChatComposer.tsx:7052`: the percentage while it uploads, else the size
-          detail = failed?.reason
-            ?: uploading?.let { formatAttachmentUploadProgress(it.progress) }
-            ?: formatAttachmentSize(attachment.sizeBytes),
-          enabled = enabled,
-          failed = failed != null,
-          onClick = if (failed != null) {
-            { actions.onRetryAttachment(attachment.id) }
-          } else {
-            null
+        val size: String = formatAttachmentSize(attachment.sizeBytes)
+        ContextChip(
+          kind = ContextChipKind.FILE,
+          label = middleTruncateAttachmentName(attachment.name),
+          icon = ContextChipIcon.FILE,
+          iconPath = attachment.name,
+          // `FileContextChip`: the size, then `uploadStatusSuffix`
+          detail = when {
+            failed != null -> "$size upload failed"
+            uploading != null -> "$size ${formatAttachmentUploadProgress(uploading.progress)}"
+            else -> size
           },
+          state = if (failed != null) ContextChipState.INVALID else ContextChipState.NORMAL,
+          // `attachmentTooltip`
+          tooltip = listOfNotNull(attachment.name, size, failed?.let { "\n${it.reason}" })
+            .joinToString("\n"),
+          enabled = enabled,
+          onClick = failed?.let { { actions.onRetryAttachment(attachment.id) } },
           onRemove = { actions.onRemoveAttachment(attachment.id) },
         )
       }
@@ -280,45 +286,24 @@ private fun AttachmentTile(
   }
 }
 
+/** A review comment or pull request in the draft, as [reviewCommentChip] draws it in a message. */
 @Composable
-private fun Chip(
-  label: String,
+private fun ReviewCommentContextChip(
+  comment: ReviewCommentContext,
   detail: String?,
   enabled: Boolean,
   onRemove: () -> Unit,
-  failed: Boolean = false,
-  onClick: (() -> Unit)? = null,
 ) {
-  val outline: Color = if (failed) {
-    JewelTheme.globalColors.text.error
-  } else {
-    JewelTheme.globalColors.borders.normal
-  }
-  val clickable: Modifier =
-    if (onClick != null && enabled) Modifier.clickable(onClick = onClick) else Modifier
-  Row(
-    modifier = Modifier
-      .border(1.dp, outline, RoundedCornerShape(8.dp))
-      .then(clickable)
-      .padding(start = 8.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
-    horizontalArrangement = Arrangement.spacedBy(6.dp),
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    Text(
-      text = label,
-      style = JewelTheme.typography.small,
-      color = if (failed) JewelTheme.globalColors.text.error else Color.Unspecified,
-    )
-    if (detail != null) {
-      Text(detail, style = JewelTheme.typography.small, color = JewelTheme.globalColors.text.info)
-    }
-    IconActionButton(
-      key = AllIconsKeys.General.Close,
-      contentDescription = "Remove",
-      onClick = onRemove,
-      enabled = enabled,
-    )
-  }
+  val chip: MessageChip = remember(comment) { reviewCommentChip(comment) }
+  ContextChip(
+    kind = chip.kind,
+    label = chip.label,
+    icon = chip.icon,
+    detail = detail,
+    tooltip = chip.tooltip,
+    enabled = enabled,
+    onRemove = onRemove,
+  )
 }
 
 /**

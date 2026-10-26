@@ -63,7 +63,6 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
@@ -367,8 +366,9 @@ private fun ComposerPromptEditor(
   val layout: MutableState<(() -> TextLayoutResult?)?> = remember { mutableStateOf(null) }
   val decorations: ComposerPromptDecorations = remember(draft) { ComposerPromptDecorations() }
   val chipStyle = ComposerPromptChipStyle(
-    fill = JewelTheme.globalColors.text.normal.copy(alpha = 0.06f),
-    outline = JewelTheme.globalColors.borders.normal,
+    foreground = JewelTheme.globalColors.text.normal,
+    borders = JewelTheme.globalColors.borders.normal,
+    error = JewelTheme.globalColors.text.error,
   )
   val blockStyle = ComposerPromptBlockStyle(
     quoteBar = JewelTheme.globalColors.borders.normal,
@@ -379,8 +379,6 @@ private fun ComposerPromptEditor(
     codeBackground = JewelTheme.globalColors.text.normal.copy(alpha = 0.04f),
     codeOutline = JewelTheme.globalColors.borders.normal.copy(alpha = 0.6f),
   )
-  val density: Density = LocalDensity.current
-  val iconRoom: TextUnit = with(density) { composerPromptChipIconRoom(chipStyle).toSp() }
   val detailColor: Color = JewelTheme.globalColors.text.info
   val textStyles: Map<ComposerPromptStyleKind, SpanStyle> = composerPromptTextStyles(blockStyle)
   val records: Map<String, ComposerDraftContextRecord> =
@@ -389,13 +387,13 @@ private fun ComposerPromptEditor(
   SideEffect {
     decorations.skills = skills
     decorations.records = records
-    decorations.iconRoom = iconRoom
+    decorations.iconRoom = COMPOSER_PROMPT_CHIP_ICON_ROOM
     decorations.detailColor = detailColor
     decorations.richText = richText
     decorations.textStyles = textStyles
     decorations.highlighter = highlighter
   }
-  val painters: Map<ComposerPromptChipIcon, Painter> = rememberComposerPromptChipPainters()
+  val painters: (ContextChipIcon, String?) -> Painter? = rememberContextChipPainters()
   val scroll: ScrollState = rememberScrollState()
   val contentPadding: PaddingValues = JewelTheme.textAreaStyle.metrics.contentPadding
   // `onVisibleSelectionChange`: typing or moving the caret unfolds, and so does a click
