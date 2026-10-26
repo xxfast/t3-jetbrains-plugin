@@ -3,4 +3,5 @@ plugins {
   alias(libs.plugins.kotlin.compose) apply false
   alias(libs.plugins.kotlin.serialization) apply false
   alias(libs.plugins.intellij.platform) apply false
+  alias(libs.plugins.maven.publish) apply false
 }

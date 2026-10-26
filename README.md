@@ -51,7 +51,7 @@ client is a supported shape, not a hack.
 
 | Module | What |
 | --- | --- |
-| `:protocol` | Plain Kotlin client for the T3 server. No IDE dependency. Reusable for a CLI or anything else. |
+| `:protocol` | Plain Kotlin client for the T3 server. No IDE dependency. Reusable for a CLI or anything else, see [Protocol](#protocol). |
 | `:plugin` | The JetBrains plugin. Jewel UI on top of `:protocol`. |
 | `:cli` | A tiny command-line client on `:protocol` alone, see [CLI](#cli). |
 | `contracts/` | Pinned upstream version and the schema generator. |
@@ -64,6 +64,15 @@ Targets IntelliJ Platform 2025.3 and later, so IDEA, Android Studio, WebStorm, R
 `:cli` pairs, lists threads and tails one using nothing but `:protocol`, a proof that the client
 holds up without an IDE. Run it with `./gradlew :cli:run --args="threads"`, more in
 [`cli/README.md`](cli/README.md).
+
+## Protocol
+
+`:protocol` publishes to Maven Central as `io.github.xxfast:t3code-protocol`, same version as the
+plugin, JDK 21 bytecode. Its POM declares no dependencies, they're `compileOnly` so the plugin
+picks where they come from. Bring your own `kotlin-stdlib`, `kotlinx-coroutines-core` and
+`kotlinx-serialization-json` (versions in `gradle/libs.versions.toml`), as
+[`:cli`](cli/build.gradle.kts) does. `generated/` is generated from upstream, see
+[`contracts/`](contracts/README.md).
 
 ## Roadmap
 
