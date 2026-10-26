@@ -255,6 +255,29 @@ class SidebarDragLogicTest {
     activeKeysById = mapOf("a1" to "f", "a2" to "t"),
     supportsSettlement = settlement,
   )
+
+  @Test
+  fun `only the list's sides make a context drag`() {
+    assertTrue(pointerOutsideThreadList(x = -1f, left = 0f, right = 300f))
+    assertTrue(pointerOutsideThreadList(x = 301f, left = 0f, right = 300f))
+    assertEquals(false, pointerOutsideThreadList(x = 0f, left = 0f, right = 300f))
+    assertEquals(false, pointerOutsideThreadList(x = 300f, left = 0f, right = 300f))
+  }
+
+  @Test
+  fun `a context drag carries the selection only when the row is in it`() {
+    val selected: Set<String> = linkedSetOf("b", "a")
+    assertEquals(listOf("b", "a"), contextDragThreads("a", selected))
+    assertEquals(listOf("c"), contextDragThreads("c", selected))
+    assertEquals(emptyList(), contextDragThreads(null, selected))
+  }
+
+  @Test
+  fun `the ghost falls back to Thread`() {
+    assertEquals("Fix login", threadContextDragTitle("  Fix login "))
+    assertEquals("Thread", threadContextDragTitle("   "))
+    assertEquals("Thread", threadContextDragTitle(null))
+  }
 }
 
 private const val AT: String = "2026-10-27T00:00:00Z"

@@ -144,6 +144,13 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
             null
           },
           reorderActive = catalog.supports(THREAD_ACTIVE_REORDER),
+          // `handleThreadFileDrop`: the thread opens and the files join its draft. Drafts live
+          // in the controller by thread id, composer or not, so upstream's pending drop store
+          // (`sidebarPendingFileDropStore.ts`) has nothing to carry them across here.
+          fileDrop = { threadId, files ->
+            opener.openThread(threadId)
+            controller.attachFiles(threadId, files, withFolders = false)
+          },
         )
       }
       val terminals: Map<String, List<String>> by RunningTerminals.get().byThread.collectAsState()

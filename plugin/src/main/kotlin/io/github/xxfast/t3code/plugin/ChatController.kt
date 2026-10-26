@@ -332,12 +332,13 @@ class ChatController(private val project: Project, private val scope: CoroutineS
   /**
    * Checks then reads [paths] off the EDT and attaches each, see [attach]. Folders among them
    * become file links in the prompt instead, see [addFolders], the split upstream's
-   * `splitTransferredFiles` makes for a drop or a paste.
+   * `splitTransferredFiles` makes for a drop or a paste. Without [withFolders] they're left out,
+   * as a drop on a Sidebar row does (`addFolders: () => {}`, SidebarThreadRow.tsx).
    */
-  fun attachFiles(threadId: String, paths: List<Path>) {
+  fun attachFiles(threadId: String, paths: List<Path>, withFolders: Boolean = true) {
     scope.launch(Dispatchers.IO) {
       val (folders: List<Path>, files: List<Path>) = paths.partition { Files.isDirectory(it) }
-      if (folders.isNotEmpty()) addFolders(threadId, folders)
+      if (folders.isNotEmpty() && withFolders) addFolders(threadId, folders)
       for (path in files) attachFile(threadId, path)
     }
   }

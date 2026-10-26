@@ -159,6 +159,28 @@ fun ChatComposer(
     shortcuts.onEditQueued = onEditQueued
     shortcuts.isCaretAtStart = { draft.selection == TextRange(0) }
   }
+  // `useThreadContextDrop`, ChatComposer.tsx: Sidebar rows dropped here join the draft as
+  // context, as `addComposerDraftThreadContexts` puts them, the references at the caret
+  // (`insertContextReferencesAtCaret`). Upstream's answer-a-question branch isn't ported, a
+  // request takes no drop.
+  var contextOver: Boolean by remember { mutableStateOf(false) }
+  fun dropThreads(threadIds: List<String>) {
+    val environmentId: String = mentions.environmentId ?: return
+    val records: List<ThreadContextRecord> =
+      droppedThreadContextRecords(threadIds, mentions.threads, environmentId, extras.threads)
+    if (records.isEmpty()) return
+    val text: String = draft.text.toString()
+    val cursor: Int = draft.selection.end.coerceIn(0, text.length)
+    val references: String = records.joinToString(" ") { threadContextReference(it) }
+    val inserted: String = textForCaretInsertion(text, cursor, "$references ")
+    val end: Int = extendReplacementRangeForTrailingSpace(text, cursor, inserted)
+    draft.edit {
+      replace(cursor, end, inserted)
+      selection = TextRange(cursor + inserted.length)
+    }
+    records.forEach(mentions.onThreadContext)
+  }
+
   val actions: @Composable () -> Unit = {
     ComposerActions(
       state = state,
@@ -217,7 +239,17 @@ fun ChatComposer(
     // upstream rings the canvas (`WorkspaceFileDropOverlay`), which looks like the conversation
     // takes the file. The box is where it lands, so the box gets the ring and the pill.
     Box {
-    ComposerSurface(modifier = Modifier.fillMaxWidth(), highlight = dropActive) {
+    ComposerSurface(
+      modifier = Modifier
+        .fillMaxWidth()
+        .threadContextDropTarget(
+          enabled = state.enabled && pending == null,
+          onOver = { over -> contextOver = over },
+          onDrop = ::dropThreads,
+        ),
+      highlight = dropActive,
+      contextOver = contextOver,
+    ) {
       when (pending) {
         null -> ComposerBody(
           motion = motion,

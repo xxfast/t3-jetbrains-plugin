@@ -63,6 +63,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -87,6 +88,7 @@ import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.AnnotatedString
@@ -107,7 +109,9 @@ import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.ThreadSearchMatch
 import io.github.xxfast.t3code.protocol.pinned
+import java.awt.Point
 import java.awt.event.MouseEvent
+import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
 import kotlin.math.abs
@@ -271,6 +275,7 @@ fun Sidebar(
           active = active,
           onHighlight = { index -> highlight = SearchHighlight(orderKey, index) },
           onSelect = select,
+          onFileDrop = actions.fileDrop,
         )
 
         searching ->
@@ -548,10 +553,12 @@ private fun Sections(
     drag.target = if (valid) target?.section else null
   }
 
-  // Upstream's `sortableDisabled`: no drag without the server's pin orders, or while renaming
+  // Upstream's `sortableDisabled`: no drag without the server's pin orders, or while renaming.
+  // The same drag carries the row out as context once it leaves the list's sides.
   fun rowDrag(thread: Thread, section: SidebarSection): RowDrag? {
     val drop: (String, SidebarThreadDropPlan) -> Unit = actions.drop ?: return null
     if (thread.id == renaming) return null
+    val carried: List<String> = contextDragThreads(thread.id, picked)
     return RowDrag(
       start = { y ->
         val top: Float = drag.bounds[thread.id]?.top ?: y
@@ -562,14 +569,32 @@ private fun Sections(
         drag.pointer = y
         aim()
       },
-      move = { y ->
-        drag.pointer = y
-        aim()
+      // `moveThreadContextDrag`: outside the list the row stops arranging and the ghost follows
+      // the pointer, back inside it arranges again
+      move = { at, screen ->
+        drag.pointer = at.y
+        if (screen != null && pointerOutsideThreadList(at.x, drag.left, drag.right)) {
+          drag.context = true
+          drag.plan = SidebarThreadDropPlan.None
+          drag.over = null
+          drag.target = null
+          val title: String = threadContextDragTitle(rowsById[thread.id]?.title)
+          moveThreadContextDrag(screen, title, carried.size)
+        } else {
+          drag.context = false
+          endThreadContextDrag()
+          aim()
+        }
       },
-      end = { dropped ->
+      // `dropThreadContextDrag`: let go outside the list, the threads go to the composer under
+      // the pointer, if any, and the list never also sorts
+      end = { dropped, screen ->
         val plan: SidebarThreadDropPlan = drag.plan
+        val context: Boolean = drag.context
         drag.reset()
-        if (dropped) drop(thread.id, plan)
+        if (dropped && context && screen != null) dropThreadContext(screen, carried)
+        endThreadContextDrag()
+        if (dropped && !context) drop(thread.id, plan)
       },
     )
   }
@@ -580,7 +605,7 @@ private fun Sections(
   // lands by it, and lifts the dragged row off the list to follow the pointer
   @Composable
   fun Slot(id: String, content: @Composable () -> Unit) {
-    val lifted: Boolean = drag.key == id
+    val lifted: Boolean = drag.key == id && !drag.context
     Box(
       Modifier
         .onGloballyPositioned { coordinates ->
@@ -618,8 +643,9 @@ private fun Sections(
   }
 
   SideEffect { drag.bounds.keys.retainAll(list.map(::sidebarListItemId).toSet()) }
+  // Out as context the row isn't lifted, as upstream drops the sortable's transform
   val verb: SidebarDropVerb? =
-    if (dragging) resolveSidebarDropVerb(drag.from, drag.target) else null
+    if (dragging && !drag.context) resolveSidebarDropVerb(drag.from, drag.target) else null
   fun motionKey(row: SidebarListItem.Row): String = when (row.section) {
     SidebarSection.Pinned, SidebarSection.Active -> "inbox:${row.key}"
     SidebarSection.Snoozed -> "${Shelf.Snoozed.name}:${row.key}"
@@ -628,7 +654,12 @@ private fun Sections(
 
   // Upstream's first shelf header has mt-auto: it sits at the bottom until the list overflows,
   // then scrolls with everything else. A min-height column with a filling gap is the same thing.
-  BoxWithConstraints(Modifier.fillMaxSize().focusRequester(focus).focusable()) {
+  val bounds: Modifier = Modifier.onGloballyPositioned { coordinates ->
+    val list: Rect = coordinates.boundsInRoot()
+    drag.left = list.left
+    drag.right = list.right
+  }
+  BoxWithConstraints(Modifier.fillMaxSize().then(bounds).focusRequester(focus).focusable()) {
     val viewport: Dp = maxHeight
     VerticallyScrollableContainer(scrollState = scroll, modifier = Modifier.fillMaxSize()) {
       val items: List<MotionItem> = buildList {
@@ -642,7 +673,7 @@ private fun Sections(
           when (item) {
             is SidebarListItem.Row -> {
               val thread: Thread = rowsById[item.key] ?: continue
-              val lifted: Boolean = drag.key == thread.id
+              val lifted: Boolean = drag.key == thread.id && !drag.context
               val dropVerb: SidebarDropVerb? = if (lifted) verb else null
               val rowDrag: RowDrag? = rowDrag(thread, item.section)
               add(
@@ -781,7 +812,8 @@ private fun Sections(
         }
       }
       val lifted: String? = list
-        .firstOrNull { it is SidebarListItem.Row && it.key == drag.key }
+        .takeUnless { drag.context }
+        ?.firstOrNull { it is SidebarListItem.Row && it.key == drag.key }
         ?.let { motionKey(it as SidebarListItem.Row) }
       // The container scrolls its content itself; a second verticalScroll here nests two
       // scrollables and the inner one gets infinite height
@@ -804,20 +836,28 @@ private class SidebarDrag {
   var target: SidebarSection? by mutableStateOf(null) // the section a drop lands in
   var plan: SidebarThreadDropPlan = SidebarThreadDropPlan.None
   val bounds: MutableMap<String, Span> = mutableMapOf() // by list item id
+  // Out past the list's sides as context, upstream's `contextDrag`
+  var context: Boolean by mutableStateOf(false)
+  var left: Float = 0f // the list's sides in the root
+  var right: Float = 0f
 
   fun reset() {
     key = null
+    context = false
     over = null
     target = null
     plan = SidebarThreadDropPlan.None
   }
 }
 
-/** What a row reports while it's dragged: the pointer's y in the root. */
+/**
+ * What a row reports while it's dragged: the pointer in the root, and on screen while there's
+ * an AWT event to say, which is where a drag out of the list goes looking for a composer.
+ */
 private class RowDrag(
   val start: (y: Float) -> Unit,
-  val move: (y: Float) -> Unit,
-  val end: (dropped: Boolean) -> Unit,
+  val move: (at: Offset, screen: Point?) -> Unit,
+  val end: (dropped: Boolean, screen: Point?) -> Unit,
 )
 
 /** Where a row was laid out, to turn the pointer into root coordinates. */
@@ -1021,6 +1061,7 @@ private fun InboxCard(
     restAlpha = if (recede && status == ThreadStatus.Working) 0.7f else 1f,
     modifier = Modifier.padding(vertical = 2.dp), // the list item's `py-0.5`
     rowDrag = rowDrag,
+    onFileDrop = actions.fileDrop?.let { drop -> { files -> drop(thread.id, files) } },
   ) { hovered ->
     Column(Modifier.height(CARD_HEIGHT).padding(horizontal = 10.dp, vertical = 8.dp)) {
       Row(
@@ -1303,6 +1344,7 @@ private fun SlimRow(
     picked = picked,
     onPick = onClick,
     rowDrag = rowDrag,
+    onFileDrop = actions.fileDrop?.let { drop -> { files -> drop(thread.id, files) } },
   ) { pointing ->
     val hovered: Boolean = pointing && !lifted
     val lit: Boolean = selected || picked || hovered
@@ -1458,6 +1500,7 @@ private fun SearchResults(
   active: Int,
   onHighlight: (index: Int) -> Unit,
   onSelect: (Thread) -> Unit,
+  onFileDrop: ((threadId: String, files: List<Path>) -> Unit)? = null,
 ) {
   val byId: Map<String, Project> = remember(projects) { projects.associateBy { it.id } }
   val now: Instant by rememberNow(30_000)
@@ -1480,6 +1523,7 @@ private fun SearchResults(
             now = now,
             onHighlight = { onHighlight(index) },
             onSelect = { onSelect(thread) },
+            onFileDrop = onFileDrop?.let { drop -> { files -> drop(thread.id, files) } },
           )
         }
       }
@@ -1507,6 +1551,7 @@ private fun SearchResultRow(
   now: Instant,
   onHighlight: () -> Unit,
   onSelect: () -> Unit,
+  onFileDrop: ((List<Path>) -> Unit)? = null,
 ) {
   val requester: BringIntoViewRequester = remember { BringIntoViewRequester() }
   LaunchedEffect(highlighted) { if (highlighted) requester.bringIntoView() }
@@ -1514,6 +1559,7 @@ private fun SearchResultRow(
     selected = highlighted || open,
     onClick = onSelect,
     modifier = Modifier.bringIntoViewRequester(requester),
+    onFileDrop = onFileDrop,
   ) { hovered ->
     LaunchedEffect(hovered) { if (hovered) onHighlight() }
     val receded: Boolean = settled && !highlighted && !open && !hovered
@@ -1605,7 +1651,8 @@ private fun indigo(): Color = if (JewelTheme.isDark) Color(0xFFA5B4FC) else Colo
  * focus ring. With [onPick] a Cmd or Ctrl click, or a Shift click, picks instead of opening, as
  * `handleThreadClick`. With [rowDrag] a primary press that moves drags it, as upstream's
  * sortable rows start on movement rather than a long press; a press that doesn't move stays a
- * click.
+ * click. With [onFileDrop] files dropped from outside land on it, ringed while they hover, as
+ * `SidebarThreadRow`'s `makeWorkspaceFileDropHandlers`.
  */
 @Composable
 private fun Selectable(
@@ -1619,6 +1666,7 @@ private fun Selectable(
   restAlpha: Float = 1f, // faded to fully opaque on hover
   modifier: Modifier = Modifier,
   rowDrag: RowDrag? = null,
+  onFileDrop: ((List<Path>) -> Unit)? = null,
   content: @Composable (hovered: Boolean) -> Unit,
 ) {
   val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
@@ -1637,11 +1685,13 @@ private fun Selectable(
   // Upstream's `isTrailingDoubleClick` (Sidebar.tsx:3204): the second click doesn't open again,
   // or the opened tab takes focus from the rename field it starts
   var trailing: Boolean by remember { mutableStateOf(false) }
-  // Upstream's `bg-sidebar-row-selected`, under the open row's `bg-sidebar-row-active`
+  var fileOver: Boolean by remember { mutableStateOf(false) }
+  // Upstream's `bg-sidebar-row-selected`, under the open row's `bg-sidebar-row-active`. A file
+  // over it lights it as a hover does.
   val fill: Color = when {
     selected -> accent().copy(alpha = 0.2f)
     picked -> JBUI.CurrentTheme.List.Selection.background(false).toComposeColor()
-    hovered -> subtle(0.08f)
+    hovered || fileOver -> subtle(0.08f)
     else -> rest
   }
   val alpha: Float by animateFloatAsState(if (hovered) 1f else restAlpha, Transition)
@@ -1654,6 +1704,20 @@ private fun Selectable(
       .background(fill)
       .then(
         if (focused) Modifier.border(2.dp, accent(), RoundedCornerShape(6.dp)) else Modifier,
+      )
+      // `isFileDragOver`'s `ring-1 ring-inset ring-primary/70`
+      .then(
+        if (fileOver && !focused) {
+          Modifier.border(1.dp, accent().copy(alpha = 0.7f), RoundedCornerShape(6.dp))
+        } else {
+          Modifier
+        },
+      )
+      .fileDropTarget(
+        enabled = onFileDrop != null,
+        onFiles = { files -> onFileDrop?.invoke(files) },
+        onRefused = {}, // upstream's row drop says nothing either
+        onDragActive = { active -> fileOver = active },
       )
       .onGloballyPositioned { coordinates -> anchor.coordinates = coordinates }
       // Ahead of clickable, so a menu gesture never also opens the thread. The platform says
@@ -1693,23 +1757,30 @@ private fun Selectable(
         awaitEachGesture {
           val down: PointerInputChange = awaitFirstDown(requireUnconsumed = false)
           if (dragging == null || !currentEvent.buttons.isPrimaryPressed) return@awaitEachGesture
-          fun rootY(change: PointerInputChange): Float? =
-            anchor.coordinates?.takeIf { it.isAttached }?.localToRoot(change.position)?.y
-          val pressed: Float = rootY(down) ?: return@awaitEachGesture
+          fun rootAt(change: PointerInputChange): Offset? =
+            anchor.coordinates?.takeIf { it.isAttached }?.localToRoot(change.position)
+          // Where the pointer is on screen, for a drag that leaves the list for a composer.
+          // Compose's synthetic moves carry no AWT event: one follows every relayout while the
+          // button is held, and a row leaving the list relayouts. The pointer hasn't moved for
+          // those, so the last real point stands; a null here took the drag back into the list.
+          var last: Point? = null
+          fun screen(): Point? =
+            currentEvent.awtEventOrNull?.locationOnScreen?.also { last = it } ?: last
+          val pressed: Float = rootAt(down)?.y ?: return@awaitEachGesture
           val moved: PointerInputChange = awaitTouchSlopOrCancellation(down.id) { change, _ ->
             change.consume()
           } ?: return@awaitEachGesture
           dragging?.start?.invoke(pressed) ?: return@awaitEachGesture
-          rootY(moved)?.let { y -> dragging?.move?.invoke(y) }
+          rootAt(moved)?.let { at -> dragging?.move?.invoke(at, screen()) }
           var dropped = false
           try {
             dropped = drag(moved.id) { change ->
               change.consume()
-              rootY(change)?.let { y -> dragging?.move?.invoke(y) }
+              rootAt(change)?.let { at -> dragging?.move?.invoke(at, screen()) }
             }
           } finally {
             // Ends on a cancelled gesture too, or the row would stay lifted
-            dragging?.end?.invoke(dropped)
+            dragging?.end?.invoke(dropped, if (dropped) screen() else null)
           }
         }
       }

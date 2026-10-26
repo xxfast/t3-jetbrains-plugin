@@ -283,3 +283,25 @@ fun dropsBelow(items: List<SidebarListItem>, activeKey: String, overId: String):
   if (overId == sidebarMarkerId(SidebarListMarker.PinnedHeader)) return true
   return activeIndex < overIndex
 }
+
+// Dragging a row out of the list, the context drag of Sidebar.tsx's pointer sensor options
+
+/**
+ * `pointerOutsideThreadList`: a drag past the list's left or right edge stops arranging rows and
+ * carries the thread out as context. Only the sides count, so dragging past the top or bottom
+ * still reorders. Asked on every move, so coming back in resumes the reorder.
+ */
+fun pointerOutsideThreadList(x: Float, left: Float, right: Float): Boolean = x < left || x > right
+
+/**
+ * `contextDragThreads`: the dragged row, or the whole multi-selection when the row is in it, in
+ * the order the rows were picked.
+ */
+fun contextDragThreads(key: String?, selected: Set<String>): List<String> = when (key) {
+  null -> emptyList()
+  in selected -> selected.toList()
+  else -> listOf(key)
+}
+
+/** The ghost's label, `moveThreadContextDrag`'s: the dragged row's trimmed title, or "Thread". */
+fun threadContextDragTitle(title: String?): String = title?.trim().orEmpty().ifEmpty { "Thread" }

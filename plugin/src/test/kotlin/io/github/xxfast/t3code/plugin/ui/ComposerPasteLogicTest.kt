@@ -49,6 +49,15 @@ class ComposerPasteLogicTest {
   }
 
   @Test
+  fun aCaretInsertionHasABoundaryBeforeIt() {
+    assertEquals("x", textForCaretInsertion("", 0, "x"))
+    assertEquals("x", textForCaretInsertion("hello", 0, "x"))
+    assertEquals(" x", textForCaretInsertion("hello", 5, "x"))
+    assertEquals(" x", textForCaretInsertion("hello world", 2, "x"))
+    assertEquals("x", textForCaretInsertion("hello world", 6, "x"))
+  }
+
+  @Test
   fun pastedTextFoldsFromThirtyTwoKibibytesByCharactersOrBytes() {
     val small: String = "a".repeat(PASTED_TEXT_ATTACHMENT_THRESHOLD_BYTES - 1)
     val large: String = "a".repeat(PASTED_TEXT_ATTACHMENT_THRESHOLD_BYTES)

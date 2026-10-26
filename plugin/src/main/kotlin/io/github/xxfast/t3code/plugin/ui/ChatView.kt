@@ -212,7 +212,8 @@ fun ChatView(
   )
 
   // Upstream's `bg-background` is the page, so the editor's background rather than the panel's
-  Column(Modifier.fillMaxSize().background(editorBackground())) {
+  // A Sidebar row dragged over it as context doesn't select or press anything on the way
+  Column(Modifier.fillMaxSize().background(editorBackground()).ignoresThreadContextDrag()) {
     ChatHeader(view, project, favicon, vcs, header)
     // A stream that fails after rendering keeps the thread and says so on top
     if (error != null && view != null) ErrorLine(error, onRetry)

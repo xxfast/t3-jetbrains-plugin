@@ -138,6 +138,24 @@ fun threadContextRecord(
 }
 
 /**
+ * What a Sidebar row dropped on the composer adds: `useThreadContextDrop`'s handler in
+ * ChatComposer.tsx, then the draft store's `addThreadContexts`. A record per thread the composer
+ * knows the shell of, titled by it, minus the ones the draft already has, each once.
+ */
+fun droppedThreadContextRecords(
+  threadIds: List<String>,
+  threads: List<ComposerThreadCandidate>,
+  environmentId: String,
+  existing: List<ThreadContextRecord>,
+): List<ThreadContextRecord> {
+  val known: MutableSet<String> = existing.map { it.contextId }.toMutableSet()
+  return threadIds
+    .mapNotNull { id -> threads.find { it.id == id } }
+    .map { shell -> threadContextRecord(environmentId, shell.id, shell.title) }
+    .filter { record -> known.add(record.contextId) }
+}
+
+/**
  * `threadContextReference` (composerContextRecords.ts:157) formatted by
  * `formatComposerContextReference` (packages/shared/src/composerContextReferences.ts:80).
  */

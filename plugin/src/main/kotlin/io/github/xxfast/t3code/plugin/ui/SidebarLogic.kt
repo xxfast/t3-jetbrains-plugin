@@ -8,6 +8,7 @@ import io.github.xxfast.t3code.protocol.generated.ThreadLinkedPullRequest
 import io.github.xxfast.t3code.protocol.generated.ThreadPullRequestLink
 import io.github.xxfast.t3code.protocol.generated.ThreadPullRequestSnapshot
 import io.github.xxfast.t3code.protocol.pinned
+import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeParseException
@@ -55,6 +56,8 @@ class RowActions(
   val drop: ((threadId: String, plan: SidebarThreadDropPlan) -> Unit)? = null,
   /** Whether the server stores active orders; without it a drop can't arrange active rows. */
   val reorderActive: Boolean = false,
+  /** Files dropped on a row, `handleThreadFileDrop`. Null means rows take no file drop. */
+  val fileDrop: ((threadId: String, files: List<Path>) -> Unit)? = null,
 )
 
 /** What rows show besides the thread: their running terminals. */
