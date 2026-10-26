@@ -67,7 +67,8 @@ How it fits together:
   `waiting-approval.json`, `waiting-question.json`, `unknown-items.json`, `many-items.json`,
   `unread.json`, `snoozed.json` with one sleeping and one woken, `background-work.json` with a
   settled run whose provider still waits on two commands and a subagent (the background work
-  banner above the composer), `worktree-setup.json` with a
+  banner above the composer), `code-blocks.json` with Kotlin, TypeScript, JSON, shell, bare
+  and unknown fences and a Kotlin block that streams in, `worktree-setup.json` with a
   first turn whose worktree is still being prepared, `skills.json` with provider skills and a
   workspace snapshot for the `$` menu, `files.json` with the files and folders `@` searches,
   `lineage.json` with a fork that has a parent, a fork of its own, running, finished and failed
@@ -328,6 +329,17 @@ Hard-won, so recorded here rather than rediscovered.
   `runHarness` boots the local IDE (263 here) while `runIde` and users run 2025.3, so a
   Jewel-level change only counts once it's seen on 2025.3: drop `t3.localIde` from the
   worktree's `local.properties` for that run.
+- Chat View code blocks highlight through Jewel's `CodeHighlighterFactory` (public, a project
+  service). Its `LexerBasedCodeHighlighter` is Kotlin `internal`, which `javap` doesn't show;
+  only the compiler says. It finds a language by `MimeType.displayName().lowercase()` through
+  `LanguageUtil.findRegisteredLanguage` (id or display name, any case), and Jewel's default
+  fence recognizer drops `ts`, `tsx` and `zsh` and gives TypeScript a mime that never
+  resolves. So the processor carries the fence word as written (`fenceMimeType`) and
+  `ChatCodeHighlighter` resolves it the composer's way and hands Jewel the language's id. It
+  also captures the global scheme when asked, not when it re-highlights, so the wrapper asks
+  again on every `EditorColorsManager.TOPIC`. No flicker while a block streams: Jewel collects
+  with `collectAsState(initial = plain)`, and `produceState` keeps the last value across a new
+  flow, so only a freshly composed block shows plain for a frame.
 - `IntelliJIconKey.fromPlatformIcon` on 2025.3 loads the Swing icon's resource through the
   plugin's classloader, so another plugin's icon (Kotlin, Markdown file types) logs a SEVERE
   per use and draws a square. Paint the `javax.swing.Icon` into a `BufferedImage` at the
@@ -336,6 +348,11 @@ Hard-won, so recorded here rather than rediscovered.
   and favicons share one (`MessageChipsRendererExtension` wraps the favicon one). An inline
   content placeholder's width goes through `sp` and rounds; give it a whole pixel of slack or
   the label ellipsises.
+- Jewel's `CodeHighlighter` gained a second abstract overload on 262, `highlight(code,
+  language: String)`, and the markdown renderer calls it for fence words Jewel has no mime type
+  for. A class implementing the 2025.3 interface must declare that descriptor by hand, as a
+  plain method (`ChatCodeHighlighter`), or it throws `AbstractMethodError` at runtime.
+  `verifyPlugin` doesn't catch it; only running on a 2026.x IDE does (2026-10-27).
 - A Search Everywhere-shaped chooser is `com.intellij.ide.actions.BigPopupUI` (public, what
   `SearchEverywhereUI` and `RunAnythingPopupUI` extend), shown with `createComponentPopupBuilder`
   and `showCenteredInCurrentWindow`. Learned on the model picker, 2026-10-21:

@@ -1,0 +1,195 @@
+{
+  "threads": [
+    {
+      "id": "thr_01JC6C0D0CODEBLKS",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Demo: code blocks",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC6C0D0CODEBLKS"
+      },
+      "status": "running",
+      "branch": "firmware-label",
+      "latestRunId": "run_01JC6C0D2CODE2",
+      "activeRunId": "run_01JC6C0D2CODE2",
+      "itemCount": 4,
+      "visibleItemCount": 4,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-27T01:00:00.000Z",
+      "updatedAt": "2026-10-27T01:05:16.000Z"
+    }
+  ],
+  "runs": {
+    "thr_01JC6C0D0CODEBLKS": [
+      {
+        "id": "run_01JC6C0D1CODE1",
+        "threadId": "thr_01JC6C0D0CODEBLKS",
+        "ordinal": 1,
+        "status": "completed",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "userMessageId": "msg_cb_u1",
+        "requestedAt": "2026-10-27T01:00:00.000Z",
+        "startedAt": "2026-10-27T01:00:01.000Z",
+        "completedAt": "2026-10-27T01:03:00.000Z"
+      },
+      {
+        "id": "run_01JC6C0D2CODE2",
+        "threadId": "thr_01JC6C0D0CODEBLKS",
+        "ordinal": 2,
+        "status": "running",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "userMessageId": "msg_cb_u2",
+        "requestedAt": "2026-10-27T01:05:00.000Z",
+        "startedAt": "2026-10-27T01:05:01.000Z"
+      }
+    ]
+  },
+  "items": {
+    "thr_01JC6C0D0CODEBLKS": [
+      {
+        "type": "user_message",
+        "id": "cb-u1",
+        "threadId": "thr_01JC6C0D0CODEBLKS",
+        "runId": "run_01JC6C0D1CODE1",
+        "ordinal": 1,
+        "status": "completed",
+        "messageId": "msg_cb_u1",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "Show me where the firmware label comes from, across Kotlin, the server's TypeScript, the record and how to run the test.",
+        "startedAt": "2026-10-27T01:00:00.000Z",
+        "completedAt": "2026-10-27T01:00:00.000Z",
+        "updatedAt": "2026-10-27T01:00:00.000Z"
+      },
+      {
+        "type": "assistant_message",
+        "id": "cb-a1",
+        "threadId": "thr_01JC6C0D0CODEBLKS",
+        "runId": "run_01JC6C0D1CODE1",
+        "ordinal": 2,
+        "status": "completed",
+        "messageId": "msg_cb_a1",
+        "streaming": false,
+        "text": "Here's where `firmwareLabel` comes from and how to check it. The Kotlin side:\n\n```kotlin\n@Composable\ncontext(icv: MobileEvidenceIcv)\ninternal fun EvidenceDevice.logFirmwareVersion(): String = when {\n  connected.type.family == DeviceFamily.Edesix -> \"unknown\"\n  system == null -> \"unknown (not captured by SDK)\"\n  else -> \"unknown (not reported by device)\"\n}\n```\n\nThe server side is TypeScript:\n\n```typescript\nexport function fileLinkLabel(file: FilePathPosition, suffixByPath: ReadonlyMap<string, string>): string {\n  const suffix = suffixByPath.get(file.path.replaceAll(\"\\\\\", \"/\"));\n  return [fileBasename(file.path), suffix, file.line ? `L${file.line}` : undefined]\n    .filter(Boolean)\n    .join(\" · \");\n}\n```\n\nThe record it reads:\n\n```json\n{\n  \"version\": 1,\n  \"contextId\": \"mention-icv\",\n  \"kind\": \"mention\",\n  \"label\": \"MobileEvidenceIcv.kt\",\n  \"line\": null\n}\n```\n\nTo reproduce, from the repo root:\n\n```sh\n./gradlew :icv:testDebugUnitTest --tests '*LogFirmwareVersionTest*'\ngrep -rn \"logFirmwareVersion\" icv/src bwc/src | wc -l\n```\n\nNo fence language here, so it stays plain:\n\n```\nicv/src/main/kotlin/MobileEvidenceIcv.kt:156\nbwc/src/main/kotlin/MobileEvidenceBwc.kt:193\n```\n\nAnd a language the IDE has no lexer for:\n\n```brainfuck\n++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.\n```\n\nInline code like `EvidenceDevice.firmwareLabel()` stays as it is.",
+        "startedAt": "2026-10-27T01:00:05.000Z",
+        "completedAt": "2026-10-27T01:03:00.000Z",
+        "updatedAt": "2026-10-27T01:03:00.000Z"
+      },
+      {
+        "type": "user_message",
+        "id": "cb-u2",
+        "threadId": "thr_01JC6C0D0CODEBLKS",
+        "runId": "run_01JC6C0D2CODE2",
+        "ordinal": 3,
+        "status": "completed",
+        "messageId": "msg_cb_u2",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "Show me the fix as one helper.",
+        "startedAt": "2026-10-27T01:05:00.000Z",
+        "completedAt": "2026-10-27T01:05:00.000Z",
+        "updatedAt": "2026-10-27T01:05:00.000Z"
+      },
+      {
+        "after": 800,
+        "type": "assistant_message",
+        "id": "cb-a2",
+        "threadId": "thr_01JC6C0D0CODEBLKS",
+        "runId": "run_01JC6C0D2CODE2",
+        "ordinal": 4,
+        "status": "running",
+        "messageId": "msg_cb_a2",
+        "streaming": true,
+        "text": "One helper in `core/src/main/kotlin/FirmwareVersion.kt`:\n\n```kotlin\ninternal fun EvidenceDevice.firmwareLabel(): String = when {\n",
+        "updatedAt": "2026-10-27T01:05:10.000Z"
+      },
+      {
+        "after": 700,
+        "type": "assistant_message",
+        "id": "cb-a2",
+        "threadId": "thr_01JC6C0D0CODEBLKS",
+        "runId": "run_01JC6C0D2CODE2",
+        "ordinal": 4,
+        "status": "running",
+        "messageId": "msg_cb_a2",
+        "streaming": true,
+        "text": "One helper in `core/src/main/kotlin/FirmwareVersion.kt`:\n\n```kotlin\ninternal fun EvidenceDevice.firmwareLabel(): String = when {\n  connected.type.family == DeviceFamily.Edesix -> \"unknown\"\n",
+        "updatedAt": "2026-10-27T01:05:11.000Z"
+      },
+      {
+        "after": 700,
+        "type": "assistant_message",
+        "id": "cb-a2",
+        "threadId": "thr_01JC6C0D0CODEBLKS",
+        "runId": "run_01JC6C0D2CODE2",
+        "ordinal": 4,
+        "status": "running",
+        "messageId": "msg_cb_a2",
+        "streaming": true,
+        "text": "One helper in `core/src/main/kotlin/FirmwareVersion.kt`:\n\n```kotlin\ninternal fun EvidenceDevice.firmwareLabel(): String = when {\n  connected.type.family == DeviceFamily.Edesix -> \"unknown\"\n  system == null -> \"unknown (not captured by SDK)\"\n",
+        "updatedAt": "2026-10-27T01:05:12.000Z"
+      },
+      {
+        "after": 700,
+        "type": "assistant_message",
+        "id": "cb-a2",
+        "threadId": "thr_01JC6C0D0CODEBLKS",
+        "runId": "run_01JC6C0D2CODE2",
+        "ordinal": 4,
+        "status": "running",
+        "messageId": "msg_cb_a2",
+        "streaming": true,
+        "text": "One helper in `core/src/main/kotlin/FirmwareVersion.kt`:\n\n```kotlin\ninternal fun EvidenceDevice.firmwareLabel(): String = when {\n  connected.type.family == DeviceFamily.Edesix -> \"unknown\"\n  system == null -> \"unknown (not captured by SDK)\"\n  else -> system.firmwareVersion ?: \"unknown (not reported by device)\"\n",
+        "updatedAt": "2026-10-27T01:05:13.000Z"
+      },
+      {
+        "after": 700,
+        "type": "assistant_message",
+        "id": "cb-a2",
+        "threadId": "thr_01JC6C0D0CODEBLKS",
+        "runId": "run_01JC6C0D2CODE2",
+        "ordinal": 4,
+        "status": "running",
+        "messageId": "msg_cb_a2",
+        "streaming": true,
+        "text": "One helper in `core/src/main/kotlin/FirmwareVersion.kt`:\n\n```kotlin\ninternal fun EvidenceDevice.firmwareLabel(): String = when {\n  connected.type.family == DeviceFamily.Edesix -> \"unknown\"\n  system == null -> \"unknown (not captured by SDK)\"\n  else -> system.firmwareVersion ?: \"unknown (not reported by device)\"\n}\n```\n\nThen both modules call it, and the Edesix branch has one home.",
+        "updatedAt": "2026-10-27T01:05:15.000Z"
+      },
+      {
+        "after": 600,
+        "type": "assistant_message",
+        "id": "cb-a2",
+        "threadId": "thr_01JC6C0D0CODEBLKS",
+        "runId": "run_01JC6C0D2CODE2",
+        "ordinal": 4,
+        "status": "completed",
+        "messageId": "msg_cb_a2",
+        "streaming": false,
+        "text": "One helper in `core/src/main/kotlin/FirmwareVersion.kt`:\n\n```kotlin\ninternal fun EvidenceDevice.firmwareLabel(): String = when {\n  connected.type.family == DeviceFamily.Edesix -> \"unknown\"\n  system == null -> \"unknown (not captured by SDK)\"\n  else -> system.firmwareVersion ?: \"unknown (not reported by device)\"\n}\n```\n\nThen both modules call it, and the Edesix branch has one home.",
+        "startedAt": "2026-10-27T01:05:10.000Z",
+        "completedAt": "2026-10-27T01:05:16.000Z",
+        "updatedAt": "2026-10-27T01:05:16.000Z"
+      }
+    ]
+  }
+}

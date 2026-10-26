@@ -37,6 +37,7 @@ import io.github.xxfast.t3code.plugin.review.rollbackBlockReason
 import io.github.xxfast.t3code.plugin.settings.T3Settings
 import io.github.xxfast.t3code.plugin.ui.Advance
 import io.github.xxfast.t3code.plugin.ui.COMPACT_COMMAND
+import io.github.xxfast.t3code.plugin.ui.ChatCodeHighlighter
 import io.github.xxfast.t3code.plugin.ui.ChatView
 import io.github.xxfast.t3code.plugin.ui.ComposerContextWindow
 import io.github.xxfast.t3code.plugin.ui.ComposerDispatchMode
@@ -142,6 +143,8 @@ import io.github.xxfast.t3code.plugin.ui.ThreadQueueWorkflowState
 import io.github.xxfast.t3code.plugin.ui.TimelineMemory
 import io.github.xxfast.t3code.plugin.ui.deriveThreadQueueWorkflowState
 import java.util.UUID
+import org.jetbrains.jewel.bridge.code.highlighting.CodeHighlighterFactory
+import org.jetbrains.jewel.foundation.code.highlighting.CodeHighlighter
 
 /** [ChatView] wired to the IDE, for the thread's editor tab. */
 @Composable
@@ -236,6 +239,10 @@ fun ChatContent(
       onOpen = { attachment -> images.open(project, attachment) },
     )
   }
+  // Jewel's lexer-based highlighter for the code blocks, behind the fence's IDE language
+  val codeHighlighter: CodeHighlighter = remember(project) {
+    ChatCodeHighlighter(CodeHighlighterFactory.getInstance(project).createHighlighter())
+  }
   // The timeline's sent images, read by the user message row only
   CompositionLocalProvider(LocalMessageImages provides imageState) {
     ChatView(
@@ -245,6 +252,7 @@ fun ChatContent(
       project = projects.find { it.id == projectId },
       favicon = favicons[projectId],
       linkFavicons = LinkFavicons.get(),
+      codeHighlighter = codeHighlighter,
       chipActions = MessageChipActions(
         onOpenFile = { path, line -> view?.let { opener.openFile(it, path, line) } },
         onOpenUrl = { url -> BrowserUtil.browse(url) },

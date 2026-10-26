@@ -97,6 +97,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import org.jetbrains.jewel.bridge.toComposeColor
 import org.jetbrains.jewel.foundation.GlobalColors
+import org.jetbrains.jewel.foundation.code.highlighting.CodeHighlighter
+import org.jetbrains.jewel.foundation.code.highlighting.NoOpCodeHighlighter
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.intui.markdown.bridge.ProvideMarkdownStyling
 import org.jetbrains.jewel.intui.markdown.bridge.create
@@ -171,6 +173,7 @@ fun ChatView(
   memory: TimelineMemory = remember { TimelineMemory() }, // where the timeline was left
   linkFavicons: LinkFaviconSource = NoLinkFavicons, // the favicons in front of external links
   chipActions: MessageChipActions = MessageChipActions(), // what a click on a chip does
+  codeHighlighter: CodeHighlighter = NoOpCodeHighlighter, // the IDE's, for code blocks
 ) {
   val threadId: String? = view?.thread?.id
   val timeline: LazyListState = remember(threadId) { LazyListState(memory.index, memory.offset) }
@@ -238,6 +241,7 @@ fun ChatView(
             markdownStyling = styling,
             markdownProcessor = processor,
             markdownBlockRenderer = renderer,
+            codeHighlighter = codeHighlighter,
           ) {
             MessagesTimeline(
               view = view,
@@ -1618,6 +1622,8 @@ private fun chatMarkdownProcessor(
     MessageChipsProcessorExtension(skills),
     ExternalLinkFaviconProcessorExtension,
   ),
+  // The fence's language as written, for the IDE to resolve (`chatCodeLanguage`)
+  languageRecognizer = ::fenceMimeType,
 )
 
 private fun chatMarkdownRenderer(
