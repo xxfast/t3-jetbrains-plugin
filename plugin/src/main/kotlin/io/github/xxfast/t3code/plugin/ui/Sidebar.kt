@@ -13,6 +13,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
@@ -41,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -86,9 +89,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -98,6 +105,7 @@ import com.intellij.util.ui.JBUI
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
+import io.github.xxfast.t3code.protocol.generated.ThreadSearchMatch
 import io.github.xxfast.t3code.protocol.pinned
 import java.awt.event.MouseEvent
 import java.time.Duration
@@ -152,13 +160,53 @@ fun Sidebar(
   details: RowDetails = RowDetails(), // terminals, machine and checkout, for the rows' extras
   selection: ThreadSelectionState = EMPTY_SELECTION, // the rows picked for a bulk action
   onSelectionChange: (ThreadSelectionState) -> Unit = {},
+  search: TextFieldState = rememberTextFieldState(), // the thread search field
+  onSearchFocus: (Boolean) -> Unit = {}, // whether the search field has focus
+  messages: ThreadSearch = ThreadSearch(), // what the server's message search has for it
 ) {
-  val search: TextFieldState = rememberTextFieldState()
   val query: String = search.text.toString()
   // Snoozes wake on the minute; a half-minute tick is close enough to move them back in time
   val minute: Instant by rememberNow(30_000)
-  val sections: ThreadSections = remember(threads, query, filter, settlement, snooze, minute) {
-    sections(threads, query, filter, settlement, snooze, minute)
+  val sections: ThreadSections = remember(threads, filter, settlement, snooze, minute) {
+    sections(threads, filter, settlement, snooze, minute)
+  }
+  // Upstream's `isSearchingThreads`: results replace the sections. They're upstream's
+  // `searchableThreads`, every row the sections hold, matched by title and pull request, then
+  // the ones only the message search found.
+  val searching: Boolean = query.isNotBlank()
+  val matches: Map<String, ThreadSearchMatch> =
+    remember(messages) { messages.matches.associateBy { it.threadId } }
+  val results: List<Thread> = remember(sections, query, matches) {
+    searchSidebarThreads(sections.inbox + sections.snoozed + sections.settled, query, matches.keys)
+  }
+  val settledIds: Set<String> = remember(sections) { sections.settled.map { it.id }.toSet() }
+  val orderKey: String = searchResultOrderKey(results)
+  // A new query starts on the first result, as `onSearchQueryChange` does
+  var highlight: SearchHighlight by remember(query) { mutableStateOf(SearchHighlight()) }
+  val active: Int = highlight.activeIn(orderKey)
+  // `selectThreadSearchResult`: the search clears, then the thread opens
+  val select: (Thread) -> Unit = { thread ->
+    search.clearText()
+    onOpenThread(thread.id)
+  }
+  // `handleThreadSearchKeyDown`
+  val onSearchKey: (Key) -> Boolean = { key ->
+    when (key) {
+      Key.Escape -> searching.also { if (it) search.clearText() }
+      Key.DirectionDown, Key.DirectionUp -> {
+        val next: Int? = moveSearchHighlight(active, results.size, key == Key.DirectionDown)
+        if (next != null) highlight = SearchHighlight(orderKey, next)
+        next != null
+      }
+
+      Key.Enter, Key.NumPadEnter -> {
+        val result: Thread? = results.getOrNull(active)
+        if (result != null) select(result)
+        result != null
+      }
+
+      else -> false
+    }
   }
   // Upstream's `orderedThreadKeys`: every row in the order they're listed, collapsed shelves too.
   // A Shift range runs over it.
@@ -187,10 +235,27 @@ fun Sidebar(
   Column(Modifier.fillMaxSize()) {
     header()
     ThreadHeader(
-      search, projects, favicons, filter, open, onFilterChange, onNewThread, onAddProject,
+      search, onSearchKey, onSearchFocus, projects, favicons, filter, open, onFilterChange,
+      onNewThread, onAddProject,
     )
     Box(Modifier.weight(1f)) {
       when {
+        searching && results.isNotEmpty() -> SearchResults(
+          results = results,
+          matches = matches,
+          settled = settledIds,
+          query = query,
+          projects = projects,
+          favicons = favicons,
+          selectedThreadId = selectedThreadId,
+          active = active,
+          onHighlight = { index -> highlight = SearchHighlight(orderKey, index) },
+          onSelect = select,
+        )
+
+        searching ->
+          Hint(if (messages.pending) "Searching thread messages…" else "No threads found")
+
         sections.inbox.isNotEmpty() || sections.snoozed.isNotEmpty() ||
           sections.settled.isNotEmpty() ->
           Sections(
@@ -199,7 +264,7 @@ fun Sidebar(
             selection.selectedThreadKeys,
           )
 
-        else -> Hint(emptyHint(projects.isEmpty(), query, filter))
+        else -> Hint(emptyHint(projects.isEmpty(), filter))
       }
     }
     if (onOpenSettings != null) UtilityFooter(onOpenSettings)
@@ -215,6 +280,8 @@ fun Sidebar(
 @Composable
 private fun ThreadHeader(
   search: TextFieldState,
+  onSearchKey: (Key) -> Boolean,
+  onSearchFocus: (Boolean) -> Unit,
   projects: List<Project>,
   favicons: Map<String, ImageBitmap>,
   filter: ProjectFilter,
@@ -228,7 +295,7 @@ private fun ThreadHeader(
     horizontalArrangement = Arrangement.spacedBy(4.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    SearchField(search, Modifier.weight(1f))
+    SearchField(search, onSearchKey, onSearchFocus, Modifier.weight(1f))
     if (projects.isNotEmpty()) {
       ProjectScope(projects, favicons, filter, open, onFilterChange)
       if (onAddProject != null) {
@@ -252,10 +319,19 @@ private fun ThreadHeader(
 
 @OptIn(ExperimentalFoundationApi::class) // Jewel's tooltips sit on Compose's TooltipArea
 @Composable
-private fun SearchField(state: TextFieldState, modifier: Modifier = Modifier) {
+private fun SearchField(
+  state: TextFieldState,
+  onKey: (Key) -> Boolean,
+  onFocus: (Boolean) -> Unit,
+  modifier: Modifier = Modifier,
+) {
   TextField(
     state = state,
-    modifier = modifier,
+    // Up, Down, Enter and Escape drive the results; the IDE's keymap doesn't own them in a text
+    // field. If it ever takes Escape, the panel's Escape action clears the search too.
+    modifier = modifier
+      .onFocusChanged { focus -> onFocus(focus.hasFocus) }
+      .onPreviewKeyEvent { event -> event.type == KeyEventType.KeyDown && onKey(event.key) },
     placeholder = { Text("Search") },
     leadingIcon = {
       Icon(AllIconsKeys.Actions.Search, contentDescription = null, Modifier.padding(end = 6.dp))
@@ -1299,6 +1375,153 @@ private fun MoreRow(count: Int, onClick: () -> Unit) {
       Text("Show $count more", color = color)
     }
   }
+}
+
+/**
+ * Upstream's search results (Sidebar.tsx, the `sidebar-thread-search-results` listbox): one
+ * [SearchResultRow] per result, the keyboard's [active] one highlighted.
+ */
+@Composable
+private fun SearchResults(
+  results: List<Thread>,
+  matches: Map<String, ThreadSearchMatch>, // the message search's, by thread id
+  settled: Set<String>, // the ids on the settled shelf
+  query: String,
+  projects: List<Project>,
+  favicons: Map<String, ImageBitmap>,
+  selectedThreadId: String?,
+  active: Int,
+  onHighlight: (index: Int) -> Unit,
+  onSelect: (Thread) -> Unit,
+) {
+  val byId: Map<String, Project> = remember(projects) { projects.associateBy { it.id } }
+  val now: Instant by rememberNow(30_000)
+  VerticallyScrollableContainer(
+    scrollState = rememberScrollState(),
+    modifier = Modifier.fillMaxSize(),
+  ) {
+    Column(Modifier.fillMaxWidth()) {
+      results.forEachIndexed { index, thread ->
+        key(thread.id) {
+          SearchResultRow(
+            thread = thread,
+            project = byId[thread.projectId],
+            favicon = favicons[thread.projectId],
+            match = matches[thread.id],
+            query = query,
+            settled = thread.id in settled,
+            highlighted = index == active,
+            open = thread.id == selectedThreadId,
+            now = now,
+            onHighlight = { onHighlight(index) },
+            onSelect = { onSelect(thread) },
+          )
+        }
+      }
+    }
+  }
+}
+
+/**
+ * `SidebarSearchResultRow` (sidebar/SidebarThreadRow.tsx): icon, title, the pull request badge
+ * when the query matched it, the time, and under them the message excerpt. A settled thread is
+ * the settled shelf's row, icon at 40% and grey, title muted, until it's highlighted, open or
+ * hovered. The pointer highlights a row as the keyboard does, and it scrolls into view.
+ */
+@OptIn(ExperimentalFoundationApi::class) // BringIntoViewRequester
+@Composable
+private fun SearchResultRow(
+  thread: Thread,
+  project: Project?,
+  favicon: ImageBitmap?,
+  match: ThreadSearchMatch?,
+  query: String,
+  settled: Boolean,
+  highlighted: Boolean,
+  open: Boolean,
+  now: Instant,
+  onHighlight: () -> Unit,
+  onSelect: () -> Unit,
+) {
+  val requester: BringIntoViewRequester = remember { BringIntoViewRequester() }
+  LaunchedEffect(highlighted) { if (highlighted) requester.bringIntoView() }
+  Selectable(
+    selected = highlighted || open,
+    onClick = onSelect,
+    modifier = Modifier.bringIntoViewRequester(requester),
+  ) { hovered ->
+    LaunchedEffect(hovered) { if (hovered) onHighlight() }
+    val receded: Boolean = settled && !highlighted && !open && !hovered
+    val iconAlpha: Float by animateFloatAsState(if (receded) 0.4f else 1f, Transition)
+    val info: Color = JewelTheme.globalColors.text.info
+    Row(
+      modifier = Modifier
+        .heightIn(min = 36.dp)
+        .fillMaxWidth()
+        .padding(horizontal = 10.dp, vertical = 4.dp),
+      horizontalArrangement = Arrangement.spacedBy(10.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Box(Modifier.alpha(iconAlpha)) {
+        if (project != null) {
+          ProjectIcon(project, favicon, muted = receded)
+        } else {
+          Box(Modifier.size(16.dp))
+        }
+      }
+      Column(Modifier.weight(1f)) {
+        Row(
+          horizontalArrangement = Arrangement.spacedBy(10.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Text(
+            text = thread.title,
+            modifier = Modifier
+              .weight(1f)
+              .alpha(if (thread.titleRegeneration != null) 0.55f else 1f),
+            fontWeight = if (settled) null else FontWeight.Medium,
+            color = if (receded) info else JewelTheme.globalColors.text.normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+          )
+          if (pullRequestMatchesSearchQuery(thread, query)) {
+            thread.pullRequestBadge()?.let { PullRequestBadgeView(it) }
+          }
+          Text(compactTime(thread.inboxAt(), now), style = small(), color = info)
+        }
+        if (match != null) SearchExcerpt(match, query)
+      }
+    }
+  }
+}
+
+/**
+ * `ThreadSearchMatchExcerpt` (ThreadSearchMatch.tsx): "You:" or "Agent:", then the snippet with
+ * every occurrence of the query in bold.
+ */
+@Composable
+private fun SearchExcerpt(match: ThreadSearchMatch, query: String) {
+  val user: Boolean = match.source == "user"
+  val normal: Color = JewelTheme.globalColors.text.normal
+  val label: Color = if (user) accent() else success()
+  val text: AnnotatedString = buildAnnotatedString {
+    withStyle(SpanStyle(color = label)) { append(if (user) "You:" else "Agent:") }
+    append(" ")
+    for ((part: String, matched: Boolean) in highlightSearchText(match.snippet, query)) {
+      if (matched) {
+        withStyle(SpanStyle(color = normal, fontWeight = FontWeight.SemiBold)) { append(part) }
+      } else {
+        append(part)
+      }
+    }
+  }
+  Text(
+    text = text,
+    style = small(),
+    color = JewelTheme.globalColors.text.info,
+    maxLines = 1,
+    overflow = TextOverflow.Ellipsis,
+  )
 }
 
 /** Upstream's `text-success`, from the theme. */

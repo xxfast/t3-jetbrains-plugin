@@ -169,6 +169,15 @@ public data class ModelSelection(
 )
 
 @Serializable
+public data class ThreadSearchMatch(
+  val threadId: String,
+  val projectId: String,
+  val source: String,
+  val snippet: String,
+  val messageCreatedAt: String?,
+)
+
+@Serializable
 public data class AppThread(
   val createdBy: String,
   val creationSource: String,

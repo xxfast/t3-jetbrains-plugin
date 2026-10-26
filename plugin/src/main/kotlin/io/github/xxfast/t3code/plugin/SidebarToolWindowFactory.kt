@@ -4,7 +4,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonShortcuts
@@ -40,13 +43,19 @@ import io.github.xxfast.t3code.plugin.ui.THREAD_PINNING
 import io.github.xxfast.t3code.plugin.ui.THREAD_PIN_REORDER
 import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SNOOZE
+import io.github.xxfast.t3code.plugin.ui.ThreadSearch
 import io.github.xxfast.t3code.plugin.ui.ThreadSelectionState
 import io.github.xxfast.t3code.plugin.ui.supports
+import io.github.xxfast.t3code.plugin.ui.threadSearch
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.ServerInfo
+import io.github.xxfast.t3code.protocol.generated.SearchThreadsInput
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.T3Client
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.JComponent
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import org.jetbrains.jewel.bridge.JewelComposePanel
 
 /** "T3 Sidebar": T3's sidebar. Opening a thread is [T3Opener.openThread]'s business. */
@@ -66,6 +75,9 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
     val controller: ChatController = ChatController.getInstance(project)
     val renamer: SidebarRename = SidebarRename.getInstance(project)
     val picks: SidebarMultiSelection = SidebarMultiSelection.getInstance(project)
+    // Out here so the Escape action below can clear it too
+    val search = TextFieldState()
+    val searchFocused = AtomicBoolean(false)
     val panel: JComponent = JewelComposePanel {
       val filter: ProjectFilter by awareness.filter.collectAsState()
       val open: Set<String> by awareness.open.collectAsState()
@@ -139,6 +151,14 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
       val renaming: String? by renamer.renaming.collectAsState()
       val shelves: Shelves by SidebarShelves.get().shelves.collectAsState()
       val picked: ThreadSelectionState by picks.selection.collectAsState()
+      // `useThreadSearch`: only a connected server is asked, upstream's `environmentIds`
+      val messages: ThreadSearch by remember {
+        val queries: Flow<String> =
+          combine(snapshotFlow { search.text.toString() }, client.connection) { query, state ->
+            if (state is ConnectionState.Connected) query else ""
+          }
+        threadSearch(queries) { query -> client.searchThreads(SearchThreadsInput(query)).matches }
+      }.collectAsState(ThreadSearch())
       Sidebar(
         projects = projects,
         threads = threads,
@@ -175,20 +195,28 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         details = details,
         selection = picked,
         onSelectionChange = picks::change,
+        search = search,
+        onSearchFocus = searchFocused::set,
+        messages = messages,
       )
     }
     // Escape drops the multi-selection, as upstream's `_chat.tsx` keydown does. An action on the
     // panel rather than a Compose key handler, as the IDE's keymap sees Escape first. Off while
-    // renaming, so the rename field's Escape still cancels it.
+    // renaming, so the rename field's Escape still cancels it. In the search field with a query
+    // it clears the search instead, as `handleThreadSearchKeyDown` stops it going further.
     object : DumbAwareAction() {
       override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
 
+      private fun clearsSearch(): Boolean = searchFocused.get() && search.text.isNotBlank()
+
       override fun update(e: AnActionEvent) {
-        e.presentation.isEnabled =
+        e.presentation.isEnabled = clearsSearch() ||
           picks.selection.value.hasSelection && renamer.renaming.value == null
       }
 
-      override fun actionPerformed(e: AnActionEvent) = picks.clear()
+      override fun actionPerformed(e: AnActionEvent) {
+        if (clearsSearch()) search.clearText() else picks.clear()
+      }
     }.registerCustomShortcutSet(CommonShortcuts.ESCAPE, panel, toolWindow.disposable)
     val content: Content = ContentFactory.getInstance().createContent(panel, null, false)
     toolWindow.contentManager.addContent(content)

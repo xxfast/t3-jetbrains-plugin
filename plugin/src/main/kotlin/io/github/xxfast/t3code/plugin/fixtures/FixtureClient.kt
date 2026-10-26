@@ -58,6 +58,8 @@ import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TerminalMetadataStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TerminalSessionSnapshot
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
+import io.github.xxfast.t3code.protocol.generated.SearchThreadsInput
+import io.github.xxfast.t3code.protocol.generated.SearchThreadsResult
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchResult
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchWorkspaceStrategy
 import io.github.xxfast.t3code.protocol.generated.ThreadProjection
@@ -87,6 +89,7 @@ import kotlin.io.path.name
 import kotlin.io.path.nameWithoutExtension
 import kotlin.io.path.readText
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -711,6 +714,13 @@ class FixtureClient(
 
   override suspend fun listRefs(input: VcsListRefsInput): VcsListRefsResult =
     fixtureListRefs(input, refs.value, currentRef.value)
+
+  // Slow enough that the Sidebar's "Searching thread messages…" shows in the harness
+  override suspend fun searchThreads(input: SearchThreadsInput): SearchThreadsResult {
+    delay(SEARCH_LATENCY)
+    val overlay: Overlay = overlay.value
+    return fixtureSearchThreads(input, threads.value) { threadId -> itemsOf(overlay, threadId) }
+  }
 
   override suspend fun switchRef(input: VcsSwitchRefInput): VcsSwitchRefResult {
     val ref: VcsRef = refs.value.find { it.name == input.refName }
@@ -1501,6 +1511,9 @@ private const val SETUP_GRACE_MILLIS: Long = 30_000
 
 /** How long the fixture's title generator takes, and the mark it leaves on the title. */
 private val TITLE_REGENERATION: Duration = 2.seconds
+
+/** How long a message search takes in fixture mode. */
+private val SEARCH_LATENCY: Duration = 800.milliseconds
 private const val REGENERATED: String = " (regenerated)"
 
 /** Item statuses that are still going; an interrupt cancels them. */

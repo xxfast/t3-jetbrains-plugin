@@ -42,12 +42,14 @@ import io.github.xxfast.t3code.protocol.generated.ChatAttachment
 import io.github.xxfast.t3code.protocol.generated.ChatFileAttachment
 import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
+import io.github.xxfast.t3code.protocol.generated.SearchThreadsInput
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchResult
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchWorkspaceStrategy
+import io.github.xxfast.t3code.protocol.generated.ThreadSearchMatch
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import io.github.xxfast.t3code.protocol.generated.VcsListRefsInput
 import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
@@ -240,6 +242,38 @@ class FixtureClientTest {
 
     val connection: ConnectionState = client.connection.first { it != ConnectionState.Connecting }
     assertIs<ConnectionState.Connected>(connection)
+  }
+
+  @Test
+  fun `message search finds one message a thread, a user's ahead of the agent's`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == THREAD } }
+
+    val readString: List<ThreadSearchMatch> =
+      client.searchThreads(SearchThreadsInput("READSTRING")).matches
+    assertEquals(listOf(THREAD), readString.map { it.threadId })
+    assertEquals("user", readString.single().source)
+    assertEquals(
+      "Don't decode by hand. Is there a proper replacement for readString?",
+      readString.single().snippet,
+    )
+    val agent: ThreadSearchMatch =
+      client.searchThreads(SearchThreadsInput("passes now")).matches.single()
+    assertEquals(MANY to "assistant", agent.threadId to agent.source)
+    val bump: List<ThreadSearchMatch> =
+      client.searchThreads(SearchThreadsInput("kotlinx-io to 0.8")).matches
+    assertEquals(setOf(THREAD, WORKTREE), bump.map { it.threadId }.toSet())
+    assertEquals(1, client.searchThreads(SearchThreadsInput("kotlinx-io", limit = 1)).matches.size)
+  }
+
+  @Test
+  fun `a long message's snippet is the window around the match`() {
+    val text: String = "a".repeat(300) + " needle " + "b".repeat(300)
+    val snippet: String = buildSearchSnippet(text, "NEEDLE")
+    assertEquals(238, snippet.length, "236 characters and an ellipsis each side")
+    // The match starts 72 characters in, the space before it included
+    assertTrue(snippet.startsWith("…" + "a".repeat(71) + " needle"), snippet)
+    assertEquals("short text", buildSearchSnippet(" short\n text ", "x"))
   }
 
   @Test

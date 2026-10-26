@@ -19,6 +19,8 @@ import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TerminalMetadataStreamEvent
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchResult
+import io.github.xxfast.t3code.protocol.generated.SearchThreadsInput
+import io.github.xxfast.t3code.protocol.generated.SearchThreadsResult
 import io.github.xxfast.t3code.protocol.generated.VcsListRefsInput
 import io.github.xxfast.t3code.protocol.generated.VcsListRefsResult
 import io.github.xxfast.t3code.protocol.generated.VcsCreateRefInput
@@ -211,6 +213,11 @@ public class WebSocketT3Client internal constructor(
   override suspend fun listRefs(input: VcsListRefsInput): VcsListRefsResult {
     val payload: JsonElement = T3JsonOut.encodeToJsonElement(VcsListRefsInput.serializer(), input)
     return decode(VcsListRefsResult.serializer(), call("vcs.listRefs", payload))
+  }
+
+  override suspend fun searchThreads(input: SearchThreadsInput): SearchThreadsResult {
+    val payload: JsonElement = T3JsonOut.encodeToJsonElement(SearchThreadsInput.serializer(), input)
+    return decode(SearchThreadsResult.serializer(), call("orchestration.searchThreads", payload))
   }
 
   override suspend fun switchRef(input: VcsSwitchRefInput): VcsSwitchRefResult {

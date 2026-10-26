@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "OrchestrationSearchThreadsResult",
+  "title": "OrchestrationSearchThreadsResult",
+  "type": "object",
+  "properties": {
+    "matches": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/OrchestrationThreadSearchMatch"
+      }
+    }
+  },
+  "required": [
+    "matches"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "OrchestrationThreadSearchMatch": {
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "user",
+            "assistant"
+          ]
+        },
+        "snippet": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "messageCreatedAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "threadId",
+        "projectId",
+        "source",
+        "snippet",
+        "messageCreatedAt"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

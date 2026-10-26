@@ -156,16 +156,15 @@ fun filterChoices(
 const val ALL_PROJECTS: String = "All projects"
 
 /** What the Sidebar says with no rows to show, so a narrowing filter is visible as one. */
-fun emptyHint(noProjects: Boolean, query: String, filter: ProjectFilter): String = when {
+fun emptyHint(noProjects: Boolean, filter: ProjectFilter): String = when {
   noProjects -> "No projects yet. Open the T3 Code desktop app to add one."
-  query.isNotBlank() -> "No threads match"
   filter is ProjectFilter.Only && filter.ids.size == 1 -> "No threads in this project"
   filter is ProjectFilter.Only -> "No threads in these projects"
   else -> "No threads"
 }
 
 /**
- * Splits [threads] matching [query] by title. Inbox is pinned rows (by `pinOrderKey`, keyless
+ * Splits [threads] into the Sidebar's sections. Inbox is pinned rows (by `pinOrderKey`, keyless
  * ones newest first) then active rows (keyless ones newest by `createdAt`/`unsettledAt`, then by
  * `activeOrderKey`). Snoozed is soonest to wake first, settled newest settled first, each only on
  * a server that does [snooze] or [settlement]; a snooze outranks settled, which outranks a pin
@@ -174,18 +173,13 @@ fun emptyHint(noProjects: Boolean, query: String, filter: ProjectFilter): String
  */
 fun sections(
   threads: List<Thread>,
-  query: String,
   filter: ProjectFilter = ProjectFilter.All,
   settlement: Boolean = true,
   snooze: Boolean = true,
   now: Instant = Instant.now(),
 ): ThreadSections {
-  val needle: String = query.trim()
   val visible: List<Thread> = threads.filter {
-    !it.archived &&
-      !it.shownUnderParent &&
-      filter.allows(it.projectId) &&
-      it.title.contains(needle, ignoreCase = true)
+    !it.archived && !it.shownUnderParent && filter.allows(it.projectId)
   }
   val (snoozed: List<Thread>, awake: List<Thread>) = visible.partition { snooze && it.snoozed(now) }
   val (settled: List<Thread>, inbox: List<Thread>) =

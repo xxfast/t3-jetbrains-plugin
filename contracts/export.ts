@@ -73,6 +73,8 @@ export const CURATED: ReadonlyArray<readonly [name: string, module: string]> = [
   ["VcsSwitchRefResult", "git.ts"],
   ["VcsCreateRefInput", "git.ts"],
   ["VcsCreateRefResult", "git.ts"],
+  ["OrchestrationSearchThreadsInput", "threadSearch.ts"],
+  ["OrchestrationSearchThreadsResult", "threadSearch.ts"],
 ];
 
 const UPSTREAM_REPO = "https://github.com/pingdotgg/t3code.git";

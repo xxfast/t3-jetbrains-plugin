@@ -300,7 +300,7 @@ internal suspend fun ThreadTarget.settle(coParking: Set<String> = emptySet()) {
 private suspend fun ThreadTarget.park(command: Command, coParking: Set<String> = emptySet()) {
   val next: String? = if (ThreadSelection.getInstance(project).selected.value == row.id) {
     val filter: ProjectFilter = ProjectAwareness.getInstance(project).filter.value
-    nextCard(sections(client.threads.value, query = "", filter).inbox, row.id, coParking)
+    nextCard(sections(client.threads.value, filter).inbox, row.id, coParking)
   } else {
     null
   }

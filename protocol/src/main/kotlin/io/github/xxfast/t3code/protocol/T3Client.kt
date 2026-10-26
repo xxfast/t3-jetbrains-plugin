@@ -10,6 +10,8 @@ import io.github.xxfast.t3code.protocol.generated.PullRequestDetail
 import io.github.xxfast.t3code.protocol.generated.PullRequestListInput
 import io.github.xxfast.t3code.protocol.generated.PullRequestListResult
 import io.github.xxfast.t3code.protocol.generated.PullRequestRef
+import io.github.xxfast.t3code.protocol.generated.SearchThreadsInput
+import io.github.xxfast.t3code.protocol.generated.SearchThreadsResult
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
@@ -129,6 +131,12 @@ public interface T3Client {
 
   /** `vcs.listRefs`: branches and tags of the checkout at `input.cwd`, paged by `cursor`. */
   public suspend fun listRefs(input: VcsListRefsInput): VcsListRefsResult
+
+  /**
+   * `orchestration.searchThreads`: user and assistant messages containing `input.query`, at most
+   * one match per thread, with a snippet around it. The query is 2 to 200 characters.
+   */
+  public suspend fun searchThreads(input: SearchThreadsInput): SearchThreadsResult
 
   /**
    * `vcs.switchRef` (`source-control:write`): checks `refName` out in `cwd`. A remote ref
