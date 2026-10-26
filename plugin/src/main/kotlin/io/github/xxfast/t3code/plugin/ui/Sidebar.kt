@@ -12,6 +12,7 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
@@ -75,6 +76,10 @@ import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
@@ -87,7 +92,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.intellij.openapi.util.SystemInfo
 import com.intellij.ui.JBColor
+import com.intellij.util.ui.JBUI
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
@@ -143,6 +150,8 @@ fun Sidebar(
   onShelvesChange: (Shelves) -> Unit = {},
   renaming: String? = null, // the row being renamed in place
   details: RowDetails = RowDetails(), // terminals, machine and checkout, for the rows' extras
+  selection: ThreadSelectionState = EMPTY_SELECTION, // the rows picked for a bulk action
+  onSelectionChange: (ThreadSelectionState) -> Unit = {},
 ) {
   val search: TextFieldState = rememberTextFieldState()
   val query: String = search.text.toString()
@@ -150,6 +159,30 @@ fun Sidebar(
   val minute: Instant by rememberNow(30_000)
   val sections: ThreadSections = remember(threads, query, filter, settlement, snooze, minute) {
     sections(threads, query, filter, settlement, snooze, minute)
+  }
+  // Upstream's `orderedThreadKeys`: every row in the order they're listed, collapsed shelves too.
+  // A Shift range runs over it.
+  val ordered: List<String> = remember(sections) {
+    (sections.inbox + sections.snoozed + sections.settled).map { it.id }
+  }
+  val current: ThreadSelectionState by rememberUpdatedState(selection)
+  // Rows that leave the list leave the selection, as a bulk delete's `removeFromSelection` does
+  LaunchedEffect(ordered, selection) {
+    val gone: Set<String> = selection.selectedThreadKeys - ordered.toSet()
+    if (gone.isNotEmpty()) onSelectionChange(selection.removeFromSelection(gone))
+  }
+  // `handleThreadClick`, then `navigateToThread`: a plain click drops the selection and anchors
+  // the next Shift range on the row it opens
+  val onClick: (String, SidebarRowClick) -> Unit = { threadId, click ->
+    when (click) {
+      SidebarRowClick.Open -> {
+        onSelectionChange(current.clearSelection().setAnchor(threadId))
+        onOpenThread(threadId)
+      }
+
+      SidebarRowClick.Toggle -> onSelectionChange(current.toggleThread(threadId))
+      SidebarRowClick.Range -> onSelectionChange(current.rangeSelectTo(threadId, ordered))
+    }
   }
   Column(Modifier.fillMaxSize()) {
     header()
@@ -161,8 +194,9 @@ fun Sidebar(
         sections.inbox.isNotEmpty() || sections.snoozed.isNotEmpty() ||
           sections.settled.isNotEmpty() ->
           Sections(
-            projects, favicons, providers, threads, sections, selectedThreadId, onOpenThread,
+            projects, favicons, providers, threads, sections, selectedThreadId, onClick,
             onContextMenu, actions, shelves, onShelvesChange, renaming, details, settlement,
+            selection.selectedThreadKeys,
           )
 
         else -> Hint(emptyHint(projects.isEmpty(), query, filter))
@@ -343,7 +377,7 @@ private fun Sections(
   threads: List<Thread>, // every row the server has, for the order keys hidden rows hold
   sections: ThreadSections,
   selectedThreadId: String?,
-  onOpenThread: (String) -> Unit,
+  onClick: (threadId: String, click: SidebarRowClick) -> Unit,
   onContextMenu: (threadId: String, x: Int, y: Int) -> Unit,
   actions: RowActions,
   shelves: Shelves,
@@ -351,6 +385,7 @@ private fun Sections(
   renaming: String?,
   details: RowDetails,
   settlement: Boolean,
+  picked: Set<String>, // the multi-selection
 ) {
   val byId: Map<String, Project> = remember(projects) { projects.associateBy { it.id } }
   val rowsById: Map<String, Thread> = remember(threads) { threads.associateBy { it.id } }
@@ -370,6 +405,12 @@ private fun Sections(
   val (pinned: List<Thread>, active: List<Thread>) = sections.inbox.partition { it.pinned }
   val drag: SidebarDrag = remember { SidebarDrag() }
   val dragging: Boolean = drag.key != null
+  // A pick doesn't open anything, so the list keeps focus for Escape to clear it
+  val focus: FocusRequester = remember { FocusRequester() }
+  val click: (String, SidebarRowClick) -> Unit = { threadId, kind ->
+    if (kind != SidebarRowClick.Open) focus.requestFocus()
+    onClick(threadId, kind)
+  }
 
   // What `handleThreadDragOver` and the collision detection work out as the pointer moves: the
   // nearest item, the drop that makes, and whether it does anything. A drop that doesn't is no
@@ -486,7 +527,7 @@ private fun Sections(
 
   // Upstream's first shelf header has mt-auto: it sits at the bottom until the list overflows,
   // then scrolls with everything else. A min-height column with a filling gap is the same thing.
-  BoxWithConstraints(Modifier.fillMaxSize()) {
+  BoxWithConstraints(Modifier.fillMaxSize().focusRequester(focus).focusable()) {
     val viewport: Dp = maxHeight
     VerticallyScrollableContainer(scrollState = scroll, modifier = Modifier.fillMaxSize()) {
       val items: List<MotionItem> = buildList {
@@ -514,7 +555,8 @@ private fun Sections(
                         providers = providers,
                         now = now,
                         selected = thread.id == selectedThreadId,
-                        onClick = { onOpenThread(thread.id) },
+                        picked = thread.id in picked,
+                        onClick = { kind -> click(thread.id, kind) },
                         onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
                         actions = actions,
                         renaming = thread.id == renaming,
@@ -535,7 +577,8 @@ private fun Sections(
                         favicon = favicons[thread.projectId],
                         now = now,
                         selected = thread.id == selectedThreadId,
-                        onClick = { onOpenThread(thread.id) },
+                        picked = thread.id in picked,
+                        onClick = { kind -> click(thread.id, kind) },
                         onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
                         actions = actions,
                         renaming = thread.id == renaming,
@@ -801,7 +844,8 @@ private fun InboxCard(
   providers: Map<String, ServerProvider>,
   now: Instant,
   selected: Boolean,
-  onClick: () -> Unit,
+  picked: Boolean,
+  onClick: (SidebarRowClick) -> Unit,
   onContextMenu: (x: Int, y: Int) -> Unit,
   actions: RowActions,
   renaming: Boolean,
@@ -813,7 +857,8 @@ private fun InboxCard(
   val status: ThreadStatus = thread.sidebarStatus()
   val woke: Boolean = thread.woke(now)
   val top: TopStatus? = thread.topStatus(woke)
-  val recede: Boolean = thread.recedes(selected, woke)
+  val recede: Boolean = thread.recedes(selected || picked, woke)
+  val open: () -> Unit = { onClick(SidebarRowClick.Open) }
   val weight: FontWeight? = if (recede) null else FontWeight.Medium
   val normal: Color = JewelTheme.globalColors.text.normal
   val info: Color = JewelTheme.globalColors.text.info
@@ -825,9 +870,11 @@ private fun InboxCard(
   }
   Selectable(
     selected = selected,
-    onClick = onClick,
+    onClick = open,
     onContextMenu = onContextMenu,
     onDoubleClick = actions.rename?.let { rename -> { rename(thread.id) } },
+    picked = picked,
+    onPick = onClick,
     rest = subtle(0.05f),
     // A receding working card sits at 70% until hovered
     restAlpha = if (recede && status == ThreadStatus.Working) 0.7f else 1f,
@@ -905,7 +952,7 @@ private fun InboxCard(
         } else {
           Spacer(Modifier.weight(1f))
         }
-        TerminalButton(thread, details, onClick)
+        TerminalButton(thread, details, open)
         thread.pullRequestBadge()?.let { PullRequestBadgeView(it) }
         ProviderStack(thread, providers)
       }
@@ -1095,7 +1142,8 @@ private fun SlimRow(
   favicon: ImageBitmap?,
   now: Instant,
   selected: Boolean,
-  onClick: () -> Unit,
+  picked: Boolean,
+  onClick: (SidebarRowClick) -> Unit,
   onContextMenu: (x: Int, y: Int) -> Unit,
   actions: RowActions,
   renaming: Boolean,
@@ -1105,15 +1153,18 @@ private fun SlimRow(
   dropVerb: SidebarDropVerb? = null,
 ) {
   val rename: (() -> Unit)? = actions.rename?.let { rename -> { rename(thread.id) } }
+  val open: () -> Unit = { onClick(SidebarRowClick.Open) }
   Selectable(
     selected = selected,
-    onClick = onClick,
+    onClick = open,
     onContextMenu = onContextMenu,
     onDoubleClick = rename,
+    picked = picked,
+    onPick = onClick,
     rowDrag = rowDrag,
   ) { pointing ->
     val hovered: Boolean = pointing && !lifted
-    val lit: Boolean = selected || hovered
+    val lit: Boolean = selected || picked || hovered
     val iconAlpha: Float by animateFloatAsState(if (lit) 1f else 0.4f, Transition)
     Row(
       modifier = Modifier.height(36.dp).fillMaxWidth().padding(horizontal = 10.dp),
@@ -1131,13 +1182,13 @@ private fun SlimRow(
         thread = thread,
         renaming = renaming,
         actions = actions,
-        weight = if (thread.recedes(selected)) null else FontWeight.Medium,
+        weight = if (thread.recedes(selected || picked)) null else FontWeight.Medium,
         color = if (lit) JewelTheme.globalColors.text.normal else JewelTheme.globalColors.text.info,
         modifier = Modifier.weight(1f),
       )
       val unpin: ((String) -> Unit)? = actions.unpin?.takeIf { !lifted }
       if (thread.pinned && dropVerb == null) PinGlyph(thread.id, unpin)
-      TerminalButton(thread, details, onClick)
+      TerminalButton(thread, details, open)
       thread.pullRequestBadge()?.let { PullRequestBadgeView(it) }
       val settle: ((String) -> Unit)? = actions.settle
       val wake: ((String) -> Unit)? = actions.wake
@@ -1260,11 +1311,13 @@ private fun success(): Color =
 private fun indigo(): Color = if (JewelTheme.isDark) Color(0xFFA5B4FC) else Color(0xFF4F46E5)
 
 /**
- * A rounded, full-width clickable surface: accent tint when selected, a light fill on hover. It
- * takes keyboard focus and opens on Enter or Space, as a row's `handleKeyDown` (Sidebar.tsx:1782),
- * with upstream's inset focus ring. With [rowDrag] a primary press that moves drags it, as
- * upstream's sortable rows start on movement rather than a long press; a press that doesn't
- * move stays a click.
+ * A rounded, full-width clickable surface: accent tint when selected, the IDE's inactive list
+ * selection when [picked] for a bulk action, a light fill on hover. It takes keyboard focus and
+ * opens on Enter or Space, as a row's `handleKeyDown` (Sidebar.tsx:1782), with upstream's inset
+ * focus ring. With [onPick] a Cmd or Ctrl click, or a Shift click, picks instead of opening, as
+ * `handleThreadClick`. With [rowDrag] a primary press that moves drags it, as upstream's
+ * sortable rows start on movement rather than a long press; a press that doesn't move stays a
+ * click.
  */
 @Composable
 private fun Selectable(
@@ -1272,6 +1325,8 @@ private fun Selectable(
   onClick: () -> Unit,
   onContextMenu: (x: Int, y: Int) -> Unit = { _, _ -> },
   onDoubleClick: (() -> Unit)? = null,
+  picked: Boolean = false,
+  onPick: ((SidebarRowClick) -> Unit)? = null,
   rest: Color = Color.Transparent,
   restAlpha: Float = 1f, // faded to fully opaque on hover
   modifier: Modifier = Modifier,
@@ -1288,11 +1343,16 @@ private fun Selectable(
   val open: () -> Unit by rememberUpdatedState(onClick)
   val menu: (x: Int, y: Int) -> Unit by rememberUpdatedState(onContextMenu)
   val double: (() -> Unit)? by rememberUpdatedState(onDoubleClick)
+  val pick: ((SidebarRowClick) -> Unit)? by rememberUpdatedState(onPick)
+  // What the press's modifiers make of the click, read when it lands
+  var click: SidebarRowClick by remember { mutableStateOf(SidebarRowClick.Open) }
   // Upstream's `isTrailingDoubleClick` (Sidebar.tsx:3204): the second click doesn't open again,
   // or the opened tab takes focus from the rename field it starts
   var trailing: Boolean by remember { mutableStateOf(false) }
+  // Upstream's `bg-sidebar-row-selected`, under the open row's `bg-sidebar-row-active`
   val fill: Color = when {
     selected -> accent().copy(alpha = 0.2f)
+    picked -> JBUI.CurrentTheme.List.Selection.background(false).toComposeColor()
     hovered -> subtle(0.08f)
     else -> rest
   }
@@ -1323,10 +1383,20 @@ private fun Selectable(
             menuGesture = menuGesture || trigger || secondary
             if (menuGesture) event.changes.forEach { change -> change.consume() }
             if (trigger && mouse != null) menu(mouse.xOnScreen, mouse.yOnScreen)
+            if (event.type == PointerEventType.Press) {
+              val keys: PointerKeyboardModifiers = event.keyboardModifiers
+              click = sidebarRowClick(
+                isMac = SystemInfo.isMac,
+                meta = keys.isMetaPressed,
+                ctrl = keys.isCtrlPressed,
+                shift = keys.isShiftPressed,
+              )
+            }
             // The second click of a double-click, upstream's rename gesture
             val released: Boolean = event.type == PointerEventType.Release && !menuGesture
             if (released) trailing = (mouse?.clickCount ?: 1) >= 2
-            if (released && mouse?.clickCount == 2) double?.invoke()
+            val plain: Boolean = click == SidebarRowClick.Open
+            if (released && plain && mouse?.clickCount == 2) double?.invoke()
           } while (event.changes.any { change -> change.pressed })
         }
       }
@@ -1366,7 +1436,14 @@ private fun Selectable(
       .clickable(
         interactionSource = interactions,
         indication = null,
-        onClick = { if (!trailing) onClick() },
+        onClick = {
+          val picks: ((SidebarRowClick) -> Unit)? = pick
+          when {
+            // Upstream picks ahead of its trailing double-click check
+            click != SidebarRowClick.Open && picks != null -> picks(click)
+            !trailing -> onClick()
+          }
+        },
       ),
   ) {
     content(hovered)

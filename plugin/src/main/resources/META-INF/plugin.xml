@@ -209,6 +209,49 @@
         icon="AllIcons.Actions.MenuOpen"/>
     </group>
 
+    <!-- Upstream's bulk menu (Sidebar.tsx's handleMultiSelectContextMenu), its order and no
+         separators: a right-click on a row in the Sidebar's multi-selection. The labels carry
+         the counts, set as the menu opens -->
+    <group id="T3Code.ThreadBulkActions" text="T3 Code Threads" popup="false">
+      <action
+        id="T3Code.Bulk.Unpin"
+        class="io.github.xxfast.t3code.plugin.actions.BulkUnpinAction"
+        text="Unpin"
+        description="Unpin the selected threads"
+        icon="AllIcons.General.PinSelected"/>
+      <action
+        id="T3Code.Bulk.Settle"
+        class="io.github.xxfast.t3code.plugin.actions.BulkSettleAction"
+        text="Settle"
+        description="Settle the selected threads"
+        icon="AllIcons.Actions.Checked"/>
+      <group
+        id="T3Code.Bulk.Snooze"
+        class="io.github.xxfast.t3code.plugin.actions.BulkSnoozeGroup"
+        text="Snooze"
+        description="Take the selected threads out of the inbox until later"
+        icon="AllIcons.Vcs.History"
+        popup="true"/>
+      <action
+        id="T3Code.Bulk.RegenerateTitles"
+        class="io.github.xxfast.t3code.plugin.actions.BulkRegenerateTitlesAction"
+        text="Regenerate titles"
+        description="Have the server write new titles for the selected threads"
+        icon="AllIcons.Actions.Refresh"/>
+      <action
+        id="T3Code.Bulk.MarkUnread"
+        class="io.github.xxfast.t3code.plugin.actions.BulkMarkUnreadAction"
+        text="Mark unread"
+        description="Show the selected threads' latest runs as unseen"
+        icon="AllIcons.Toolwindows.NotificationsNew"/>
+      <action
+        id="T3Code.Bulk.Delete"
+        class="io.github.xxfast.t3code.plugin.actions.BulkDeleteAction"
+        text="Delete"
+        description="Delete the selected threads and their conversation history"
+        icon="AllIcons.General.Delete"/>
+    </group>
+
     <!-- Upstream's chat.new: the "New thread in..." picker. In the IDE's New and Generate popups,
          what mod+n opens here, rather than on the key itself -->
     <action

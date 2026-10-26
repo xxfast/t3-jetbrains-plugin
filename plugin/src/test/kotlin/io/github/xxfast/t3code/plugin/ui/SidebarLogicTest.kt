@@ -103,6 +103,13 @@ class SidebarLogicTest {
   }
 
   @Test
+  fun `a bulk settle moves on past the cards settling with it`() {
+    val inbox: List<Thread> = listOf(thread("a"), thread("b"), thread("c"), thread("d"))
+    assertEquals("d", nextCard(inbox, "b", coParking = setOf("b", "c")))
+    assertNull(nextCard(inbox, "a", coParking = setOf("a", "b", "c", "d")))
+  }
+
+  @Test
   fun `a closed shelf counts its rows`() {
     assertEquals("Settled", shelfLabel("Settled", open = true, count = 3))
     assertEquals("Settled (3)", shelfLabel("Settled", open = false, count = 3))

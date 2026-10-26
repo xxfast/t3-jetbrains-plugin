@@ -1,11 +1,14 @@
 package io.github.xxfast.t3code.plugin.actions
 
 import io.github.xxfast.t3code.plugin.ui.READ_ONLY as COMPOSER_READ_ONLY
+import io.github.xxfast.t3code.plugin.ui.BulkMenuItem
 import io.github.xxfast.t3code.plugin.ui.OrderKeyAssignment
 import io.github.xxfast.t3code.plugin.ui.ProjectFilter
 import io.github.xxfast.t3code.plugin.ui.SidebarThreadDropPlan
 import io.github.xxfast.t3code.plugin.ui.operateBlockReason
 import io.github.xxfast.t3code.plugin.ui.SnoozePreset
+import io.github.xxfast.t3code.plugin.ui.buildBulkTitleRegenerationContextMenuItem
+import io.github.xxfast.t3code.plugin.ui.buildBulkUnpinContextMenuItem
 import io.github.xxfast.t3code.plugin.ui.canSnooze
 import io.github.xxfast.t3code.plugin.ui.settled
 import io.github.xxfast.t3code.plugin.ui.topOfPinnedRunOrderKey
@@ -351,3 +354,69 @@ fun unsettleUndoCommands(row: Thread, commandId: String): List<Command> = buildL
     add(Command.ThreadSnooze(commandId = id, threadId = row.id, snoozedUntil = until))
   }
 }
+
+/** A bulk menu entry and the rows it acts on, which aren't always all of them. */
+data class BulkEntry(val item: BulkMenuItem, val targets: List<Thread>)
+
+/**
+ * The bulk menu `handleMultiSelectContextMenu` (Sidebar.tsx) builds for the picked [rows], in
+ * its order. Null entries aren't shown. Settle isn't behind `threadSettlement` there, so it
+ * isn't here either. [pinning], [snooze] and [titleRegeneration] are the server's capabilities;
+ * without [operable] everything but Mark unread greys, upstream's `canOperateThreads`.
+ */
+data class BulkThreadMenu(
+  val unpin: BulkEntry?,
+  val settle: BulkEntry,
+  val snooze: BulkEntry?,
+  val regenerateTitles: BulkEntry?,
+  val markUnread: BulkEntry,
+  val delete: BulkEntry,
+)
+
+fun bulkThreadMenu(
+  rows: List<Thread>,
+  pinning: Boolean,
+  snooze: Boolean,
+  titleRegeneration: Boolean,
+  operable: Boolean,
+  now: Instant,
+): BulkThreadMenu {
+  val count: Int = rows.size
+  val settling: List<Thread> = rows.filter { !it.settled }
+  val canSnoozeSelection: Boolean = snooze && rows.all { it.canSnooze(now) }
+  val supported: List<Thread> = if (titleRegeneration) rows else emptyList()
+  val regeneratable: List<Thread> = supported.filter { it.titleRegeneration == null }
+  val pinned: List<Thread> = if (pinning) rows.filter { it.pinned } else emptyList()
+  fun BulkMenuItem.unless(blocked: Boolean): BulkMenuItem = copy(disabled = disabled || blocked)
+  return BulkThreadMenu(
+    unpin = buildBulkUnpinContextMenuItem(pinned.size)
+      ?.let { BulkEntry(it.unless(!operable), pinned) },
+    settle = BulkEntry(
+      BulkMenuItem("Settle ($count)", disabled = settling.isEmpty() || !operable),
+      settling,
+    ),
+    snooze = if (canSnoozeSelection) {
+      BulkEntry(BulkMenuItem("Snooze ($count)", disabled = !operable), rows)
+    } else {
+      null
+    },
+    regenerateTitles = buildBulkTitleRegenerationContextMenuItem(supported.size, regeneratable.size)
+      ?.let { BulkEntry(it.unless(!operable), regeneratable) },
+    markUnread = BulkEntry(BulkMenuItem("Mark unread ($count)"), rows),
+    delete = BulkEntry(BulkMenuItem("Delete ($count)", disabled = !operable), rows),
+  )
+}
+
+/** The bulk delete's confirmation, Sidebar.tsx's `handleMultiSelectContextMenu`. */
+fun bulkDeletePrompt(count: Int): String = "Delete $count thread${if (count == 1) "" else "s"}?"
+
+const val BULK_DELETE_WARNING: String =
+  "This permanently clears conversation history for these threads."
+
+/** A bulk snooze's toast when some of it failed: how many, or all of it. */
+fun bulkSnoozeFailureTitle(failed: Int, snoozed: Int): String =
+  if (snoozed > 0) {
+    "Failed to snooze $failed thread${if (failed == 1) "" else "s"}"
+  } else {
+    "Failed to snooze threads"
+  }

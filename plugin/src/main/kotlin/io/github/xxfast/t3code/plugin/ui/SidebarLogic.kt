@@ -214,11 +214,12 @@ fun sections(
  * Where settling the open [current] thread moves to: the next inbox card after it, wrapping
  * round, as `planForwardNavigation` (Sidebar.tsx:3213) picks it. Null when [current] isn't a
  * card or it's the only one; upstream then starts a new thread, which the plugin can't yet (#17).
+ * [coParking] are the cards a bulk settle or snooze takes out with it, skipped too.
  */
-fun nextCard(inbox: List<Thread>, current: String): String? {
+fun nextCard(inbox: List<Thread>, current: String, coParking: Set<String> = emptySet()): String? {
   val index: Int = inbox.indexOfFirst { it.id == current }
   if (index == -1) return null
-  return (inbox.drop(index + 1) + inbox.take(index)).firstOrNull()?.id
+  return (inbox.drop(index + 1) + inbox.take(index)).firstOrNull { it.id !in coParking }?.id
 }
 
 /** A collapsed shelf's header counts its rows, as the section headers at Sidebar.tsx:4982 do. */

@@ -5,7 +5,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.CommonShortcuts
 import com.intellij.openapi.project.DumbAware
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
@@ -19,6 +23,7 @@ import io.github.xxfast.t3code.plugin.actions.WAKE_ACTION
 import io.github.xxfast.t3code.plugin.actions.blockedBy
 import io.github.xxfast.t3code.plugin.actions.dropThread
 import io.github.xxfast.t3code.plugin.actions.performThreadAction
+import io.github.xxfast.t3code.plugin.actions.showThreadBulkMenu
 import io.github.xxfast.t3code.plugin.actions.showThreadMenu
 import io.github.xxfast.t3code.plugin.ide.ProjectAwareness
 import io.github.xxfast.t3code.plugin.ide.RunningTerminals
@@ -35,6 +40,7 @@ import io.github.xxfast.t3code.plugin.ui.THREAD_PINNING
 import io.github.xxfast.t3code.plugin.ui.THREAD_PIN_REORDER
 import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SNOOZE
+import io.github.xxfast.t3code.plugin.ui.ThreadSelectionState
 import io.github.xxfast.t3code.plugin.ui.supports
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.ServerInfo
@@ -59,6 +65,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
     val awareness: ProjectAwareness = ProjectAwareness.getInstance(project)
     val controller: ChatController = ChatController.getInstance(project)
     val renamer: SidebarRename = SidebarRename.getInstance(project)
+    val picks: SidebarMultiSelection = SidebarMultiSelection.getInstance(project)
     val panel: JComponent = JewelComposePanel {
       val filter: ProjectFilter by awareness.filter.collectAsState()
       val open: Set<String> by awareness.open.collectAsState()
@@ -131,6 +138,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
       }
       val renaming: String? by renamer.renaming.collectAsState()
       val shelves: Shelves by SidebarShelves.get().shelves.collectAsState()
+      val picked: ThreadSelectionState by picks.selection.collectAsState()
       Sidebar(
         projects = projects,
         threads = threads,
@@ -139,10 +147,23 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         favicons = favicons,
         providers = providers,
         header = header,
-        onContextMenu = { threadId, x, y -> showThreadMenu(project, threadId, x, y) },
+        // A picked row opens the bulk menu, `handleThreadContextMenu`
+        onContextMenu = { threadId, x, y ->
+          val now: ThreadSelectionState = picks.selection.value
+          if (now.hasSelection && threadId in now.selectedThreadKeys) {
+            showThreadBulkMenu(project, now.selectedThreadKeys.toList(), x, y)
+          } else {
+            showThreadMenu(project, threadId, x, y)
+          }
+        },
         filter = filter,
         open = open,
-        onFilterChange = awareness::choose,
+        // A selection made under one scope can hold rows the next one hides, upstream's
+        // `setProjectScopeKey`
+        onFilterChange = { choice ->
+          picks.clear()
+          awareness.choose(choice)
+        },
         onNewThread = if (operable) NewThread.getInstance(project)::open else null,
         onOpenSettings = { T3.openSettings(project) },
         settlement = settlement,
@@ -152,8 +173,23 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         onShelvesChange = SidebarShelves.get()::change,
         renaming = renaming,
         details = details,
+        selection = picked,
+        onSelectionChange = picks::change,
       )
     }
+    // Escape drops the multi-selection, as upstream's `_chat.tsx` keydown does. An action on the
+    // panel rather than a Compose key handler, as the IDE's keymap sees Escape first. Off while
+    // renaming, so the rename field's Escape still cancels it.
+    object : DumbAwareAction() {
+      override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+      override fun update(e: AnActionEvent) {
+        e.presentation.isEnabled =
+          picks.selection.value.hasSelection && renamer.renaming.value == null
+      }
+
+      override fun actionPerformed(e: AnActionEvent) = picks.clear()
+    }.registerCustomShortcutSet(CommonShortcuts.ESCAPE, panel, toolWindow.disposable)
     val content: Content = ContentFactory.getInstance().createContent(panel, null, false)
     toolWindow.contentManager.addContent(content)
   }

@@ -145,6 +145,28 @@ fun showThreadMenu(
     threadContext(project, threadId, view = view, fromSidebar = view == null)
   val actions: ActionGroup =
     group?.let { ActionManager.getInstance().getAction(it) as? ActionGroup } ?: threadActions()
+  showActionPopup(actions, context, x, y)
+}
+
+/** The bulk actions, registered in `plugin.xml`. */
+const val THREAD_BULK_ACTIONS: String = "T3Code.ThreadBulkActions"
+
+/**
+ * The bulk menu for the picked [threadIds], at [x], [y] on screen: upstream's
+ * `handleMultiSelectContextMenu`, what a right-click on a picked row opens.
+ */
+fun showThreadBulkMenu(project: Project, threadIds: List<String>, x: Int, y: Int) {
+  val context: DataContext = SimpleDataContext.builder()
+    .add(CommonDataKeys.PROJECT, project)
+    .add(T3DataKeys.THREAD_IDS, threadIds)
+    .add(T3DataKeys.FROM_SIDEBAR, true)
+    .build()
+  val actions: ActionGroup =
+    ActionManager.getInstance().getAction(THREAD_BULK_ACTIONS) as ActionGroup
+  showActionPopup(actions, context, x, y)
+}
+
+private fun showActionPopup(actions: ActionGroup, context: DataContext, x: Int, y: Int) {
   JBPopupFactory.getInstance()
     .createActionGroupPopup(
       null,

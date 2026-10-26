@@ -1,6 +1,8 @@
 package io.github.xxfast.t3code.plugin.actions
 
 import io.github.xxfast.t3code.plugin.fixtures.Scenario
+import io.github.xxfast.t3code.plugin.ui.BASE_THREAD
+import io.github.xxfast.t3code.plugin.ui.BulkMenuItem
 import io.github.xxfast.t3code.plugin.ui.OrderKeyAssignment
 import io.github.xxfast.t3code.plugin.ui.ProjectFilter
 import io.github.xxfast.t3code.plugin.ui.SidebarThreadDropPlan
@@ -264,6 +266,71 @@ class ThreadActionsLogicTest {
   }
 
   @Test
+  fun `the bulk menu counts every row, unpin and regenerate only the ones they act on`() {
+    val pinned: Thread = BASE_THREAD.copy(id = "p", pinnedAt = AT)
+    val settled: Thread = BASE_THREAD.copy(id = "s", settledOverride = "settled")
+    val regenerating: Thread =
+      BASE_THREAD.copy(id = "r", titleRegeneration = ThreadTitleRegeneration("q", AT))
+    val rows: List<Thread> = listOf(pinned, settled, regenerating)
+    val menu: BulkThreadMenu = bulkMenu(rows)
+    assertEquals(BulkEntry(BulkMenuItem("Unpin (1)"), listOf(pinned)), menu.unpin)
+    assertEquals(BulkEntry(BulkMenuItem("Settle (3)"), listOf(pinned, regenerating)), menu.settle)
+    assertEquals(BulkEntry(BulkMenuItem("Snooze (3)"), rows), menu.snooze)
+    val regenerate = BulkEntry(BulkMenuItem("Regenerate titles (2)"), listOf(pinned, settled))
+    assertEquals(regenerate, menu.regenerateTitles)
+    assertEquals(BulkEntry(BulkMenuItem("Mark unread (3)"), rows), menu.markUnread)
+    assertEquals(BulkEntry(BulkMenuItem("Delete (3)"), rows), menu.delete)
+  }
+
+  @Test
+  fun `the bulk menu leaves out what the server or the rows can't do`() {
+    val idle: Thread = BASE_THREAD.copy(id = "a")
+    val asking: Thread = BASE_THREAD.copy(
+      id = "b",
+      settledOverride = "settled",
+      pendingRuntimeRequest = PendingRuntimeRequestSummary("q", "command", AT),
+    )
+    assertNull(bulkMenu(listOf(idle), pinning = false).unpin, "Pins need threadPinning")
+    assertNull(bulkMenu(listOf(idle.copy(pinnedAt = AT)), pinning = false).unpin)
+    assertNull(bulkMenu(listOf(idle), snooze = false).snooze)
+    assertNull(bulkMenu(listOf(idle, asking)).snooze, "One row waiting on you keeps them all")
+    assertNull(bulkMenu(listOf(idle), titleRegeneration = false).regenerateTitles)
+    assertTrue(bulkMenu(listOf(asking)).settle.item.disabled, "Nothing left to settle")
+    val busy: Thread = idle.copy(titleRegeneration = ThreadTitleRegeneration("q", AT))
+    val all: BulkEntry? = bulkMenu(listOf(busy)).regenerateTitles
+    assertEquals(BulkEntry(BulkMenuItem("Regenerating… (1)", disabled = true), emptyList()), all)
+  }
+
+  @Test
+  fun `a read-only pairing greys the bulk menu except Mark unread`() {
+    val menu: BulkThreadMenu = bulkMenu(listOf(BASE_THREAD.copy(pinnedAt = AT)), operable = false)
+    assertTrue(menu.unpin!!.item.disabled)
+    assertTrue(menu.settle.item.disabled)
+    assertTrue(menu.snooze!!.item.disabled)
+    assertTrue(menu.regenerateTitles!!.item.disabled)
+    assertFalse(menu.markUnread.item.disabled)
+    assertTrue(menu.delete.item.disabled)
+  }
+
+  @Test
+  fun `bulk delete and snooze say how many`() {
+    assertEquals("Delete 1 thread?", bulkDeletePrompt(1))
+    assertEquals("Delete 3 threads?", bulkDeletePrompt(3))
+    assertEquals("Failed to snooze 1 thread", bulkSnoozeFailureTitle(failed = 1, snoozed = 2))
+    assertEquals("Failed to snooze 2 threads", bulkSnoozeFailureTitle(failed = 2, snoozed = 1))
+    assertEquals("Failed to snooze threads", bulkSnoozeFailureTitle(failed = 3, snoozed = 0))
+  }
+
+  private fun bulkMenu(
+    rows: List<Thread>,
+    pinning: Boolean = true,
+    snooze: Boolean = true,
+    titleRegeneration: Boolean = true,
+    operable: Boolean = true,
+  ): BulkThreadMenu =
+    bulkThreadMenu(rows, pinning, snooze, titleRegeneration, operable, Instant.parse(AT))
+
+  @Test
   fun `regenerate title waits for the one in flight`() {
     val regenerating: Thread =
       row.copy(titleRegeneration = ThreadTitleRegeneration("r", "2026-10-19T09:00:00Z"))
@@ -364,6 +431,8 @@ private fun connected(vararg permissions: String): ConnectionState.Connected =
       permissions = permissions.toList(),
     ),
   )
+
+private const val AT: String = "2026-10-19T09:00:00Z"
 
 private val OPERATING: ConnectionState = connected("orchestration:read", OPERATE)
 
