@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListItemInfo
+import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,6 +35,7 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -714,6 +716,20 @@ private fun MessagesTimeline(
       follow.scrollToEnd()
     }
   }
+  // `TimelineMinimap`'s ticks, and the rows on screen that light them, MessagesTimeline.tsx
+  val minimapItems: List<TimelineMinimapItem> = remember(rows) { deriveTimelineMinimapItems(rows) }
+  val minimapVisibleRange: TimelineMinimapVisibleRange by remember(state) {
+    derivedStateOf {
+      val info: LazyListLayoutInfo = state.layoutInfo
+      resolveTimelineMinimapVisibleRange(
+        buffered = info.visibleItemsInfo,
+        viewportStart = info.viewportStartOffset,
+        viewportEnd = info.viewportEndOffset,
+      )
+    }
+  }
+  val minimapViewOffset: Int = with(LocalDensity.current) { 8.dp.roundToPx() }
+  val scope: CoroutineScope = rememberCoroutineScope()
 
   BoxWithConstraints(modifier.fillMaxSize()) {
     // `.messages-timeline-scroll`: 12px a side when narrow, 48px from 640px up
@@ -750,6 +766,22 @@ private fun MessagesTimeline(
         }
       }
     }
+    // The lane the rows lay out, upstream's `[data-timeline-root]` width
+    val laneWidth: Dp = minOf(maxWidth, MAX_CONTENT_WIDTH) - side * 2
+    TimelineMinimap(
+      items = minimapItems,
+      hasPersistentGutter =
+        resolveTimelineMinimapHasPersistentGutter(maxWidth.value, laneWidth.value),
+      hitStripWidth = resolveTimelineMinimapHitStripWidth(maxWidth.value, laneWidth.value),
+      visibleRange = { minimapVisibleRange },
+      viewportHeight = maxHeight,
+      onSelect = { item ->
+        follow.cancelForUserNavigation()
+        // `viewOffset: 24`, of which the list's top padding is 16
+        scope.launch { state.animateScrollToItem(item.rowIndex, -minimapViewOffset) }
+      },
+      modifier = Modifier.align(Alignment.CenterStart),
+    )
   }
 }
 
