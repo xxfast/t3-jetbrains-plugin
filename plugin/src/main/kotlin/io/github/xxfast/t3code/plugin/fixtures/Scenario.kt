@@ -66,6 +66,11 @@ class ScenarioFile(
   val pullRequests: List<PullRequestListEntry> = emptyList(),
   /** Pull requests only `pullRequests.detail` finds, past what the list shows. */
   val olderPullRequests: List<PullRequestListEntry> = emptyList(),
+  /**
+   * Changes to a thread's row per thread id, each a partial row with an `after` in milliseconds,
+   * played one after another from load, so a thread can complete or fail while you watch.
+   */
+  val transitions: Map<String, List<JsonObject>> = emptyMap(),
 )
 
 @Serializable
@@ -77,6 +82,9 @@ class ScenarioConnection(
 
 /** A turn item and how long to wait before it shows up, in milliseconds. */
 class FixtureItem(val item: TurnItem, val after: Long)
+
+/** Fields laid over a thread's row, and how long to wait before they are, in milliseconds. */
+class FixtureTransition(val fields: JsonObject, val after: Long)
 
 /**
  * A scenario file, decoded all the way down so a bad file fails at load, not mid-replay.
@@ -105,6 +113,7 @@ class Scenario(
   val projectEntries: List<ProjectEntry> = emptyList(),
   val pullRequests: List<PullRequestListEntry> = emptyList(),
   val olderPullRequests: List<PullRequestListEntry> = emptyList(),
+  val transitions: Map<String, List<FixtureTransition>> = emptyMap(),
 ) {
   companion object {
     fun decode(text: String): Scenario {
@@ -131,6 +140,7 @@ class Scenario(
         projectEntries = file.projectEntries,
         pullRequests = file.pullRequests,
         olderPullRequests = file.olderPullRequests,
+        transitions = file.transitions.mapValues { (_, entries) -> entries.map(::transition) },
       )
     }
 
@@ -166,6 +176,7 @@ class Scenario(
       projectEntries = parts.flatMap { it.projectEntries }.distinctBy { it.path },
       pullRequests = parts.flatMap { it.pullRequests }.distinctBy { it.url },
       olderPullRequests = parts.flatMap { it.olderPullRequests }.distinctBy { it.url },
+      transitions = parts.map { it.transitions }.fold(emptyMap(), ::append),
     )
 
     fun failed(name: String, message: String): Scenario = Scenario(
@@ -226,4 +237,9 @@ private fun fixtureItem(entry: JsonObject): FixtureItem {
     JsonObject(entry - "after"),
   )
   return FixtureItem(item, after)
+}
+
+private fun transition(entry: JsonObject): FixtureTransition {
+  val after: Long = (entry["after"] as? JsonPrimitive)?.long ?: 0
+  return FixtureTransition(JsonObject(entry - "after"), after)
 }

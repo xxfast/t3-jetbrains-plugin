@@ -39,17 +39,18 @@ val INTERRUPTIBLE: Set<String> = setOf("preparing", "starting", "running", "wait
 
 enum class ThreadActionKind {
   Stop, Interrupt, NewThreadOnBranch, Archive, Pin, MarkUnread, Settle, AutoSettle, Snooze, Wake,
-  Rename, RegenerateTitle, Delete, FilterByProject, Copy,
+  Rename, RegenerateTitle, Delete, FilterByProject, Copy, Mute,
 }
 
 /**
  * `threadActionRequiresOperate`, threadActionMenu.logic.ts:92: read markers and copying stay
  * available to a read-only pairing. Filter by project isn't on upstream's list, so it greys too.
  * Upstream's new thread on a branch is a draft a read-only pairing could open; the plugin greys
- * it, as the draft could never be sent.
+ * it, as the draft could never be sent. Mute is plugin-only and local, so it never greys.
  */
 val ThreadActionKind.requiresOperate: Boolean
-  get() = this != ThreadActionKind.MarkUnread && this != ThreadActionKind.Copy
+  get() = this != ThreadActionKind.MarkUnread && this != ThreadActionKind.Copy &&
+    this != ThreadActionKind.Mute
 
 /**
  * Why no command can go out on [connection], or null when one can: [operateBlockReason], the one
@@ -72,7 +73,7 @@ fun disabledReason(
     ThreadActionKind.Stop, ThreadActionKind.NewThreadOnBranch, ThreadActionKind.Pin,
     ThreadActionKind.Settle, ThreadActionKind.AutoSettle, ThreadActionKind.Wake,
     ThreadActionKind.Rename, ThreadActionKind.Delete, ThreadActionKind.FilterByProject,
-    ThreadActionKind.Copy -> null
+    ThreadActionKind.Copy, ThreadActionKind.Mute -> null
     ThreadActionKind.RegenerateTitle ->
       if (row.titleRegeneration == null) null else "Already regenerating the title"
     // threadActionMenu.logic.ts's `canSnoozeNow`

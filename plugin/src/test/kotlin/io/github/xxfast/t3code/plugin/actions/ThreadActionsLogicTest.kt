@@ -58,9 +58,9 @@ class ThreadActionsLogicTest {
   }
 
   @Test
-  fun `read-only keeps mark unread and copy, as threadActionRequiresOperate`() {
+  fun `read-only keeps mark unread and copy, as threadActionRequiresOperate, and mute`() {
     val operating: List<ThreadActionKind> = ThreadActionKind.entries.filter { it.requiresOperate }
-    assertEquals(ThreadActionKind.entries - operating, listOf(MARK_UNREAD, COPY))
+    assertEquals(ThreadActionKind.entries - operating, listOf(MARK_UNREAD, COPY, MUTE))
     assertTrue(ThreadActionKind.FilterByProject in operating)
     val done: Thread = row.copy(latestRunCompletedAt = "2026-10-19T09:00:00Z")
     assertNull(disabledReason(MARK_UNREAD, connected("orchestration:read"), done))
@@ -437,6 +437,7 @@ private const val AT: String = "2026-10-19T09:00:00Z"
 private val OPERATING: ConnectionState = connected("orchestration:read", OPERATE)
 
 private val MARK_UNREAD: ThreadActionKind = ThreadActionKind.MarkUnread
+private val MUTE: ThreadActionKind = ThreadActionKind.Mute
 
 private val COPY: ThreadActionKind = ThreadActionKind.Copy
 

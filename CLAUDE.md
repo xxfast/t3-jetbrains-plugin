@@ -71,6 +71,9 @@ How it fits together:
   and unknown fences and a Kotlin block that streams in, `usage-limit.json` with a run a usage
   limit stopped (the recovery banner above the composer; the plain error banner over the
   timeline is `unread.json`'s failed "Run the wasmJs browser tests headless"),
+  `notifications.json` with `transitions`, thread-level `after`s that lay fields over a row:
+  "Fix predictive back on iOS 26" completes 8 s after load and "Benchmark the IndexedDB codec"
+  fails 4 s later, for the "Thread completed" and "Thread failed" balloons,
   `worktree-setup.json` with a
   first turn whose worktree is still being prepared, `skills.json` with provider skills and a
   workspace snapshot for the `$` menu, `files.json` with the files and folders `@` searches,

@@ -64,7 +64,7 @@ import org.jetbrains.jewel.bridge.JewelComposePanel
 class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
   // Runs when the tool window registers, before it's ever opened
   override fun init(toolWindow: ToolWindow) {
-    WaitingWatcher.getInstance(toolWindow.project).attach(toolWindow)
+    ThreadNotificationCoordinator.getInstance(toolWindow.project).attach(toolWindow)
   }
 
   override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {

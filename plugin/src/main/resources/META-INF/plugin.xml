@@ -207,6 +207,14 @@
         text="Open in IDE"
         description="Focus the IDE window that has the thread's checkout open, else open it in a new one"
         icon="AllIcons.Actions.MenuOpen"/>
+      <!-- Plugin-only, upstream has no mute. Local to this IDE project, so read-only pairings
+           keep it -->
+      <separator/>
+      <action
+        id="T3Code.ToggleMute"
+        class="io.github.xxfast.t3code.plugin.actions.MuteThreadAction"
+        text="Mute notifications"
+        description="Mute or unmute the thread's notification balloons in this project"/>
     </group>
 
     <!-- Upstream's bulk menu (Sidebar.tsx's handleMultiSelectContextMenu), its order and no

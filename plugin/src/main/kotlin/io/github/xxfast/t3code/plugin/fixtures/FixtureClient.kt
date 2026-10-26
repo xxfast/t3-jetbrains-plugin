@@ -158,6 +158,9 @@ class FixtureClient(
   /** The fake assistant replies in flight, by thread id, so an interrupt can stop one. */
   private val replies: ConcurrentHashMap<String, Job> = ConcurrentHashMap()
 
+  /** The scenario's `transitions` playing, restarted when the directory reloads. */
+  private var transitions: Job? = null
+
   /** What [terminalWrite] echoes, by `threadId/terminalId`. */
   private val terminals: ConcurrentHashMap<String, MutableSharedFlow<TerminalAttachStreamEvent>> =
     ConcurrentHashMap()
@@ -1526,7 +1529,22 @@ class FixtureClient(
     // The sequence only moves forward, or a sent message waiting on it would never retire
     overlay.value = Overlay(sequence = sequence.get())
     refreshedSnapshots.clear()
-    loaded.value = load(files)
+    transitions?.cancel()
+    val scenario: Scenario = load(files)
+    loaded.value = scenario
+    transitions = play(scenario.transitions)
+  }
+
+  /** Each thread's transitions in order, every one laid over its row and stamping `updatedAt`. */
+  private fun play(transitions: Map<String, List<FixtureTransition>>): Job = scope.launch {
+    transitions.forEach { (threadId, steps) ->
+      launch {
+        steps.forEach { step ->
+          delay(step.after)
+          updateRow(threadId) { row -> row.with(step.fields, Instant.now().toString()) }
+        }
+      }
+    }
   }
 
   private fun load(files: List<Path>): Scenario {
@@ -1571,6 +1589,13 @@ private val IN_FLIGHT: Set<String> = setOf("pending", "running", "waiting")
 
 /** Run statuses a send queues behind, `ACTIVE_RUN_STATUSES` in threadWorkflows.ts:14. */
 private val ACTIVE_RUN: Set<String> = setOf("preparing", "starting", "running", "waiting")
+
+/** This row with [fields] laid over it, through its JSON, updated at [now] unless they say. */
+private fun Thread.with(fields: JsonObject, now: String): Thread {
+  val json: JsonObject = T3Json.encodeToJsonElement(Thread.serializer(), this).jsonObject
+  val updated: Map<String, JsonElement> = json + ("updatedAt" to JsonPrimitive(now)) + fields
+  return T3Json.decodeFromJsonElement(Thread.serializer(), JsonObject(updated))
+}
 
 /** [item], whatever its type, closed as cancelled at [now], through its JSON to stay generic. */
 private fun cancelled(item: TurnItem, now: String): TurnItem {

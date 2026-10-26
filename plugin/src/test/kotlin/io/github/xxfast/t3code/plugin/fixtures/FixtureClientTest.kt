@@ -226,6 +226,27 @@ class FixtureClientTest {
   }
 
   @Test
+  fun `transitions change a row after their delay, stamping it`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val before: Thread = client.threads
+      .first { threads -> threads.any { it.id == COMPLETES } }
+      .first { it.id == COMPLETES }
+    assertEquals("running", before.status)
+
+    val done: Thread = client.threads
+      .first { threads -> threads.any { it.id == COMPLETES && it.status == "completed" } }
+      .first { it.id == COMPLETES }
+    assertNull(done.activeRunId)
+    assertTrue(done.updatedAt > before.updatedAt, "A transition stamps updatedAt")
+
+    val failed: Thread = client.threads
+      .first { threads -> threads.any { it.id == FAILS && it.status == "failed" } }
+      .first { it.id == FAILS }
+    assertNotNull(failed.lastError)
+    assertEquals(before.title, client.threads.value.first { it.id == COMPLETES }.title)
+  }
+
+  @Test
   fun `the last file that sets a connection wins`(@TempDir directory: Path) = runTest {
     directory.resolve("a.json").writeText("""{ "connection": { "state": "authError" } }""")
     directory.resolve("b.json").writeText("""{ "connection": { "state": "unpaired" } }""")
@@ -984,6 +1005,8 @@ class FixtureClientTest {
     JsonObject(mapOf(*entries)).toString()
 
   private companion object {
+    const val COMPLETES = "thr_01JC4B2W5RROUTER1"
+    const val FAILS = "thr_01JC3A0P7SPAUSED1"
     const val THREAD = "thr_01JC4A1F0QWMIGRATE"
     const val WAITING = "thr_01JC49ZK2HWAITING"
     const val UNKNOWN = "thr_01JC4C0X1UNKNOWN"

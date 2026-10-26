@@ -23,6 +23,7 @@ import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ide.ThreadVirtualFile
 import io.github.xxfast.t3code.plugin.ide.ThreadVisits
 import io.github.xxfast.t3code.plugin.ide.notify
+import io.github.xxfast.t3code.plugin.settings.T3ProjectState
 import io.github.xxfast.t3code.plugin.settings.T3Settings
 import io.github.xxfast.t3code.plugin.ui.ProjectFilter
 import io.github.xxfast.t3code.plugin.ui.SnoozePreset
@@ -188,6 +189,26 @@ internal suspend fun ThreadTarget.markUnread() {
   // where upstream's dispatch fails without a word
   if (blockedBy(client.connection.value) != null) return
   client.dispatch(Command.ThreadMarkUnread(commandId = commandId(), threadId = row.id))
+}
+
+/**
+ * "Mute notifications" or "Unmute notifications". Plugin-only, upstream has no mute: a muted
+ * thread gets no balloon from [io.github.xxfast.t3code.plugin.ThreadNotificationCoordinator] and
+ * still counts on T3 Sidebar's badge. Kept per IDE project in [T3ProjectState].
+ */
+class MuteThreadAction : ThreadAction(ThreadActionKind.Mute) {
+  override fun update(e: AnActionEvent) {
+    super.update(e)
+    val project: Project = e.project ?: return
+    val id: String = e.threadId(project) ?: return
+    val muted: Boolean = T3ProjectState.getInstance(project).isMuted(id)
+    e.presentation.text = if (muted) "Unmute notifications" else "Mute notifications"
+  }
+
+  override suspend fun perform(target: ThreadTarget) {
+    val state: T3ProjectState = T3ProjectState.getInstance(target.project)
+    state.setMuted(target.row.id, !state.isMuted(target.row.id))
+  }
 }
 
 /**
