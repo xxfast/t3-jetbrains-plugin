@@ -273,6 +273,65 @@
       icon="AllIcons.Actions.Undo"
       use-shortcut-of="$Undo"/>
 
+    <!-- Upstream's thread.previous, thread.next and thread.jump.1 to 9, down the Sidebar's rows.
+         No default keys: upstream's mod+shift+[ and ] are code block selection here and editor
+         tabs on macOS, mod+1 to 9 are bookmarks here and tool windows on macOS -->
+    <action
+      id="T3Code.PreviousThread"
+      class="io.github.xxfast.t3code.plugin.actions.PreviousThreadAction"
+      text="Previous T3 Thread"
+      description="Open the thread above the open one in the T3 Sidebar"/>
+    <action
+      id="T3Code.NextThread"
+      class="io.github.xxfast.t3code.plugin.actions.NextThreadAction"
+      text="Next T3 Thread"
+      description="Open the thread below the open one in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread1"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 1"
+      description="Open the first thread in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread2"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 2"
+      description="Open the second thread in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread3"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 3"
+      description="Open the third thread in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread4"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 4"
+      description="Open the fourth thread in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread5"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 5"
+      description="Open the fifth thread in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread6"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 6"
+      description="Open the sixth thread in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread7"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 7"
+      description="Open the seventh thread in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread8"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 8"
+      description="Open the eighth thread in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread9"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 9"
+      description="Open the ninth thread in the T3 Sidebar"/>
+
     <!-- Paste over the composer with files or an image on the clipboard attaches them -->
     <action
       id="T3Code.PasteAttachment"

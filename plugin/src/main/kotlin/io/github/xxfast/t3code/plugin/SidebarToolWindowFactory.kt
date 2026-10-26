@@ -11,6 +11,7 @@ import androidx.compose.runtime.snapshotFlow
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonShortcuts
+import com.intellij.openapi.keymap.KeymapUtil
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
@@ -42,6 +43,7 @@ import io.github.xxfast.t3code.plugin.ui.THREAD_ACTIVE_REORDER
 import io.github.xxfast.t3code.plugin.ui.THREAD_PINNING
 import io.github.xxfast.t3code.plugin.ui.THREAD_PIN_REORDER
 import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
+import io.github.xxfast.t3code.plugin.ui.THREAD_JUMP_COUNT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SNOOZE
 import io.github.xxfast.t3code.plugin.ui.ThreadSearch
 import io.github.xxfast.t3code.plugin.ui.ThreadSelectionState
@@ -75,6 +77,8 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
     val controller: ChatController = ChatController.getInstance(project)
     val renamer: SidebarRename = SidebarRename.getInstance(project)
     val picks: SidebarMultiSelection = SidebarMultiSelection.getInstance(project)
+    val navigation: SidebarNavigation = SidebarNavigation.getInstance(project)
+    navigation.watch(toolWindow)
     // Out here so the Escape action below can clear it too
     val search = TextFieldState()
     val searchFocused = AtomicBoolean(false)
@@ -159,6 +163,14 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
           }
         threadSearch(queries) { query -> client.searchThreads(SearchThreadsInput(query)).matches }
       }.collectAsState(ThreadSearch())
+      // Read as the hints come up, so a key just bound in the keymap shows on the next hold
+      val hints: Boolean by navigation.hints.collectAsState()
+      val jumpLabels: List<String?> = remember(hints) {
+        if (!hints) return@remember emptyList()
+        (1..THREAD_JUMP_COUNT).map { n ->
+          KeymapUtil.getFirstKeyboardShortcutText("$JUMP_TO_THREAD_ACTION$n").ifEmpty { null }
+        }
+      }
       Sidebar(
         projects = projects,
         threads = threads,
@@ -198,6 +210,8 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         search = search,
         onSearchFocus = searchFocused::set,
         messages = messages,
+        onOrderedThreadIds = navigation::order,
+        jumpLabels = jumpLabels,
       )
     }
     // Escape drops the multi-selection, as upstream's `_chat.tsx` keydown does. An action on the

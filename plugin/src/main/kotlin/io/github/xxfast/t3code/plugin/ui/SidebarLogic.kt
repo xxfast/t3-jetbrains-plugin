@@ -11,6 +11,13 @@ import io.github.xxfast.t3code.protocol.pinned
 import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeParseException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /** Thread and run statuses that mean work is in flight. */
 val RUNNING: Set<String> = setOf("preparing", "queued", "starting", "running")
@@ -214,6 +221,129 @@ fun nextCard(inbox: List<Thread>, current: String, coParking: Set<String> = empt
   val index: Int = inbox.indexOfFirst { it.id == current }
   if (index == -1) return null
   return (inbox.drop(index + 1) + inbox.take(index)).firstOrNull { it.id !in coParking }?.id
+}
+
+// Keyboard navigation: apps/web/src/components/Sidebar.logic.ts and the `thread.previous`,
+// `thread.next` and `thread.jump.N` commands of apps/web/src/keybindings.ts.
+
+/** `ThreadTraversalDirection`. */
+enum class ThreadTraversalDirection { Previous, Next }
+
+/** `THREAD_JUMP_KEYBINDING_COMMANDS`, packages/contracts/src/keybindings.ts: jumps 1 to 9. */
+const val THREAD_JUMP_COUNT: Int = 9
+
+/**
+ * `resolveAdjacentThreadId`: the row before or after [currentThreadId] in [threadIds], no wrap.
+ * With nothing open, previous is the last row and next the first. Null at either end, or when
+ * the open thread isn't a row.
+ */
+fun resolveAdjacentThreadId(
+  threadIds: List<String>,
+  currentThreadId: String?,
+  direction: ThreadTraversalDirection,
+): String? {
+  if (threadIds.isEmpty()) return null
+  if (currentThreadId == null) {
+    return if (direction == ThreadTraversalDirection.Previous) threadIds.last() else threadIds[0]
+  }
+  val currentIndex: Int = threadIds.indexOf(currentThreadId)
+  if (currentIndex == -1) return null
+  return when (direction) {
+    ThreadTraversalDirection.Previous -> threadIds.getOrNull(currentIndex - 1)
+    ThreadTraversalDirection.Next -> threadIds.getOrNull(currentIndex + 1)
+  }
+}
+
+/**
+ * `resolveSidebarRowThreadId`: subagents have no row, so an open one stands for its nearest
+ * non-subagent ancestor. A broken chain (missing parent, cycle) resolves to [threadId] itself.
+ */
+fun resolveSidebarRowThreadId(threadId: String, threads: List<Thread>): String {
+  val byId: Map<String, Thread> = threads.associateBy { it.id }
+  val visited: MutableSet<String> = mutableSetOf()
+  var thread: Thread? = byId[threadId]
+  while (thread != null && thread.shownUnderParent) {
+    val parent: String = thread.lineage.parentThreadId ?: return threadId
+    if (!visited.add(thread.id)) return threadId
+    thread = byId[parent]
+  }
+  return thread?.id ?: threadId
+}
+
+/**
+ * Upstream's `orderedThreadKeys` (`useSidebarThreads`, Sidebar.tsx): the rows as listed, which
+ * prev, next and jump N walk. The inbox, then the snoozed shelf, then the settled shelf's first
+ * [settledShown] plus the open row when it's further down. A closed shelf only keeps the open
+ * row, [routeRowThreadId]. Upstream walks these even while searching; here the results replace
+ * them, since they're the rows on screen then.
+ */
+fun orderedThreadIds(
+  sections: ThreadSections,
+  shelves: Shelves,
+  settledShown: Int,
+  routeRowThreadId: String?,
+): List<String> {
+  fun routeThreadOnly(threads: List<Thread>): List<Thread> =
+    threads.filter { it.id == routeRowThreadId }
+  val settled: List<Thread> = if (sections.settled.size <= settledShown) {
+    sections.settled
+  } else {
+    sections.settled.take(settledShown) + routeThreadOnly(sections.settled.drop(settledShown))
+  }
+  val snoozed: List<Thread> =
+    if (shelves.snoozed) sections.snoozed else routeThreadOnly(sections.snoozed)
+  val rendered: List<Thread> = if (shelves.settled) settled else routeThreadOnly(settled)
+  return (sections.inbox + snoozed + rendered).map { it.id }
+}
+
+/** Modifier keys as `ShortcutModifierStateLike` has them. */
+data class ShortcutModifiers(
+  val ctrl: Boolean = false,
+  val meta: Boolean = false,
+  val alt: Boolean = false,
+  val shift: Boolean = false,
+)
+
+/**
+ * `shouldShowThreadJumpHintsForModifiers`: the [held] modifiers are exactly those of one of the
+ * jump actions' [shortcuts], as `matchesKeybindingShortcutModifiers` compares them. With no
+ * jump bound, never.
+ */
+fun shouldShowThreadJumpHints(
+  held: ShortcutModifiers,
+  shortcuts: Collection<ShortcutModifiers>,
+): Boolean = shortcuts.any { it == held }
+
+/** `THREAD_JUMP_HINT_SHOW_DELAY_MS`: how long the modifier is held before the hints show. */
+const val THREAD_JUMP_HINT_SHOW_DELAY_MS: Long = 200
+
+/**
+ * `createThreadJumpHintVisibilityController`: the hints show once the modifier has been held
+ * for [delayMs] and hide as soon as it's let go. [sync] wants one thread, [scope]'s.
+ */
+class ThreadJumpHintVisibility(
+  private val scope: CoroutineScope,
+  private val delayMs: Long = THREAD_JUMP_HINT_SHOW_DELAY_MS,
+) {
+  private val state: MutableStateFlow<Boolean> = MutableStateFlow(false)
+  val visible: StateFlow<Boolean> = state.asStateFlow()
+
+  private var pendingShow: Job? = null
+
+  fun sync(shouldShow: Boolean) {
+    if (!shouldShow) {
+      pendingShow?.cancel()
+      pendingShow = null
+      state.value = false
+      return
+    }
+    if (state.value || pendingShow != null) return
+    pendingShow = scope.launch {
+      delay(delayMs)
+      pendingShow = null
+      state.value = true
+    }
+  }
 }
 
 /** A collapsed shelf's header counts its rows, as the section headers at Sidebar.tsx:4982 do. */

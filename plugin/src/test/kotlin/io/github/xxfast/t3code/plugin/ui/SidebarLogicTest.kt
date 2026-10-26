@@ -110,6 +110,101 @@ class SidebarLogicTest {
   }
 
   @Test
+  fun `previous and next step one row and stop at the ends`() {
+    val ids: List<String> = listOf("a", "b", "c")
+    val previous: ThreadTraversalDirection = ThreadTraversalDirection.Previous
+    val next: ThreadTraversalDirection = ThreadTraversalDirection.Next
+    assertEquals("a", resolveAdjacentThreadId(ids, "b", previous))
+    assertEquals("c", resolveAdjacentThreadId(ids, "b", next))
+    assertNull(resolveAdjacentThreadId(ids, "a", previous), "No wrap at the top")
+    assertNull(resolveAdjacentThreadId(ids, "c", next), "No wrap at the bottom")
+    assertEquals("c", resolveAdjacentThreadId(ids, null, previous), "Nothing open: the last")
+    assertEquals("a", resolveAdjacentThreadId(ids, null, next), "Nothing open: the first")
+    assertNull(resolveAdjacentThreadId(ids, "gone", next), "The open thread isn't a row")
+    assertNull(resolveAdjacentThreadId(emptyList(), null, next))
+  }
+
+  @Test
+  fun `an open subagent stands for its nearest row`() {
+    fun child(id: String, parent: String?): Thread = thread(id, relationship = "subagent")
+      .let { it.copy(lineage = it.lineage.copy(parentThreadId = parent)) }
+    val threads: List<Thread> =
+      listOf(thread("root"), child("sub", "root"), child("subsub", "sub"), child("orphan", null))
+    assertEquals("root", resolveSidebarRowThreadId("subsub", threads))
+    assertEquals("root", resolveSidebarRowThreadId("root", threads))
+    assertEquals("orphan", resolveSidebarRowThreadId("orphan", threads), "Broken chain: itself")
+    assertEquals("unknown", resolveSidebarRowThreadId("unknown", threads))
+    val cycle: List<Thread> = listOf(child("x", "y"), child("y", "x"))
+    assertEquals("x", resolveSidebarRowThreadId("x", cycle), "A cycle: itself")
+  }
+
+  @Test
+  fun `navigation walks the rows on screen, a closed shelf only keeping the open one`() {
+    val sections = ThreadSections(
+      inbox = listOf(thread("p"), thread("a")),
+      settled = listOf(thread("s1"), thread("s2"), thread("s3")),
+      snoozed = listOf(thread("z1"), thread("z2")),
+    )
+    val open = Shelves(settled = true, snoozed = true)
+    assertEquals(
+      listOf("p", "a", "z1", "z2", "s1", "s2", "s3"),
+      orderedThreadIds(sections, open, settledShown = 10, routeRowThreadId = null),
+    )
+    assertEquals(
+      listOf("p", "a", "z1", "z2", "s1"),
+      orderedThreadIds(sections, open, settledShown = 1, routeRowThreadId = null),
+      "Only the settled page",
+    )
+    assertEquals(
+      listOf("p", "a", "z1", "z2", "s1", "s3"),
+      orderedThreadIds(sections, open, settledShown = 1, routeRowThreadId = "s3"),
+      "The open row past the page comes along",
+    )
+    assertEquals(
+      listOf("p", "a", "z2"),
+      orderedThreadIds(sections, Shelves(), settledShown = 10, routeRowThreadId = "z2"),
+      "Closed shelves keep only the open row",
+    )
+    assertEquals(
+      listOf("p", "a", "s3"),
+      orderedThreadIds(sections, Shelves(), settledShown = 1, routeRowThreadId = "s3"),
+      "Even past the page",
+    )
+  }
+
+  @Test
+  fun `jump hints want exactly a jump shortcut's modifiers`() {
+    val ctrlAlt = ShortcutModifiers(ctrl = true, alt = true)
+    val bound: List<ShortcutModifiers> = listOf(ctrlAlt, ShortcutModifiers(meta = true))
+    assertTrue(shouldShowThreadJumpHints(ctrlAlt, bound))
+    assertTrue(shouldShowThreadJumpHints(ShortcutModifiers(meta = true), bound))
+    assertFalse(shouldShowThreadJumpHints(ShortcutModifiers(ctrl = true), bound), "Not all held")
+    assertFalse(
+      shouldShowThreadJumpHints(ctrlAlt.copy(shift = true), bound),
+      "One too many held",
+    )
+    assertFalse(shouldShowThreadJumpHints(ctrlAlt, emptyList()), "No jump bound")
+  }
+
+  @Test
+  fun `jump hints show after a hold and hide at once`() = runTest {
+    val hints = ThreadJumpHintVisibility(this)
+    hints.sync(true)
+    advanceTimeBy(THREAD_JUMP_HINT_SHOW_DELAY_MS - 1)
+    assertFalse(hints.visible.value, "Not yet")
+    hints.sync(true)
+    advanceTimeBy(2)
+    assertTrue(hints.visible.value, "A second sync doesn't restart the wait")
+    hints.sync(false)
+    assertFalse(hints.visible.value)
+    hints.sync(true)
+    advanceTimeBy(THREAD_JUMP_HINT_SHOW_DELAY_MS / 2)
+    hints.sync(false)
+    advanceTimeBy(THREAD_JUMP_HINT_SHOW_DELAY_MS)
+    assertFalse(hints.visible.value, "Let go before the delay")
+  }
+
+  @Test
   fun `a bulk settle moves on past the cards settling with it`() {
     val inbox: List<Thread> = listOf(thread("a"), thread("b"), thread("c"), thread("d"))
     assertEquals("d", nextCard(inbox, "b", coParking = setOf("b", "c")))

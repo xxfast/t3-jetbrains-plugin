@@ -163,6 +163,10 @@ fun Sidebar(
   search: TextFieldState = rememberTextFieldState(), // the thread search field
   onSearchFocus: (Boolean) -> Unit = {}, // whether the search field has focus
   messages: ThreadSearch = ThreadSearch(), // what the server's message search has for it
+  // The rows prev, next and jump N walk, as they change
+  onOrderedThreadIds: (List<String>) -> Unit = {},
+  // The jump shortcuts' labels by row, 1 to 9, while their modifier is held; null when unbound
+  jumpLabels: List<String?> = emptyList(),
 ) {
   val query: String = search.text.toString()
   // Snoozes wake on the minute; a half-minute tick is close enough to move them back in time
@@ -213,6 +217,21 @@ fun Sidebar(
   val ordered: List<String> = remember(sections) {
     (sections.inbox + sections.snoozed + sections.settled).map { it.id }
   }
+  // The settled shelf's page, back to the first whenever a search takes the list's place
+  var shown: Int by remember(searching) { mutableIntStateOf(FIRST_PAGE) }
+  // What prev, next and jump N walk: the rows on screen, see `orderedThreadIds`
+  val routeRow: String? = remember(selectedThreadId, threads) {
+    selectedThreadId?.let { resolveSidebarRowThreadId(it, threads) }
+  }
+  val listed: List<String> = remember(sections, shelves, shown, routeRow) {
+    orderedThreadIds(sections, shelves, shown, routeRow)
+  }
+  val navigable: List<String> = if (searching) results.map { it.id } else listed
+  LaunchedEffect(navigable) { onOrderedThreadIds(navigable) }
+  // Upstream's `jumpLabelByKey`: only the first nine rows, and only the ones with a shortcut
+  val jumps: Map<String, String> = remember(listed, jumpLabels) {
+    listed.zip(jumpLabels).mapNotNull { (id, label) -> label?.let { id to it } }.toMap()
+  }
   val current: ThreadSelectionState by rememberUpdatedState(selection)
   // Rows that leave the list leave the selection, as a bulk delete's `removeFromSelection` does
   LaunchedEffect(ordered, selection) {
@@ -261,7 +280,7 @@ fun Sidebar(
           Sections(
             projects, favicons, providers, threads, sections, selectedThreadId, onClick,
             onContextMenu, actions, shelves, onShelvesChange, renaming, details, settlement,
-            selection.selectedThreadKeys,
+            selection.selectedThreadKeys, shown, { more -> shown += more }, jumps,
           )
 
         else -> Hint(emptyHint(projects.isEmpty(), filter))
@@ -462,6 +481,9 @@ private fun Sections(
   details: RowDetails,
   settlement: Boolean,
   picked: Set<String>, // the multi-selection
+  shown: Int, // how many settled rows the shelf pages in
+  onShowMore: (Int) -> Unit,
+  jumps: Map<String, String>, // the jump hint each row shows, by thread id
 ) {
   val byId: Map<String, Project> = remember(projects) { projects.associateBy { it.id } }
   val rowsById: Map<String, Thread> = remember(threads) { threads.associateBy { it.id } }
@@ -469,7 +491,6 @@ private fun Sections(
   val ticking: Set<ThreadStatus> = setOf(ThreadStatus.Working, ThreadStatus.Waiting)
   val period: Long = if (sections.inbox.none { it.sidebarStatus() in ticking }) 30_000 else 1_000
   val now: Instant by rememberNow(period)
-  var shown: Int by remember { mutableIntStateOf(FIRST_PAGE) }
   val more: Int = moreCount(sections.settled.size, shown)
   val scroll: ScrollState = rememberScrollState()
   val snoozedShown: List<Thread> = if (shelves.snoozed) sections.snoozed else emptyList()
@@ -623,46 +644,48 @@ private fun Sections(
               add(
                 MotionItem(motionKey(item)) {
                   Slot(thread.id) {
-                    when (item.section) {
-                      SidebarSection.Pinned, SidebarSection.Active -> InboxCard(
-                        thread = thread,
-                        project = byId[thread.projectId],
-                        favicon = favicons[thread.projectId],
-                        providers = providers,
-                        now = now,
-                        selected = thread.id == selectedThreadId,
-                        picked = thread.id in picked,
-                        onClick = { kind -> click(thread.id, kind) },
-                        onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
-                        actions = actions,
-                        renaming = thread.id == renaming,
-                        details = details,
-                        rowDrag = rowDrag,
-                        lifted = lifted,
-                        dropVerb = dropVerb,
-                      )
+                    JumpHinted(jumps[thread.id]) {
+                      when (item.section) {
+                        SidebarSection.Pinned, SidebarSection.Active -> InboxCard(
+                          thread = thread,
+                          project = byId[thread.projectId],
+                          favicon = favicons[thread.projectId],
+                          providers = providers,
+                          now = now,
+                          selected = thread.id == selectedThreadId,
+                          picked = thread.id in picked,
+                          onClick = { kind -> click(thread.id, kind) },
+                          onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
+                          actions = actions,
+                          renaming = thread.id == renaming,
+                          details = details,
+                          rowDrag = rowDrag,
+                          lifted = lifted,
+                          dropVerb = dropVerb,
+                        )
 
-                      SidebarSection.Snoozed, SidebarSection.Settled -> SlimRow(
-                        thread = thread,
-                        shelf = if (item.section == SidebarSection.Snoozed) {
-                          Shelf.Snoozed
-                        } else {
-                          Shelf.Settled
-                        },
-                        project = byId[thread.projectId],
-                        favicon = favicons[thread.projectId],
-                        now = now,
-                        selected = thread.id == selectedThreadId,
-                        picked = thread.id in picked,
-                        onClick = { kind -> click(thread.id, kind) },
-                        onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
-                        actions = actions,
-                        renaming = thread.id == renaming,
-                        details = details,
-                        rowDrag = rowDrag,
-                        lifted = lifted,
-                        dropVerb = dropVerb,
-                      )
+                        SidebarSection.Snoozed, SidebarSection.Settled -> SlimRow(
+                          thread = thread,
+                          shelf = if (item.section == SidebarSection.Snoozed) {
+                            Shelf.Snoozed
+                          } else {
+                            Shelf.Settled
+                          },
+                          project = byId[thread.projectId],
+                          favicon = favicons[thread.projectId],
+                          now = now,
+                          selected = thread.id == selectedThreadId,
+                          picked = thread.id in picked,
+                          onClick = { kind -> click(thread.id, kind) },
+                          onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
+                          actions = actions,
+                          renaming = thread.id == renaming,
+                          details = details,
+                          rowDrag = rowDrag,
+                          lifted = lifted,
+                          dropVerb = dropVerb,
+                        )
+                      }
                     }
                   }
                 },
@@ -750,7 +773,7 @@ private fun Sections(
           }
         }
         if (shelves.settled && more > 0) {
-          add(MotionItem("settled-more") { MoreRow(more, onClick = { shown += more }) })
+          add(MotionItem("settled-more") { MoreRow(more, onClick = { onShowMore(more) }) })
         }
       }
       val lifted: String? = list
@@ -875,6 +898,44 @@ private fun DropVerbBadge(verb: SidebarDropVerb) {
   ) {
     Glyph(verb.glyph, color, 12.dp)
     Text(verb.label, style = small(), color = color, fontWeight = FontWeight.Medium)
+  }
+}
+
+/** A row with its jump [label] over its right edge, as SidebarThreadRow.tsx places the badge. */
+@Composable
+private fun JumpHinted(label: String?, row: @Composable () -> Unit) {
+  Box {
+    row()
+    if (label != null) {
+      // The row's own 8dp inset, then upstream's `right-1.5`
+      JumpHintBadge(label, Modifier.align(Alignment.CenterEnd).padding(end = 14.dp))
+    }
+  }
+}
+
+/**
+ * `JumpHintBadge` (sidebar/SidebarThreadRow.tsx): the row's jump shortcut in a small mono pill,
+ * shown while the jump modifier is held.
+ */
+@Composable
+private fun JumpHintBadge(label: String, modifier: Modifier = Modifier) {
+  val shape: RoundedCornerShape = RoundedCornerShape(percent = 50)
+  Box(
+    modifier = modifier
+      .height(20.dp)
+      .clip(shape)
+      .background(JewelTheme.globalColors.panelBackground.copy(alpha = 0.95f))
+      .border(1.dp, JewelTheme.globalColors.borders.normal.copy(alpha = 0.8f), shape)
+      .padding(horizontal = 6.dp),
+    contentAlignment = Alignment.Center,
+  ) {
+    Text(
+      text = label,
+      style = small().copy(fontFamily = JewelTheme.editorTextStyle.fontFamily),
+      color = JewelTheme.globalColors.text.normal,
+      fontWeight = FontWeight.Medium,
+      maxLines = 1,
+    )
   }
 }
 
