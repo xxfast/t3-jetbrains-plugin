@@ -53,10 +53,17 @@ client is a supported shape, not a hack.
 | --- | --- |
 | `:protocol` | Plain Kotlin client for the T3 server. No IDE dependency. Reusable for a CLI or anything else. |
 | `:plugin` | The JetBrains plugin. Jewel UI on top of `:protocol`. |
+| `:cli` | A tiny command-line client on `:protocol` alone, see [CLI](#cli). |
 | `contracts/` | Pinned upstream version and the schema generator. |
 | `harness/` | Fixture scenarios for the design harness. `./gradlew runHarness` opens a sandbox IDE on them. |
 
 Targets IntelliJ Platform 2025.3 and later, so IDEA, Android Studio, WebStorm, Rider and friends.
+
+## CLI
+
+`:cli` pairs, lists threads and tails one using nothing but `:protocol`, a proof that the client
+holds up without an IDE. Run it with `./gradlew :cli:run --args="threads"`, more in
+[`cli/README.md`](cli/README.md).
 
 ## Roadmap
 
