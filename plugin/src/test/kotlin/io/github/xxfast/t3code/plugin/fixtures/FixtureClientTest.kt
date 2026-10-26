@@ -41,6 +41,7 @@ import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.ChatAttachment
 import io.github.xxfast.t3code.protocol.generated.ChatFileAttachment
 import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.LimitRecoveryUpdate
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.SearchThreadsInput
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
@@ -70,6 +71,7 @@ import kotlin.io.path.writeText
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -130,7 +132,7 @@ class FixtureClientTest {
     val scenario: Scenario = Scenario.merge(parts)
     val connected: ConnectionState.Connected = assertIs(scenario.connection)
     assertTrue(connected.session.has("orchestration:operate"), "Thread actions work in default")
-    assertEquals(44, scenario.threads.size)
+    assertEquals(45, scenario.threads.size)
     val demos: Set<String> = scenario.threads
       .filter { it.title.startsWith("Demo: ") }
       .map { it.id }
@@ -147,6 +149,7 @@ class FixtureClientTest {
         LINEAGE,
         BACKGROUND_WORK,
         CODE_BLOCKS,
+        LIMIT,
       ),
       demos,
     )
@@ -701,6 +704,43 @@ class FixtureClientTest {
   }
 
   @Test
+  fun `metadata update records a branch`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == IDLE } }
+
+    client.dispatch(Command.ThreadMetadataUpdate(commandId = "c", threadId = IDLE, branch = "dev"))
+    client.threads.first { row(it).branch == "dev" }
+  }
+
+  @Test
+  fun `limit recovery keeps the other half, and a snooze sleeps until the reset`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == LIMIT } }
+    val run = "run_01JC4ALIMIT01"
+    val reset = "2099-01-01T00:00:00.000Z"
+    fun recovery(command: String, update: LimitRecoveryUpdate) = Command.ThreadMetadataUpdate(
+      commandId = command,
+      threadId = LIMIT,
+      limitRecovery = update,
+    )
+
+    client.dispatch(recovery("c1", LimitRecoveryUpdate(run, reset, autoResume = true)))
+    client.threads.first { row(it, LIMIT).limitRecovery?.autoResume == true }
+
+    client.dispatch(recovery("c2", LimitRecoveryUpdate(run, reset, snooze = true)))
+    val snoozed: Thread = client.threads.first { row(it, LIMIT).snoozedUntil != null }
+      .let { row(it, LIMIT) }
+    assertEquals(reset, snoozed.snoozedUntil)
+    assertEquals(true, snoozed.limitRecovery?.autoResume)
+
+    client.dispatch(recovery("c3", LimitRecoveryUpdate(run, reset, snooze = false)))
+    client.threads.first { row(it, LIMIT).snoozedUntil == null }
+
+    val past = LimitRecoveryUpdate(run, "2020-01-01T00:00:00.000Z", snooze = true)
+    assertFailsWith<T3Exception.Rpc> { client.dispatch(recovery("c4", past)) }
+  }
+
+  @Test
   fun `delete takes the thread off the list`() = runTest {
     val client = FixtureClient(default, backgroundScope)
     client.threads.first { threads -> threads.any { it.id == IDLE } }
@@ -954,6 +994,7 @@ class FixtureClientTest {
     const val LINEAGE = "thr_01JC5L1N1LINEAG1"
     const val BACKGROUND_WORK = "thr_01JC6B1K0BGWORK01"
     const val CODE_BLOCKS = "thr_01JC6C0D0CODEBLKS"
+    const val LIMIT = "thr_01JC4A1F0QLIMIT"
     const val PINNED = "thr_01JC4B2W5RROUTER1"
     const val SETTLED = "thr_01JC1A2B3CSETTLE01"
     const val RUN = "run_fixture_m1"

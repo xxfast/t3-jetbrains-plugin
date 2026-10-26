@@ -33,6 +33,8 @@ import io.github.xxfast.t3code.protocol.generated.ChatFileAttachment
 import io.github.xxfast.t3code.protocol.generated.ChatImageAttachment
 import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.LatestVisibleMessageSummary
+import io.github.xxfast.t3code.protocol.generated.LimitRecovery
+import io.github.xxfast.t3code.protocol.generated.LimitRecoveryUpdate
 import io.github.xxfast.t3code.protocol.generated.ModelCapabilities
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
@@ -474,6 +476,7 @@ class FixtureClient(
         if (branch != null) {
           updateRow(command.threadId) { row -> row.copy(branch = branch, updatedAt = now) }
         }
+        command.limitRecovery?.let { update -> updateLimitRecovery(command, update, now) }
         if (command.regenerateTitle == true) {
           regenerateTitle(command.threadId, command.commandId, now)
         }
@@ -1149,6 +1152,49 @@ class FixtureClient(
     context = message.context,
     attachments = message.attachments,
   )
+
+  /**
+   * `thread.metadata.update`'s `limitRecovery` half, Orchestrator.ts at the pinned tag: a snooze
+   * past the reset is refused, the other field carries over for the same run and reset, a
+   * snooze sleeps the thread until the reset and turning it off wakes it. The server's checks
+   * that the limit is still the latest failure aren't done.
+   */
+  private fun updateLimitRecovery(
+    command: Command.ThreadMetadataUpdate,
+    update: LimitRecoveryUpdate,
+    now: String,
+  ) {
+    val reset: Instant = Instant.parse(update.resetAt)
+    if (update.snooze == true && !reset.isAfter(Instant.parse(now))) {
+      throw T3Exception.Rpc(
+        "OrchestratorDispatchError",
+        "The reset time has passed. Retry the thread manually.",
+      )
+    }
+    updateRow(command.threadId) { row ->
+      val previous: LimitRecovery? = row.limitRecovery
+        ?.takeIf { it.runId == update.runId && it.resetAt == update.resetAt }
+      val next = LimitRecovery(
+        requestId = command.commandId,
+        runId = update.runId,
+        resetAt = update.resetAt,
+        autoResume = update.autoResume ?: previous?.autoResume ?: false,
+        snooze = update.snooze ?: previous?.snooze ?: false,
+      )
+      val current: LimitRecovery? = row.limitRecovery
+      val snoozedUntil: String? = row.snoozedUntil
+      val wasSnoozedUntilReset: Boolean = current?.snooze == true &&
+        snoozedUntil != null &&
+        Instant.parse(snoozedUntil) == Instant.parse(current.resetAt)
+      when {
+        next.snooze == true && reset.isAfter(Instant.parse(now)) ->
+          row.copy(limitRecovery = next, snoozedUntil = next.resetAt, snoozedAt = now)
+        wasSnoozedUntilReset ->
+          row.copy(limitRecovery = next, snoozedUntil = null, snoozedAt = null)
+        else -> row.copy(limitRecovery = next)
+      }
+    }
+  }
 
   private fun updateRow(threadId: String, change: (Thread) -> Thread) =
     overlay.update { overlay -> overlay.withRow(threadId, change) }

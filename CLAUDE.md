@@ -68,7 +68,10 @@ How it fits together:
   `unread.json`, `snoozed.json` with one sleeping and one woken, `background-work.json` with a
   settled run whose provider still waits on two commands and a subagent (the background work
   banner above the composer), `code-blocks.json` with Kotlin, TypeScript, JSON, shell, bare
-  and unknown fences and a Kotlin block that streams in, `worktree-setup.json` with a
+  and unknown fences and a Kotlin block that streams in, `usage-limit.json` with a run a usage
+  limit stopped (the recovery banner above the composer; the plain error banner over the
+  timeline is `unread.json`'s failed "Run the wasmJs browser tests headless"),
+  `worktree-setup.json` with a
   first turn whose worktree is still being prepared, `skills.json` with provider skills and a
   workspace snapshot for the `$` menu, `files.json` with the files and folders `@` searches,
   `lineage.json` with a fork that has a parent, a fork of its own, running, finished and failed

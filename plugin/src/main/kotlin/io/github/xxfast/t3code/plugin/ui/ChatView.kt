@@ -173,6 +173,10 @@ fun ChatView(
   backgroundWorkActions: BackgroundWorkActions = BackgroundWorkActions(),
   branchMismatch: BranchMismatchBannerState? = null, // the checkout moved off the thread's branch
   branchMismatchActions: BranchMismatchBannerActions = BranchMismatchBannerActions(),
+  limitRecovery: UsageLimitRecoveryState? = null, // a usage limit stopped the thread
+  onLimitRecovery: (LimitRecoveryAction) -> Unit = {}, // its resume and snooze toggles
+  threadError: ThreadErrorBannerState? = null, // the thread's last error, over the timeline
+  threadErrorActions: ThreadErrorBannerActions = ThreadErrorBannerActions(),
   mentions: ComposerMentions = ComposerMentions(), // what the composer's `@` and `#` menus read
   memory: TimelineMemory = remember { TimelineMemory() }, // where the timeline was left
   linkFavicons: LinkFaviconSource = NoLinkFavicons, // the favicons in front of external links
@@ -271,6 +275,17 @@ fun ChatView(
           }
         }
       }
+      // `ChatBannerLane`: the thread's last error pinned over the timeline's top
+      if (view != null && threadError != null) {
+        ThreadErrorBanner(
+          state = threadError,
+          actions = threadErrorActions,
+          modifier = Modifier
+            .align(Alignment.TopCenter)
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp)
+            .widthIn(max = 768.dp),
+        )
+      }
       // Upstream's `scrollToEndClearance + 4` above the composer. The queued drawer spans the
       // lane, so it always sits under the pill, as `resolveScrollToEndClearance` counts it.
       if (view != null && view.items.isNotEmpty()) {
@@ -312,6 +327,7 @@ fun ChatView(
           // the items in `composerBannerItems`' order
           attachedAbove = run {
             val banners: List<ComposerBannerItem> = listOfNotNull(
+              limitRecovery?.let(ComposerBannerItem::LimitRecovery),
               backgroundWork?.let(ComposerBannerItem::BackgroundWork),
               branchMismatch?.let(ComposerBannerItem::BranchMismatch),
             )
@@ -322,6 +338,8 @@ fun ChatView(
                 attachedAbove = queue?.let { state -> { QueuedRunsControl(state, queueActions) } },
               ) { item, attached ->
                 when (item) {
+                  is ComposerBannerItem.LimitRecovery ->
+                    UsageLimitRecoveryBanner(item.state, onLimitRecovery, attached)
                   is ComposerBannerItem.BackgroundWork ->
                     BackgroundWorkBanner(item.state, backgroundWorkActions, attached = attached)
                   is ComposerBannerItem.BranchMismatch ->

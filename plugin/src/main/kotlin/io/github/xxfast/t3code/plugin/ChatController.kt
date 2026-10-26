@@ -75,6 +75,7 @@ import java.awt.Desktop
 import java.io.File
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
 import io.github.xxfast.t3code.protocol.generated.ChatAttachment
+import io.github.xxfast.t3code.protocol.generated.LimitRecoveryUpdate
 import io.github.xxfast.t3code.protocol.generated.MessageContext
 import java.awt.Image
 import java.io.IOException
@@ -183,6 +184,11 @@ class ChatController(private val project: Project, private val scope: CoroutineS
 
   /** Threads whose branch mismatch notice's "Restore branch" is still switching. */
   val restoringBranch: StateFlow<Set<String>> = _restoringBranch
+
+  private val _savingLimitRecovery: MutableStateFlow<Set<String>> = MutableStateFlow(emptySet())
+
+  /** Threads whose usage limit recovery change is still on its way. */
+  val savingLimitRecovery: StateFlow<Set<String>> = _savingLimitRecovery
 
   private val _catalog: MutableStateFlow<ServerInfo?> = MutableStateFlow(null)
 
@@ -822,6 +828,34 @@ class ChatController(private val project: Project, private val scope: CoroutineS
   /** A banner's dismiss, by the key upstream remembers it with. */
   fun dismissBanner(key: String) {
     _dismissedBanners.update { it + key }
+  }
+
+  /**
+   * The usage limit recovery banner's toggles, `RecoveryActions`' `onChange`
+   * (UsageLimitRecoveryBanner.tsx): `thread.metadata.update { limitRecovery }`, "Saving..."
+   * until the server answers, a refusal as a balloon, upstream's toast.
+   */
+  fun updateLimitRecovery(threadId: String, update: LimitRecoveryUpdate, failure: String) {
+    if (threadId in _savingLimitRecovery.value) return
+    _savingLimitRecovery.update { it + threadId }
+    scope.launch {
+      try {
+        client.dispatch(
+          Command.ThreadMetadataUpdate(
+            commandId = UUID.randomUUID().toString(),
+            threadId = threadId,
+            limitRecovery = update,
+          ),
+        )
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        LOG.info("Couldn't change the limit recovery on $threadId", e)
+        notify(project, e.message ?: "An error occurred.", NotificationType.ERROR, title = failure)
+      } finally {
+        _savingLimitRecovery.update { it - threadId }
+      }
+    }
   }
 
   /**

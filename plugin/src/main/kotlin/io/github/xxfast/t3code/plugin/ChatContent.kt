@@ -92,6 +92,20 @@ import io.github.xxfast.t3code.plugin.ui.VcsSummary
 import io.github.xxfast.t3code.plugin.ui.BranchMismatch
 import io.github.xxfast.t3code.plugin.ui.BranchMismatchBannerActions
 import io.github.xxfast.t3code.plugin.ui.BranchMismatchBannerState
+import io.github.xxfast.t3code.plugin.ui.CHATGPT_USAGE_URL
+import io.github.xxfast.t3code.plugin.ui.CHATGPT_WORKSPACE_ADMIN_REQUEST
+import io.github.xxfast.t3code.plugin.ui.LimitRecoveryAction
+import io.github.xxfast.t3code.plugin.ui.ThreadErrorBannerActions
+import io.github.xxfast.t3code.plugin.ui.ThreadErrorBannerState
+import io.github.xxfast.t3code.plugin.ui.UsageLimitRecoveryState
+import io.github.xxfast.t3code.plugin.ui.limitRecoveryUpdate
+import io.github.xxfast.t3code.plugin.ui.limitResetPassed
+import io.github.xxfast.t3code.plugin.ui.resolveThreadErrorBanner
+import io.github.xxfast.t3code.plugin.ui.threadErrorBannerKey
+import io.github.xxfast.t3code.plugin.ui.usageLimitRecovery
+import io.github.xxfast.t3code.protocol.generated.LimitRecoveryUpdate
+import com.intellij.openapi.ide.CopyPasteManager
+import java.awt.datatransfer.StringSelection
 import io.github.xxfast.t3code.plugin.ui.branchMismatch
 import io.github.xxfast.t3code.plugin.ui.branchMismatchKey
 import io.github.xxfast.t3code.plugin.ui.composerDraftHasUserContent
@@ -246,6 +260,17 @@ fun ChatContent(
   val branchNotice: BranchMismatchBannerState? = rememberBranchMismatchNotice(
     view, isDraft, pending, footer, vcsStatus, composerDraft, extras, controller,
   )
+  // The usage limit recovery banner, and the thread's last error over the timeline unless that
+  // banner speaks for it. Both read the shell's row: the thread stream only takes the shell's
+  // status, error and recovery at its snapshot, so its copy goes stale when they change.
+  val dismissedBanners: Set<String> by controller.dismissedBanners.collectAsState()
+  val savingRecovery: Set<String> by controller.savingLimitRecovery.collectAsState()
+  val row: Thread? = threads.find { it.id == threadId } ?: view?.thread
+  val limitRecovery: UsageLimitRecoveryState? = row?.let(::usageLimitRecovery)
+    ?.copy(saving = threadId in savingRecovery)
+  val threadError: ThreadErrorBannerState? = row?.let { thread ->
+    resolveThreadErrorBanner(thread, dismissedBanners, limitRecoveryShown = limitRecovery != null)
+  }
   val images: AttachmentImages = AttachmentImages.get()
   val previews: Map<String, ImageBitmap> by images.previews.collectAsState()
   val imageState: MessageImageState = remember(previews, project) {
@@ -406,6 +431,29 @@ fun ChatContent(
         },
         onOpenThread = opener::openThread,
       ),
+      limitRecovery = limitRecovery,
+      onLimitRecovery = { action ->
+        limitRecovery?.let { state ->
+          toggleLimitRecovery(project, controller, threadId, state, action)
+        }
+      },
+      threadError = threadError,
+      threadErrorActions = ThreadErrorBannerActions(
+        onDismiss = {
+          threadErrorBannerKey(threadId, threadError?.error)?.let(controller::dismissBanner)
+        },
+        onManageUsage = { BrowserUtil.browse(CHATGPT_USAGE_URL) },
+        onCopyAdminRequest = {
+          CopyPasteManager.getInstance()
+            .setContents(StringSelection(CHATGPT_WORKSPACE_ADMIN_REQUEST))
+          notify(
+            project,
+            "Send it to your workspace admin.",
+            NotificationType.INFORMATION,
+            title = "Request copied",
+          )
+        },
+      ),
       branchMismatch = branchNotice,
       branchMismatchActions = BranchMismatchBannerActions(
         onRestore = {
@@ -484,6 +532,35 @@ private fun rememberBranchMismatchNotice(
     restoring = threadId in restoring,
     canRestore = footer?.workspace?.canChangeBranch == true, // `canWriteSourceControl`
   )
+}
+
+/**
+ * `RecoveryActions`' `toggle`, UsageLimitRecoveryBanner.tsx: a snooze after the reset says so
+ * and sends nothing, anything else goes to the server.
+ */
+private fun toggleLimitRecovery(
+  project: Project,
+  controller: ChatController,
+  threadId: String,
+  state: UsageLimitRecoveryState,
+  action: LimitRecoveryAction,
+) {
+  val snoozing: Boolean = action == LimitRecoveryAction.SNOOZE && !state.snoozed
+  if (snoozing && limitResetPassed(state.resetAt, Instant.now())) {
+    notify(
+      project,
+      "The reset time has passed. Retry the thread manually.",
+      NotificationType.ERROR,
+      title = "Could not snooze thread",
+    )
+    return
+  }
+  val update: LimitRecoveryUpdate = limitRecoveryUpdate(state, action) ?: return
+  val failure: String = when (action) {
+    LimitRecoveryAction.RESUME -> "Could not change auto-resume"
+    LimitRecoveryAction.SNOOZE -> "Could not snooze thread"
+  }
+  controller.updateLimitRecovery(threadId, update, failure)
 }
 
 /**
