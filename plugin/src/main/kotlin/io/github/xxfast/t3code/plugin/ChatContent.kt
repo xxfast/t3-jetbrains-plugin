@@ -239,6 +239,7 @@ fun ChatContent(
   // The timeline's sent images, read by the user message row only
   CompositionLocalProvider(LocalMessageImages provides imageState) {
     ChatView(
+      onAnswerSecret = T3.get().client::answerSecretRequest,
       memory = memory,
       view = shown,
       error = load.error,

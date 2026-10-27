@@ -20,6 +20,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // Bump-sensitive: the curated list. Module paths are relative to packages/contracts/src.
 export const CURATED: ReadonlyArray<readonly [name: string, module: string]> = [
   ["AuthSessionState", "auth.ts"],
+  ["SecretRequestAnswerInput", "secretRequest.ts"],
   ["AuthAccessTokenResult", "auth.ts"],
   ["OrchestrationProjectShell", "orchestrationProject.ts"],
   ["OrchestrationV2ThreadShell", "orchestrationV2.ts"],

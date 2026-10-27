@@ -143,6 +143,19 @@ class FakeRpcServer : WebSocketServer(InetSocketAddress("127.0.0.1", 0)), AutoCl
 
         "orchestration.dispatchCommand" -> conn.send(exit(id, """{"sequence":42}"""))
 
+        "secrets.answerRequest" -> {
+          if (payload?.string("turnItemId") == "fail") {
+            val error = JsonObject(mapOf(
+              "_tag" to JsonPrimitive("EnvironmentAuthorizationError"),
+              "message" to JsonPrimitive(payload.toString()),
+            ))
+            conn.send(
+              """{"_tag":"Exit","requestId":"$id","exit":{"_tag":"Failure","cause":""" +
+                """[{"_tag":"Fail","error":$error}]}}""",
+            )
+          } else conn.send(exit(id, "null"))
+        }
+
         "terminal.close", "attachments.delete" -> conn.send(exit(id, "null"))
 
         "server.getConfig" -> conn.send(exit(id, fixture("server-config.json")))

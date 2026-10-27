@@ -13,6 +13,7 @@ import io.github.xxfast.t3code.protocol.generated.PullRequestDetail
 import io.github.xxfast.t3code.protocol.generated.PullRequestListInput
 import io.github.xxfast.t3code.protocol.generated.PullRequestListResult
 import io.github.xxfast.t3code.protocol.generated.PullRequestRef
+import io.github.xxfast.t3code.protocol.generated.SecretRequestAnswerInput
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
@@ -166,6 +167,24 @@ public class WebSocketT3Client internal constructor(
       T3JsonOut.encodeToJsonElement(OrchestrationV2Command.serializer(), command)
     val result: JsonElement = call("orchestration.dispatchCommand", payload)
     return decode(DispatchCommandResult.serializer(), result).sequence
+  }
+
+  override suspend fun answerSecretRequest(
+    input: SecretRequestAnswerInput,
+  ) {
+    try {
+      val payload: JsonElement = T3Json.encodeToJsonElement(
+        SecretRequestAnswerInput.serializer(), input,
+      )
+      // Keep failures out of connection state too: an untrusted error may echo the input.
+      val rpc: RpcConnection = active.value ?: throw T3Exception.Transport("Not connected")
+      rpc.call("secrets.answerRequest", payload)
+    } catch (e: CancellationException) {
+      throw CancellationException("Secret request interrupted")
+    } catch (_: Exception) {
+      // No cause: callers may log the exception or display it in a notification.
+      throw T3Exception.Transport("Could not answer the request. Try again.")
+    }
   }
 
   override suspend fun launchThread(input: ThreadLaunchInput): ThreadLaunchResult {
@@ -517,6 +536,12 @@ public class WebSocketT3Client internal constructor(
         items = visible.mapNotNull { entry ->
           decodeOrNull(TurnItem.serializer(), (entry as? JsonObject)?.get("item"))
         },
+        itemVisibility = visible.mapNotNull { entry ->
+          val row: JsonObject = entry as? JsonObject ?: return@mapNotNull null
+          val itemId: String = (row["item"] as? JsonObject)?.string("id")
+            ?: return@mapNotNull null
+          itemId to (row.string("visibility") ?: "unknown")
+        }.toMap(),
         runtimeRequests = decodeEach(RuntimeRequest.serializer(), projection["runtimeRequests"]),
         providerSessions =
           decodeEach(ProviderSession.serializer(), projection["providerSessions"]),

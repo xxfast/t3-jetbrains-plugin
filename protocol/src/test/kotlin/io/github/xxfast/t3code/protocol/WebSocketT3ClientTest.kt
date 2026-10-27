@@ -1,6 +1,7 @@
 package io.github.xxfast.t3code.protocol
 
 import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.SecretRequestAnswerInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TurnItem
@@ -48,6 +49,58 @@ class WebSocketT3ClientTest {
     scope = scope,
     http = defaultHttpClient(),
   )
+
+  @Test
+  fun secretAnswersUseTheirOwnRpcWithoutDispatchingMessages() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+    client.connection.first { it is ConnectionState.Connected }
+    client.answerSecretRequest(SecretRequestAnswerInput(
+      threadId = "thread-1", turnItemId = "secret-1",
+      answer = SecretRequestAnswerInput.Answer.Save(secret = "test-only-value"),
+    ))
+    client.answerSecretRequest(SecretRequestAnswerInput(
+      threadId = "thread-1", turnItemId = "secret-2",
+      answer = SecretRequestAnswerInput.Answer.Decline(),
+    ))
+    val payloads: List<JsonObject> = rpc.requests("secrets.answerRequest")
+      .map { it.getValue("payload").jsonObject }
+    assertEquals("thread-1", payloads[0].string("threadId"))
+    assertEquals("secret-1", payloads[0].string("turnItemId"))
+    assertEquals("save", payloads[0].getValue("answer").jsonObject.string("type"))
+    assertEquals("test-only-value", payloads[0].getValue("answer").jsonObject.string("secret"))
+    assertEquals("decline", payloads[1].getValue("answer").jsonObject.string("type"))
+    assertFalse(payloads[1].getValue("answer").jsonObject.containsKey("secret"))
+    assertTrue(rpc.requests("orchestration.dispatchCommand").isEmpty())
+  }
+
+  @Test
+  fun secretFailuresCannotEchoValuesInExceptionsOrConnectionState() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+    client.connection.first { it is ConnectionState.Connected }
+    val error: T3Exception = assertFailsWith<T3Exception> {
+      client.answerSecretRequest(SecretRequestAnswerInput(
+        threadId = "thread-1", turnItemId = "fail",
+        answer = SecretRequestAnswerInput.Answer.Save(secret = "must-never-appear"),
+      ))
+    }
+    assertEquals("Could not answer the request. Try again.", error.message)
+    assertNull(error.cause)
+    assertFalse(error.stackTraceToString().contains("must-never-appear"))
+    assertFalse(client.connection.value.toString().contains("must-never-appear"))
+    assertIs<ConnectionState.Connected>(client.connection.value)
+  }
+
+  @Test
+  fun projectedVisibilitySurvivesSnapshotDecoding() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+    client.connection.first { it is ConnectionState.Connected }
+    val view: ThreadView = client.thread("thread-1").first()
+    assertTrue(view.itemVisibility.isNotEmpty())
+    assertTrue(view.itemVisibility.values.all { it == "local" })
+  }
 
   @Test
   fun connectsAndMirrorsTheShell() = realTimeTest {

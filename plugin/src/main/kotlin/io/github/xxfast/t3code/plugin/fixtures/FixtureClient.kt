@@ -17,6 +17,7 @@ import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ProjectScriptSettings
 import io.github.xxfast.t3code.protocol.ServerInfo
+import io.github.xxfast.t3code.protocol.ServerSession
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.T3Exception
 import io.github.xxfast.t3code.protocol.T3Json
@@ -43,6 +44,7 @@ import io.github.xxfast.t3code.protocol.generated.PullRequestListInput
 import io.github.xxfast.t3code.protocol.generated.PullRequestListResult
 import io.github.xxfast.t3code.protocol.generated.PullRequestRef
 import io.github.xxfast.t3code.protocol.generated.ProviderOptionChoice
+import io.github.xxfast.t3code.protocol.generated.SecretRequestAnswerInput
 import io.github.xxfast.t3code.protocol.generated.SelectProviderOptionDescriptor
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.ServerProviderAuth
@@ -72,6 +74,7 @@ import io.github.xxfast.t3code.protocol.generated.UserInputAttachmentAnswerPaylo
 import io.github.xxfast.t3code.protocol.generated.VcsStatusLocalResult
 import io.github.xxfast.t3code.protocol.generated.VcsStatusRemoteResult
 import io.github.xxfast.t3code.protocol.generated.VcsStatusStreamEvent
+import io.github.xxfast.t3code.protocol.has
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
@@ -136,6 +139,7 @@ class FixtureClient(
   private val online: MutableStateFlow<Boolean> = MutableStateFlow(true)
   private var loadedStamp: List<Pair<String, Long>>? = null
   private val sequence: AtomicLong = AtomicLong(0)
+  private val failedSecretRequests: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
   /** Attachments minted by [createUploadUrl] and not deleted, by their number. */
   private val minted: MutableSet<String> = ConcurrentHashMap.newKeySet()
@@ -223,6 +227,35 @@ class FixtureClient(
       delay(entry.after)
       items[entry.item.id] = entry.item
       emit(view())
+    }
+  }
+
+  override suspend fun answerSecretRequest(
+    input: SecretRequestAnswerInput,
+  ) {
+    val session: ServerSession = (connection.value as? ConnectionState.Connected)?.session
+      ?: throw T3Exception.Transport("Not connected")
+    if (!session.has("orchestration:operate")) {
+      throw T3Exception.Transport("Could not answer the request. Try again.")
+    }
+    delay(400)
+    // The retry demo fails once without retaining the submitted value.
+    if (input.turnItemId == "secret-retry" && failedSecretRequests.add(input.turnItemId)) {
+      throw T3Exception.Transport("Could not answer the request. Try again.")
+    }
+    overlay.update { current ->
+      val item: TurnItem.SecretRequest = itemsOf(current, input.threadId)
+        .filterIsInstance<TurnItem.SecretRequest>()
+        .firstOrNull { it.id == input.turnItemId && it.threadId == input.threadId }
+        ?: throw T3Exception.Transport("Could not answer the request. Try again.")
+      check(item.secretStatus == "pending")
+      val status: String = when (input.answer) {
+        is SecretRequestAnswerInput.Answer.Save -> "saved"
+        is SecretRequestAnswerInput.Answer.Decline ->
+          "declined"
+        else -> throw T3Exception.Transport("Could not answer the request. Try again.")
+      }
+      current.upsertItem(input.threadId, item.copy(secretStatus = status, status = "completed"))
     }
   }
 

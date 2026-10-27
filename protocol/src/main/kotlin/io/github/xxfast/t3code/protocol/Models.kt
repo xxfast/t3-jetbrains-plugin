@@ -101,6 +101,8 @@ public data class ThreadView(
    * snapshot's `snapshotSequence`, whichever is later. Compare with what `dispatch` returned.
    */
   val sequence: Long = 0,
+  /** Projected row visibility, so inherited resources can't be answered from a fork. */
+  val itemVisibility: Map<String, String> = emptyMap(),
 )
 
 /** `server.getConfig`, the parts the plugin uses. */

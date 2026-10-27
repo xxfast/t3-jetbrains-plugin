@@ -84,6 +84,7 @@ import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.ChatAttachment
+import io.github.xxfast.t3code.protocol.generated.SecretRequestAnswerInput
 import io.github.xxfast.t3code.protocol.generated.ServerProviderSkill
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
@@ -171,6 +172,8 @@ fun ChatView(
   memory: TimelineMemory = remember { TimelineMemory() }, // where the timeline was left
   linkFavicons: LinkFaviconSource = NoLinkFavicons, // the favicons in front of external links
   chipActions: MessageChipActions = MessageChipActions(), // what a click on a chip does
+  onAnswerSecret: (suspend (SecretRequestAnswerInput)
+    -> Unit)? = null,
 ) {
   val threadId: String? = view?.thread?.id
   val timeline: LazyListState = remember(threadId) { LazyListState(memory.index, memory.offset) }
@@ -247,6 +250,7 @@ fun ChatView(
               processor = processor,
               operateReason = composer.disabledReason,
               actions = TimelineActions(
+                onAnswerSecret = onAnswerSecret,
                 onOpenFile = onOpenFile,
                 onDiffFile = onDiffFile,
                 onDiffRun = onDiffRun,
@@ -334,6 +338,8 @@ fun ChatView(
 }
 
 private class TimelineActions(
+  val onAnswerSecret: (suspend (SecretRequestAnswerInput)
+    -> Unit)?,
   val onOpenFile: (String) -> Unit,
   val onDiffFile: (TurnItem.FileChange) -> Unit,
   val onDiffRun: (Run) -> Unit,
@@ -693,6 +699,9 @@ private fun MessagesTimeline(
     requests = requests,
     open = open,
     rollbackReason = rollbackBlockReason(operateReason, view),
+    secretReason = operateReason,
+    itemVisibility = view.itemVisibility,
+    threadId = view.thread.id,
     actions = actions,
     onToggleRun = { runId -> expansion = expansion.copy(runIds = expansion.runIds.toggle(runId)) },
     onToggleGroup = { groupId ->
@@ -785,6 +794,9 @@ private class RowContext(
   val requests: Map<String, RuntimeRequest>, // by id, for the state of approvals and questions
   val open: SnapshotStateMap<String, Boolean>,
   val rollbackReason: String?,
+  val secretReason: String?,
+  val itemVisibility: Map<String, String>,
+  val threadId: String,
   val actions: TimelineActions,
   val onToggleRun: (String) -> Unit,
   val onToggleGroup: (String) -> Unit,
@@ -1464,6 +1476,16 @@ private fun ContextCompactionRow(label: String, active: Boolean) {
 /** `V2EventTimelineRow`: lifecycle events as dividers, the rest as a card. */
 @Composable
 private fun EventRow(item: TurnItem, context: RowContext) {
+  if (item is TurnItem.SecretRequest) {
+    SecretRequestCard(
+      item = item,
+      visibility = context.itemVisibility[item.id]
+        ?: if (item.threadId == context.threadId) "local" else "inherited",
+      disabledReason = context.secretReason,
+      onAnswer = context.actions.onAnswerSecret,
+    )
+    return
+  }
   when (item.type) {
     "run_interrupt_result" ->
       SystemDivider("x", "Run interrupted", JewelTheme.globalColors.text.error)

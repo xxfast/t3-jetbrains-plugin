@@ -10,6 +10,7 @@ import io.github.xxfast.t3code.protocol.generated.PullRequestDetail
 import io.github.xxfast.t3code.protocol.generated.PullRequestListInput
 import io.github.xxfast.t3code.protocol.generated.PullRequestListResult
 import io.github.xxfast.t3code.protocol.generated.PullRequestRef
+import io.github.xxfast.t3code.protocol.generated.SecretRequestAnswerInput
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
@@ -108,6 +109,11 @@ public interface T3Client {
 
   /** `orchestration.dispatchCommand`. Returns the server's sequence. */
   public suspend fun dispatch(command: OrchestrationV2Command): Long
+
+  /** `secrets.answerRequest`: the value goes only to the server's one-use secret store. */
+  public suspend fun answerSecretRequest(
+    input: SecretRequestAnswerInput,
+  )
 
   /**
    * `orchestration.launchThread`: creates a thread, or with `reuseExistingThread` claims an
