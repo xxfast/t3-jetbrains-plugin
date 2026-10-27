@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ScheduledTaskSetEnabledInput",
+  "title": "ScheduledTaskSetEnabledInput",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "id",
+    "enabled"
+  ],
+  "additionalProperties": true
+}

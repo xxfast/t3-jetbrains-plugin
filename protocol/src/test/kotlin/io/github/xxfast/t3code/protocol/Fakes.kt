@@ -141,6 +141,8 @@ class FakeRpcServer : WebSocketServer(InetSocketAddress("127.0.0.1", 0)), AutoCl
 
         "subscribeVcsStatus" -> replay(conn, id, "vcs-status-snapshot-chunk.json")
 
+        "scheduledTasks.subscribe" -> replay(conn, id, "scheduled-tasks-chunk.json")
+
         "orchestration.dispatchCommand" -> conn.send(exit(id, """{"sequence":42}"""))
 
         "terminal.close", "attachments.delete" -> conn.send(exit(id, "null"))

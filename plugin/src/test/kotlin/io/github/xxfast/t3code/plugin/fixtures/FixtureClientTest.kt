@@ -47,6 +47,7 @@ import io.github.xxfast.t3code.protocol.generated.LimitRecoveryUpdate
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.ProjectIconOverride
 import io.github.xxfast.t3code.protocol.generated.ProjectMutation
+import io.github.xxfast.t3code.protocol.generated.ScheduledTask
 import io.github.xxfast.t3code.protocol.generated.SearchThreadsInput
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.StoredProjectIcon
@@ -65,6 +66,7 @@ import io.github.xxfast.t3code.protocol.has
 import io.github.xxfast.t3code.protocol.pinned
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 import java.nio.file.attribute.FileTime
 import kotlin.io.path.extension
 import kotlin.io.path.getLastModifiedTime
@@ -361,6 +363,28 @@ class FixtureClientTest {
     // The match starts 72 characters in, the space before it included
     assertTrue(snippet.startsWith("…" + "a".repeat(71) + " needle"), snippet)
     assertEquals("short text", buildSearchSnippet(" short\n text ", "x"))
+  }
+
+  @Test
+  fun `scheduled tasks run now and toggle over the scenario's`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val tasks: List<ScheduledTask> = client.scheduledTasks().first { it.isNotEmpty() }
+    assertEquals(listOf("interval", "fixed_time", "webhook"), tasks.map { it.schedule.type })
+    assertFalse(tasks.single { it.id == PR_REVIEW }.enabled, "The webhook one starts paused")
+    // A passed `nextRunAt` rolls forward, so the harness never shows a next run in the past
+    val now: Instant = Instant.now()
+    tasks.mapNotNull { it.nextRunAt }.forEach { at -> assertTrue(Instant.parse(at).isAfter(now)) }
+
+    val started: ScheduledTask = client.runScheduledTask(TRIAGE)
+    assertEquals("running", started.lastRunStatus)
+    val done: ScheduledTask = client.scheduledTasks()
+      .first { list -> list.first { it.id == TRIAGE }.lastRunStatus == "succeeded" }
+      .first { it.id == TRIAGE }
+    assertEquals(42, done.runCount)
+
+    assertFalse(client.setScheduledTaskEnabled(TRIAGE, false).enabled)
+    assertFalse(client.scheduledTasks().first().first { it.id == TRIAGE }.enabled)
+    assertFailsWith<T3Exception.Rpc> { client.runScheduledTask("sched_missing") }
   }
 
   @Test
@@ -1078,6 +1102,8 @@ class FixtureClientTest {
     const val WORKTREE = "thr_01JC5W0RKTREE001"
     const val QUEUED = "thr_01JC4C3Q8UQUEUED1"
     const val LINEAGE = "thr_01JC5L1N1LINEAG1"
+    const val TRIAGE = "sched_01JC6A0T0TRIAGE01"
+    const val PR_REVIEW = "sched_01JC6A0T2PRREVIEW"
     const val BACKGROUND_WORK = "thr_01JC6B1K0BGWORK01"
     const val CODE_BLOCKS = "thr_01JC6C0D0CODEBLKS"
     const val LIMIT = "thr_01JC4A1F0QLIMIT"

@@ -13,6 +13,11 @@ import io.github.xxfast.t3code.protocol.generated.PullRequestDetail
 import io.github.xxfast.t3code.protocol.generated.PullRequestListInput
 import io.github.xxfast.t3code.protocol.generated.PullRequestListResult
 import io.github.xxfast.t3code.protocol.generated.PullRequestRef
+import io.github.xxfast.t3code.protocol.generated.ScheduledTask
+import io.github.xxfast.t3code.protocol.generated.ScheduledTaskMutationResult
+import io.github.xxfast.t3code.protocol.generated.ScheduledTaskRunNowInput
+import io.github.xxfast.t3code.protocol.generated.ScheduledTaskRunNowResult
+import io.github.xxfast.t3code.protocol.generated.ScheduledTaskSetEnabledInput
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
@@ -234,6 +239,28 @@ public class WebSocketT3Client internal constructor(
   override suspend fun createRef(input: VcsCreateRefInput): VcsCreateRefResult {
     val payload: JsonElement = T3JsonOut.encodeToJsonElement(VcsCreateRefInput.serializer(), input)
     return decode(VcsCreateRefResult.serializer(), call("vcs.createRef", payload))
+  }
+
+  override fun scheduledTasks(): Flow<List<ScheduledTask>> = resubscribing(
+    "scheduledTasks.subscribe",
+    JsonObject(emptyMap()),
+    JsonElement.serializer(),
+  ).map { result -> decodeEach(ScheduledTask.serializer(), (result as? JsonObject)?.get("tasks")) }
+
+  override suspend fun runScheduledTask(id: String): ScheduledTask {
+    val input = ScheduledTaskRunNowInput(id)
+    val payload: JsonElement =
+      T3JsonOut.encodeToJsonElement(ScheduledTaskRunNowInput.serializer(), input)
+    val result: JsonElement = call("scheduledTasks.runNow", payload)
+    return decode(ScheduledTaskRunNowResult.serializer(), result).task
+  }
+
+  override suspend fun setScheduledTaskEnabled(id: String, enabled: Boolean): ScheduledTask {
+    val input = ScheduledTaskSetEnabledInput(id, enabled)
+    val payload: JsonElement =
+      T3JsonOut.encodeToJsonElement(ScheduledTaskSetEnabledInput.serializer(), input)
+    val result: JsonElement = call("scheduledTasks.setEnabled", payload)
+    return decode(ScheduledTaskMutationResult.serializer(), result).task
   }
 
   override fun terminal(input: TerminalAttachInput): Flow<TerminalAttachStreamEvent> {

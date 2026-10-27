@@ -1938,6 +1938,201 @@ public data class RepositoryOrigin(
   val displayName: String? = null,
 )
 
+@Serializable(with = ScheduledTaskScheduleSerializer::class)
+public sealed interface ScheduledTaskSchedule {
+  public val type: String
+
+  @Serializable
+  public data class Interval(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "interval",
+    val everyMs: Long,
+  ) : ScheduledTaskSchedule
+
+  @Serializable
+  public data class FixedTime(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "fixed_time",
+    val timeOfDay: String,
+    val weekdays: List<Long>? = null,
+  ) : ScheduledTaskSchedule
+
+  @Serializable
+  public data class Webhook(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "webhook",
+    val signature: ScheduledTaskWebhookSignature?,
+    val maxDeliveryAgeMinutes: Long? = null,
+    val dedupe: ScheduledTaskSchedule.Webhook.Dedupe? = null,
+    val filters: List<ScheduledTaskWebhookFilter>? = null,
+  ) : ScheduledTaskSchedule {
+    @Serializable
+    public data class Dedupe(
+      val replayKey: String? = null,
+      val coalesceKey: String? = null,
+      val coalesceWindowSeconds: Long? = null,
+    )
+  }
+
+  /** A variant this build doesn't know. [raw] is the whole object as received. */
+  @Serializable(with = UnknownScheduledTaskScheduleSerializer::class)
+  public data class Unknown(
+    override val type: String,
+    val raw: JsonObject,
+  ) : ScheduledTaskSchedule
+}
+
+public object ScheduledTaskScheduleSerializer : KSerializer<ScheduledTaskSchedule> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<ScheduledTaskSchedule> =
+    when (element["type"]?.jsonPrimitive?.contentOrNull) {
+      "interval" -> ScheduledTaskSchedule.Interval.serializer()
+      "fixed_time" -> ScheduledTaskSchedule.FixedTime.serializer()
+      "webhook" -> ScheduledTaskSchedule.Webhook.serializer()
+      else -> ScheduledTaskSchedule.Unknown.serializer()
+    }
+
+  override fun deserialize(decoder: Decoder): ScheduledTaskSchedule {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(ScheduledTaskSchedule.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: ScheduledTaskSchedule) {
+    when (value) {
+      is ScheduledTaskSchedule.Interval ->
+        ScheduledTaskSchedule.Interval.serializer().serialize(encoder, value)
+      is ScheduledTaskSchedule.FixedTime ->
+        ScheduledTaskSchedule.FixedTime.serializer().serialize(encoder, value)
+      is ScheduledTaskSchedule.Webhook ->
+        ScheduledTaskSchedule.Webhook.serializer().serialize(encoder, value)
+      is ScheduledTaskSchedule.Unknown ->
+        ScheduledTaskSchedule.Unknown.serializer().serialize(encoder, value)
+    }
+  }
+}
+
+public object UnknownScheduledTaskScheduleSerializer : KSerializer<ScheduledTaskSchedule.Unknown> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  override fun deserialize(decoder: Decoder): ScheduledTaskSchedule.Unknown {
+    val raw: JsonObject = (decoder as JsonDecoder).decodeJsonElement().jsonObject
+    fun string(key: String): String? = raw[key]?.jsonPrimitive?.contentOrNull
+    return ScheduledTaskSchedule.Unknown(
+      type = string("type") ?: "unknown",
+      raw = raw,
+    )
+  }
+
+  override fun serialize(encoder: Encoder, value: ScheduledTaskSchedule.Unknown) {
+    (encoder as JsonEncoder).encodeJsonElement(value.raw)
+  }
+}
+
+@Serializable
+public data class ScheduledTaskWebhookEndpoint(
+  val path: String,
+  val url: String?,
+  val hasSecret: Boolean,
+)
+
+@Serializable(with = ScheduledTaskWebhookFilterSerializer::class)
+public sealed interface ScheduledTaskWebhookFilter {
+  public val path: String
+  public val op: String
+
+  @Serializable
+  public data class Equals(
+    override val path: String,
+    override val op: String,
+    val value: String,
+  ) : ScheduledTaskWebhookFilter
+
+  @Serializable
+  public data class In(
+    override val path: String,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val op: String = "in",
+    val value: List<String>,
+  ) : ScheduledTaskWebhookFilter
+
+  @Serializable
+  public data class Exists(
+    override val path: String,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val op: String = "exists",
+  ) : ScheduledTaskWebhookFilter
+
+  /** A variant this build doesn't know. [raw] is the whole object as received. */
+  @Serializable(with = UnknownScheduledTaskWebhookFilterSerializer::class)
+  public data class Unknown(
+    override val path: String,
+    override val op: String,
+    val raw: JsonObject,
+  ) : ScheduledTaskWebhookFilter
+}
+
+public object ScheduledTaskWebhookFilterSerializer : KSerializer<ScheduledTaskWebhookFilter> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<ScheduledTaskWebhookFilter> =
+    when (element["op"]?.jsonPrimitive?.contentOrNull) {
+      "equals", "notEquals", "startsWith" -> ScheduledTaskWebhookFilter.Equals.serializer()
+      "in" -> ScheduledTaskWebhookFilter.In.serializer()
+      "exists" -> ScheduledTaskWebhookFilter.Exists.serializer()
+      else -> ScheduledTaskWebhookFilter.Unknown.serializer()
+    }
+
+  override fun deserialize(decoder: Decoder): ScheduledTaskWebhookFilter {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(ScheduledTaskWebhookFilter.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: ScheduledTaskWebhookFilter) {
+    when (value) {
+      is ScheduledTaskWebhookFilter.Equals ->
+        ScheduledTaskWebhookFilter.Equals.serializer().serialize(encoder, value)
+      is ScheduledTaskWebhookFilter.In ->
+        ScheduledTaskWebhookFilter.In.serializer().serialize(encoder, value)
+      is ScheduledTaskWebhookFilter.Exists ->
+        ScheduledTaskWebhookFilter.Exists.serializer().serialize(encoder, value)
+      is ScheduledTaskWebhookFilter.Unknown ->
+        ScheduledTaskWebhookFilter.Unknown.serializer().serialize(encoder, value)
+    }
+  }
+}
+
+public object UnknownScheduledTaskWebhookFilterSerializer :
+  KSerializer<ScheduledTaskWebhookFilter.Unknown> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  override fun deserialize(decoder: Decoder): ScheduledTaskWebhookFilter.Unknown {
+    val raw: JsonObject = (decoder as JsonDecoder).decodeJsonElement().jsonObject
+    fun string(key: String): String? = raw[key]?.jsonPrimitive?.contentOrNull
+    return ScheduledTaskWebhookFilter.Unknown(
+      path = string("path") ?: "",
+      op = string("op") ?: "unknown",
+      raw = raw,
+    )
+  }
+
+  override fun serialize(encoder: Encoder, value: ScheduledTaskWebhookFilter.Unknown) {
+    (encoder as JsonEncoder).encodeJsonElement(value.raw)
+  }
+}
+
+@Serializable
+public data class ScheduledTaskWebhookSignature(
+  val header: String,
+  val encoding: String,
+  val prefix: String,
+)
+
 @Serializable
 public data class SelectProviderOptionDescriptor(
   override val id: String,

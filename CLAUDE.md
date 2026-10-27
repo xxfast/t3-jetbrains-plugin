@@ -85,7 +85,9 @@ How it fits together:
   its `#` says pull requests aren't available; KStore has three scripts in `list.json`, one a
   worktree hook, so T3 Thread Details shows "Run tests", while Decompose-Router inherits the
   fixture server's `defaultProjectScripts` ("Lint") the way `resolveProjectScripts` has it),
-  and its `connection.json` grants the
+  `scheduled-tasks.json` with three scheduled tasks for T3 Sidebar's Scheduled tab (every 30
+  min, weekdays at 09:00, and a paused webhook one whose last run failed; Run now goes running,
+  then succeeded 2 s later), and its `connection.json` grants the
   operate, terminal and `source-control:write` scopes so every action is live, the branch
   pickers included. `disconnected/`, `pairing/`, `auth-error/`, `read-only/` (no operate) and
   `empty-server/` cover connection-level states; the ones with threads carry a byte-for-byte copy

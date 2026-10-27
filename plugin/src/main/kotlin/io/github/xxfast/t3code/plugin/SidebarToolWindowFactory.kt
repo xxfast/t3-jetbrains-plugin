@@ -61,7 +61,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import org.jetbrains.jewel.bridge.JewelComposePanel
 
-/** "T3 Sidebar": T3's sidebar. Opening a thread is [T3Opener.openThread]'s business. */
+/**
+ * "T3 Sidebar": T3's sidebar, a "Threads" tab, plus a "Scheduled" one for the server's
+ * scheduled tasks. Opening a thread is [T3Opener.openThread]'s business.
+ */
 class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
   // Runs when the tool window registers, before it's ever opened
   override fun init(toolWindow: ToolWindow) {
@@ -248,7 +251,12 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         if (clearsSearch()) search.clearText() else picks.clear()
       }
     }.registerCustomShortcutSet(CommonShortcuts.ESCAPE, panel, toolWindow.disposable)
-    val content: Content = ContentFactory.getInstance().createContent(panel, null, false)
+    val content: Content = ContentFactory.getInstance().createContent(panel, "Threads", false)
     toolWindow.contentManager.addContent(content)
+    // Upstream's Settings > Scheduled tasks, read-only here
+    val scheduled: JComponent = JewelComposePanel { ScheduledTasksContent(project) }
+    toolWindow.contentManager.addContent(
+      ContentFactory.getInstance().createContent(scheduled, "Scheduled", false),
+    )
   }
 }

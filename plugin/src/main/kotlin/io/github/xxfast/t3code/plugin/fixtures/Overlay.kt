@@ -8,6 +8,7 @@ import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.RuntimeRequest.ResponseCapability
+import io.github.xxfast.t3code.protocol.generated.ScheduledTask
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 
 /**
@@ -39,6 +40,8 @@ data class Overlay(
   val createdProjects: List<String> = emptyList(),
   /** Projects `project.delete` removed. */
   val deletedProjects: Set<String> = emptySet(),
+  /** Scheduled tasks `scheduledTasks.runNow` or `setEnabled` changed, replacing the scenario's. */
+  val scheduledTasks: Map<String, ScheduledTask> = emptyMap(),
 ) {
   fun row(thread: Thread): Thread = threads[thread.id] ?: thread
 

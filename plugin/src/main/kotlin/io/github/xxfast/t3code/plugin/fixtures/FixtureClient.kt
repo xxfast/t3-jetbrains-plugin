@@ -49,6 +49,8 @@ import io.github.xxfast.t3code.protocol.generated.PullRequestListEntry
 import io.github.xxfast.t3code.protocol.generated.PullRequestListInput
 import io.github.xxfast.t3code.protocol.generated.PullRequestListResult
 import io.github.xxfast.t3code.protocol.generated.PullRequestRef
+import io.github.xxfast.t3code.protocol.generated.ScheduledTask
+import io.github.xxfast.t3code.protocol.generated.ScheduledTaskSchedule
 import io.github.xxfast.t3code.protocol.generated.ProviderOptionChoice
 import io.github.xxfast.t3code.protocol.generated.SelectProviderOptionDescriptor
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
@@ -84,6 +86,8 @@ import io.github.xxfast.t3code.protocol.generated.VcsStatusStreamEvent
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.io.path.extension
@@ -116,6 +120,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -768,6 +773,79 @@ class FixtureClient(
     }
     if (input.switchRef == true) currentRef.value = input.refName
     return VcsCreateRefResult(refName = input.refName)
+  }
+
+  /**
+   * The scenario's `scheduledTasks`, with what [runScheduledTask] and the toggle changed. A
+   * `nextRunAt` that has passed rolls forward, so the file doesn't go stale.
+   */
+  override fun scheduledTasks(): Flow<List<ScheduledTask>> =
+    combine(loaded.filterNotNull(), overlay) { scenario, overlay ->
+      scenario.scheduledTasks.map { task -> rolledForward(overlay.scheduledTasks[task.id] ?: task) }
+    }.distinctUntilChanged()
+
+  /** Running at once, succeeded a moment later, as a quick run would on the server. */
+  override suspend fun runScheduledTask(id: String): ScheduledTask {
+    val started: ScheduledTask = updateScheduledTask(id) { task ->
+      val now: String = Instant.now().toString()
+      task.copy(lastRunAt = now, lastRunStatus = "running", lastRunError = null, updatedAt = now)
+    }
+    scope.launch {
+      delay(SCHEDULED_RUN_MILLIS)
+      // The directory may have reloaded without it meanwhile
+      runCatching {
+        updateScheduledTask(id) { task ->
+          task.copy(
+            lastRunStatus = "succeeded",
+            runCount = task.runCount + 1,
+            updatedAt = Instant.now().toString(),
+          )
+        }
+      }
+    }
+    return started
+  }
+
+  override suspend fun setScheduledTaskEnabled(id: String, enabled: Boolean): ScheduledTask =
+    updateScheduledTask(id) { task ->
+      task.copy(enabled = enabled, updatedAt = Instant.now().toString())
+    }
+
+  /** An interval steps by its interval, a fixed time by a day until it's on one of its weekdays. */
+  private fun rolledForward(task: ScheduledTask): ScheduledTask {
+    val now: Instant = Instant.now()
+    var next: Instant = task.nextRunAt?.let(Instant::parse) ?: return task
+    if (next.isAfter(now)) return task
+    when (val schedule: ScheduledTaskSchedule = task.schedule) {
+      is ScheduledTaskSchedule.Interval -> {
+        val every: Long = schedule.everyMs.takeIf { it > 0 } ?: return task
+        while (!next.isAfter(now)) next = next.plusMillis(every)
+      }
+
+      is ScheduledTaskSchedule.FixedTime -> {
+        // Upstream's weekdays count from Sunday, 0 to 6
+        val days: List<Long> = schedule.weekdays.orEmpty().filter { it in 0L..6L }
+        fun on(at: Instant): Boolean = days.isEmpty() ||
+          at.atZone(ZoneId.systemDefault()).dayOfWeek.value % 7L in days
+        while (!next.isAfter(now) || !on(next)) next = next.plus(1, ChronoUnit.DAYS)
+      }
+
+      else -> return task
+    }
+    return task.copy(nextRunAt = next.toString())
+  }
+
+  private fun updateScheduledTask(
+    id: String,
+    change: (ScheduledTask) -> ScheduledTask,
+  ): ScheduledTask {
+    val listed: ScheduledTask = loaded.value?.scheduledTasks?.find { it.id == id }
+      ?: throw T3Exception.Rpc("ScheduledTaskError", "Scheduled task not found.")
+    val next: Overlay = overlay.updateAndGet { overlay ->
+      val changed: ScheduledTask = change(overlay.scheduledTasks[id] ?: listed)
+      overlay.copy(scheduledTasks = overlay.scheduledTasks + (id to changed))
+    }
+    return next.scheduledTasks.getValue(id)
   }
 
   /** The setup stream for [threadId], seeded from the scenario's `worktreeSetups` if it has one. */
@@ -1585,6 +1663,9 @@ private const val PULL_REQUEST_LOOKUP_MILLIS: Long = 250
 
 /** How long the fake `projects.searchEntries` takes. */
 private const val SEARCH_ENTRIES_MILLIS: Long = 150
+
+/** How long a scheduled task's run now stays running. */
+private const val SCHEDULED_RUN_MILLIS: Long = 2_000
 
 /** The fixture server's `environment.environmentId`. */
 const val FIXTURE_ENVIRONMENT_ID: String = "env_fixture"

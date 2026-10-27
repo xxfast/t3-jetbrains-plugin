@@ -1,6 +1,8 @@
 package io.github.xxfast.t3code.protocol
 
 import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.ScheduledTask
+import io.github.xxfast.t3code.protocol.generated.ScheduledTaskSchedule
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TurnItem
@@ -254,6 +256,21 @@ class WebSocketT3ClientTest {
     assertEquals("thread-1", payload.string("threadId"))
     assertEquals("term-1", payload.string("terminalId"))
     assertEquals("true", payload.string("deleteHistory"))
+  }
+
+  @Test
+  fun scheduledTasksDropsATaskThatDoesNotDecode() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+
+    val tasks: List<ScheduledTask> = client.scheduledTasks().first()
+
+    assertEquals(listOf("sched_nightly"), tasks.map { it.id })
+    val schedule: ScheduledTaskSchedule.FixedTime = assertIs(tasks.single().schedule)
+    assertEquals(listOf(1L, 2L, 3L, 4L, 5L), schedule.weekdays)
+    val payload: JsonObject =
+      rpc.requests("scheduledTasks.subscribe").single().getValue("payload").jsonObject
+    assertTrue(payload.isEmpty(), "$payload")
   }
 
   @Test

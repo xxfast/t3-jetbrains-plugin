@@ -16,6 +16,7 @@ import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.generated.ProjectEntry
 import io.github.xxfast.t3code.protocol.generated.PullRequestListEntry
+import io.github.xxfast.t3code.protocol.generated.ScheduledTask
 import io.github.xxfast.t3code.protocol.generated.ServerAuthDescriptor
 import io.github.xxfast.t3code.protocol.generated.ServerProviderSkill
 import io.github.xxfast.t3code.protocol.generated.ServerProviderUsageLimits
@@ -71,6 +72,8 @@ class ScenarioFile(
    * played one after another from load, so a thread can complete or fail while you watch.
    */
   val transitions: Map<String, List<JsonObject>> = emptyMap(),
+  /** What `scheduledTasks.subscribe` lists. */
+  val scheduledTasks: List<ScheduledTask> = emptyList(),
 )
 
 @Serializable
@@ -114,6 +117,7 @@ class Scenario(
   val pullRequests: List<PullRequestListEntry> = emptyList(),
   val olderPullRequests: List<PullRequestListEntry> = emptyList(),
   val transitions: Map<String, List<FixtureTransition>> = emptyMap(),
+  val scheduledTasks: List<ScheduledTask> = emptyList(),
 ) {
   companion object {
     fun decode(text: String): Scenario {
@@ -141,14 +145,15 @@ class Scenario(
         pullRequests = file.pullRequests,
         olderPullRequests = file.olderPullRequests,
         transitions = file.transitions.mapValues { (_, entries) -> entries.map(::transition) },
+        scheduledTasks = file.scheduledTasks,
       )
     }
 
     /**
-     * One scenario out of a directory's files, in order. Projects, threads and terminals dedupe
-     * by id, first wins. Runs, items, requests, sessions, checkpoints and provider threads append
-     * per thread. The
-     * last file that sets a connection wins, and a directory that sets none is connected.
+     * One scenario out of a directory's files, in order. Projects, threads, terminals and
+     * scheduled tasks dedupe by id, first wins. Runs, items, requests, sessions, checkpoints and
+     * provider threads append per thread. The last file that sets a connection wins, and a
+     * directory that sets none is connected.
      */
     fun merge(parts: List<Scenario>): Scenario = Scenario(
       connection = parts.lastOrNull { it.connection != null }?.connection
@@ -177,6 +182,7 @@ class Scenario(
       pullRequests = parts.flatMap { it.pullRequests }.distinctBy { it.url },
       olderPullRequests = parts.flatMap { it.olderPullRequests }.distinctBy { it.url },
       transitions = parts.map { it.transitions }.fold(emptyMap(), ::append),
+      scheduledTasks = parts.flatMap { it.scheduledTasks }.distinctBy { it.id },
     )
 
     fun failed(name: String, message: String): Scenario = Scenario(

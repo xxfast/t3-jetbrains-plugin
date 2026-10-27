@@ -11,6 +11,7 @@ import io.github.xxfast.t3code.protocol.generated.PullRequestDetail
 import io.github.xxfast.t3code.protocol.generated.PullRequestListInput
 import io.github.xxfast.t3code.protocol.generated.PullRequestListResult
 import io.github.xxfast.t3code.protocol.generated.PullRequestRef
+import io.github.xxfast.t3code.protocol.generated.ScheduledTask
 import io.github.xxfast.t3code.protocol.generated.SearchThreadsInput
 import io.github.xxfast.t3code.protocol.generated.SearchThreadsResult
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
@@ -153,6 +154,23 @@ public interface T3Client {
 
   /** `vcs.createRef` (`source-control:write`): a new branch in `cwd`, checked out with `switchRef`. */
   public suspend fun createRef(input: VcsCreateRefInput): VcsCreateRefResult
+
+  /**
+   * `scheduledTasks.subscribe` (`orchestration:read`): every scheduled task, the whole list again
+   * on each change. The server sends the current list first, `scheduledTasks.list`'s answer, so
+   * there's no separate list call. A task that doesn't decode is dropped, as upstream's
+   * `ForwardCompatibleArray` drops it.
+   */
+  public fun scheduledTasks(): Flow<List<ScheduledTask>>
+
+  /** `scheduledTasks.runNow` (`orchestration:operate`): runs task [id] now. The task after. */
+  public suspend fun runScheduledTask(id: String): ScheduledTask
+
+  /**
+   * `scheduledTasks.setEnabled` (`orchestration:operate`): pauses or resumes task [id], only the
+   * flag, so it can't undo an edit made elsewhere. The task after.
+   */
+  public suspend fun setScheduledTaskEnabled(id: String, enabled: Boolean): ScheduledTask
 
   /**
    * `terminal.attach`: a snapshot first (replay its `history`), then live events. Cancelling

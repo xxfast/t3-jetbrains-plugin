@@ -78,6 +78,13 @@ export const CURATED: ReadonlyArray<readonly [name: string, module: string]> = [
   ["ProjectMutation", "project.ts"],
   ["ProjectMutationError", "project.ts"],
   ["Project", "project.ts"],
+  ["ScheduledTask", "scheduledTask.ts"],
+  ["ScheduledTaskListResult", "scheduledTask.ts"],
+  ["ScheduledTaskRunNowInput", "scheduledTask.ts"],
+  ["ScheduledTaskRunNowResult", "scheduledTask.ts"],
+  ["ScheduledTaskSetEnabledInput", "scheduledTask.ts"],
+  ["ScheduledTaskMutationResult", "scheduledTask.ts"],
+  ["ScheduledTaskError", "scheduledTask.ts"],
 ];
 
 const UPSTREAM_REPO = "https://github.com/pingdotgg/t3code.git";
