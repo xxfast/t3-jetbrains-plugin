@@ -1,0 +1,4 @@
+<!-- Loaded only when the JCEF plugin is there, see the optional depends in plugin.xml. Registers
+     nothing: the depends is what puts JCEF on the plugin's class loader from 262, and the web view
+     stays in plugin.xml so 2025.3.0, where JCEF is core and the plugin id doesn't exist, keeps it -->
+<idea-plugin/>

@@ -380,6 +380,27 @@ Hard-won, so recorded here rather than rediscovered.
     SEVERE) until it has a font.
   - `org.jetbrains.jewel.foundation.LocalComponent` (experimental, not internal) is the Swing
     component hosting a composable, for anchoring a `JBPopup` to Compose content.
+- The JCEF web view (#22, 2026-10-27) can't use the browser-session cookie.
+  `POST /api/auth/browser-session` takes a one-time pairing credential, not an access token,
+  and minting one (`POST /api/auth/pairing-token`) needs `access:write`; the live server
+  answers the plugin's token with 403 `insufficient_scope`. So `T3WebViewEditor` adds
+  `Authorization: Bearer` to every request to the server's origin (`isServerOrigin`, `ws` as
+  `http`) in a `CefResourceRequestHandler`; `/api/auth/session` then says authenticated and
+  `POST /api/auth/websocket-ticket` answers. The web app's primary socket only sends the
+  cookie, so the socket works only if CEF lets the handler touch the upgrade; the handler logs
+  each path at debug to tell. The pages render, but saving needs the scopes the plugin
+  doesn't ask for (`settings:write`, `providers:manage`). Asking for `access:write` would
+  allow the cookie, at the cost of every user pairing again. Unknown GETs serve the SPA, so
+  deep links work.
+- JCEF left core in 262 for a bundled, OS and arch specific plugin, `com.intellij.modules.jcef`
+  (`plugins/jcef-plugin`, `JBCefApp` in its `intellij.platform.ui.jcef` content module). A
+  plugin that doesn't depend on it gets `ClassNotFoundException: com.intellij.ui.jcef.JBCefApp`
+  at runtime; `verifyPlugin` doesn't catch it, only running on 262 does (2026-10-27). On
+  2025.3.0, our compile target, JCEF is in core `app.jar` and the id doesn't exist (the docs
+  say the alias came in 2025.3.1), so a required depends would stop the plugin loading there.
+  The plugin has it as an optional `<depends>` with an empty `t3code-jcef.xml`, keeps the web
+  view in `plugin.xml`, and calls `JBCefApp` first through `isJcefSupported()`, which catches
+  `LinkageError` and falls back to the system browser.
 
 ## Style
 

@@ -19,6 +19,8 @@
   </dependencies>
 
   <depends optional="true" config-file="t3code-terminal.xml">org.jetbrains.plugins.terminal</depends>
+  <!-- JCEF left core for its own plugin in 262; 2025.3.0 has no such id and keeps it in core -->
+  <depends optional="true" config-file="t3code-jcef.xml">com.intellij.modules.jcef</depends>
 
   <extensions defaultExtensionNs="com.intellij">
     <toolWindow
@@ -36,6 +38,8 @@
     <postStartupActivity implementation="io.github.xxfast.t3code.plugin.LaunchOpen"/>
     <fileEditorProvider
       implementation="io.github.xxfast.t3code.plugin.ide.ThreadFileEditorProvider"/>
+    <fileEditorProvider
+      implementation="io.github.xxfast.t3code.plugin.web.T3WebViewEditorProvider"/>
     <applicationConfigurable
       parentId="tools"
       instance="io.github.xxfast.t3code.plugin.settings.T3Configurable"
@@ -63,6 +67,25 @@
   </extensions>
 
   <actions>
+    <!-- The escape hatch: pages the plugin doesn't own, in the server's web UI in a JCEF tab -->
+    <group id="T3Code.WebView" text="T3 Code" popup="true" icon="AllIcons.General.Web">
+      <add-to-group group-id="ToolsMenu" anchor="last"/>
+      <action
+        id="T3Code.OpenWebView.Settings"
+        class="io.github.xxfast.t3code.plugin.web.OpenServerSettingsWebViewAction"
+        text="Server settings"
+        description="Open the T3 server's settings in a T3 web view"/>
+      <action
+        id="T3Code.OpenWebView.Providers"
+        class="io.github.xxfast.t3code.plugin.web.OpenProviderSetupWebViewAction"
+        text="Provider setup"
+        description="Open the T3 server's provider setup in a T3 web view"/>
+      <action
+        id="T3Code.OpenWebView.ScheduledTasks"
+        class="io.github.xxfast.t3code.plugin.web.OpenScheduledTasksWebViewAction"
+        text="Scheduled tasks"
+        description="Open the T3 server's scheduled tasks in a T3 web view"/>
+    </group>
     <!-- Harness only (fixture mode): throws so the error dialog and its report button show -->
     <action
       id="T3Code.ThrowTestError"
@@ -213,6 +236,13 @@
         text="Open in IDE"
         description="Focus the IDE window that has the thread's checkout open, else open it in a new one"
         icon="AllIcons.Actions.MenuOpen"/>
+      <!-- The thread in the server's web UI, the way to its PR review guide (no route upstream) -->
+      <action
+        id="T3Code.OpenWebView.Thread"
+        class="io.github.xxfast.t3code.plugin.web.OpenThreadWebViewAction"
+        text="Open in T3 web view"
+        description="Open the thread in the server's web UI, where its PR review guide is"
+        icon="AllIcons.General.Web"/>
       <!-- Plugin-only, upstream has no mute. Local to this IDE project, so read-only pairings
            keep it -->
       <separator/>
