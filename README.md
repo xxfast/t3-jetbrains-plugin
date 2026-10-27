@@ -14,8 +14,11 @@ Unofficial. Built for my own use, published in case it's useful to others.
 ## Status
 
 0.1.0 is the first release. Built and tested on IntelliJ IDEA, against T3 Code 0.1.2. Android
-Studio and Rider are checked by the plugin verifier on every build. Other IDEs on IntelliJ
-Platform 2025.3 and later share IDEA's platform build and should work; report it if one doesn't.
+Studio and Rider are checked by the plugin verifier on every build. Android Studio 2026.1 was
+also opened by hand (2026-10-27, the design harness): the Sidebar, the Chat View, Thread
+Details, sending and the composer banners all worked; Rider hasn't been tried by hand yet.
+Other IDEs on IntelliJ Platform 2025.3 and later share IDEA's platform build and should work;
+report it if one doesn't.
 What each release adds is in its [release notes](https://github.com/xxfast/t3-jetbrains-plugin/releases);
 what's next is in the [milestones](https://github.com/xxfast/t3-jetbrains-plugin/milestones).
 
