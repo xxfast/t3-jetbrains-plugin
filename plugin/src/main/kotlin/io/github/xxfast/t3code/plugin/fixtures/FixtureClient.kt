@@ -15,6 +15,7 @@ import io.github.xxfast.t3code.protocol.ConversationMessage
 import io.github.xxfast.t3code.protocol.FileContents
 import io.github.xxfast.t3code.protocol.OrchestrationV2Command
 import io.github.xxfast.t3code.protocol.Project
+import io.github.xxfast.t3code.protocol.ProjectRecord
 import io.github.xxfast.t3code.protocol.ProviderSession
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
@@ -39,6 +40,7 @@ import io.github.xxfast.t3code.protocol.generated.ModelCapabilities
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
+import io.github.xxfast.t3code.protocol.generated.ProjectMutation
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
 import io.github.xxfast.t3code.protocol.generated.ProjectScript
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesResult
@@ -182,9 +184,9 @@ class FixtureClient(
     if (!on) ConnectionState.Disconnected else scenario?.connection ?: ConnectionState.Connecting
   }.stateIn(scope, SharingStarted.Eagerly, ConnectionState.Connecting)
 
-  override val projects: StateFlow<List<Project>> = loaded
-    .map { scenario -> scenario?.projects.orEmpty() }
-    .stateIn(scope, SharingStarted.Eagerly, emptyList())
+  override val projects: StateFlow<List<Project>> = combine(loaded, overlay) { scenario, overlay ->
+    overlay.projectsOver(scenario?.projects.orEmpty())
+  }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
   override val threads: StateFlow<List<Thread>> = combine(loaded, overlay) { scenario, overlay ->
     val created: List<Thread> = overlay.created.mapNotNull { overlay.threads[it] }
@@ -730,6 +732,19 @@ class FixtureClient(
     delay(SEARCH_LATENCY)
     val overlay: Overlay = overlay.value
     return fixtureSearchThreads(input, threads.value) { threadId -> itemsOf(overlay, threadId) }
+  }
+
+  // The Sidebar redraws off the overlay, as it would off the shell's next snapshot
+  override suspend fun mutateProject(mutation: ProjectMutation): ProjectRecord {
+    val now: String = Instant.now().toString()
+    var stored: ProjectRecord? = null
+    overlay.update { overlay ->
+      val current: List<Project> = overlay.projectsOver(loaded.value?.projects.orEmpty())
+      val (next: Overlay, record: ProjectRecord) = overlay.mutateProject(current, mutation, now)
+      stored = record
+      next
+    }
+    return checkNotNull(stored)
   }
 
   override suspend fun switchRef(input: VcsSwitchRefInput): VcsSwitchRefResult {

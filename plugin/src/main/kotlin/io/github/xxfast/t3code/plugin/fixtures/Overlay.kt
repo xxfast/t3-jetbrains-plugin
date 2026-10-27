@@ -1,6 +1,7 @@
 package io.github.xxfast.t3code.plugin.fixtures
 
 import io.github.xxfast.t3code.protocol.ConversationMessage
+import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.ProviderSession
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
@@ -32,8 +33,20 @@ data class Overlay(
   val created: List<String> = emptyList(),
   /** The fixture server's sequence as of the last `message.dispatch`, what every view reports. */
   val sequence: Long = 0,
+  /** Projects that replace the scenario's, by id, what `projects.mutate` changed. */
+  val projects: Map<String, Project> = emptyMap(),
+  /** Projects `project.create` added; their rows are in [projects]. */
+  val createdProjects: List<String> = emptyList(),
+  /** Projects `project.delete` removed. */
+  val deletedProjects: Set<String> = emptySet(),
 ) {
   fun row(thread: Thread): Thread = threads[thread.id] ?: thread
+
+  /** The scenario's [base] projects, then the created ones, with every mutation laid over. */
+  fun projectsOver(base: List<Project>): List<Project> =
+    (base + createdProjects.mapNotNull(projects::get))
+      .filter { it.id !in deletedProjects }
+      .map { projects[it.id] ?: it }
 
   fun upsertItem(threadId: String, item: TurnItem): Overlay =
     copy(items = items + (threadId to items[threadId].orEmpty().upsert(item, TurnItem::id)))

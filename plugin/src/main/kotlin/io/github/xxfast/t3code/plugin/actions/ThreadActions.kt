@@ -1,6 +1,7 @@
 package io.github.xxfast.t3code.plugin.actions
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.Presentation
@@ -10,6 +11,7 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.MessageDialogBuilder
 import com.intellij.openapi.ui.Messages
@@ -272,6 +274,34 @@ class CopyBranchAction : CopyAction() {
 
 class CopyThreadIdAction : CopyAction() {
   override fun copied(row: Thread, projects: List<T3Project>): Copied = copyThreadId(row)
+}
+
+/**
+ * "Project settings" (threadActionMenu.logic.ts), after Copy: [openProjectSettings] on the
+ * context's [T3DataKeys.PROJECT_ID], else the thread's project. Enabled on a read-only pairing,
+ * as `threadActionRequiresOperate` leaves it; the dialog shows the values and can't save.
+ */
+class ProjectSettingsAction : AnAction(), DumbAware {
+  override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+
+  override fun update(e: AnActionEvent) {
+    val project: Project? = e.project
+    e.presentation.isEnabledAndVisible = project != null && projectId(e, project) != null
+  }
+
+  override fun actionPerformed(e: AnActionEvent) {
+    val project: Project = e.project ?: return
+    val projectId: String = projectId(e, project) ?: return
+    openProjectSettings(project, projectId)
+  }
+
+  private fun projectId(e: AnActionEvent, project: Project): String? {
+    val client: T3Client = T3.get().client
+    val id: String = e.getData(T3DataKeys.PROJECT_ID)
+      ?: e.threadRow(project, client)?.projectId
+      ?: return null
+    return id.takeIf { client.projects.value.any { it.id == id } }
+  }
 }
 
 /**

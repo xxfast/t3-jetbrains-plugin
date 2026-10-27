@@ -25,6 +25,8 @@ import io.github.xxfast.t3code.plugin.ui.buildPendingUserInputAnswers
 import io.github.xxfast.t3code.plugin.review.checkpointForRun
 import io.github.xxfast.t3code.protocol.Checkpoint
 import io.github.xxfast.t3code.protocol.ConnectionState
+import io.github.xxfast.t3code.protocol.Project
+import io.github.xxfast.t3code.protocol.ProjectRecord
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ServerSession
@@ -43,8 +45,11 @@ import io.github.xxfast.t3code.protocol.generated.ChatFileAttachment
 import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.LimitRecoveryUpdate
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
+import io.github.xxfast.t3code.protocol.generated.ProjectIconOverride
+import io.github.xxfast.t3code.protocol.generated.ProjectMutation
 import io.github.xxfast.t3code.protocol.generated.SearchThreadsInput
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
+import io.github.xxfast.t3code.protocol.generated.StoredProjectIcon
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
@@ -302,6 +307,50 @@ class FixtureClientTest {
       client.searchThreads(SearchThreadsInput("kotlinx-io to 0.8")).matches
     assertEquals(setOf(THREAD, WORKTREE), bump.map { it.threadId }.toSet())
     assertEquals(1, client.searchThreads(SearchThreadsInput("kotlinx-io", limit = 1)).matches.size)
+  }
+
+  @Test
+  fun `a project update renames and re-icons the project in the shell`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val before: Project = client.projects.first { it.isNotEmpty() }.first()
+    val icon = ProjectIconOverride.Emoji(emoji = "🦀")
+
+    val stored: ProjectRecord = client.mutateProject(
+      ProjectMutation.ProjectUpdate(
+        commandId = "c1",
+        projectId = before.id,
+        title = "Store",
+        projectIcon = icon,
+      ),
+    )
+
+    assertEquals("Store", stored.title)
+    val after: Project = client.projects.first { it.first().title == "Store" }.first()
+    assertEquals(StoredProjectIcon.Emoji(emoji = "🦀"), after.projectIcon)
+    assertEquals(before.workspaceRoot, after.workspaceRoot)
+  }
+
+  @Test
+  fun `a project create adds one, and refuses a taken root`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val listed: List<Project> = client.projects.first { it.isNotEmpty() }
+    fun create(id: String, root: String) = ProjectMutation.ProjectCreate(
+      commandId = "c-$id",
+      projectId = id,
+      title = "fresh",
+      workspaceRoot = root,
+      createWorkspaceRootIfMissing = true,
+    )
+
+    client.mutateProject(create("prj_fresh", "/code/fresh"))
+
+    val after: List<Project> = client.projects.first { it.size == listed.size + 1 }
+    assertEquals("prj_fresh" to "fresh", after.last().id to after.last().title)
+    val taken: T3Exception.Rpc = assertFailsWith {
+      client.mutateProject(create("prj_other", listed.first().workspaceRoot))
+    }
+    assertEquals("ProjectMutationError", taken.tag)
+    assertFailsWith<T3Exception.Rpc> { client.mutateProject(create("prj_fresh", "/code/x")) }
   }
 
   @Test

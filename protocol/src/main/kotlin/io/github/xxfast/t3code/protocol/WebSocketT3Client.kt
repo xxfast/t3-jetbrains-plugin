@@ -19,6 +19,7 @@ import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TerminalMetadataStreamEvent
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchResult
+import io.github.xxfast.t3code.protocol.generated.ProjectMutation
 import io.github.xxfast.t3code.protocol.generated.SearchThreadsInput
 import io.github.xxfast.t3code.protocol.generated.SearchThreadsResult
 import io.github.xxfast.t3code.protocol.generated.VcsListRefsInput
@@ -218,6 +219,11 @@ public class WebSocketT3Client internal constructor(
   override suspend fun searchThreads(input: SearchThreadsInput): SearchThreadsResult {
     val payload: JsonElement = T3JsonOut.encodeToJsonElement(SearchThreadsInput.serializer(), input)
     return decode(SearchThreadsResult.serializer(), call("orchestration.searchThreads", payload))
+  }
+
+  override suspend fun mutateProject(mutation: ProjectMutation): ProjectRecord {
+    val payload: JsonElement = T3JsonOut.encodeToJsonElement(ProjectMutation.serializer(), mutation)
+    return decode(ProjectRecord.serializer(), call("projects.mutate", payload))
   }
 
   override suspend fun switchRef(input: VcsSwitchRefInput): VcsSwitchRefResult {

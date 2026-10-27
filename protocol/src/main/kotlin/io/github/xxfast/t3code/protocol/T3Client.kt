@@ -4,6 +4,7 @@ import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
+import io.github.xxfast.t3code.protocol.generated.ProjectMutation
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesResult
 import io.github.xxfast.t3code.protocol.generated.PullRequestDetail
@@ -137,6 +138,12 @@ public interface T3Client {
    * one match per thread, with a snippet around it. The query is 2 to 200 characters.
    */
   public suspend fun searchThreads(input: SearchThreadsInput): SearchThreadsResult
+
+  /**
+   * `projects.mutate` (`orchestration:operate`): creates, updates or deletes a project. The
+   * shell snapshot follows with the change; the answer is the stored project.
+   */
+  public suspend fun mutateProject(mutation: ProjectMutation): ProjectRecord
 
   /**
    * `vcs.switchRef` (`source-control:write`): checks `refName` out in `cwd`. A remote ref

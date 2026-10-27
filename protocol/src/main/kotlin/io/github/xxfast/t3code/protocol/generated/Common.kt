@@ -1582,6 +1582,90 @@ public data class ProjectEntry(
   val ignored: Boolean? = null,
 )
 
+@Serializable(with = ProjectIconOverrideSerializer::class)
+public sealed interface ProjectIconOverride {
+  public val kind: String
+
+  @Serializable
+  public data class Lucide(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "lucide",
+    val name: String,
+    val color: String,
+  ) : ProjectIconOverride
+
+  @Serializable
+  public data class Emoji(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "emoji",
+    val emoji: String,
+  ) : ProjectIconOverride
+
+  @Serializable
+  public data class Monogram(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "monogram",
+    val text: String,
+    val color: String,
+  ) : ProjectIconOverride
+
+  /** A variant this build doesn't know. [raw] is the whole object as received. */
+  @Serializable(with = UnknownProjectIconOverrideSerializer::class)
+  public data class Unknown(
+    override val kind: String,
+    val raw: JsonObject,
+  ) : ProjectIconOverride
+}
+
+public object ProjectIconOverrideSerializer : KSerializer<ProjectIconOverride> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<ProjectIconOverride> =
+    when (element["kind"]?.jsonPrimitive?.contentOrNull) {
+      "lucide" -> ProjectIconOverride.Lucide.serializer()
+      "emoji" -> ProjectIconOverride.Emoji.serializer()
+      "monogram" -> ProjectIconOverride.Monogram.serializer()
+      else -> ProjectIconOverride.Unknown.serializer()
+    }
+
+  override fun deserialize(decoder: Decoder): ProjectIconOverride {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(ProjectIconOverride.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: ProjectIconOverride) {
+    when (value) {
+      is ProjectIconOverride.Lucide ->
+        ProjectIconOverride.Lucide.serializer().serialize(encoder, value)
+      is ProjectIconOverride.Emoji ->
+        ProjectIconOverride.Emoji.serializer().serialize(encoder, value)
+      is ProjectIconOverride.Monogram ->
+        ProjectIconOverride.Monogram.serializer().serialize(encoder, value)
+      is ProjectIconOverride.Unknown ->
+        ProjectIconOverride.Unknown.serializer().serialize(encoder, value)
+    }
+  }
+}
+
+public object UnknownProjectIconOverrideSerializer : KSerializer<ProjectIconOverride.Unknown> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  override fun deserialize(decoder: Decoder): ProjectIconOverride.Unknown {
+    val raw: JsonObject = (decoder as JsonDecoder).decodeJsonElement().jsonObject
+    fun string(key: String): String? = raw[key]?.jsonPrimitive?.contentOrNull
+    return ProjectIconOverride.Unknown(
+      kind = string("kind") ?: "unknown",
+      raw = raw,
+    )
+  }
+
+  override fun serialize(encoder: Encoder, value: ProjectIconOverride.Unknown) {
+    (encoder as JsonEncoder).encodeJsonElement(value.raw)
+  }
+}
+
 @Serializable
 public data class ProjectScript(
   val id: String,

@@ -187,6 +187,12 @@
           text="Thread ID"
           description="Copy the thread's ID"/>
       </group>
+      <action
+        id="T3Code.ProjectSettings"
+        class="io.github.xxfast.t3code.plugin.actions.ProjectSettingsAction"
+        text="Project settings"
+        description="The project's name and icon"
+        icon="AllIcons.General.Settings"/>
       <separator/>
       <action
         id="T3Code.ToggleArchive"

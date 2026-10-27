@@ -9,6 +9,9 @@ import io.github.xxfast.t3code.protocol.ThreadView
 object T3DataKeys {
   val THREAD_ID: DataKey<String> = DataKey.create("T3Code.ThreadId")
 
+  /** A T3 project to act on, where there's no thread: the Sidebar's project picker. */
+  val PROJECT_ID: DataKey<String> = DataKey.create("T3Code.ProjectId")
+
   /** The Sidebar's multi-selection, in the order it was picked, for the bulk actions. */
   val THREAD_IDS: DataKey<List<String>> = DataKey.create("T3Code.ThreadIds")
 
