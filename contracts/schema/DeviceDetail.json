@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "DeviceDetail",
+  "title": "DeviceDetail",
+  "type": "object",
+  "properties": {
+    "hostId": {
+      "type": "string"
+    },
+    "deviceId": {
+      "type": "string"
+    },
+    "settings": {
+      "$ref": "#/$defs/DeviceSettings"
+    },
+    "foregroundApp": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DeviceForegroundApp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "readAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "hostId",
+    "deviceId",
+    "settings",
+    "foregroundApp",
+    "readAt"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "DeviceForegroundApp": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": true
+    },
+    "DeviceSettings": {
+      "type": "object",
+      "properties": {
+        "appearance": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "light",
+                "dark"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "textSize": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "small",
+                "default",
+                "large",
+                "extra-large"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reduceMotion": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "increaseContrast": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reduceTransparency": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "showBorders": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "voiceOver": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "liquidGlass": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "clear",
+                "tinted"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "colorFilter": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "none",
+                "grayscale",
+                "red-green",
+                "green-red",
+                "blue-yellow"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "networkEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "location": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "latitude": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "Infinity",
+                            "-Infinity",
+                            "NaN"
+                          ]
+                        }
+                      ]
+                    },
+                    "longitude": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "Infinity",
+                            "-Infinity",
+                            "NaN"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "latitude",
+                    "longitude"
+                  ],
+                  "additionalProperties": true
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

@@ -33,6 +33,10 @@ import io.github.xxfast.t3code.protocol.generated.BooleanProviderOptionDescripto
 import io.github.xxfast.t3code.protocol.generated.ChatFileAttachment
 import io.github.xxfast.t3code.protocol.generated.ChatImageAttachment
 import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.DeviceDetail
+import io.github.xxfast.t3code.protocol.generated.DeviceDetailInput
+import io.github.xxfast.t3code.protocol.generated.DeviceListInput
+import io.github.xxfast.t3code.protocol.generated.DeviceServiceState
 import io.github.xxfast.t3code.protocol.generated.LatestVisibleMessageSummary
 import io.github.xxfast.t3code.protocol.generated.LimitRecovery
 import io.github.xxfast.t3code.protocol.generated.LimitRecoveryUpdate
@@ -41,6 +45,7 @@ import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
 import io.github.xxfast.t3code.protocol.generated.ProjectMutation
+import io.github.xxfast.t3code.protocol.generated.PreviewListResult
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
 import io.github.xxfast.t3code.protocol.generated.ProjectScript
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesResult
@@ -270,6 +275,35 @@ class FixtureClient(
     val known: List<PullRequestListEntry> =
       scenario?.pullRequests.orEmpty() + scenario?.olderPullRequests.orEmpty()
     return fixturePullRequestDetail(known, ref)
+  }
+
+  /** The scenario's `previewSessions` for [threadId]. */
+  override suspend fun previewSessions(threadId: String): PreviewListResult = PreviewListResult(
+    sessions = loaded.value?.previewSessions?.get(threadId).orEmpty(),
+    serverEpoch = "fixture",
+    revision = 0,
+  )
+
+  /** The scenario's `deviceState`, after a moment as a rescan takes one. */
+  override suspend fun devices(input: DeviceListInput): DeviceServiceState {
+    delay(DEVICE_SCAN_MILLIS)
+    return deviceStateOf(loaded.value)
+  }
+
+  /** The scenario's `deviceState`, again each time the directory reloads. */
+  override fun deviceState(): Flow<DeviceServiceState> = loaded
+    .filterNotNull()
+    .map(::deviceStateOf)
+
+  /** One of the scenario's `deviceDetails`, else upstream's `DeviceNotFoundError`. */
+  override suspend fun deviceDetail(input: DeviceDetailInput): DeviceDetail {
+    val hostId: String = input.hostId ?: LOCAL_DEVICE_HOST_ID
+    return loaded.value?.deviceDetails
+      ?.find { it.hostId == hostId && it.deviceId == input.deviceId }
+      ?: throw T3Exception.Rpc(
+        "DeviceNotFoundError",
+        "Device ${input.deviceId} was not found on host $hostId.",
+      )
   }
 
   override suspend fun projectFavicon(cwd: String, path: String?): ByteArray? = null
@@ -1666,6 +1700,25 @@ private const val SEARCH_ENTRIES_MILLIS: Long = 150
 
 /** How long a scheduled task's run now stays running. */
 private const val SCHEDULED_RUN_MILLIS: Long = 2_000
+/** How long the fake `device.list` rescan takes. */
+private const val DEVICE_SCAN_MILLIS: Long = 300
+
+/** Upstream's `LOCAL_DEVICE_HOST_ID`, the host a device target without one means. */
+private const val LOCAL_DEVICE_HOST_ID: String = "local"
+
+/** The scenario's device state, or a server with device support off when it has none. */
+private fun deviceStateOf(scenario: Scenario?): DeviceServiceState = scenario?.deviceState
+  ?: DeviceServiceState(
+    hostStatus = "disabled",
+    hostStatuses = emptyMap(),
+    devices = emptyList(),
+    sessions = emptyList(),
+    onboardingCompleted = false,
+    agentAccessEnabled = false,
+    hubBasePath = "",
+    revision = 0,
+    hosts = emptyList(),
+  )
 
 /** The fixture server's `environment.environmentId`. */
 const val FIXTURE_ENVIRONMENT_ID: String = "env_fixture"

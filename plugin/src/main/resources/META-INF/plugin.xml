@@ -257,6 +257,27 @@
     <group id="T3Code.ProjectActions" text="T3 Code Project" popup="false">
       <reference ref="T3Code.ProjectSettings"/>
     </group>
+    <!-- Upstream's preview and device panes (#68). The preview is right panel state with no
+         route, so it's the thread's page in a T3 web view; the device panel is native and
+         read-only -->
+    <action
+      id="T3Code.OpenPreview"
+      class="io.github.xxfast.t3code.plugin.web.OpenPreviewAction"
+      text="Open preview"
+      description="Open the thread in a T3 web view, where its preview is in the right panel"
+      icon="AllIcons.Actions.Preview">
+      <add-to-group
+        group-id="T3Code.ThreadActions"
+        anchor="after"
+        relative-to-action="T3Code.OpenWebView.Thread"/>
+    </action>
+    <action
+      id="T3Code.DevicePanel"
+      class="io.github.xxfast.t3code.plugin.device.OpenDevicePanelAction"
+      text="Device panel"
+      description="Show the T3 server's simulators and emulators, read-only">
+      <add-to-group group-id="T3Code.WebView" anchor="last"/>
+    </action>
 
     <!-- Upstream's bulk menu (Sidebar.tsx's handleMultiSelectContextMenu), its order and no
          separators: a right-click on a row in the Sidebar's multi-selection. The labels carry

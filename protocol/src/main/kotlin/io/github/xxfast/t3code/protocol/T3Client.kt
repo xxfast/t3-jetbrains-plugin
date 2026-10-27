@@ -2,9 +2,14 @@ package io.github.xxfast.t3code.protocol
 
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
+import io.github.xxfast.t3code.protocol.generated.DeviceDetail
+import io.github.xxfast.t3code.protocol.generated.DeviceDetailInput
+import io.github.xxfast.t3code.protocol.generated.DeviceListInput
+import io.github.xxfast.t3code.protocol.generated.DeviceServiceState
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
 import io.github.xxfast.t3code.protocol.generated.ProjectMutation
+import io.github.xxfast.t3code.protocol.generated.PreviewListResult
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesResult
 import io.github.xxfast.t3code.protocol.generated.PullRequestDetail
@@ -236,6 +241,24 @@ public interface T3Client {
   public suspend fun persistAttachments(
     input: PersistChatAttachmentsInput,
   ): PersistChatAttachmentsResult
+
+  /**
+   * `preview.list` (`orchestration:read`): [threadId]'s open preview tabs. Opening, navigating
+   * or closing one needs `preview:operate`, which the plugin doesn't ask for.
+   */
+  public suspend fun previewSessions(threadId: String): PreviewListResult
+
+  /**
+   * `device.list` (`orchestration:read` with an empty [input]): rescans the device hosts and
+   * answers the state after. `retryHostId` and `updateTool` need `orchestration:operate`.
+   */
+  public suspend fun devices(input: DeviceListInput = DeviceListInput()): DeviceServiceState
+
+  /** `subscribeDeviceState` (`orchestration:read`): the state first, then each change. */
+  public fun deviceState(): Flow<DeviceServiceState>
+
+  /** `device.detail` (`orchestration:read`): one device's settings and foreground app. */
+  public suspend fun deviceDetail(input: DeviceDetailInput): DeviceDetail
 
   /** `server.getConfig`, the parts the plugin uses. Cached per connection. */
   public suspend fun serverInfo(): ServerInfo

@@ -2,10 +2,16 @@ package io.github.xxfast.t3code.protocol
 
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
+import io.github.xxfast.t3code.protocol.generated.DeviceDetail
+import io.github.xxfast.t3code.protocol.generated.DeviceDetailInput
+import io.github.xxfast.t3code.protocol.generated.DeviceListInput
+import io.github.xxfast.t3code.protocol.generated.DeviceServiceState
 import io.github.xxfast.t3code.protocol.generated.DispatchCommandResult
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
+import io.github.xxfast.t3code.protocol.generated.PreviewListInput
+import io.github.xxfast.t3code.protocol.generated.PreviewListResult
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
 import io.github.xxfast.t3code.protocol.generated.ProjectScript
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesResult
@@ -361,6 +367,28 @@ public class WebSocketT3Client internal constructor(
       T3JsonOut.encodeToJsonElement(PersistChatAttachmentsInput.serializer(), input)
     val result: JsonElement = call("assets.persistChatAttachments", payload)
     return decode(PersistChatAttachmentsResult.serializer(), result)
+  }
+
+  override suspend fun previewSessions(threadId: String): PreviewListResult {
+    val payload: JsonElement =
+      T3JsonOut.encodeToJsonElement(PreviewListInput.serializer(), PreviewListInput(threadId))
+    return decode(PreviewListResult.serializer(), call("preview.list", payload))
+  }
+
+  override suspend fun devices(input: DeviceListInput): DeviceServiceState {
+    val payload: JsonElement = T3JsonOut.encodeToJsonElement(DeviceListInput.serializer(), input)
+    return decode(DeviceServiceState.serializer(), call("device.list", payload))
+  }
+
+  override fun deviceState(): Flow<DeviceServiceState> = resubscribing(
+    "subscribeDeviceState",
+    JsonObject(emptyMap()),
+    DeviceServiceState.serializer(),
+  )
+
+  override suspend fun deviceDetail(input: DeviceDetailInput): DeviceDetail {
+    val payload: JsonElement = T3JsonOut.encodeToJsonElement(DeviceDetailInput.serializer(), input)
+    return decode(DeviceDetail.serializer(), call("device.detail", payload))
   }
 
   override suspend fun serverInfo(): ServerInfo {

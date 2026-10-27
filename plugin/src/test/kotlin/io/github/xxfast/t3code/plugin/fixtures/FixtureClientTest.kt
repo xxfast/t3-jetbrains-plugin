@@ -43,6 +43,9 @@ import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.ChatAttachment
 import io.github.xxfast.t3code.protocol.generated.ChatFileAttachment
 import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.DeviceDetailInput
+import io.github.xxfast.t3code.protocol.generated.DeviceServiceState
+import io.github.xxfast.t3code.protocol.generated.DeviceSummary
 import io.github.xxfast.t3code.protocol.generated.LimitRecoveryUpdate
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.ProjectIconOverride
@@ -533,6 +536,30 @@ class FixtureClientTest {
       client.thread(THREAD).first { view -> view.items.any { it is TurnItem.UserMessage } }
     val prompt = running.items.filterIsInstance<TurnItem.UserMessage>().first()
     assertEquals(listOf(true, false), prompt.attachments.map(::isImageAttachment))
+  }
+
+  @Test
+  fun `the running demo has a preview open and other threads don't`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { it.isNotEmpty() }
+    assertEquals(listOf("browser-1"), client.previewSessions(THREAD).sessions.map { it.tabId })
+    assertEquals(emptyList(), client.previewSessions("thr_nope").sessions)
+  }
+
+  @Test
+  fun `default lists two devices and reads the running one's detail`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val state: DeviceServiceState = client.deviceState().first()
+    assertEquals(listOf("Pixel 9 API 36", "iPhone 17 Pro"), state.devices.map { it.name })
+    assertEquals(state.devices, client.devices().devices)
+    val running: DeviceSummary = state.devices.single { it.booted }
+    val detail = client.deviceDetail(DeviceDetailInput(running.hostId, running.id))
+    assertEquals("io.github.xxfast.kstore.sample", detail.foregroundApp?.id)
+    val stopped: DeviceSummary = state.devices.single { !it.booted }
+    val missing: T3Exception.Rpc = assertFailsWith {
+      client.deviceDetail(DeviceDetailInput(stopped.hostId, stopped.id))
+    }
+    assertEquals("DeviceNotFoundError", missing.tag)
   }
 
   private fun image(size: Int) = AttachmentCreateUploadUrlInput.Image(

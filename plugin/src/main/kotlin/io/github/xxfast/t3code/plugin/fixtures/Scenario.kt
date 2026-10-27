@@ -14,6 +14,9 @@ import io.github.xxfast.t3code.protocol.ServerSession
 import io.github.xxfast.t3code.protocol.Subagent
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
+import io.github.xxfast.t3code.protocol.generated.DeviceDetail
+import io.github.xxfast.t3code.protocol.generated.DeviceServiceState
+import io.github.xxfast.t3code.protocol.generated.PreviewSessionSnapshot
 import io.github.xxfast.t3code.protocol.generated.ProjectEntry
 import io.github.xxfast.t3code.protocol.generated.PullRequestListEntry
 import io.github.xxfast.t3code.protocol.generated.ScheduledTask
@@ -74,6 +77,12 @@ class ScenarioFile(
   val transitions: Map<String, List<JsonObject>> = emptyMap(),
   /** What `scheduledTasks.subscribe` lists. */
   val scheduledTasks: List<ScheduledTask> = emptyList(),
+  /** Open preview tabs per thread, what `preview.list` answers. */
+  val previewSessions: Map<String, List<PreviewSessionSnapshot>> = emptyMap(),
+  /** What `subscribeDeviceState` and `device.list` answer. */
+  val deviceState: DeviceServiceState? = null,
+  /** What `device.detail` answers, found by `hostId` and `deviceId`. */
+  val deviceDetails: List<DeviceDetail> = emptyList(),
 )
 
 @Serializable
@@ -118,6 +127,9 @@ class Scenario(
   val olderPullRequests: List<PullRequestListEntry> = emptyList(),
   val transitions: Map<String, List<FixtureTransition>> = emptyMap(),
   val scheduledTasks: List<ScheduledTask> = emptyList(),
+  val previewSessions: Map<String, List<PreviewSessionSnapshot>> = emptyMap(),
+  val deviceState: DeviceServiceState? = null,
+  val deviceDetails: List<DeviceDetail> = emptyList(),
 ) {
   companion object {
     fun decode(text: String): Scenario {
@@ -146,6 +158,9 @@ class Scenario(
         olderPullRequests = file.olderPullRequests,
         transitions = file.transitions.mapValues { (_, entries) -> entries.map(::transition) },
         scheduledTasks = file.scheduledTasks,
+        previewSessions = file.previewSessions,
+        deviceState = file.deviceState,
+        deviceDetails = file.deviceDetails,
       )
     }
 
@@ -183,6 +198,9 @@ class Scenario(
       olderPullRequests = parts.flatMap { it.olderPullRequests }.distinctBy { it.url },
       transitions = parts.map { it.transitions }.fold(emptyMap(), ::append),
       scheduledTasks = parts.flatMap { it.scheduledTasks }.distinctBy { it.id },
+      previewSessions = parts.map { it.previewSessions }.fold(emptyMap(), ::append),
+      deviceState = parts.lastOrNull { it.deviceState != null }?.deviceState,
+      deviceDetails = parts.flatMap { it.deviceDetails }.distinctBy { it.hostId to it.deviceId },
     )
 
     fun failed(name: String, message: String): Scenario = Scenario(

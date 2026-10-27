@@ -85,6 +85,13 @@ export const CURATED: ReadonlyArray<readonly [name: string, module: string]> = [
   ["ScheduledTaskSetEnabledInput", "scheduledTask.ts"],
   ["ScheduledTaskMutationResult", "scheduledTask.ts"],
   ["ScheduledTaskError", "scheduledTask.ts"],
+  // The device and preview panes (#68), read-only
+  ["PreviewListInput", "preview.ts"],
+  ["PreviewListResult", "preview.ts"],
+  ["DeviceListInput", "device.ts"],
+  ["DeviceServiceState", "device.ts"],
+  ["DeviceDetailInput", "device.ts"],
+  ["DeviceDetail", "device.ts"],
 ];
 
 const UPSTREAM_REPO = "https://github.com/pingdotgg/t3code.git";
