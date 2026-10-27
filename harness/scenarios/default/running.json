@@ -15,6 +15,7 @@
         "claude",
         "codex"
       ],
+      "activeProviderThreadId": "pth_01JC4A1F0QWMIGRATE",
       "runtimeMode": "approval-required",
       "interactionMode": "default",
       "lineage": {
@@ -89,6 +90,34 @@
         "userMessageId": "msg_u2",
         "requestedAt": "2026-10-19T08:42:00.000Z",
         "startedAt": "2026-10-19T08:42:01.000Z"
+      }
+    ]
+  },
+  "providerThreads": {
+    "thr_01JC4A1F0QWMIGRATE": [
+      {
+        "id": "pth_01JC4A1F0QWMIGRATE",
+        "driver": "codex",
+        "providerInstanceId": "codex",
+        "providerSessionId": null,
+        "appThreadId": "thr_01JC4A1F0QWMIGRATE",
+        "ownerNodeId": null,
+        "nativeThreadRef": null,
+        "nativeConversationHeadRef": null,
+        "status": "running",
+        "firstRunOrdinal": 1,
+        "lastRunOrdinal": 2,
+        "handoffIds": [],
+        "forkedFrom": null,
+        "contextUsage": {
+          "usedTokens": 90000,
+          "maxTokens": 200000,
+          "totalProcessedTokens": 412000,
+          "compactsAutomatically": true,
+          "cost": { "amount": 0.42, "currency": "USD" }
+        },
+        "createdAt": "2026-10-19T08:30:12.000Z",
+        "updatedAt": "2026-10-19T08:43:30.000Z"
       }
     ]
   },

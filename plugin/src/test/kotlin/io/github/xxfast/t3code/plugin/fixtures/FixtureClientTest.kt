@@ -51,6 +51,7 @@ import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchResult
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchWorkspaceStrategy
 import io.github.xxfast.t3code.protocol.generated.ThreadSearchMatch
+import io.github.xxfast.t3code.protocol.generated.ThreadTokenUsageSnapshot
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import io.github.xxfast.t3code.protocol.generated.VcsListRefsInput
 import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
@@ -187,6 +188,19 @@ class FixtureClientTest {
       assertIs(items.map { it.item }.single { it is TurnItem.Unknown })
     assertEquals("some_future_type", unknown.type)
     assertTrue("hologram" in unknown.raw)
+  }
+
+  @Test
+  fun `running thread carries a context usage with a cost`() {
+    val text: String = default.resolve("running.json").readText()
+    val scenario: Scenario = Scenario.decode(text)
+    val thread: Thread = scenario.threads.single { it.id == THREAD }
+    val usage: ThreadTokenUsageSnapshot? = scenario.providerThreads.getValue(THREAD)
+      .single { it.id == thread.activeProviderThreadId }
+      .contextUsage
+    assertEquals(90_000L, usage?.usedTokens)
+    assertEquals(200_000L, usage?.maxTokens)
+    assertEquals(ThreadTokenUsageSnapshot.Cost(0.42, "USD"), usage?.cost)
   }
 
   @Test

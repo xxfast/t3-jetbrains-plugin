@@ -63,7 +63,8 @@ How it fits together:
 - Composables take state, not the client. That's what makes fixture and real interchangeable, and
   it's what makes screenshot tests possible later.
 - A scenario is a folder in `harness/scenarios/`; the fixture client merges every `*.json` in it.
-  `default/` is the thread list plus one demo thread per thread-level state (`running.json`,
+  `default/` is the thread list plus one demo thread per thread-level state (`running.json`, whose
+  provider thread has a context usage with a cost, so the meter's card shows a Cost line,
   `waiting-approval.json`, `waiting-question.json`, `unknown-items.json`, `many-items.json`,
   `unread.json`, `snoozed.json` with one sleeping and one woken, `background-work.json` with a
   settled run whose provider still waits on two commands and a subagent (the background work
