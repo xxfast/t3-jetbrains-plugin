@@ -87,7 +87,8 @@ How it fits together:
   fixture server's `defaultProjectScripts` ("Lint") the way `resolveProjectScripts` has it),
   `scheduled-tasks.json` with three scheduled tasks for T3 Sidebar's Scheduled tab (every 30
   min, weekdays at 09:00, and a paused webhook one whose last run failed; Run now goes running,
-  then succeeded 2 s later), and its `connection.json` grants the
+  then succeeded 2 s later), the 30 min one bound to `lineage.json`'s parent, "Plan the KStore
+  1.0 release", so its T3 Thread Details shows Automations, and its `connection.json` grants the
   operate, terminal and `source-control:write` scopes so every action is live, the branch
   pickers included. `disconnected/`, `pairing/`, `auth-error/`, `read-only/` (no operate) and
   `empty-server/` cover connection-level states; the ones with threads carry a byte-for-byte copy

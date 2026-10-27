@@ -7,7 +7,7 @@
       "enabled": true,
       "schedule": { "type": "interval", "everyMs": 1800000 },
       "projectId": "prj_01JB2K7Q9V3XKSTORE",
-      "threadId": null,
+      "threadId": "thr_01JC5L1N0PARENT1",
       "workspaceStrategy": { "type": "root" },
       "modelSelection": { "instanceId": "codex", "model": "gpt-5" },
       "runtimeMode": "approval-required",

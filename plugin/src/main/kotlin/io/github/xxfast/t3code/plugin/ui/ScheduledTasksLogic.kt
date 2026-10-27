@@ -88,3 +88,10 @@ fun scheduledTaskStatusTone(status: String): ThreadRelationshipTone = when (stat
   else -> ThreadRelationshipTone.Muted
 }
 
+
+/**
+ * The tasks T3 Thread Details' Automations lists, `boundTasks` in ThreadAutomationsPanel.tsx:77:
+ * those whose runs go to [threadId].
+ */
+fun boundTasks(tasks: List<ScheduledTask>, threadId: String): List<ScheduledTask> =
+  tasks.filter { it.threadId == threadId }

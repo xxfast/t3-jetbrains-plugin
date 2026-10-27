@@ -85,6 +85,16 @@ class ScheduledTasksLogicTest {
   }
 
   @Test
+  fun `automations are the tasks bound to the thread`() {
+    val bound: ScheduledTask = task(fixed(), threadId = "thr_1")
+    val other: ScheduledTask = task(fixed(), threadId = "thr_2")
+    val unbound: ScheduledTask = task(fixed())
+
+    assertEquals(listOf(bound), boundTasks(listOf(unbound, bound, other), "thr_1"))
+    assertEquals(emptyList(), boundTasks(listOf(unbound), "thr_1"))
+  }
+
+  @Test
   fun `the last run's dot follows upstream's colours`() {
     assertEquals(ThreadRelationshipTone.Muted, scheduledTaskStatusTone("never"))
     assertEquals(ThreadRelationshipTone.Info, scheduledTaskStatusTone("running"))
@@ -101,6 +111,7 @@ class ScheduledTasksLogicTest {
     schedule: ScheduledTaskSchedule,
     nextRunAt: String? = null,
     enabled: Boolean = true,
+    threadId: String? = null,
   ): ScheduledTask {
     val base: JsonObject = buildJsonObject {
       put("id", "sched_1")
@@ -109,7 +120,7 @@ class ScheduledTasksLogicTest {
       put("enabled", enabled)
       put("schedule", T3Json.encodeToJsonElement(ScheduledTaskSchedule.serializer(), schedule))
       put("projectId", "prj_1")
-      put("threadId", null as String?)
+      put("threadId", threadId)
       put("workspaceStrategy", buildJsonObject { put("type", "root") })
       put("modelSelection", buildJsonObject { put("model", "gpt-5") })
       put("runtimeMode", "approval-required")

@@ -371,6 +371,7 @@ class FixtureClientTest {
     val tasks: List<ScheduledTask> = client.scheduledTasks().first { it.isNotEmpty() }
     assertEquals(listOf("interval", "fixed_time", "webhook"), tasks.map { it.schedule.type })
     assertFalse(tasks.single { it.id == PR_REVIEW }.enabled, "The webhook one starts paused")
+    assertEquals(PARENT, tasks.single { it.id == TRIAGE }.threadId, "Its Automations show it")
     // A passed `nextRunAt` rolls forward, so the harness never shows a next run in the past
     val now: Instant = Instant.now()
     tasks.mapNotNull { it.nextRunAt }.forEach { at -> assertTrue(Instant.parse(at).isAfter(now)) }
@@ -1103,6 +1104,7 @@ class FixtureClientTest {
     const val QUEUED = "thr_01JC4C3Q8UQUEUED1"
     const val LINEAGE = "thr_01JC5L1N1LINEAG1"
     const val TRIAGE = "sched_01JC6A0T0TRIAGE01"
+    const val PARENT = "thr_01JC5L1N0PARENT1"
     const val PR_REVIEW = "sched_01JC6A0T2PRREVIEW"
     const val BACKGROUND_WORK = "thr_01JC6B1K0BGWORK01"
     const val CODE_BLOCKS = "thr_01JC6C0D0CODEBLKS"

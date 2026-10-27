@@ -37,12 +37,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.github.xxfast.t3code.protocol.generated.ScheduledTask
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
+import java.time.Instant
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.Orientation
 import org.jetbrains.jewel.ui.component.CircularProgressIndicator
 import org.jetbrains.jewel.ui.component.Divider
 import org.jetbrains.jewel.ui.component.Icon
+import org.jetbrains.jewel.ui.component.IconActionButton
 import org.jetbrains.jewel.ui.component.IconButton
 import org.jetbrains.jewel.ui.component.PopupMenu
 import org.jetbrains.jewel.ui.component.Text
@@ -62,14 +65,25 @@ class ThreadLineageActions(
 )
 
 /**
+ * What T3 Thread Details' Automations shows: the scheduled tasks bound to the thread, or why
+ * they didn't load. [blocked] is why they can't change, [busyTaskId] the one with a call out.
+ */
+class ThreadAutomationsState(
+  val tasks: List<ScheduledTask>,
+  val error: String?,
+  val blocked: String?,
+  val busyTaskId: String?,
+)
+
+/**
  * "T3 Thread Details", upstream's `ThreadDetailsPanel` (apps/web/src/components/chat/
  * ThreadDetailsPanel.tsx): the Workspace section, the Version Control section when the thread
- * has a `gitCwd`, then the Lineage, upstream's `ThreadRelationshipsPanel`
- * (ThreadRelationshipsControl.tsx). Automations aren't ported: upstream hides the section without
- * scheduled tasks, and the plugin has none. Upstream hides the Lineage when there's nothing
- * related; so does this. [enabled] is false without the operate scope, which leaves opening rows
- * but no actions. [stoppingId] is the row being stopped. Upstream's card drops to a compact
- * density when short of height; a tool window scrolls instead.
+ * has a `gitCwd`, the Automations (ThreadAutomationsPanel.tsx), then the Lineage, upstream's
+ * `ThreadRelationshipsPanel` (ThreadRelationshipsControl.tsx). Upstream hides the Automations
+ * without bound tasks or an error, and the Lineage when there's nothing related; so does this.
+ * [enabled] is false without the operate scope, which leaves opening rows but no actions.
+ * [stoppingId] is the row being stopped. Upstream's card drops to a compact density when short
+ * of height; a tool window scrolls instead.
  */
 @Composable
 fun ThreadDetails(
@@ -81,8 +95,15 @@ fun ThreadDetails(
   stoppingId: String?,
   enabled: Boolean,
   actions: ThreadLineageActions,
+  automations: ThreadAutomationsState? = null,
+  automationActions: ScheduledTaskActions = ScheduledTaskActions(),
+  onManageAutomations: (() -> Unit)? = null,
 ) {
-  if (panel == null && lineage == null) return Hint("No details for this thread yet")
+  val showsAutomations: Boolean =
+    automations != null && (automations.error != null || automations.tasks.isNotEmpty())
+  if (panel == null && lineage == null && !showsAutomations) {
+    return Hint("No details for this thread yet")
+  }
   val now: Long = rememberNow(1_000).value.toEpochMilli()
   VerticallyScrollableContainer(
     scrollState = rememberScrollState(),
@@ -93,9 +114,17 @@ fun ThreadDetails(
         WorkspaceSection(panel, panelActions)
         if (panel.gitCwd != null) VersionControlSection(panel, panelActions)
       }
+      if (automations != null && showsAutomations) {
+        AutomationsSection(
+          state = automations,
+          separated = panel != null,
+          actions = automationActions,
+          onManage = onManageAutomations,
+        )
+      }
       if (lineage != null) {
         ThreadDetailsSection(
-          separated = panel != null,
+          separated = panel != null || showsAutomations,
           title = lineage.title,
           actions = { LineageActions(lineage, busyAction, enabled, actions.onDetach) },
         ) {
@@ -108,6 +137,57 @@ fun ThreadDetails(
             }
           }
         }
+      }
+    }
+  }
+}
+
+/**
+ * `ThreadAutomationsPanel`: "Automations", its manage button when this IDE can edit them, the
+ * error, then a row per bound task, as the Scheduled tab draws them. Upstream's per-row edit
+ * pencil deep links into a task; the manage button stands in for both.
+ */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip sits on Compose's TooltipArea
+@Composable
+private fun AutomationsSection(
+  state: ThreadAutomationsState,
+  separated: Boolean,
+  actions: ScheduledTaskActions,
+  onManage: (() -> Unit)?,
+) {
+  val now: Instant = rememberNow(60_000).value
+  ThreadDetailsSection(
+    separated = separated,
+    title = "Automations",
+    actions = {
+      if (onManage != null) {
+        IconActionButton(
+          key = AllIconsKeys.General.Settings,
+          contentDescription = "Manage scheduled tasks",
+          onClick = onManage,
+          tooltip = { Text("Manage scheduled tasks") },
+        )
+      }
+    },
+  ) {
+    state.error?.let { error ->
+      Text(
+        text = "Could not load automations: $error",
+        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        style = small(),
+        color = DESTRUCTIVE,
+      )
+    }
+    state.tasks.forEach { task ->
+      key(task.id) {
+        ScheduledTaskRow(
+          task = task,
+          line = taskScheduleLine(task, now),
+          blocked = state.blocked,
+          // One call at a time across the section, as upstream's `busyTaskId`
+          busy = state.busyTaskId != null,
+          actions = actions,
+        )
       }
     }
   }
