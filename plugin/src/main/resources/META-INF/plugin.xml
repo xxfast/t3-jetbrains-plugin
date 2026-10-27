@@ -60,9 +60,20 @@
     <actionPromoter implementation="io.github.xxfast.t3code.plugin.actions.StashPromptPromoter"/>
     <!-- Puts the T3Code.Composer.* shortcuts ahead of the IDE's while the composer has focus -->
     <actionPromoter implementation="io.github.xxfast.t3code.plugin.actions.ComposerShortcutPromoter"/>
+    <actionPromoter implementation="io.github.xxfast.t3code.plugin.actions.ThreadFindPromoter"/>
   </extensions>
 
   <actions>
+    <action id="T3Code.FindInThread"
+      class="io.github.xxfast.t3code.plugin.actions.FindInThreadAction"
+      text="Find in T3 Thread" use-shortcut-of="Find"/>
+    <action id="T3Code.FindNextInThread"
+      class="io.github.xxfast.t3code.plugin.actions.FindNextInThreadAction"
+      text="Find Next in T3 Thread" use-shortcut-of="FindNext"/>
+    <action id="T3Code.FindPreviousInThread"
+      class="io.github.xxfast.t3code.plugin.actions.FindPreviousInThreadAction"
+      text="Find Previous in T3 Thread" use-shortcut-of="FindPrevious"/>
+
     <!-- Harness only (fixture mode): throws so the error dialog and its report button show -->
     <action
       id="T3Code.ThrowTestError"

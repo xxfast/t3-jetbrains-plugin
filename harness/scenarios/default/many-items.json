@@ -19,8 +19,8 @@
       },
       "status": "completed",
       "latestRunId": "run_01JC5D0M5P6Q",
-      "itemCount": 330,
-      "visibleItemCount": 330,
+      "itemCount": 332,
+      "visibleItemCount": 332,
       "hasActionableProposedPlan": false,
       "createdAt": "2026-10-19T06:00:00.000Z",
       "updatedAt": "2026-10-19T08:45:00.000Z"
@@ -47,7 +47,10 @@
           "maxTokens": 1000000,
           "totalProcessedTokens": 4820000,
           "compactsAutomatically": true,
-          "cost": { "amount": 12.4, "currency": "USD" }
+          "cost": {
+            "amount": 12.4,
+            "currency": "USD"
+          }
         },
         "createdAt": "2026-10-19T06:00:00.000Z",
         "updatedAt": "2026-10-19T08:45:00.000Z"
@@ -75,6 +78,21 @@
   },
   "items": {
     "thr_01JC5D0M4NYITEMS": [
+      {
+        "type": "user_message",
+        "id": "find-long-prompt",
+        "threadId": "thr_01JC5D0M4NYITEMS",
+        "runId": "run_01JC5D0M5P6Q",
+        "ordinal": 0,
+        "status": "completed",
+        "messageId": "find-long-message",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "Find demo line 0: keep this setup context available.\n\nFind demo line 1: keep this setup context available.\n\nFind demo line 2: keep this setup context available.\n\nFind demo line 3: keep this setup context available.\n\nFind demo line 4: keep this setup context available.\n\nFind demo line 5: keep this setup context available.\n\nFind demo line 6: keep this setup context available.\n\nFind demo line 7: keep this setup context available.\n\nFind demo line 8: keep this setup context available.\n\nFind demo line 9: keep this setup context available.\n\nFind demo line 10: keep this setup context available.\n\nFind demo line 11: keep this setup context available.\n\nFind demo line 12: keep this setup context available.\n\nFind demo line 13: keep this setup context available.\n\nFind demo line 14: keep this setup context available.\n\nFind demo line 15: keep this setup context available.\n\nFind demo line 16: keep this setup context available.\n\nFind demo line 17: keep this setup context available.\n\nFind demo line 18: keep this setup context available.\n\nFind demo line 19: keep this setup context available.\n\nFind demo line 20: keep this setup context available.\n\nFind demo line 21: keep this setup context available.\n\nFind demo line 22: keep this setup context available.\n\nFind demo line 23: keep this setup context available.\n\nFind demo line 24: keep this setup context available.\n\nFind demo line 25: keep this setup context available.\n\nFind demo line 26: keep this setup context available.\n\nFind demo line 27: keep this setup context available.\n\nFind demo line 28: keep this setup context available.\n\nFind demo line 29: keep this setup context available.\n\nThe hidden prompt marker is hibiscus.",
+        "updatedAt": "2026-10-19T09:08:40.000Z"
+      },
       {
         "type": "reasoning",
         "id": "rea_0000",
@@ -129,7 +147,7 @@
         "startedAt": "2026-10-19T06:02:00.000Z",
         "completedAt": "2026-10-19T06:02:00.000Z",
         "updatedAt": "2026-10-19T06:02:00.000Z",
-        "text": "Case 0 passes now. 79 to go."
+        "text": "Case 0 passes now. 79 to go.\n\nFind demo: **orchid** across *inline formatting*. Repeat orchid.\n\n```kotlin\nval orchid = \"offscreen code match\"\n```\n\n| Flower | Note |\n| --- | --- |\n| orchid | table match |\n"
       },
       {
         "type": "reasoning",
@@ -2429,7 +2447,7 @@
         "startedAt": "2026-10-19T07:24:30.000Z",
         "completedAt": "2026-10-19T07:24:30.000Z",
         "updatedAt": "2026-10-19T07:24:30.000Z",
-        "text": "Case 40 passes now. 39 to go."
+        "text": "Case 40 passes now. 39 to go.\n\n## Orchid notes\n\nTall row filler 1: the reveal has to scroll inside this one message.\n\nTall row filler 2: the reveal has to scroll inside this one message.\n\nTall row filler 3: the reveal has to scroll inside this one message.\n\nTall row filler 4: the reveal has to scroll inside this one message.\n\nTall row filler 5: the reveal has to scroll inside this one message.\n\nTall row filler 6: the reveal has to scroll inside this one message.\n\nTall row filler 7: the reveal has to scroll inside this one message.\n\nTall row filler 8: the reveal has to scroll inside this one message.\n\nTall row filler 9: the reveal has to scroll inside this one message.\n\nTall row filler 10: the reveal has to scroll inside this one message.\n\nTall row filler 11: the reveal has to scroll inside this one message.\n\nTall row filler 12: the reveal has to scroll inside this one message.\n\nTall row filler 13: the reveal has to scroll inside this one message.\n\nTall row filler 14: the reveal has to scroll inside this one message.\n\nTall row filler 15: the reveal has to scroll inside this one message.\n\nTall row filler 16: the reveal has to scroll inside this one message.\n\nTall row filler 17: the reveal has to scroll inside this one message.\n\nTall row filler 18: the reveal has to scroll inside this one message.\n\nTall row filler 19: the reveal has to scroll inside this one message.\n\nTall row filler 20: the reveal has to scroll inside this one message.\n\nTall row filler 21: the reveal has to scroll inside this one message.\n\nTall row filler 22: the reveal has to scroll inside this one message.\n\nTall row filler 23: the reveal has to scroll inside this one message.\n\nTall row filler 24: the reveal has to scroll inside this one message.\n\n| Flower | Bed | Note |\n| --- | --- | --- |\n| orchid | north | orchid |\n| orchid | north | orchid |\n\nTall row padding 1: the reveal has to scroll inside this one message.\n\nTall row padding 2: the reveal has to scroll inside this one message.\n\nTall row padding 3: the reveal has to scroll inside this one message.\n\nTall row padding 4: the reveal has to scroll inside this one message.\n\nTall row padding 5: the reveal has to scroll inside this one message.\n\nTall row padding 6: the reveal has to scroll inside this one message.\n\nTall row padding 7: the reveal has to scroll inside this one message.\n\nTall row padding 8: the reveal has to scroll inside this one message.\n\nTall row padding 9: the reveal has to scroll inside this one message.\n\nTall row padding 10: the reveal has to scroll inside this one message.\n\nTall row padding 11: the reveal has to scroll inside this one message.\n\nTall row padding 12: the reveal has to scroll inside this one message.\n\nTall row padding 13: the reveal has to scroll inside this one message.\n\nTall row padding 14: the reveal has to scroll inside this one message.\n\nTall row padding 15: the reveal has to scroll inside this one message.\n\nTall row padding 16: the reveal has to scroll inside this one message.\n\nTall row padding 17: the reveal has to scroll inside this one message.\n\nTall row padding 18: the reveal has to scroll inside this one message.\n\nTall row padding 19: the reveal has to scroll inside this one message.\n\nTall row padding 20: the reveal has to scroll inside this one message.\n\nTall row padding 21: the reveal has to scroll inside this one message.\n\nTall row padding 22: the reveal has to scroll inside this one message.\n\nTall row padding 23: the reveal has to scroll inside this one message.\n\nTall row padding 24: the reveal has to scroll inside this one message.\n\n## Orchid notes\n\n| Flower | Bed | Note |\n| --- | --- | --- |\n| orchid | north | orchid |\n| orchid | north | orchid |\n\nEnd of the tall find demo."
       },
       {
         "type": "reasoning",
@@ -4661,7 +4679,7 @@
         "startedAt": "2026-10-19T08:44:30.000Z",
         "completedAt": "2026-10-19T08:44:30.000Z",
         "updatedAt": "2026-10-19T08:44:30.000Z",
-        "text": "Case 79 passes now. 0 to go.\n\n| Module | Cases | Status |\n| :--- | ---: | :---: |\n| `:kstore` | 20 | pass |\n| `:kstore-file` | 20 | pass |\n| `:kstore-storage` | 20 | pass |\n| `:kstore-test` | 20 | ~~pending~~ pass |\n\n> The flaky one was a timing assumption in `:kstore-test`, not a real failure.\n> Details at https://github.com/xxfast/KStore/issues/1."
+        "text": "Case 79 passes now. 0 to go.\n\n| Module | Cases | Status |\n| :--- | ---: | :---: |\n| `:kstore` | 20 | pass |\n| `:kstore-file` | 20 | pass |\n| `:kstore-storage` | 20 | pass |\n| `:kstore-test` | 20 | ~~pending~~ pass |\n\n> The flaky one was a timing assumption in `:kstore-test`, not a real failure.\n> Details at https://github.com/xxfast/KStore/issues/1.\n\nFind demo: orchid at the end of the conversation."
       },
       {
         "type": "system_notice",
@@ -4674,6 +4692,21 @@
         "completedAt": "2026-10-19T08:45:00.000Z",
         "updatedAt": "2026-10-19T08:45:00.000Z",
         "message": "Context compacted after pass 80."
+      },
+      {
+        "type": "proposed_plan",
+        "id": "find-plan",
+        "threadId": "thr_01JC5D0M4NYITEMS",
+        "runId": "run_01JC5D0M5P6Q",
+        "ordinal": 331,
+        "status": "completed",
+        "streaming": false,
+        "startedAt": "2026-10-19T06:02:00.000Z",
+        "completedAt": "2026-10-19T06:02:00.000Z",
+        "updatedAt": "2026-10-19T06:02:00.000Z",
+        "planId": "find-plan",
+        "title": "Camellia rollout",
+        "markdown": "## Rollout\n\nThe plan marker is **camellia**."
       }
     ]
   },

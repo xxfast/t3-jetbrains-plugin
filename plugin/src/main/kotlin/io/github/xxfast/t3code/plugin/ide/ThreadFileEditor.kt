@@ -72,7 +72,7 @@ class ThreadFileEditor(
   }
 
   // The thread actions on top, acting on this tab's thread
-  private val root: JComponent = ThreadPanel(panel, file.threadId, view = { load.value.view })
+  private val root: JComponent = ThreadPanel(panel, file.threadId, view = { load.value.view }, find = memory.find)
 
   init {
     scope.launch {
@@ -113,6 +113,7 @@ class ThreadFileEditor(
   }
 
   override fun deselectNotify() {
+    memory.find.close()
     ThreadVisits.getInstance(project).closed(file.threadId)
   }
 

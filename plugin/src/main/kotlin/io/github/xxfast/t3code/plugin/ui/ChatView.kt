@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.hoverable
@@ -31,6 +32,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.runtime.key
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -47,11 +50,19 @@ import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.awt.awtEventOrNull
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -203,8 +214,15 @@ fun ChatView(
   )
 
   // Upstream's `bg-background` is the page, so the editor's background rather than the panel's
-  Column(Modifier.fillMaxSize().background(editorBackground())) {
+  // Escape bubbles up from wherever focus is in the chat, after the composer's menus had a go
+  Column(Modifier.fillMaxSize().background(editorBackground()).onKeyEvent { event ->
+    if (memory.find.isOpen && event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+      memory.find.close()
+      true
+    } else false
+  }) {
     ChatHeader(view, project, favicon, vcs, header)
+    ThreadFindBar(memory.find)
     // A stream that fails after rendering keeps the thread and says so on top
     if (error != null && view != null) ErrorLine(error, onRetry)
     // The composer floats over the timeline's bottom, as upstream's overlay does, so its fold
@@ -668,18 +686,31 @@ private fun MessagesTimeline(
   val now: Instant by rememberNow(if (running != null) 1_000 else 30_000)
   var expansion: TimelineExpansion by memory::expansion
   val entries: List<TimelineEntry> = remember(view.items) { deriveTimelineEntries(view.items) }
+  val find: ThreadFindState = memory.find
+  val baseRenderer: MarkdownBlockRenderer = JewelTheme.markdownBlockRenderer
+  val documents: List<ThreadFindDocument> = remember(find.isOpen, view.items, processor) {
+    if (find.isOpen) threadFindDocuments(view.items, processor, { content ->
+      baseRenderer.inlineRenderer.renderAsAnnotatedString(content,
+        baseRenderer.rootStyling.paragraph.inlinesStyling, true, {}).text
+    }, find.documents) else emptyList()
+  }
+  SideEffect { if (find.isOpen) find.updateDocuments(documents) }
+  val selected: ThreadFindMatch? = find.activeMatch
+  val findExpansion: TimelineExpansion = if (selected?.runId != null) {
+    expansion.copy(runIds = expansion.runIds + selected.runId)
+  } else expansion
   val rows: List<TimelineRow> = remember(
     entries,
     view.runs,
     view.checkpoints,
-    expansion,
+    findExpansion,
     worktreeSetup,
   ) {
     deriveMessagesTimelineRows(
       timelineEntries = entries,
       runs = view.runs,
       runningRun = running,
-      expansion = expansion,
+      expansion = findExpansion,
       checkpointFiles = { run -> checkpointForRun(view, run)?.files },
       revertTarget = { run ->
         view.runs
@@ -688,6 +719,18 @@ private fun MessagesTimeline(
       },
       worktreeSetup = worktreeSetup,
     )
+  }
+  // Until the match reveals, rows inserted above it move it, so follow its row to its new index
+  var revealed: Int by remember { mutableIntStateOf(-1) }
+  var scrolled: Int by remember { mutableIntStateOf(-1) }
+  LaunchedEffect(selected?.entryId, find.navigation, rows) {
+    if (selected == null || revealed == find.navigation) return@LaunchedEffect
+    val index: Int = rows.indexOfFirst { it.id == selected.entryId }
+    if (index < 0 || index == scrolled && state.layoutInfo.visibleItemsInfo
+        .any { it.index == index }) return@LaunchedEffect
+    follow.cancelForUserNavigation()
+    scrolled = index
+    state.scrollToItem(index)
   }
   val requests: Map<String, RuntimeRequest> =
     remember(view.runtimeRequests) { view.runtimeRequests.associateBy { it.id } }
@@ -720,7 +763,9 @@ private fun MessagesTimeline(
     }
   }
 
-  BoxWithConstraints(modifier.fillMaxSize()) {
+  var viewport: Rect by remember { mutableStateOf(Rect.Zero) }
+  val bottomCovered: Float = with(LocalDensity.current) { bottomInset.toPx() + 16.dp.toPx() }
+  BoxWithConstraints(modifier.fillMaxSize().onGloballyPositioned { viewport = it.boundsInWindow() }) {
     // `.messages-timeline-scroll`: 12px a side when narrow, 48px from 640px up
     val side: Dp = if (maxWidth >= 640.dp) 48.dp else 12.dp
     TimelineScrollContainer(
@@ -749,7 +794,25 @@ private fun MessagesTimeline(
                 .padding(horizontal = side)
                 .padding(bottom = row.bottomPadding(continues)),
             ) {
-              TimelineRowContent(row, context)
+              val document: ThreadFindDocument? = documents.firstOrNull { it.entryId == row.id }
+              val highlight: ThreadFindHighlight? = document?.takeIf { find.query.isNotBlank() }
+                ?.let { ThreadFindHighlight(it, find.query.trim(),
+                  selected?.takeIf { match -> match.entryId == row.id }, find.navigation,
+                  onReveal = { target ->
+                    val top: Float = viewport.top + 16f
+                    val bottom: Float = (viewport.bottom - bottomCovered).coerceAtLeast(top + 1f)
+                    val delta: Float = when {
+                      target.top < top -> target.top - top
+                      target.bottom > bottom -> target.bottom - bottom
+                      else -> 0f
+                    }
+                    if (delta != 0f) state.scrollBy(delta)
+                    revealed = find.navigation
+                  },
+                ) }
+              CompositionLocalProvider(LocalThreadFindHighlight provides highlight) {
+                TimelineRowContent(row, context)
+              }
             }
           }
         }
@@ -1028,7 +1091,8 @@ private fun UserMessageRow(row: TimelineRow.Message, context: RowContext) {
         extras.forEach { line -> Text(line, style = small(), color = muted()) }
         if (text.isNotEmpty()) {
           val clip: Modifier =
-            if (collapsible && !showAll) Modifier.heightIn(max = 176.dp).clip(RectangleClip)
+            if (collapsible && !showAll && LocalThreadFindHighlight.current?.match == null)
+              Modifier.heightIn(max = 176.dp).clip(RectangleClip)
             else Modifier
           ProvideMessageContextRecords(records) {
             Box(clip) { MarkdownText(text, context.processor, fill = false) }
@@ -1551,7 +1615,8 @@ private fun PlanCard(plan: TurnItem.ProposedPlan, processor: MarkdownProcessor) 
       .padding(20.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp),
   ) {
-    Text(plan.title ?: "Plan", fontWeight = FontWeight.Medium)
+    // The title is the plan's first find segment, see `threadFindDocuments`
+    ThreadFindSegmentText(plan.title ?: "Plan", segment = 0, fontWeight = FontWeight.Medium)
     MarkdownText(plan.markdown, processor)
   }
 }
@@ -1707,7 +1772,14 @@ private fun chatMarkdownHeading(base: TextStyle, colors: GlobalColors): Markdown
 
 @Composable
 private fun MarkdownText(text: String, processor: MarkdownProcessor, fill: Boolean = true) {
-  val blocks: List<MarkdownBlock> = remember(text) { processor.processMarkdownDocument(text) }
+  // Find binds segments to the document's own blocks, so other markdown in the row stays plain
+  val find: ThreadFindHighlight? =
+    LocalThreadFindHighlight.current?.takeIf { it.document.source == text }
+  val blocks: List<MarkdownBlock> = find?.document?.blocks
+    ?: remember(text) { processor.processMarkdownDocument(text) }
+  val renderer: MarkdownBlockRenderer = if (find != null) {
+    threadFindRenderer(JewelTheme.markdownBlockRenderer, find)
+  } else JewelTheme.markdownBlockRenderer
   val modifier: Modifier = if (fill) Modifier.fillMaxWidth() else Modifier
   // Jewel's default `onUrlClick` is a no-op, so a link does nothing until it's told where to go.
   // Upstream's markdown anchors open in the system browser; the IDE's `BrowserUtil` is that here.
@@ -1715,13 +1787,17 @@ private fun MarkdownText(text: String, processor: MarkdownProcessor, fill: Boole
   // `DefaultMarkdownBlockRenderer(styling)` with no extensions, not the one
   // `ProvideMarkdownStyling` set, so chips and favicons rendered as their markdown there. 263
   // reads `JewelTheme.markdownBlockRenderer` for the default, which hid it under `runHarness`.
-  Markdown(
-    markdownBlocks = blocks,
-    markdown = text,
-    modifier = modifier,
-    onUrlClick = { url -> BrowserUtil.browse(url) },
-    blockRenderer = JewelTheme.markdownBlockRenderer,
-  )
+  // Jewel caches rendered inline spans by block, without including the inline renderer.
+  // Recreate that composition for a new query/selection so old highlights can't survive it.
+  key(find?.query, find?.match, find?.navigation) {
+    Markdown(
+      markdownBlocks = blocks,
+      markdown = text,
+      modifier = modifier,
+      onUrlClick = { url -> BrowserUtil.browse(url) },
+      blockRenderer = renderer,
+    )
+  }
 }
 
 @Composable

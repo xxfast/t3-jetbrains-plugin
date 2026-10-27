@@ -4,9 +4,12 @@ import com.intellij.openapi.actionSystem.DataKey
 import io.github.xxfast.t3code.plugin.ui.AttachmentActions
 import io.github.xxfast.t3code.plugin.ui.ComposerShortcuts
 import io.github.xxfast.t3code.protocol.ThreadView
+import io.github.xxfast.t3code.plugin.ui.ThreadFindState
 
 /** What thread actions act on. Without one they fall back to the selected thread. */
 object T3DataKeys {
+  val THREAD_FIND: DataKey<ThreadFindState> = DataKey.create("T3Code.ThreadFind")
+
   val THREAD_ID: DataKey<String> = DataKey.create("T3Code.ThreadId")
 
   /** Set when the action came from a Sidebar row, which renames in place instead of a dialog. */

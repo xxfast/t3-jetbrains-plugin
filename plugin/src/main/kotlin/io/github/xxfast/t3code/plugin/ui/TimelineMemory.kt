@@ -14,6 +14,8 @@ import androidx.compose.runtime.snapshots.SnapshotStateMap
  * tabs, reopening one and restarting the IDE come back to the same place, as a text editor does.
  */
 class TimelineMemory {
+  val find = ThreadFindState()
+
   var index: Int = 0
   var offset: Int = 0
 

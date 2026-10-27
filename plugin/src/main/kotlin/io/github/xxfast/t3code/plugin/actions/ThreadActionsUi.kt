@@ -13,6 +13,7 @@ import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.ui.awt.RelativePoint
 import io.github.xxfast.t3code.protocol.ThreadView
+import io.github.xxfast.t3code.plugin.ui.ThreadFindState
 import java.awt.Point
 import javax.swing.JComponent
 
@@ -30,6 +31,7 @@ class ThreadPanel(
   content: JComponent,
   private val threadId: String,
   private val view: () -> ThreadView?,
+  private val find: ThreadFindState? = null,
 ) : SimpleToolWindowPanel(true, true) {
   init {
     setContent(content)
@@ -37,6 +39,7 @@ class ThreadPanel(
 
   override fun uiDataSnapshot(sink: DataSink) {
     super.uiDataSnapshot(sink)
+    if (find != null) sink[T3DataKeys.THREAD_FIND] = find
     sink[T3DataKeys.THREAD_ID] = threadId
     view()?.takeIf { it.thread.id == threadId }?.let { live -> sink[T3DataKeys.THREAD_VIEW] = live }
   }
