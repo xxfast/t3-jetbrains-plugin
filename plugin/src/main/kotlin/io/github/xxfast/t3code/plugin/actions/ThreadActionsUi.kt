@@ -12,6 +12,9 @@ import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.ui.popup.JBPopupListener
+import com.intellij.openapi.ui.popup.LightweightWindowEvent
+import com.intellij.openapi.ui.popup.ListPopup
 import com.intellij.ui.awt.RelativePoint
 import io.github.xxfast.t3code.plugin.T3
 import io.github.xxfast.t3code.plugin.ide.notify
@@ -164,6 +167,34 @@ fun showThreadBulkMenu(project: Project, threadIds: List<String>, x: Int, y: Int
   val actions: ActionGroup =
     ActionManager.getInstance().getAction(THREAD_BULK_ACTIONS) as ActionGroup
   showActionPopup(actions, context, x, y)
+}
+
+/** The project actions, registered in `plugin.xml`. */
+const val PROJECT_ACTIONS: String = "T3Code.ProjectActions"
+
+/**
+ * The menu for the T3 project [projectId] at [at]: what a right-click or Shift+F10 on a row of
+ * the Sidebar's project picker opens. [onChosen] runs once an item is picked, before it runs.
+ */
+fun showProjectMenu(project: Project, projectId: String, at: RelativePoint, onChosen: () -> Unit) {
+  val context: DataContext = SimpleDataContext.builder()
+    .add(CommonDataKeys.PROJECT, project)
+    .add(T3DataKeys.PROJECT_ID, projectId)
+    .build()
+  val actions: ActionGroup = ActionManager.getInstance().getAction(PROJECT_ACTIONS) as ActionGroup
+  val popup: ListPopup = JBPopupFactory.getInstance().createActionGroupPopup(
+    null,
+    actions,
+    context,
+    JBPopupFactory.ActionSelectionAid.SPEEDSEARCH,
+    true,
+  )
+  popup.addListener(object : JBPopupListener {
+    override fun onClosed(event: LightweightWindowEvent) {
+      if (event.isOk) onChosen()
+    }
+  })
+  popup.show(at)
 }
 
 private fun showActionPopup(actions: ActionGroup, context: DataContext, x: Int, y: Int) {

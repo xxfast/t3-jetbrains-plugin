@@ -202,11 +202,16 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         open = open,
         // A selection made under one scope can hold rows the next one hides, upstream's
         // `setProjectScopeKey`
-        onFilterChange = { choice ->
-          picks.clear()
-          awareness.choose(choice)
+        onOpenProjectScope = { at ->
+          showProjectScope(project, at) { choice ->
+            picks.clear()
+            awareness.choose(choice)
+          }
         },
         onNewThread = if (operable) NewThread.getInstance(project)::open else null,
+        // Upstream's Add project, the command palette's; creating one needs operate
+        onAddProject = { addProject(project) },
+        addProjectBlocked = blockedBy(connection),
         onOpenSettings = { T3.openSettings(project) },
         settlement = settlement,
         snooze = snooze,

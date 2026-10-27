@@ -517,13 +517,37 @@ class SidebarLogicTest {
   }
 
   @Test
-  fun `an empty list says when the filter is why`() {
+  fun `an empty list says when the filter is why, naming the project`() {
+    val projects: List<Project> = listOf(project("kstore", "KStore"), project("router", "Router"))
     val one: ProjectFilter = ProjectFilter.Only(setOf("kstore"))
     val two: ProjectFilter = ProjectFilter.Only(setOf("kstore", "router"))
-    assertEquals("No threads in this project", emptyHint(false, one))
-    assertEquals("No threads in these projects", emptyHint(false, two))
-    assertEquals("No threads", emptyHint(false, ProjectFilter.All))
-    assertTrue(emptyHint(true, one).startsWith("No projects yet"))
+    assertEquals("No threads in KStore yet", emptyHint(projects, one))
+    assertEquals("No threads in these projects yet", emptyHint(projects, two))
+    assertEquals("No threads yet", emptyHint(projects, ProjectFilter.All))
+    assertEquals("No threads yet", emptyHint(projects, ProjectFilter.Only(setOf("gone"))))
+    assertEquals("No projects yet", emptyHint(emptyList(), one))
+  }
+
+  @Test
+  fun `searching the picker keeps the matching projects only, in order`() {
+    val projects: List<Project> = listOf(
+      project("kstore", "KStore"), project("router", "Decompose-Router"), project("nuget", "NuGet"),
+    )
+    val both: ProjectFilter = ProjectFilter.Only(setOf("kstore", "router"))
+    val matched: FilterChoices = filterChoices(projects, both, setOf("nuget"), query = " U ")
+    assertEquals(listOf("NuGet", "Decompose-Router"), matched.labels)
+    assertEquals(1, matched.divider)
+    assertEquals(-1, matched.selected, "The several-project match isn't listed")
+    val router: ProjectFilter = ProjectFilter.Only(setOf("router"))
+    assertEquals(0, filterChoices(projects, router, query = "route").selected)
+    assertEquals(emptyList(), filterChoices(projects, ProjectFilter.All, query = "zzz").labels)
+  }
+
+  @Test
+  fun `a picker match ignores case and accents`() {
+    assertTrue(projectScopeMatches("Café Router", "cafe"))
+    assertTrue(projectScopeMatches("KStore", "sto"))
+    assertFalse(projectScopeMatches("KStore", "router"))
   }
 
   @Test

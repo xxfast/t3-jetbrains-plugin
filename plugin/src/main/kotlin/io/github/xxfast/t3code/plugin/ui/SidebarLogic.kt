@@ -9,9 +9,11 @@ import io.github.xxfast.t3code.protocol.generated.ThreadPullRequestLink
 import io.github.xxfast.t3code.protocol.generated.ThreadPullRequestSnapshot
 import io.github.xxfast.t3code.protocol.pinned
 import java.nio.file.Path
+import java.text.Normalizer
 import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeParseException
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -126,7 +128,9 @@ fun ProjectFilter.allows(projectId: String): Boolean = when (this) {
  * The project picker's entries: "All projects", then "N projects" while a match picked several,
  * then the projects this window has [open], then the rest, with a [divider] before the rest when
  * both are there. Ours, not upstream's: an IDE window is about its own projects. [filters] runs
- * parallel to [labels]; [selected] and [divider] index both.
+ * parallel to [labels]; [selected] and [divider] index both, [selected] is -1 when the current
+ * filter isn't listed. A [query] keeps only the projects it matches, upstream's
+ * `filterSidebarProjectScopeItems` (Sidebar.logic.ts): "All projects" goes, and so does ours.
  */
 data class FilterChoices(
   val labels: List<String>,
@@ -140,22 +144,26 @@ fun filterChoices(
   projects: List<Project>,
   filter: ProjectFilter,
   open: Set<String> = emptySet(),
+  query: String = "",
 ): FilterChoices {
+  val searching: Boolean = query.isNotBlank()
   val chosen: List<Project> = projects.filter { filter.allows(it.id) }
-  val several: Boolean = filter is ProjectFilter.Only && chosen.size > 1
-  val (ours: List<Project>, rest: List<Project>) = projects.partition { it.id in open }
+  val several: Boolean = !searching && filter is ProjectFilter.Only && chosen.size > 1
+  val listed: List<Project> =
+    if (searching) projects.filter { projectScopeMatches(it.title, query) } else projects
+  val (ours: List<Project>, rest: List<Project>) = listed.partition { it.id in open }
   val ordered: List<Project> = ours + rest
   val labels: List<String> = buildList {
-    add(ALL_PROJECTS)
+    if (!searching) add(ALL_PROJECTS)
     if (several) add("${chosen.size} projects")
     ordered.forEach { add(it.title) }
   }
   val filters: List<ProjectFilter> = buildList {
-    add(ProjectFilter.All)
+    if (!searching) add(ProjectFilter.All)
     if (several) add(filter)
     ordered.forEach { add(ProjectFilter.Only(setOf(it.id))) }
   }
-  val selected: Int = filters.indexOf(filter).coerceAtLeast(0)
+  val selected: Int = filters.indexOf(filter).let { if (searching) it else it.coerceAtLeast(0) }
   val names: List<String> =
     if (filter == ProjectFilter.All) emptyList() else chosen.map { it.title }
   val divider: Int? =
@@ -165,13 +173,35 @@ fun filterChoices(
 
 const val ALL_PROJECTS: String = "All projects"
 
-/** What the Sidebar says with no rows to show, so a narrowing filter is visible as one. */
-fun emptyHint(noProjects: Boolean, filter: ProjectFilter): String = when {
-  noProjects -> "No projects yet. Open the T3 Code desktop app to add one."
-  filter is ProjectFilter.Only && filter.ids.size == 1 -> "No threads in this project"
-  filter is ProjectFilter.Only -> "No threads in these projects"
-  else -> "No threads"
+/**
+ * Whether the picker's [query] matches [label]: base-ui's `useComboboxFilter().contains`,
+ * a substring match ignoring case and accents.
+ */
+fun projectScopeMatches(label: String, query: String): Boolean =
+  foldForSearch(label).contains(foldForSearch(query.trim()))
+
+private val MARKS: Regex = Regex("\\p{M}+")
+
+private fun foldForSearch(text: String): String =
+  Normalizer.normalize(text, Normalizer.Form.NFD).replace(MARKS, "").lowercase(Locale.ROOT)
+
+/**
+ * What the Sidebar says with no rows to show, the empty state in upstream's Sidebar.tsx: "No
+ * projects yet" (with Add project under it), "No threads in X yet" scoped to one project, else
+ * "No threads yet". Scoped to several is ours, so it says so.
+ */
+fun emptyHint(projects: List<Project>, filter: ProjectFilter): String {
+  if (projects.isEmpty()) return NO_PROJECTS
+  val ids: Set<String> = (filter as? ProjectFilter.Only)?.ids ?: return "No threads yet"
+  val scoped: Project? = ids.singleOrNull()?.let { id -> projects.find { it.id == id } }
+  return when {
+    scoped != null -> "No threads in ${scoped.title} yet"
+    ids.size > 1 -> "No threads in these projects yet"
+    else -> "No threads yet"
+  }
 }
+
+const val NO_PROJECTS: String = "No projects yet"
 
 /**
  * Splits [threads] into the Sidebar's sections. Inbox is pinned rows (by `pinOrderKey`, keyless

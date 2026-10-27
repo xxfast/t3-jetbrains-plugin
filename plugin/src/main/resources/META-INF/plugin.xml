@@ -223,6 +223,11 @@
         description="Mute or unmute the thread's notification balloons in this project"/>
     </group>
 
+    <!-- A project's menu: a right-click or Shift+F10 on a row of the Sidebar's project picker -->
+    <group id="T3Code.ProjectActions" text="T3 Code Project" popup="false">
+      <reference ref="T3Code.ProjectSettings"/>
+    </group>
+
     <!-- Upstream's bulk menu (Sidebar.tsx's handleMultiSelectContextMenu), its order and no
          separators: a right-click on a row in the Sidebar's multi-selection. The labels carry
          the counts, set as the menu opens -->

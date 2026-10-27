@@ -91,6 +91,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
@@ -99,10 +100,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.ui.JBColor
+import com.intellij.ui.awt.RelativePoint
 import com.intellij.util.ui.JBUI
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Thread
@@ -114,20 +117,21 @@ import java.awt.event.MouseEvent
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
+import javax.swing.JComponent
 import kotlin.math.abs
 import org.jetbrains.jewel.bridge.toComposeColor
+import org.jetbrains.jewel.foundation.LocalComponent
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.Orientation
 import org.jetbrains.jewel.ui.component.Divider
 import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.IconActionButton
 import org.jetbrains.jewel.ui.component.IconButton
-import org.jetbrains.jewel.ui.component.PopupMenu
+import org.jetbrains.jewel.ui.component.OutlinedButton
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.TextField
 import org.jetbrains.jewel.ui.component.Tooltip
 import org.jetbrains.jewel.ui.component.VerticallyScrollableContainer
-import org.jetbrains.jewel.ui.component.separator
 import org.jetbrains.jewel.ui.icon.IconKey
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import org.jetbrains.jewel.ui.typography
@@ -151,9 +155,11 @@ fun Sidebar(
   onContextMenu: (threadId: String, x: Int, y: Int) -> Unit = { _, _, _ -> },
   filter: ProjectFilter = ProjectFilter.All, // which projects' threads to list
   open: Set<String> = emptySet(), // the projects this window has open, first in the picker
-  onFilterChange: (ProjectFilter) -> Unit = {},
   onNewThread: (() -> Unit)? = null, // null disables the button, as upstream does with no project
-  onAddProject: (() -> Unit)? = null, // null hides the button: the desktop app owns projects
+  onAddProject: (() -> Unit)? = null, // null hides the buttons
+  addProjectBlocked: String? = null, // why Add project can't create one, disabling it
+  // The project scope button was pressed, its bottom left at; the host shows the picker
+  onOpenProjectScope: (at: RelativePoint) -> Unit = {},
   onOpenSettings: (() -> Unit)? = null, // null hides the footer
   settlement: Boolean = true, // whether the server settles threads; without it there's no shelf
   snooze: Boolean = true, // the same for snoozing
@@ -259,8 +265,8 @@ fun Sidebar(
   Column(Modifier.fillMaxSize()) {
     header()
     ThreadHeader(
-      search, onSearchKey, onSearchFocus, projects, favicons, filter, open, onFilterChange,
-      onNewThread, onAddProject,
+      search, onSearchKey, onSearchFocus, projects, favicons, filter, open, onOpenProjectScope,
+      onNewThread, onAddProject, addProjectBlocked,
     )
     Box(Modifier.weight(1f).alpha(if (stale) STALE_ALPHA else 1f)) {
       when {
@@ -289,7 +295,11 @@ fun Sidebar(
             selection.selectedThreadKeys, shown, { more -> shown += more }, jumps,
           )
 
-        else -> Hint(emptyHint(projects.isEmpty(), filter))
+        else -> EmptyState(
+          hint = emptyHint(projects, filter),
+          onAddProject = onAddProject?.takeIf { projects.isEmpty() },
+          blocked = addProjectBlocked,
+        )
       }
     }
     if (onOpenSettings != null) UtilityFooter(onOpenSettings)
@@ -314,9 +324,10 @@ private fun ThreadHeader(
   favicons: Map<String, ImageBitmap>,
   filter: ProjectFilter,
   open: Set<String>,
-  onFilterChange: (ProjectFilter) -> Unit,
+  onOpenProjectScope: (at: RelativePoint) -> Unit,
   onNewThread: (() -> Unit)?,
   onAddProject: (() -> Unit)?,
+  addProjectBlocked: String?,
 ) {
   Row(
     modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -325,13 +336,14 @@ private fun ThreadHeader(
   ) {
     SearchField(search, onSearchKey, onSearchFocus, Modifier.weight(1f))
     if (projects.isNotEmpty()) {
-      ProjectScope(projects, favicons, filter, open, onFilterChange)
+      ProjectScope(projects, favicons, filter, open, onOpenProjectScope)
       if (onAddProject != null) {
         IconActionButton(
           key = AllIconsKeys.Actions.NewFolder,
           contentDescription = "Add project",
           onClick = onAddProject,
-          tooltip = { Text("Add project") },
+          enabled = addProjectBlocked == null,
+          tooltip = { Text(addProjectBlocked ?: "Add project") },
         )
       }
     }
@@ -379,9 +391,10 @@ private fun SearchField(
 
 /**
  * Upstream's project scope: an icon button showing the filter glyph, or the scoped project's
- * icon, that opens the list of projects with "All projects" first. The filter itself is ours
- * (an IDE window defaults to the projects it has open), so a match of several projects is one
- * more entry, "N projects", and the glyph with their names in the tooltip.
+ * icon, that opens the list of projects with "All projects" first ([ProjectScopePicker], which
+ * the host shows in a popup under it). The filter itself is ours (an IDE window defaults to the
+ * projects it has open), so a match of several projects is one more entry, "N projects", and
+ * the glyph with their names in the tooltip.
  */
 @OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip sits on Compose's TooltipArea
 @Composable
@@ -390,7 +403,7 @@ private fun ProjectScope(
   favicons: Map<String, ImageBitmap>,
   filter: ProjectFilter,
   open: Set<String>,
-  onFilterChange: (ProjectFilter) -> Unit,
+  onOpen: (at: RelativePoint) -> Unit,
 ) {
   val choices: FilterChoices =
     remember(projects, filter, open) { filterChoices(projects, filter, open) }
@@ -401,56 +414,66 @@ private fun ProjectScope(
     choices.names.isNotEmpty() -> choices.names.joinToString("\n")
     else -> "Filter threads by project"
   }
-  var expanded: Boolean by remember { mutableStateOf(false) }
-  Box {
-    Tooltip(tooltip = { Text(tooltip) }) {
-      IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(24.dp)) {
-        if (scoped != null) {
-          ProjectIcon(scoped, favicons[scoped.id])
-        } else {
-          Icon(AllIconsKeys.General.Filter, contentDescription = "Filter threads by project")
-        }
-      }
-    }
-    if (expanded) {
-      PopupMenu(
-        onDismissRequest = {
-          expanded = false
-          return@PopupMenu true
+  val component: JComponent = LocalComponent.current
+  val density: Density = LocalDensity.current
+  var bottomLeft: Offset by remember { mutableStateOf(Offset.Zero) }
+  Tooltip(tooltip = { Text(tooltip) }) {
+    IconButton(
+      onClick = {
+        // Compose pixels to the hosting component's Swing coordinates
+        val at = Point(
+          (bottomLeft.x / density.density).toInt(),
+          (bottomLeft.y / density.density).toInt(),
+        )
+        onOpen(RelativePoint(component, at))
+      },
+      modifier = Modifier
+        .size(24.dp)
+        .onGloballyPositioned { coordinates ->
+          bottomLeft =
+            coordinates.positionInRoot() + Offset(0f, coordinates.size.height.toFloat())
         },
-        horizontalAlignment = Alignment.Start,
-      ) {
-        choices.filters.forEachIndexed { index, choice ->
-          if (index == choices.divider) separator()
-          val project: Project? = choice.singleProject(byId)
-          selectableItem(
-            selected = index == choices.selected,
-            onClick = {
-              expanded = false
-              if (choice != filter) onFilterChange(choice)
-            },
-          ) {
-            Row(
-              horizontalArrangement = Arrangement.spacedBy(8.dp),
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              if (project != null) {
-                ProjectIcon(project, favicons[project.id])
-              } else {
-                Icon(AllIconsKeys.Nodes.Folder, contentDescription = null)
-              }
-              Text(choices.labels[index], maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-          }
-        }
+    ) {
+      if (scoped != null) {
+        ProjectIcon(scoped, favicons[scoped.id])
+      } else {
+        Icon(AllIconsKeys.General.Filter, contentDescription = "Filter threads by project")
       }
     }
   }
 }
 
-/** The one project a filter scopes to, if it's exactly one. */
-private fun ProjectFilter.singleProject(byId: Map<String, Project>): Project? =
-  (this as? ProjectFilter.Only)?.ids?.singleOrNull()?.let(byId::get)
+/**
+ * The Sidebar's empty state (Sidebar.tsx): [hint], and with no projects at all an Add project
+ * button under it, greyed with the reason when the pairing can't add one.
+ */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip sits on Compose's TooltipArea
+@Composable
+private fun EmptyState(hint: String, onAddProject: (() -> Unit)?, blocked: String?) {
+  if (onAddProject == null) {
+    Hint(hint)
+    return
+  }
+  Column(
+    modifier = Modifier.fillMaxSize().padding(16.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+    horizontalAlignment = Alignment.CenterHorizontally,
+  ) {
+    Text(hint, color = JewelTheme.globalColors.text.info)
+    val button: @Composable () -> Unit = {
+      OutlinedButton(onClick = onAddProject, enabled = blocked == null) {
+        Row(
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Icon(AllIconsKeys.General.Add, contentDescription = null)
+          Text("Add project")
+        }
+      }
+    }
+    if (blocked != null) Tooltip(tooltip = { Text(blocked) }) { button() } else button()
+  }
+}
 
 /**
  * Upstream's `SidebarUtilityMenu` (sidebar/SidebarChrome.tsx): a row of icon buttons at the
