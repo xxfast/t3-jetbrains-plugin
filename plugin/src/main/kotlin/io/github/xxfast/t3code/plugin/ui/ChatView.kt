@@ -119,6 +119,7 @@ import org.jetbrains.jewel.markdown.MarkdownBlock
 import org.jetbrains.jewel.markdown.extensions.autolink.AutolinkProcessorExtension
 import org.jetbrains.jewel.markdown.extensions.github.strikethrough.GitHubStrikethroughProcessorExtension
 import org.jetbrains.jewel.markdown.extensions.github.strikethrough.GitHubStrikethroughRendererExtension
+import org.jetbrains.jewel.markdown.extensions.github.tables.GfmTableColors
 import org.jetbrains.jewel.markdown.extensions.github.tables.GfmTableStyling
 import org.jetbrains.jewel.markdown.extensions.github.tables.GitHubTableProcessorExtension
 import org.jetbrains.jewel.markdown.extensions.github.tables.GitHubTableRendererExtension
@@ -251,8 +252,9 @@ fun ChatView(
           }
           val processor: MarkdownProcessor = remember(skills) { chatMarkdownProcessor(skills) }
           val styling: MarkdownStyling = chatMarkdownStyling()
-          val renderer: MarkdownBlockRenderer = remember(styling, linkFavicons) {
-            chatMarkdownRenderer(styling, linkFavicons)
+          val tableStyling: GfmTableStyling = chatMarkdownTableStyling()
+          val renderer: MarkdownBlockRenderer = remember(styling, tableStyling, linkFavicons) {
+            chatMarkdownRenderer(styling, tableStyling, linkFavicons)
           }
           CompositionLocalProvider(LocalMessageChipActions provides chipActions) {
           ProvideMarkdownStyling(
@@ -1709,12 +1711,13 @@ private fun chatMarkdownProcessor(
 
 private fun chatMarkdownRenderer(
   styling: MarkdownStyling,
+  tableStyling: GfmTableStyling,
   linkFavicons: LinkFaviconSource,
 ): MarkdownBlockRenderer =
   MarkdownBlockRenderer.create(
     styling,
     listOf(
-      GitHubTableRendererExtension(GfmTableStyling.create(), styling),
+      GitHubTableRendererExtension(tableStyling, styling),
       GitHubStrikethroughRendererExtension,
       // Jewel asks the first image renderer only, so the chips' one wraps the favicons'
       MessageChipsRendererExtension(
@@ -1722,6 +1725,23 @@ private fun chatMarkdownRenderer(
       ),
     ),
   )
+
+// On 2025.3 `GfmTableColors.create()` defaults read Jewel's `isLightTheme`, a static `val`
+// captured once at class-load (`JBColor.isBright()`), so switching from dark to light leaves
+// alternate rows dark (`#151B23`). Pass the colours from the live theme instead.
+@Composable
+private fun chatMarkdownTableStyling(): GfmTableStyling {
+  val colors: GlobalColors = JewelTheme.globalColors
+  val dark: Boolean = JewelTheme.isDark
+  return remember(colors, dark) {
+    GfmTableStyling.create(
+      colors = GfmTableColors.create(
+        borderColor = colors.borders.normal,
+        alternateRowBackgroundColor = if (dark) Color(0xFF151B23) else Color(0xFFF6F8FA),
+      ),
+    )
+  }
+}
 
 // The bridge's BlockQuote defaults are GitHub's light colours, fixed, so a quote is grey on grey
 // in a dark theme. Upstream's index.css draws it with a 2px `--contrast-border` line and
