@@ -1,6 +1,19 @@
 package io.github.xxfast.t3code.plugin.ui
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.text.BasicSecureTextField
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.TextObfuscationMode
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,16 +29,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.intellij.ui.DocumentAdapter
 import io.github.xxfast.t3code.protocol.generated.SecretRequestAnswerInput
 import io.github.xxfast.t3code.protocol.generated.TurnItem
-import java.awt.event.ActionListener
 import java.util.concurrent.atomic.AtomicBoolean
-import javax.swing.JPasswordField
-import javax.swing.event.DocumentEvent
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -34,7 +42,7 @@ import org.jetbrains.jewel.ui.component.DefaultButton
 import org.jetbrains.jewel.ui.component.OutlinedButton
 import org.jetbrains.jewel.ui.component.Text
 
-/** `SecretRequestCard.tsx`: the input lives only in a native password field, never a draft. */
+/** `SecretRequestCard.tsx`: the secure input stays in this composition, never a draft. */
 @Composable
 fun SecretRequestCard(
   item: TurnItem.SecretRequest,
@@ -61,36 +69,21 @@ private fun PendingSecretRequestForm(
 ) {
   val scope: CoroutineScope = rememberCoroutineScope()
   var busy: Boolean by remember(item.id) { mutableStateOf(false) }
-  var hasValue: Boolean by remember(item.id) { mutableStateOf(false) }
   var error: String? by remember(item.id) { mutableStateOf(null) }
   var answered: Boolean by remember(item.id) { mutableStateOf(false) }
   val inFlight = remember(item.id) { AtomicBoolean(false) }
-  val field = remember(item.id) {
-    JPasswordField().apply {
-      putClientProperty("JTextField.placeholderText", item.placeholder ?: "Paste the secret")
-      accessibleContext.accessibleName = item.label
-      document.addDocumentListener(object : DocumentAdapter() {
-        override fun textChanged(e: DocumentEvent) {
-          val value: CharArray = password
-          hasValue = value.any { !it.isWhitespace() }
-          value.fill('\u0000')
-        }
-      })
-    }
-  }
+  // Don't use rememberTextFieldState: its saver would retain this across restoration.
+  val field: TextFieldState = remember(item.id) { TextFieldState() }
+  val hasValue: Boolean = field.text.any { !it.isWhitespace() }
   DisposableEffect(field) {
-    onDispose { field.text = "" }
+    onDispose { field.clearText() }
   }
   val enabled: Boolean = disabledReason == null && onAnswer != null && !busy && !answered
 
   fun send(decline: Boolean) {
     if (!enabled || !inFlight.compareAndSet(false, true)) return
-    val value: CharArray = field.password
-    val input: SecretRequestAnswerInput? = try {
-      secretRequestAnswerInput(item, if (decline) null else String(value))
-    } finally {
-      value.fill('\u0000')
-    }
+    val input: SecretRequestAnswerInput? =
+      secretRequestAnswerInput(item, if (decline) null else field.text.toString())
     if (input == null) {
       inFlight.set(false)
       return
@@ -100,7 +93,7 @@ private fun PendingSecretRequestForm(
     scope.launch {
       try {
         onAnswer?.invoke(input)
-        field.text = ""
+        field.clearText()
         answered = true
       } catch (_: CancellationException) {
         throw CancellationException("Secret request interrupted")
@@ -113,11 +106,6 @@ private fun PendingSecretRequestForm(
       }
     }
   }
-  DisposableEffect(field, enabled, onAnswer) {
-    val listener = ActionListener { send(decline = false) }
-    field.addActionListener(listener)
-    onDispose { field.removeActionListener(listener) }
-  }
 
   Column(
     modifier = Modifier.fillMaxWidth()
@@ -128,11 +116,29 @@ private fun PendingSecretRequestForm(
     Text(item.label, fontWeight = FontWeight.Medium)
     if (item.reason.isNotBlank()) Text(item.reason, color = muted())
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      SwingPanel(
-        factory = { field },
-        update = { it.isEnabled = enabled },
-        modifier = Modifier.weight(1f).height(30.dp),
-      )
+      Box(
+        modifier = Modifier.weight(1f).height(30.dp)
+          .border(1.dp, JewelTheme.globalColors.borders.normal, RoundedCornerShape(4.dp))
+          .padding(horizontal = 8.dp),
+        contentAlignment = Alignment.CenterStart,
+      ) {
+        if (field.text.isEmpty()) Text(item.placeholder ?: "Paste the secret", color = muted())
+        BasicSecureTextField(
+          state = field,
+          enabled = enabled,
+          textObfuscationMode = TextObfuscationMode.Hidden,
+          textStyle = JewelTheme.defaultTextStyle,
+          cursorBrush = SolidColor(JewelTheme.globalColors.text.normal),
+          modifier = Modifier.fillMaxSize().padding(vertical = 5.dp)
+            .onPreviewKeyEvent { event ->
+              if (event.type == KeyEventType.KeyDown &&
+                event.key in listOf(Key.Enter, Key.NumPadEnter)) {
+                send(decline = false)
+                true
+              } else false
+            },
+        )
+      }
       DefaultButton(onClick = { send(decline = false) }, enabled = enabled && hasValue) {
         Text(if (busy) "Submitting..." else "Save securely")
       }
