@@ -1,6 +1,8 @@
 package io.github.xxfast.t3code.plugin.fixtures
 
 import io.github.xxfast.t3code.protocol.ConversationMessage
+import io.github.xxfast.t3code.protocol.PlanArtifact
+import io.github.xxfast.t3code.protocol.generated.PlanArtifact as GenPlanArtifact
 import io.github.xxfast.t3code.protocol.ProviderSession
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
@@ -55,12 +57,24 @@ data class Overlay(
   fun over(base: ThreadView): ThreadView {
     val id: String = base.thread.id
     val items: List<TurnItem> = base.items.upsertAll(items[id].orEmpty(), TurnItem::id)
+    val todoPlans: List<PlanArtifact> = items.filterIsInstance<TurnItem.TodoList>().map { turnItem ->
+      GenPlanArtifact.TodoList(
+        id = turnItem.planId,
+        threadId = turnItem.threadId,
+        runId = turnItem.runId,
+        nodeId = turnItem.nodeId ?: "",
+        status = turnItem.status,
+        steps = turnItem.steps,
+        explanation = turnItem.explanation,
+      )
+    }
     val listed: List<RuntimeRequest> =
       base.runtimeRequests.upsertAll(runtimeRequests[id].orEmpty(), RuntimeRequest::id)
     val standIns: List<RuntimeRequest> = requestsOf(items, sessionOf(base.providerSessions))
     return base.copy(
       thread = threads[id] ?: base.thread,
       runs = base.runs.upsertAll(runs[id].orEmpty(), Run::id),
+      plans = base.plans.upsertAll(todoPlans, PlanArtifact::id),
       items = items,
       runtimeRequests = listed + standIns.filter { request ->
         listed.none { it.id == request.id }

@@ -180,6 +180,7 @@ fun ChatView(
   queueActions: QueuedRunsActions = QueuedRunsActions(),
   backgroundWork: BackgroundWorkState? = null, // the provider's pending work, above the composer
   backgroundWorkActions: BackgroundWorkActions = BackgroundWorkActions(),
+  tasks: ComposerTasksState? = null, // the active todo_list tasks, above the composer
   mentions: ComposerMentions = ComposerMentions(), // what the composer's `@` and `#` menus read
   memory: TimelineMemory = remember { TimelineMemory() }, // where the timeline was left
   linkFavicons: LinkFaviconSource = NoLinkFavicons, // the favicons in front of external links
@@ -191,6 +192,8 @@ fun ChatView(
   val timeline: LazyListState = remember(threadId) { LazyListState(memory.index, memory.offset) }
   val scrollCollapse: ComposerScrollCollapse = remember(threadId) { ComposerScrollCollapse() }
   val follow: TimelineFollow = remember(threadId) { TimelineFollow(followEnd = memory.atEnd) }
+  var isTasksExpanded: Boolean by remember(threadId) { mutableStateOf(false) }
+  if (tasks == null || pending != null) isTasksExpanded = false
   // `canScrollCollapseComposer`'s and `composerHasExpandedChrome`'s parts the plugin has: a
   // multi-line prompt, a request, chips or a note on the draft, or an error keep it open
   val hasMultilinePrompt: Boolean = draft.text.contains('\n')
@@ -201,7 +204,8 @@ fun ChatView(
     extras.comments.isNotEmpty() ||
     extras.selection != null ||
     extras.notice != null ||
-    extras.blockReason != null
+    extras.blockReason != null ||
+    isTasksExpanded
   val collapseEligible: Boolean = !hasMultilinePrompt && !hasExpandedChrome
   // How much of the timeline's bottom the composer covers, in pixels
   var inset: Int by remember(threadId) { mutableIntStateOf(0) }
@@ -325,13 +329,25 @@ fun ChatView(
           onSteerQueued = queue?.let { state -> queuedSteerShortcut(state, queueActions) },
           onEditQueued = queue?.let { state -> queuedEditShortcut(state, queueActions) },
           // `ComposerBannerStack`: the queued drawer (`attachedAbove`) over the front banner
-          attachedAbove = if (queue == null && backgroundWork == null) {
+          attachedAbove = if (
+            queue == null &&
+            backgroundWork == null &&
+            (pending != null || tasks == null)
+          ) {
             null
           } else {
             {
               Column {
                 queue?.let { state -> QueuedRunsControl(state, queueActions) }
                 backgroundWork?.let { state -> BackgroundWorkBanner(state, backgroundWorkActions) }
+                if (pending == null && tasks != null) {
+                  ComposerTasksContent(
+                    progress = tasks.progress,
+                    steps = tasks.steps,
+                    expanded = isTasksExpanded,
+                    onToggle = { isTasksExpanded = !isTasksExpanded },
+                  )
+                }
               }
             }
           },

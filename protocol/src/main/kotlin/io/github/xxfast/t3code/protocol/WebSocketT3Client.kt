@@ -6,6 +6,9 @@ import io.github.xxfast.t3code.protocol.generated.DispatchCommandResult
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
+import io.github.xxfast.t3code.protocol.generated.PlanArtifactSerializer
+import io.github.xxfast.t3code.protocol.generated.PlanArtifact as GenPlanArtifact
+import io.github.xxfast.t3code.protocol.generated.TurnItem as GenTurnItem
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
 import io.github.xxfast.t3code.protocol.generated.ProjectScript
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesResult
@@ -533,6 +536,7 @@ public class WebSocketT3Client internal constructor(
       return ThreadView(
         thread = thread,
         runs = decodeEach(Run.serializer(), projection["runs"]),
+        plans = decodeEach(PlanArtifactSerializer, projection["plans"]),
         items = visible.mapNotNull { entry ->
           decodeOrNull(TurnItem.serializer(), (entry as? JsonObject)?.get("item"))
         },
@@ -562,7 +566,27 @@ public class WebSocketT3Client internal constructor(
     val sequence: Long = item.long("sequence") ?: view.sequence
     val next: ThreadView? = when {
       type == "turn-item.updated" -> decodeOrNull(TurnItem.serializer(), payload)
-        ?.let { turnItem -> view.copy(items = view.items.upsert(turnItem, TurnItem::id)) }
+        ?.let { turnItem ->
+          val nextItems: List<TurnItem> = view.items.upsert(turnItem, TurnItem::id)
+          val nextPlans: List<PlanArtifact> = if (turnItem is GenTurnItem.TodoList) {
+            val plan: PlanArtifact = GenPlanArtifact.TodoList(
+              id = turnItem.planId,
+              threadId = turnItem.threadId,
+              runId = turnItem.runId,
+              nodeId = turnItem.nodeId ?: "",
+              status = turnItem.status,
+              steps = turnItem.steps,
+              explanation = turnItem.explanation,
+            )
+            view.plans.upsert(plan, PlanArtifact::id)
+          } else {
+            view.plans
+          }
+          view.copy(items = nextItems, plans = nextPlans)
+        }
+
+      type == "plan.updated" -> decodeOrNull(PlanArtifactSerializer, payload)
+        ?.let { plan -> view.copy(plans = view.plans.upsert(plan, PlanArtifact::id)) }
 
       type == "run.created" || type == "run.updated" -> decodeOrNull(Run.serializer(), payload)
         ?.let { run -> view.copy(runs = view.runs.upsert(run, Run::id)) }

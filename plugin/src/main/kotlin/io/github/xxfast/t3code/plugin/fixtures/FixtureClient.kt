@@ -9,6 +9,9 @@ import io.github.xxfast.t3code.plugin.ui.THREAD_TITLE_REGENERATION
 import io.github.xxfast.t3code.plugin.ui.instance
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.ConversationMessage
+import io.github.xxfast.t3code.protocol.PlanArtifact
+import io.github.xxfast.t3code.protocol.generated.PlanArtifact as GenPlanArtifact
+import io.github.xxfast.t3code.protocol.generated.TurnItem as GenTurnItem
 import io.github.xxfast.t3code.protocol.FileContents
 import io.github.xxfast.t3code.protocol.OrchestrationV2Command
 import io.github.xxfast.t3code.protocol.Project
@@ -213,6 +216,19 @@ class FixtureClient(
       thread = thread,
       runs = scenario.runs[thread.id].orEmpty(),
       items = items.values.toList(),
+      plans = (scenario.plans[thread.id].orEmpty() + items.values
+        .filterIsInstance<GenTurnItem.TodoList>()
+        .map { turnItem ->
+          GenPlanArtifact.TodoList(
+            id = turnItem.planId,
+            threadId = turnItem.threadId,
+            runId = turnItem.runId,
+            nodeId = turnItem.nodeId ?: "",
+            status = turnItem.status,
+            steps = turnItem.steps,
+            explanation = turnItem.explanation,
+          )
+        }).associateBy { it.id }.values.toList(),
       runtimeRequests = scenario.runtimeRequests[thread.id].orEmpty(),
       providerSessions = scenario.providerSessions[thread.id].orEmpty(),
       checkpoints = scenario.checkpoints[thread.id].orEmpty(),

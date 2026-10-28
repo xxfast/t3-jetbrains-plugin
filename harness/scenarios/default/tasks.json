@@ -1,0 +1,138 @@
+{
+  "threads": [
+    {
+      "id": "tasks-demo",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Demo: tasks banner",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "full-access",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "tasks-demo"
+      },
+      "status": "running",
+      "branch": "feature/tasks-demo",
+      "latestRunId": "run_tasks_1",
+      "activeRunId": "run_tasks_1",
+      "itemCount": 2,
+      "visibleItemCount": 2,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-19T08:30:12.000Z",
+      "updatedAt": "2026-10-19T08:43:30.000Z"
+    }
+  ],
+  "runs": {
+    "tasks-demo": [
+      {
+        "id": "run_tasks_1",
+        "threadId": "tasks-demo",
+        "ordinal": 1,
+        "status": "running",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "userMessageId": "msg_tasks_u1",
+        "requestedAt": "2026-10-19T08:30:12.000Z",
+        "startedAt": "2026-10-19T08:30:13.000Z"
+      }
+    ]
+  },
+  "items": {
+    "tasks-demo": [
+      {
+        "type": "user_message",
+        "id": "msg_tasks_u1",
+        "threadId": "tasks-demo",
+        "runId": "run_tasks_1",
+        "ordinal": 1,
+        "status": "completed",
+        "messageId": "msg_tasks_u1",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "Optimize storage serialization benchmarks and add integration tests",
+        "updatedAt": "2026-10-19T08:30:12.000Z"
+      },
+      {
+        "type": "todo_list",
+        "id": "item_tasks_todo_1",
+        "threadId": "tasks-demo",
+        "runId": "run_tasks_1",
+        "nodeId": "node_tasks_1",
+        "planId": "plan_tasks_1",
+        "ordinal": 2,
+        "status": "running",
+        "updatedAt": "2026-10-19T08:30:14.000Z",
+        "steps": [
+          { "id": "step_1", "text": "Profile serialization bottlenecks", "status": "inProgress" },
+          { "id": "step_2", "text": "Inline hot path buffer allocations", "status": "pending" },
+          { "id": "step_3", "text": "Verify backward compatibility", "status": "pending" },
+          { "id": "step_4", "text": "Run microbenchmarks suite", "status": "pending" }
+        ]
+      },
+      {
+        "after": 1500,
+        "type": "todo_list",
+        "id": "item_tasks_todo_1",
+        "threadId": "tasks-demo",
+        "runId": "run_tasks_1",
+        "nodeId": "node_tasks_1",
+        "planId": "plan_tasks_1",
+        "ordinal": 2,
+        "status": "running",
+        "updatedAt": "2026-10-19T08:30:16.000Z",
+        "steps": [
+          { "id": "step_1", "text": "Profile serialization bottlenecks", "status": "completed", "durationMs": 1500 },
+          { "id": "step_2", "text": "Inline hot path buffer allocations", "status": "inProgress" },
+          { "id": "step_3", "text": "Verify backward compatibility", "status": "pending" },
+          { "id": "step_4", "text": "Run microbenchmarks suite", "status": "pending" }
+        ]
+      },
+      {
+        "after": 3000,
+        "type": "todo_list",
+        "id": "item_tasks_todo_1",
+        "threadId": "tasks-demo",
+        "runId": "run_tasks_1",
+        "nodeId": "node_tasks_1",
+        "planId": "plan_tasks_1",
+        "ordinal": 2,
+        "status": "running",
+        "updatedAt": "2026-10-19T08:30:19.000Z",
+        "steps": [
+          { "id": "step_1", "text": "Profile serialization bottlenecks", "status": "completed", "durationMs": 1500 },
+          { "id": "step_2", "text": "Inline hot path buffer allocations", "status": "completed", "durationMs": 2100 },
+          { "id": "step_3", "text": "Verify backward compatibility", "status": "inProgress" },
+          { "id": "step_4", "text": "Run microbenchmarks suite", "status": "pending" }
+        ]
+      },
+      {
+        "after": 4500,
+        "type": "todo_list",
+        "id": "item_tasks_todo_1",
+        "threadId": "tasks-demo",
+        "runId": "run_tasks_1",
+        "nodeId": "node_tasks_1",
+        "planId": "plan_tasks_1",
+        "ordinal": 2,
+        "status": "running",
+        "updatedAt": "2026-10-19T08:30:22.000Z",
+        "steps": [
+          { "id": "step_1", "text": "Profile serialization bottlenecks", "status": "completed", "durationMs": 1500 },
+          { "id": "step_2", "text": "Inline hot path buffer allocations", "status": "completed", "durationMs": 2100 },
+          { "id": "step_3", "text": "Verify backward compatibility", "status": "completed", "durationMs": 1800 },
+          { "id": "step_4", "text": "Run microbenchmarks suite", "status": "inProgress" }
+        ]
+      }
+    ]
+  }
+}

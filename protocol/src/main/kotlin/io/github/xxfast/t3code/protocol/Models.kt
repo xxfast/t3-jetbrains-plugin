@@ -26,6 +26,12 @@ public typealias Run = io.github.xxfast.t3code.protocol.generated.Run
 
 public typealias TurnItem = io.github.xxfast.t3code.protocol.generated.TurnItem
 
+/** A plan artifact, `OrchestrationV2PlanArtifact`. */
+public typealias PlanArtifact = io.github.xxfast.t3code.protocol.generated.PlanArtifact
+
+/** A step in a plan or todo list, `OrchestrationV2PlanStep`. */
+public typealias PlanStep = io.github.xxfast.t3code.protocol.generated.PlanStep
+
 /**
  * What `orchestration.dispatchCommand` takes. Typealiases don't reach nested classes, so code
  * that builds a branch (`Command.ThreadPin`) imports `generated.Command` directly.
@@ -78,13 +84,14 @@ public data class Credential(
 /**
  * One open thread: the row, its runs and the items to render, in order, plus the projection's
  * pending requests, attached provider sessions and threads, captured checkpoints, its
- * conversation messages (queued ones have a message long before they have an item), and its
- * subagents and context transfers.
+ * conversation messages (queued ones have a message long before they have an item), its
+ * plans, and its subagents and context transfers.
  */
 public data class ThreadView(
   val thread: Thread,
   val runs: List<Run>,
   val items: List<TurnItem>,
+  val plans: List<PlanArtifact> = emptyList(),
   val runtimeRequests: List<RuntimeRequest> = emptyList(),
   val providerSessions: List<ProviderSession> = emptyList(),
   val checkpoints: List<Checkpoint> = emptyList(),

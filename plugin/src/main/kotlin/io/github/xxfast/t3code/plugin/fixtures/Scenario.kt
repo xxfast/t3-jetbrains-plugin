@@ -4,6 +4,7 @@ import io.github.xxfast.t3code.protocol.Checkpoint
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.ContextTransfer
 import io.github.xxfast.t3code.protocol.ConversationMessage
+import io.github.xxfast.t3code.protocol.PlanArtifact
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.ProviderSession
 import io.github.xxfast.t3code.protocol.ProviderThread
@@ -35,6 +36,7 @@ class ScenarioFile(
   val projects: List<Project> = emptyList(),
   val threads: List<Thread> = emptyList(),
   val runs: Map<String, List<Run>> = emptyMap(),
+  val plans: Map<String, List<PlanArtifact>> = emptyMap(),
   val items: Map<String, List<JsonObject>> = emptyMap(),
   val runtimeRequests: Map<String, List<RuntimeRequest>> = emptyMap(),
   val providerSessions: Map<String, List<ProviderSession>> = emptyMap(),
@@ -87,6 +89,7 @@ class Scenario(
   val projects: List<Project>,
   val threads: List<Thread>,
   val runs: Map<String, List<Run>>,
+  val plans: Map<String, List<PlanArtifact>> = emptyMap(),
   val items: Map<String, List<FixtureItem>>,
   val runtimeRequests: Map<String, List<RuntimeRequest>> = emptyMap(),
   val providerSessions: Map<String, List<ProviderSession>> = emptyMap(),
@@ -114,6 +117,7 @@ class Scenario(
         projects = file.projects,
         threads = file.threads,
         runs = file.runs,
+        plans = file.plans,
         items = file.items.mapValues { (_, entries) -> entries.map(::fixtureItem) },
         runtimeRequests = file.runtimeRequests,
         providerSessions = file.providerSessions,
@@ -146,6 +150,7 @@ class Scenario(
       projects = parts.flatMap { it.projects }.distinctBy { it.id },
       threads = parts.flatMap { it.threads }.distinctBy { it.id },
       runs = parts.map { it.runs }.fold(emptyMap(), ::append),
+      plans = parts.map { it.plans }.fold(emptyMap(), ::append),
       items = parts.map { it.items }.fold(emptyMap(), ::append),
       runtimeRequests = parts.map { it.runtimeRequests }.fold(emptyMap(), ::append),
       providerSessions = parts.map { it.providerSessions }.fold(emptyMap(), ::append),
