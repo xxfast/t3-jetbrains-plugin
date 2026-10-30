@@ -158,6 +158,32 @@ fun filterComposerPullRequestMatches(
     .take(limit)
 }
 
+/**
+ * `withLinkedComposerPullRequestsFirst`, composerPullRequestMatches.ts:78: puts the thread's
+ * [linked] pull requests that match a text query ahead of the searched [matches]. A linked one
+ * the search found keeps the search's row; otherwise every query word has to be in its number,
+ * title, repository or branch.
+ */
+fun withLinkedComposerPullRequestsFirst(
+  matches: List<ComposerPullRequest>,
+  linked: List<ComposerPullRequest>,
+  query: String,
+  limit: Int,
+): List<ComposerPullRequest> {
+  fun keyOf(entry: ComposerPullRequest): String =
+    "${entry.repository.trim().lowercase()}#${entry.number}"
+  val matchesByKey: Map<String, ComposerPullRequest> = matches.associateBy(::keyOf)
+  val words: List<String> = query.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+  val linkedMatches: List<ComposerPullRequest> = linked.mapNotNull { entry ->
+    matchesByKey[keyOf(entry)]?.let { return@mapNotNull it }
+    val text: String =
+      "#${entry.number} ${entry.title} ${entry.repository} ${entry.headBranch}".lowercase()
+    entry.takeIf { words.all { word -> text.contains(word) } }
+  }
+  val linkedKeys: Set<String> = linkedMatches.map(::keyOf).toSet()
+  return (linkedMatches + matches.filter { keyOf(it) !in linkedKeys }).take(limit)
+}
+
 /** `matchesPullRequestQuery`, pullRequestList.logic.ts:144. */
 fun matchesPullRequestQuery(entry: ComposerPullRequest, query: String): Boolean {
   val normalized: String = query.trim().lowercase()
@@ -222,9 +248,10 @@ fun composerPullRequestNumber(trigger: ComposerTrigger?): Long? {
 private const val MAX_SAFE_INTEGER: Long = 9_007_199_254_740_991
 
 /**
- * The `#` half of `composerMenuItems`, ChatComposer.tsx:2750: a numeric query (or none) filters
- * the exact lookup, the list and the linked pull requests by number; text ranks the list
- * entries of this repository that the host searched or that match on the row. At most 12.
+ * The `#` half of `composerMenuItems`, useComposerMenuItems.ts:290: a numeric query (or none)
+ * filters the exact lookup, the list and the linked pull requests by number; text ranks the list
+ * entries of this repository that the host searched or that match on the row, after the linked
+ * pull requests that match, which show before the list answers too. At most 12.
  */
 fun composerPullRequestMatches(
   query: String,
@@ -255,7 +282,12 @@ fun composerPullRequestMatches(
       list?.providers?.find { it.host == entry.host }?.searchesOnHost == true
     searchesOnHost || matchesPullRequestQuery(entry, query)
   }
-  return rankPullRequestMatches(candidates, query).take(COMPOSER_PULL_REQUEST_RESULT_LIMIT)
+  return withLinkedComposerPullRequestsFirst(
+    matches = rankPullRequestMatches(candidates, query),
+    linked = linked,
+    query = query,
+    limit = COMPOSER_PULL_REQUEST_RESULT_LIMIT,
+  )
 }
 
 /** A `#` row's description, CC:2797: the title, after the repository when it's another. */

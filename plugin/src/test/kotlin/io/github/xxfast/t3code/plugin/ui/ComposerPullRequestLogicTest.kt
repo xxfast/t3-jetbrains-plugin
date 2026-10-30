@@ -38,6 +38,7 @@ class ComposerPullRequestLogicTest {
     repository: String,
     number: Long,
     source: String = "agent",
+    title: String = "$repository $number",
   ) = ThreadPullRequestLink(
     host = "github.com",
     repository = repository,
@@ -47,7 +48,7 @@ class ComposerPullRequestLogicTest {
     linkedAt = "2026-01-01T00:00:00.000Z",
     snapshot = ThreadPullRequestSnapshot(
       state = "open",
-      title = "$repository $number",
+      title = title,
       headBranch = "feature",
       baseBranch = "main",
       isDraft = false,
@@ -104,6 +105,28 @@ class ComposerPullRequestLogicTest {
       limit = 10,
     )
     assertEquals(listOf(entry(4, "2026-01-03")), result)
+  }
+
+  @Test
+  fun `puts linked pull requests ahead of a text search, before and after it returns`() {
+    val linked: List<ComposerPullRequest> = composerPullRequestsFromLinks(
+      listOf(link("owner/repo", 7, title = "Fix login"), link("owner/repo", 8)),
+      "p1",
+    )
+    val searching: List<ComposerPullRequest> = withLinkedComposerPullRequestsFirst(
+      matches = emptyList(),
+      linked = linked,
+      query = "fix",
+      limit = 10,
+    )
+    assertEquals(listOf(7L), searching.map { it.number })
+    val searched: List<ComposerPullRequest> = withLinkedComposerPullRequestsFirst(
+      matches = listOf(entry(9, "2026-01-05"), entry(8, "2026-01-03")),
+      linked = linked,
+      query = "fix",
+      limit = 10,
+    )
+    assertEquals(listOf(linked[0], entry(8, "2026-01-03"), entry(9, "2026-01-05")), searched)
   }
 
   @Test
@@ -207,6 +230,26 @@ class ComposerPullRequestLogicTest {
       repository = "owner/repo",
     )
     assertEquals(listOf(1L), matches.map { it.number })
+  }
+
+  @Test
+  fun `a text query shows the matching linked pull requests before the list answers`() {
+    val linked: List<ComposerPullRequest> = composerPullRequestsFromLinks(
+      listOf(link("owner/repo", 7, title = "Fix login"), link("owner/repo", 8)),
+      "p1",
+    )
+    fun matches(list: PullRequestListResult?): List<Long> = composerPullRequestMatches(
+      query = "login",
+      list = list,
+      exact = null,
+      linked = linked,
+      projectId = "p1",
+      repository = "owner/repo",
+    ).map { it.number }
+    assertEquals(listOf(7L), matches(list = null))
+    val entries: List<PullRequestListEntry> =
+      listOf(listEntry(9, "Login screen", "2026-01-05"), listEntry(7, "Fix login", "2026-01-03"))
+    assertEquals(listOf(7L, 9L), matches(listed(entries, searchesOnHost = true)))
   }
 
   @Test
