@@ -16,12 +16,20 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.keymap.KeymapUtil
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.wm.ToolWindow
+import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.openapi.wm.ex.ToolWindowManagerListener
+import com.intellij.util.ui.accessibility.AccessibleAnnouncerUtil
 import io.github.xxfast.t3code.plugin.ide.NOTIFICATION_GROUP
 import io.github.xxfast.t3code.plugin.ide.launchReporting
+import javax.accessibility.Accessible
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -32,9 +40,11 @@ const val UNDO_ACTION: String = "T3Code.UndoThreadAction"
 const val SIDEBAR_TOOL_WINDOW: String = "T3 Sidebar"
 
 /**
- * This window's [ThreadUndo], its 5 s timer and its notice. Upstream shows the notice inline at
- * the bottom of the Sidebar; here it's a balloon with the undo as its action, replaced as the
- * count changes and expired with the window.
+ * This window's [ThreadUndo], its 5 s timer and its notice. The notice is [footer], for the
+ * Sidebar's utility row as upstream's `SidebarThreadUndoNotice`. Upstream's sidebar is always on
+ * screen and ours isn't, so with the Sidebar hidden it's a balloon instead, replaced as the count
+ * changes and expired with the window. Never both, and it follows the Sidebar if that's hidden or
+ * shown while the notice is up.
  */
 @Service(Service.Level.PROJECT)
 class ThreadUndos(private val project: Project, private val scope: CoroutineScope) {
@@ -42,9 +52,24 @@ class ThreadUndos(private val project: Project, private val scope: CoroutineScop
 
   private var timer: Job? = null
   private var balloon: Notification? = null
+  private val inSidebar: MutableStateFlow<UndoNotice?> = MutableStateFlow(null)
+  private var routedToSidebar: Boolean = false
+  private var announced: String? = null // upstream's `announcedSummary`
+
+  /** The notice the Sidebar's footer shows; null when there's none or the balloon has it. */
+  val footer: StateFlow<UndoNotice?> = inSidebar.asStateFlow()
 
   init {
     scope.launch { undo.notice.collect { notice -> withContext(Dispatchers.EDT) { show(notice) } } }
+    project.messageBus.connect(scope).subscribe(
+      ToolWindowManagerListener.TOPIC,
+      object : ToolWindowManagerListener {
+        override fun stateChanged(toolWindowManager: ToolWindowManager) {
+          val notice: UndoNotice = undo.notice.value ?: return
+          if ((sidebar() != null) != routedToSidebar) show(notice)
+        }
+      },
+    )
   }
 
   /**
@@ -83,16 +108,32 @@ class ThreadUndos(private val project: Project, private val scope: CoroutineScop
     return taken.isNotEmpty()
   }
 
+  /** The Sidebar when it's on screen. */
+  private fun sidebar(): ToolWindow? = ToolWindowManager.getInstance(project)
+    .getToolWindow(SIDEBAR_TOOL_WINDOW)?.takeIf { it.isVisible }
+
+  /** Decided again on every change, so the notice is wherever the Sidebar is right now. */
   private fun show(notice: UndoNotice?) {
+    val sidebar: ToolWindow? = notice?.let { sidebar() }
+    routedToSidebar = sidebar != null
+    inSidebar.value = notice.takeIf { sidebar != null }
+    val shortcut: String = KeymapUtil.getFirstKeyboardShortcutText(UNDO_ACTION)
     balloon?.expire()
-    balloon = notice?.let { shown ->
-      val shortcut: String = KeymapUtil.getFirstKeyboardShortcutText(UNDO_ACTION)
+    balloon = notice?.takeIf { sidebar == null }?.let { shown ->
       NotificationGroupManager.getInstance()
         .getNotificationGroup(NOTIFICATION_GROUP)
         .createNotification(noticeText(shown), NotificationType.INFORMATION)
         .addAction(NotificationAction.createSimpleExpiring(undoText(shortcut)) { undoLatest() })
         .also { it.notify(project) }
     }
+    // showThreadUndoNotice.ts's `setNotice`: the footer's notice is announced on its own, since
+    // a region that mounts already filled is skipped. A balloon announces itself.
+    val summary: String? = notice?.takeIf { sidebar != null }?.let(::noticeText)
+    if (summary == announced) return
+    announced = summary
+    if (summary == null || !AccessibleAnnouncerUtil.isAnnouncingAvailable()) return
+    val where: Accessible = sidebar?.component as? Accessible ?: return
+    AccessibleAnnouncerUtil.announce(where, "$summary, ${undoText(shortcut)}", false)
   }
 
   companion object {

@@ -67,9 +67,11 @@ class ThreadUndoLogicTest {
   }
 
   @Test
-  fun `texts follow SidebarThreadUndoNotice`() {
+  fun `texts follow showThreadUndoNotice and SidebarThreadUndoNotice`() {
     assertEquals("Archived 1 thread", noticeText(UndoNotice(UndoAction.Archived, 1)))
     assertEquals("Settled 3 threads", noticeText(UndoNotice(UndoAction.Settled, 3)))
+    assertEquals("Settled", noticeSummary(UndoNotice(UndoAction.Settled, 1)))
+    assertEquals("Snoozed 3", noticeSummary(UndoNotice(UndoAction.Snoozed, 3)))
     assertEquals("⌘Z to undo", undoText("⌘Z"))
     assertEquals("Undo", undoText(""))
     assertEquals("Undo", undoText(null))

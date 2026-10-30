@@ -25,11 +25,18 @@ const val UNDO_WINDOW_MS: Long = 5_000
 /** What the notice shows: the latest action and how many in a row did the same. */
 data class UndoNotice(val action: UndoAction, val count: Int)
 
-/** "Archived 2 threads", SidebarThreadUndoNotice.tsx:15. */
+/** "Archived 2 threads", `threadUndoNoticeSummary` in showThreadUndoNotice.ts. */
 fun noticeText(notice: UndoNotice): String =
   "${notice.action} ${notice.count} thread${if (notice.count == 1) "" else "s"}"
 
-/** The notice's button, "⌘Z to undo" with a shortcut and "Undo" without, as upstream's. */
+/**
+ * "Settled", or "Settled 3" for more than one: short enough to fit beside the footer's icons,
+ * SidebarThreadUndoNotice.tsx's `summary`. Screen readers get [noticeText].
+ */
+fun noticeSummary(notice: UndoNotice): String =
+  if (notice.count == 1) "${notice.action}" else "${notice.action} ${notice.count}"
+
+/** `threadUndoLabel`: "⌘Z to undo" with a shortcut and "Undo" without, as upstream's. */
 fun undoText(shortcut: String?): String =
   if (shortcut.isNullOrEmpty()) "Undo" else "$shortcut to undo"
 

@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.openapi.keymap.KeymapUtil
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
@@ -20,10 +21,14 @@ import com.intellij.ui.content.ContentFactory
 import io.github.xxfast.t3code.plugin.actions.OPEN_TERMINAL_ACTION
 import io.github.xxfast.t3code.plugin.actions.SETTLE_ACTION
 import io.github.xxfast.t3code.plugin.actions.SNOOZE_GROUP
+import io.github.xxfast.t3code.plugin.actions.ThreadUndos
+import io.github.xxfast.t3code.plugin.actions.UNDO_ACTION
+import io.github.xxfast.t3code.plugin.actions.UndoNotice
 import io.github.xxfast.t3code.plugin.actions.WAKE_ACTION
 import io.github.xxfast.t3code.plugin.actions.blockedBy
 import io.github.xxfast.t3code.plugin.actions.performThreadAction
 import io.github.xxfast.t3code.plugin.actions.showThreadMenu
+import io.github.xxfast.t3code.plugin.actions.undoText
 import io.github.xxfast.t3code.plugin.ide.ProjectAwareness
 import io.github.xxfast.t3code.plugin.ide.RunningTerminals
 import io.github.xxfast.t3code.plugin.ide.T3Opener
@@ -66,6 +71,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
     val awareness: ProjectAwareness = ProjectAwareness.getInstance(project)
     val controller: ChatController = ChatController.getInstance(project)
     val renamer: SidebarRename = SidebarRename.getInstance(project)
+    val undos: ThreadUndos = ThreadUndos.getInstance(project)
     val panel: JComponent = JewelComposePanel {
       val filter: ProjectFilter by awareness.filter.collectAsState()
       val open: Set<String> by awareness.open.collectAsState()
@@ -148,6 +154,10 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
           },
         )
       }
+      val undo: UndoNotice? by undos.footer.collectAsState()
+      // Read with each notice, so a keymap change shows up on the next one
+      val undoLabel: String =
+        remember(undo) { undoText(KeymapUtil.getFirstKeyboardShortcutText(UNDO_ACTION)) }
       Sidebar(
         projects = projects,
         threads = threads,
@@ -172,6 +182,9 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         workingShelf = workingShelf,
         boring = boring,
         folderActions = folderActions,
+        undo = undo,
+        undoLabel = undoLabel,
+        onUndo = { undos.undoLatest() },
       )
     }
     val content: Content = ContentFactory.getInstance().createContent(panel, null, false)

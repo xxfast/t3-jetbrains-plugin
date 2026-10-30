@@ -76,6 +76,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.intellij.ui.JBColor
 import com.intellij.util.concurrency.AppExecutorUtil
+import io.github.xxfast.t3code.plugin.actions.UndoNotice
+import io.github.xxfast.t3code.plugin.actions.undoText
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
@@ -133,7 +135,7 @@ fun Sidebar(
   onFilterChange: (ProjectFilter) -> Unit = {},
   onNewThread: (() -> Unit)? = null, // null disables the button, as upstream does with no project
   onAddProject: (() -> Unit)? = null, // null hides the button: the desktop app owns projects
-  onOpenSettings: (() -> Unit)? = null, // null hides the footer
+  onOpenSettings: (() -> Unit)? = null, // null hides the footer, unless there's an undo notice
   settlement: Boolean = true, // whether the server settles threads; without it there's no shelf
   snooze: Boolean = true, // the same for snoozing
   actions: RowActions = RowActions(), // the rows' hover buttons
@@ -144,6 +146,9 @@ fun Sidebar(
   workingShelf: Boolean = true, // upstream's `sidebarWorkingShelfEnabled`
   boring: BoringSidebar? = null, // upstream's `boringSidebarEnabled`, null while it's off
   folderActions: FolderActions = FolderActions(), // the boring sidebar's folder headers
+  undo: UndoNotice? = null, // the footer's undo notice, see ThreadUndos.footer
+  undoLabel: String = undoText(null), // `threadUndoLabel`, with the undo action's shortcut
+  onUndo: () -> Unit = {},
 ) {
   val search: TextFieldState = rememberTextFieldState()
   val query: String = search.text.toString()
@@ -185,7 +190,10 @@ fun Sidebar(
         else -> Hint(emptyHint(projects, query, filter))
       }
     }
-    if (onOpenSettings != null) UtilityFooter(onOpenSettings)
+    // Outside the list's `when`, so a search or an empty Sidebar still shows the notice
+    if (onOpenSettings != null || undo != null) {
+      UtilityFooter(onOpenSettings, undo, undoLabel, onUndo)
+    }
   }
 }
 
@@ -388,22 +396,31 @@ private fun ProjectScopeRowIcon(selected: Boolean, content: @Composable () -> Un
 
 /**
  * Upstream's `SidebarUtilityMenu` (sidebar/SidebarChrome.tsx): a row of icon buttons at the
- * bottom. Settings is the one the plugin has; pull requests and usage are later phases.
+ * bottom, then the undo notice in the space left. Settings is the one button the plugin has;
+ * pull requests and usage are later phases.
  */
 @OptIn(ExperimentalFoundationApi::class) // Jewel's tooltips sit on Compose's TooltipArea
 @Composable
-private fun UtilityFooter(onOpenSettings: () -> Unit) {
+private fun UtilityFooter(
+  onOpenSettings: (() -> Unit)?,
+  undo: UndoNotice?,
+  undoLabel: String,
+  onUndo: () -> Unit,
+) {
   Row(
     modifier = Modifier.fillMaxWidth().padding(8.dp),
     horizontalArrangement = Arrangement.spacedBy(4.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    IconActionButton(
-      key = AllIconsKeys.General.Settings,
-      contentDescription = "Settings",
-      onClick = onOpenSettings,
-      tooltip = { Text("Settings") },
-    )
+    if (onOpenSettings != null) {
+      IconActionButton(
+        key = AllIconsKeys.General.Settings,
+        contentDescription = "Settings",
+        onClick = onOpenSettings,
+        tooltip = { Text("Settings") },
+      )
+    }
+    SidebarThreadUndoNotice(undo, undoLabel, onUndo, Modifier.weight(1f))
   }
 }
 
