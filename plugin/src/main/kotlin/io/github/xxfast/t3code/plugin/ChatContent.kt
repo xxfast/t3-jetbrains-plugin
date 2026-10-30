@@ -18,8 +18,10 @@ import androidx.compose.ui.graphics.ImageBitmap
 import com.intellij.notification.NotificationType
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.keymap.KeymapUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
+import io.github.xxfast.t3code.plugin.actions.COMPOSER_MODE_ACTION_ID
 import io.github.xxfast.t3code.plugin.actions.interruptCommand
 import io.github.xxfast.t3code.plugin.actions.RENAME_ACTION
 import io.github.xxfast.t3code.plugin.actions.performThreadAction
@@ -121,6 +123,7 @@ import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.Project as T3Project
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.ServerInfo
+import io.github.xxfast.t3code.protocol.resolveProjectDefaultRuntimeMode
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
@@ -638,10 +641,15 @@ private fun rememberComposerFooter(
       reported = view?.let(::deriveReportedModelSelection),
       favorites = favorites,
     ).copy(
+      defaultRuntimeMode =
+        resolveProjectDefaultRuntimeMode(catalog.runtimeSettings, thread.projectId),
       workspace = workspace,
       cwd = cwd,
       showSkillsInSlashMenu = T3Settings.get().showSkillsInSlashMenu,
       composerRichTextEnabled = T3Settings.get().composerRichTextEnabled,
+      effortDisplay = T3Settings.get().effortDisplay,
+      modeShortcutLabel =
+        KeymapUtil.getFirstKeyboardShortcutText(COMPOSER_MODE_ACTION_ID).ifEmpty { null },
     )
   }
 

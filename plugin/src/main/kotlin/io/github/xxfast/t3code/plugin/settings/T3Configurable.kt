@@ -16,6 +16,7 @@ import com.intellij.ui.dsl.builder.COLUMNS_LARGE
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import io.github.xxfast.t3code.plugin.T3
+import io.github.xxfast.t3code.plugin.ui.EffortDisplay
 import io.github.xxfast.t3code.protocol.ConnectionState
 import javax.swing.JComponent
 import javax.swing.JEditorPane
@@ -76,6 +77,26 @@ class T3Configurable : BoundConfigurable("T3 Code") {
             "Queue follow-ups while the agent runs or steer the current run. " +
               "Press ${if (SystemInfo.isMac) "⌘" else "Ctrl"} + Enter to do the opposite " +
               "for one message.",
+          )
+      }
+      row("Effort display") {
+        // Upstream's effort display row, AppearanceSettingsPanel.tsx:278
+        comboBox(EffortDisplay.entries)
+          .bindItem(
+            getter = { T3Settings.get().effortDisplay },
+            setter = { value -> value?.let { T3Settings.get().effortDisplay = it } },
+          )
+          .applyToComponent {
+            renderer = textListCellRenderer { value ->
+              when (value) {
+                EffortDisplay.LABEL -> "Word (default)"
+                EffortDisplay.BARS -> "Bars"
+                null -> null
+              }
+            }
+          }
+          .comment(
+            "Show reasoning effort in the composer as its name, such as High, or as bars.",
           )
       }
       row {

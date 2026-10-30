@@ -382,6 +382,7 @@ public class WebSocketT3Client internal constructor(
       scriptSettings = settings?.let(::scriptSettings) ?: ProjectScriptSettings(),
       modelSettings = settings?.let(::modelSettings) ?: ProjectModelSettings(),
       snoozePresets = decodeSnoozePresets(settings?.get("snoozePresets")),
+      runtimeSettings = settings?.let(::runtimeSettings) ?: ProjectRuntimeSettings(),
     )
     info = rpc to fresh
     return fresh
@@ -428,6 +429,22 @@ public class WebSocketT3Client internal constructor(
       projectSettingsModels = overrides,
       projectSettingsFolded =
         (settings["projectSettingsFolded"] as? JsonPrimitive)?.booleanOrNull ?: false,
+    )
+  }
+
+  /** The runtime mode fields of `settings`, with upstream's decoding default when absent. */
+  private fun runtimeSettings(settings: JsonObject): ProjectRuntimeSettings {
+    val overrides: Map<String, String> =
+      (settings["projectSettingsOverrides"] as? JsonObject).orEmpty()
+        .mapNotNull { (id, override) ->
+          val mode: String = (override as? JsonObject)?.string("defaultRuntimeMode")
+            ?: return@mapNotNull null
+          id to mode
+        }
+        .toMap()
+    return ProjectRuntimeSettings(
+      defaultRuntimeMode = settings.string("defaultRuntimeMode") ?: DEFAULT_RUNTIME_MODE,
+      projectSettingsRuntimeModes = overrides,
     )
   }
 

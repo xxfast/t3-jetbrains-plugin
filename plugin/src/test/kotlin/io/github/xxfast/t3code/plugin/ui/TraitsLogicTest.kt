@@ -84,11 +84,11 @@ class TraitsLogicTest {
   @Test
   fun `a select falls back to its default, an unknown value too`() {
     val none = selectedTraits(caps, "", null)
-    assertEquals("Medium", buildTraitsTriggerLabel("claudeAgent", none, null, null))
+    assertEquals("Medium", buildTraitsTriggerDisplay("claudeAgent", none, null, null).label)
     val unknown = selectedTraits(caps, "", selection("effort" to "max").optionSelections)
-    assertEquals("Medium", buildTraitsTriggerLabel("claudeAgent", unknown, null, null))
+    assertEquals("Medium", buildTraitsTriggerDisplay("claudeAgent", unknown, null, null).label)
     val high = selectedTraits(caps, "", selection("effort" to "high").optionSelections)
-    assertEquals("High", buildTraitsTriggerLabel("claudeAgent", high, null, null))
+    assertEquals("High", buildTraitsTriggerDisplay("claudeAgent", high, null, null).label)
   }
 
   @Test
@@ -98,9 +98,32 @@ class TraitsLogicTest {
       "",
       selection("effort" to "high", "fastMode" to true).optionSelections,
     )
-    assertEquals("High Fast", buildTraitsTriggerLabel("claudeAgent", fast, null, null))
+    assertEquals("High Fast", buildTraitsTriggerDisplay("claudeAgent", fast, null, null).label)
     val onlyFast = selectedTraits(ModelCapabilities(listOf(fastMode)), "", null)
-    assertEquals("Normal", buildTraitsTriggerLabel("claudeAgent", onlyFast, null, null))
+    assertEquals("Normal", buildTraitsTriggerDisplay("claudeAgent", onlyFast, null, null).label)
+  }
+
+  @Test
+  fun `the display splits out the speed and the labels other than reasoning`() {
+    val window = SelectProviderOptionDescriptor(
+      id = "contextWindow",
+      label = "Context window",
+      options = listOf(ProviderOptionChoice("1m", "1M", isDefault = true)),
+    )
+    val fast = selectedTraits(
+      ModelCapabilities(listOf(effort, window, fastMode)),
+      "",
+      selection("effort" to "high", "fastMode" to true).optionSelections,
+    )
+    val display: TraitsTriggerDisplay =
+      buildTraitsTriggerDisplay("claudeAgent", fast, null, null)
+    assertEquals("High Fast · 1M", display.label)
+    assertEquals("Fast", display.speedLabel)
+    assertEquals(listOf("1M"), display.otherLabels)
+    val slow = selectedTraits(caps, "", selection("effort" to "low").optionSelections)
+    val plain: TraitsTriggerDisplay = buildTraitsTriggerDisplay("claudeAgent", slow, null, null)
+    assertNull(plain.speedLabel)
+    assertEquals(emptyList(), plain.otherLabels)
   }
 
   @Test
@@ -108,7 +131,7 @@ class TraitsLogicTest {
     val prompted = selectedTraits(caps, "Ultrathink:\nfix it", null)
     assertTrue(prompted.ultrathinkPromptControlled)
     assertFalse(prompted.ultrathinkInBodyText)
-    assertEquals("Ultrathink", buildTraitsTriggerLabel("claudeAgent", prompted, null, null))
+    assertEquals("Ultrathink", buildTraitsTriggerDisplay("claudeAgent", prompted, null, null).label)
     assertEquals("ultrathink", traitSelectValue(prompted, effort, null, null))
 
     val inBody = selectedTraits(caps, "please ultrathink about it", null)

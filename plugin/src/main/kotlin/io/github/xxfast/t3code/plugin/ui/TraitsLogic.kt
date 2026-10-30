@@ -201,9 +201,19 @@ const val ULTRATHINK_PROMPT_PREFIX: String = "Ultrathink:\n"
 
 private val ULTRATHINK_LEADING: Regex = Regex("^Ultrathink:\\s*", RegexOption.IGNORE_CASE)
 
-/** `REASONING_SELECT_DESCRIPTOR_IDS`, TraitsPicker.tsx:94. */
-private val REASONING_SELECT_DESCRIPTOR_IDS: Set<String> =
-  setOf("reasoningEffort", "reasoning", "effort", "variant", "thinking")
+/**
+ * `REASONING_SELECT_DESCRIPTOR_IDS`, `packages/client-runtime/src/modelTraits.ts:17`:
+ * `REASONING_EFFORT_OPTION_IDS` (`state/threadExecution.ts:148`) plus "thinking".
+ */
+val REASONING_SELECT_DESCRIPTOR_IDS: Set<String> = setOf(
+  "reasoningEffort",
+  "effort",
+  "reasoning",
+  "variant",
+  "reasoning_effort",
+  "thinking_level",
+  "thinking",
+)
 
 /**
  * `getProviderModelCapabilities`, `apps/web/src/providerModels.ts:52`. With plan mode off, the
@@ -355,17 +365,27 @@ fun traitSelectValue(
   return getProviderOptionCurrentValue(descriptor, selection, reported)?.stringOrNull.orEmpty()
 }
 
+/** What [buildTraitsTriggerDisplay] answers. */
+data class TraitsTriggerDisplay(
+  val label: String,
+  /** "Fast" or "Ultrafast" when a speed option is on. */
+  val speedLabel: String?,
+  /** Labels other than reasoning and speed, such as context window or thinking. */
+  val otherLabels: List<String>,
+)
+
 /**
- * `buildTraitsTriggerDisplay`, TraitsPicker.tsx:570: the trigger's label, every option's
- * current label joined with " · ", with a speed ("Fast", "Ultrafast") folded into the reasoning
- * label.
+ * `buildTraitsTriggerDisplay`, `packages/client-runtime/src/modelTraits.ts:106`: the trigger's
+ * label, every option's current label joined with " · ", with a speed ("Fast", "Ultrafast")
+ * folded into the reasoning label. The speed and the other labels come apart too, for the
+ * composer's trigger.
  */
-fun buildTraitsTriggerLabel(
+fun buildTraitsTriggerDisplay(
   driver: String?,
   selected: SelectedTraits,
   selection: ModelSelection?,
   reported: ModelSelection?,
-): String {
+): TraitsTriggerDisplay {
   var fastModeFallback: String? = null
   var speed: String? = null
   var reasoningIndex: Int = -1
@@ -417,12 +437,15 @@ fun buildTraitsTriggerLabel(
       labels += label
     }
   }
-  if (labels.isEmpty() && fastModeFallback != null) return fastModeFallback
+  val otherLabels: List<String> = labels.filterIndexed { index, _ -> index != reasoningIndex }
+  if (labels.isEmpty() && fastModeFallback != null) {
+    return TraitsTriggerDisplay(fastModeFallback, speed, otherLabels)
+  }
   if (speed != null) {
     if (reasoningIndex >= 0) labels[reasoningIndex] = "${labels[reasoningIndex]} $speed"
     else labels += speed
   }
-  return labels.joinToString(" · ")
+  return TraitsTriggerDisplay(labels.joinToString(" · "), speed, otherLabels)
 }
 
 /**

@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -136,9 +138,19 @@ val LocalComposerControlSize: ProvidableCompositionLocal<ComposerControlSize> =
   staticCompositionLocalOf { ComposerControlSize.SM }
 
 /**
+ * Whether the [ComposerControl] around it is hovered or pressed, upstream's `hover:text-foreground`
+ * and `data-pressed:text-foreground`: its label and icons brighten to the foreground.
+ */
+val LocalComposerControlHighlighted: ProvidableCompositionLocal<Boolean> =
+  compositionLocalOf { false }
+
+/**
  * `ComposerControl` (`ComposerControl.tsx`): a borderless button that fills on hover or while
- * [pressed] (`aria-pressed`, `data-pressed`), 28dp tall. `sm` is medium weight with muted icons,
- * `xs` is the smaller muted variant.
+ * [pressed] (`aria-pressed`, `data-pressed`, `data-popup-open`), 28dp tall. `sm` is medium weight
+ * with muted icons, `xs` is the smaller muted variant. Its text brightens on hover either way.
+ * A [textControl] never fills, `TEXT_CONTROL_STATES` in `ComposerControlsBar.tsx`: the model and
+ * effort sit a word space apart, so hover and open brighten text, not a box. [start] and [end]
+ * override the horizontal padding (`ps-*`, `pe-*`).
  */
 @Composable
 fun ComposerControl(
@@ -148,17 +160,22 @@ fun ComposerControl(
   pressed: Boolean = false,
   size: ComposerControlSize = LocalComposerControlSize.current,
   square: Boolean = false, // an icon-only button, as wide as it's tall
+  textControl: Boolean = false,
+  start: Dp? = null,
+  end: Dp? = null,
   content: @Composable RowScope.() -> Unit,
 ) {
   val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
   val hovered: Boolean by interactions.collectIsHoveredAsState()
   val fill: Color = when {
+    textControl -> Color.Transparent
     pressed && hovered -> subtle(0.08f)
     pressed || hovered && enabled -> subtle(0.06f)
     else -> Color.Transparent
   }
   val xs: Boolean = size == ComposerControlSize.XS
   val height: Dp = if (xs) 24.dp else 28.dp
+  val padding: Dp = if (square) 0.dp else if (xs) 7.dp else 10.dp
   Row(
     modifier = modifier
       .alpha(if (enabled) 1f else 0.64f)
@@ -174,12 +191,14 @@ fun ComposerControl(
         role = Role.Button,
         onClick = onClick,
       )
-      .padding(horizontal = if (square) 0.dp else if (xs) 7.dp else 10.dp),
+      .padding(start = start ?: padding, end = end ?: padding),
     horizontalArrangement =
       Arrangement.spacedBy(if (xs) 4.dp else 6.dp, Alignment.CenterHorizontally),
     verticalAlignment = Alignment.CenterVertically,
-    content = content,
-  )
+  ) {
+    val highlighted: Boolean = pressed || hovered && enabled
+    CompositionLocalProvider(LocalComposerControlHighlighted provides highlighted) { content() }
+  }
 }
 
 /** `ComposerControlIcon`: a lucide glyph at 16dp (`sm`) or 12dp (`xs`), muted. */
@@ -206,18 +225,6 @@ fun ComposerControlChevron(size: ComposerControlSize = LocalComposerControlSize.
   Glyph("chevron-down", if (xs) tint.copy(alpha = 0.5f) else tint, if (xs) 12.dp else 14.dp)
 }
 
-/** `ComposerControlSeparator`: a vertical rule between control groups, 16dp tall. */
-@Composable
-fun ComposerControlSeparator(size: ComposerControlSize = LocalComposerControlSize.current) {
-  Box(
-    Modifier
-      .padding(horizontal = 2.dp)
-      .width(1.dp)
-      .height(if (size == ComposerControlSize.XS) 14.dp else 16.dp)
-      .background(JewelTheme.globalColors.borders.normal),
-  )
-}
-
 /** The text colour of a `sm` control's label, upstream's `text-secondary-label`. */
 @Composable
 fun composerControlLabel(): Color = JewelTheme.globalColors.text.normal.copy(alpha = 0.85f)
@@ -228,22 +235,37 @@ private fun composerControlMuted(): Color = JewelTheme.globalColors.text.info.co
 
 /**
  * A control's label (`data-composer-control-label`): medium weight in `sm`; in `xs` regular,
- * small and `text-muted-foreground/70`. Long labels end in an ellipsis past [maxWidth].
+ * small and `text-muted-foreground/70`. [muted] is `text-muted-foreground`, the effort word next
+ * to the model name. Either brightens to the foreground while the control is highlighted. Long
+ * labels end in an ellipsis past [maxWidth].
  */
 @Composable
 fun ComposerControlLabel(
   text: String,
   maxWidth: Dp = Dp.Unspecified,
   size: ComposerControlSize = LocalComposerControlSize.current,
+  muted: Boolean = false,
 ) {
   val xs: Boolean = size == ComposerControlSize.XS
   Text(
     text = text,
     modifier = Modifier.widthIn(max = maxWidth),
     style = if (xs) small() else LocalTextStyle.current,
-    color = if (xs) composerControlMuted() else composerControlLabel(),
+    color = composerControlText(xs, muted),
     fontWeight = if (xs) FontWeight.Normal else FontWeight.Medium,
     maxLines = 1,
     overflow = TextOverflow.Ellipsis,
   )
+}
+
+/** The text colour of a control's label, see [ComposerControlLabel]. */
+@Composable
+fun composerControlText(
+  xs: Boolean = LocalComposerControlSize.current == ComposerControlSize.XS,
+  muted: Boolean = false,
+): Color = when {
+  LocalComposerControlHighlighted.current -> JewelTheme.globalColors.text.normal
+  muted -> JewelTheme.globalColors.text.info
+  xs -> composerControlMuted()
+  else -> composerControlLabel()
 }

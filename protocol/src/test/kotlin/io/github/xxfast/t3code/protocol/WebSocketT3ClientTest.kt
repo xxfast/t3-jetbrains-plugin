@@ -399,6 +399,9 @@ class WebSocketT3ClientTest {
       info.snoozePresets,
       "A day this build doesn't know is skipped",
     )
+    val runtime: ProjectRuntimeSettings = info.runtimeSettings
+    assertEquals("approval-required", runtime.defaultRuntimeMode)
+    assertEquals(mapOf("prj_none" to "auto"), runtime.projectSettingsRuntimeModes)
   }
 
   @Test

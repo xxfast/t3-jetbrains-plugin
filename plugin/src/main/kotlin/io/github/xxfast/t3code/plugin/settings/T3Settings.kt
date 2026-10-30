@@ -7,6 +7,7 @@ import com.intellij.openapi.components.SimplePersistentStateComponent
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.components.service
+import io.github.xxfast.t3code.plugin.ui.EffortDisplay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +29,7 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
     var composerRichTextEnabled: Boolean by property(true)
     var followUpBehavior: String? by string(FOLLOW_UP_STEER)
     var planModeEnabled: Boolean by property(false)
+    var effortDisplay: String? by string(EffortDisplay.LABEL.value)
 
     // Upstream's `favorites` (`ModelFavorites`, settings.ts:277), as `instanceId:slug` keys
     var modelFavorites: MutableList<String> by list()
@@ -90,6 +92,13 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
     get() = state.planModeEnabled
     set(value) {
       state.planModeEnabled = value
+    }
+
+  /** Upstream's `effortDisplay`: the composer's effort as its word (the default) or as bars. */
+  var effortDisplay: EffortDisplay
+    get() = EffortDisplay.of(state.effortDisplay)
+    set(value) {
+      state.effortDisplay = value.value
     }
 
   /** The favourite models in the picker, keyed by `providerModelKey`. */

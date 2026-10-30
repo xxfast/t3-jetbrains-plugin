@@ -64,10 +64,14 @@ abstract class ComposerControlAction(private val kind: ComposerControlKind) :
 class ComposerEffortAction : ComposerControlAction(ComposerControlKind.EFFORT)
 
 /**
- * `composer.mode`: the runtime mode select. Deviates from upstream's mod+shift+a, which is Find
- * Action in the IDE keymaps: mod+alt+shift+y.
+ * `composer.mode`: the permissions chip, or the effort menu while the chip is hidden
+ * (`effortOwnsModeShortcut`). Deviates from upstream's mod+shift+a, which is Find Action in the
+ * IDE keymaps: mod+alt+shift+y.
  */
 class ComposerModeAction : ComposerControlAction(ComposerControlKind.MODE)
+
+/** [ComposerModeAction]'s id in `plugin.xml`, for the effort trigger's tooltip. */
+const val COMPOSER_MODE_ACTION_ID: String = "T3Code.Composer.Mode"
 
 /** `composer.workspace`, mod+shift+x: the Workspace select in the context strip. */
 class ComposerWorkspaceAction : ComposerControlAction(ComposerControlKind.WORKSPACE)

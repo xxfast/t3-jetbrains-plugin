@@ -20,6 +20,7 @@ import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.ProviderSession
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
+import io.github.xxfast.t3code.protocol.ProjectRuntimeSettings
 import io.github.xxfast.t3code.protocol.ProjectScriptSettings
 import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.ServerSession
@@ -1447,6 +1448,9 @@ class FixtureClient(
       ),
     ),
     snoozePresets = loaded.value?.snoozePresets ?: DEFAULT_SNOOZE_PRESETS,
+    // Supervised by default, so most demo threads hide the permissions chip and the full access
+    // ones show it
+    runtimeSettings = ProjectRuntimeSettings(defaultRuntimeMode = "approval-required"),
   ).let { info -> info.copy(providers = info.providers.map(::withSkills)) }
 
   /**

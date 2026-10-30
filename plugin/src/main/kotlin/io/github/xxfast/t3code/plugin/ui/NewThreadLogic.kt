@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import io.github.xxfast.t3code.protocol.DEFAULT_RUNTIME_MODE
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
@@ -8,9 +9,6 @@ import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.ServerProviderModel
 import kotlinx.serialization.json.JsonPrimitive
-
-/** `DEFAULT_RUNTIME_MODE`, packages/contracts/src/providerPolicy.ts:32. */
-const val DEFAULT_RUNTIME_MODE: String = "full-access"
 
 /** `DEFAULT_PROVIDER_INTERACTION_MODE`, providerPolicy.ts:36. */
 const val DEFAULT_PROVIDER_INTERACTION_MODE: String = "default"

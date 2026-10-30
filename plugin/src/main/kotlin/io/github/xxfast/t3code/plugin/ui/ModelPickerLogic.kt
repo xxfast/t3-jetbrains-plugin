@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import io.github.xxfast.t3code.protocol.DEFAULT_RUNTIME_MODE
 import io.github.xxfast.t3code.protocol.ProviderSession
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.Command
@@ -371,6 +372,11 @@ data class ComposerFooterState(
   val models: List<ModelPickerGroup>,
   val runtimeModes: List<RuntimeModeOption>,
   val runtimeMode: String,
+  /**
+   * The project's `defaultRuntimeMode`, `resolveProjectSettings` (ChatView.tsx:921). The
+   * permissions chip hides while [runtimeMode] matches it.
+   */
+  val defaultRuntimeMode: String = DEFAULT_RUNTIME_MODE,
   val showInteractionModeToggle: Boolean,
   val interactionMode: String,
   /** The model's option descriptors, for the traits picker. */
@@ -393,6 +399,10 @@ data class ComposerFooterState(
   val composerRichTextEnabled: Boolean = true,
   /** The context window meter's model, [resolveContextWindowModelDisplayName] of [selection]. */
   val contextWindowModelName: String? = null,
+  /** Upstream's `effortDisplay` setting: the effort as its word or as bars. */
+  val effortDisplay: EffortDisplay = EffortDisplay.LABEL,
+  /** `composer.mode`'s key, `shortcutLabelForCommand`, for the effort trigger's tooltip. */
+  val modeShortcutLabel: String? = null,
 )
 
 /**

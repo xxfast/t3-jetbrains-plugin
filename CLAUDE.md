@@ -74,7 +74,10 @@ How it fits together:
   with a settled run whose provider still waits on two commands and a subagent (the work line
   at the end of the timeline), `tasks.json` with `todo_list` updates that land as Tasks rows
   over `after` delays, `worktree-setup.json` with a
-  first turn whose worktree is still being prepared, `skills.json` with provider skills and a
+  first turn whose worktree is still being prepared, `permissions.json` with a thread on a model
+  without traits (the fixture server's `defaultRuntimeMode` is Supervised, so most threads hide
+  the permissions chip, the full access ones show it and this one keeps an icon), `skills.json`
+  with provider skills and a
   workspace snapshot for the `$` menu, `files.json` with the files and folders `@` searches,
   `lineage.json` with a fork that has a parent, a fork of its own, running, finished and failed
   subagents and context transfers for T3 Thread Details (its fork merges back),

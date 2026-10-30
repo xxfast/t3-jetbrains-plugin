@@ -55,6 +55,7 @@
       { "kind": "at", "day": "someday", "time": "09:00" }
     ],
     "defaultModelSelection": { "instanceId": "codex", "model": "gpt-5" },
+    "defaultRuntimeMode": "approval-required",
     "defaultProjectScripts": [
       {
         "id": "scr_default",
@@ -77,7 +78,7 @@
       ]
     },
     "projectSettingsOverrides": {
-      "prj_none": { "defaultModelSelection": null },
+      "prj_none": { "defaultModelSelection": null, "defaultRuntimeMode": "auto" },
       "prj_new": {
         "defaultModelSelection": { "instanceId": "claude", "model": "opus" },
         "defaultProjectScripts": [

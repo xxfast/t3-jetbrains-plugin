@@ -1,0 +1,56 @@
+{
+  "threads": [
+    {
+      "id": "thr_01JC6P0RMSNOTRAITS",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Demo: permissions on a model without traits",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-4.1"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC6P0RMSNOTRAITS"
+      },
+      "status": "completed",
+      "itemCount": 2,
+      "visibleItemCount": 2,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-30T09:00:00.000Z",
+      "updatedAt": "2026-10-30T09:01:00.000Z"
+    }
+  ],
+  "items": {
+    "thr_01JC6P0RMSNOTRAITS": [
+      {
+        "type": "user_message",
+        "id": "u1",
+        "messageId": "msg_u1",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "threadId": "thr_01JC6P0RMSNOTRAITS",
+        "ordinal": 1,
+        "status": "completed",
+        "text": "Where does the permissions chip go on a model with no effort menu?",
+        "updatedAt": "2026-10-30T09:00:00.000Z"
+      },
+      {
+        "type": "assistant_message",
+        "id": "a1",
+        "messageId": "msg_a1",
+        "streaming": false,
+        "threadId": "thr_01JC6P0RMSNOTRAITS",
+        "ordinal": 2,
+        "status": "completed",
+        "text": "GPT-4.1 has no traits, so there's no effort menu to hold Permissions. The thread is at the server's default (Supervised), and the chip stays as a lock icon.",
+        "updatedAt": "2026-10-30T09:01:00.000Z"
+      }
+    ]
+  }
+}

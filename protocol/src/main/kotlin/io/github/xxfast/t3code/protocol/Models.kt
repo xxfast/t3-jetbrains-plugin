@@ -156,6 +156,8 @@ public data class ServerInfo(
   val modelSettings: ProjectModelSettings = ProjectModelSettings(),
   /** `settings.snoozePresets`, the snooze menu the user picked in T3's settings. */
   val snoozePresets: List<SnoozePresetSetting> = DEFAULT_SNOOZE_PRESETS,
+  /** The settings that decide a project's default runtime mode, see [ProjectRuntimeSettings]. */
+  val runtimeSettings: ProjectRuntimeSettings = ProjectRuntimeSettings(),
 )
 
 /**
@@ -223,3 +225,27 @@ public fun resolveProjectDefaultModelSelection(
   if (!settings.projectSettingsFolded) project.defaultModelSelection?.let { return it }
   return settings.defaultModelSelection
 }
+
+/** `DEFAULT_RUNTIME_MODE`, packages/contracts/src/providerPolicy.ts:32. */
+public const val DEFAULT_RUNTIME_MODE: String = "full-access"
+
+/**
+ * The `settings` fields of `server.getConfig` that decide `defaultRuntimeMode` in
+ * `resolveProjectSettings` (packages/shared/src/projectSettings.ts:53). The project row has no
+ * legacy runtime mode, so the fold doesn't matter here.
+ */
+public data class ProjectRuntimeSettings(
+  /** `defaultRuntimeMode`, the environment's default, [DEFAULT_RUNTIME_MODE] when absent. */
+  val defaultRuntimeMode: String = DEFAULT_RUNTIME_MODE,
+  /** `projectSettingsOverrides[id].defaultRuntimeMode`, by project id, where defined. */
+  val projectSettingsRuntimeModes: Map<String, String> = emptyMap(),
+)
+
+/**
+ * `resolveProjectSettings(settings, projectId).settings.defaultRuntimeMode`, as ChatView.tsx:921
+ * reads it: the project's override, else the environment's default. No project, no override.
+ */
+public fun resolveProjectDefaultRuntimeMode(
+  settings: ProjectRuntimeSettings,
+  projectId: String?,
+): String = projectId?.let(settings.projectSettingsRuntimeModes::get) ?: settings.defaultRuntimeMode
