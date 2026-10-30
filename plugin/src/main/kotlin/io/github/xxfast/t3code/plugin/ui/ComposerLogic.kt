@@ -313,8 +313,9 @@ fun composerKey(
   else -> ComposerKey.SEND
 }
 
-// Approvals and questions. They take over the composer while the thread waits on you, like
-// upstream's `ComposerPendingApprovalPanel.tsx` and `ComposerPendingUserInputPanel.tsx`.
+// Questions take over the composer while the thread waits on you, like upstream's
+// `ComposerPendingUserInputPanel.tsx`. Approvals are answered on their timeline row,
+// `TimelinePendingApprovalRow.tsx`.
 
 /** What the composer shows instead of the text field while the thread waits on you. */
 sealed interface PendingRequest {
@@ -325,18 +326,6 @@ sealed interface PendingRequest {
 
   /** False when the provider can't take an answer any more (`not_resumable`). */
   val resumable: Boolean
-
-  data class Approval(
-    override val requestId: String,
-    val requestKind: String,
-    val detail: String?,
-    val appName: String?,
-    val options: List<ProviderApprovalOption>,
-    /** How many approvals are pending, for upstream's `1/N`. */
-    val count: Int,
-    override val resumable: Boolean,
-    override val responding: Boolean,
-  ) : PendingRequest
 
   data class UserInput(
     val item: TurnItem.UserInputRequest,
@@ -370,8 +359,25 @@ data class PendingApproval(
   val detail: String?,
   val appName: String?,
   val options: List<ProviderApprovalOption>?,
+  /** `responseCapability == "live"`. */
   val resumable: Boolean,
+  val reason: String? = null,
+  val fullAccessOverride: String? = null,
 )
+
+/** `FULL_ACCESS_OVERRIDE_QUESTION`, `packages/client-runtime/src/state/threadRequests.ts`. */
+const val FULL_ACCESS_OVERRIDE_QUESTION: String = "Why am I being asked this?"
+
+/** `fullAccessOverrideExplanation`, `threadRequests.ts`. */
+fun fullAccessOverrideExplanation(override: String): String =
+  if (override == "ask_rule") {
+    "Full access skips approvals, but an ask rule in the agent's own settings matches this " +
+      "action, so it still asks. Remove or narrow that rule to stop these prompts."
+  } else {
+    "Full access skips approvals, but the agent still stops for a few safety checks of its own " +
+      "that no setting can skip, such as a delete whose path it can't verify. T3 Code can't " +
+      "turn these off, so check the request and approve it if it's what you expect."
+  }
 
 /** A question the thread waits on, `ThreadPendingUserInput` in `threadRequests.ts`. */
 data class PendingUserInput(
@@ -426,6 +432,8 @@ fun derivePendingThreadRequests(
       appName = item?.appName?.takeIf { it.isNotEmpty() },
       options = item?.options,
       resumable = capability == "live",
+      reason = item?.reason?.takeIf { it.isNotEmpty() },
+      fullAccessOverride = item?.fullAccessOverride?.takeIf { it.isNotEmpty() },
     )
   }
 
@@ -433,29 +441,15 @@ fun derivePendingThreadRequests(
 }
 
 /**
- * The one request the composer shows: the first approval, else the first question
- * (`ChatComposer.tsx:5385` shows questions only when no approval is pending).
+ * The one request the composer shows: the first question (`ChatComposer.tsx`'s
+ * `pendingUserInputs[0]`). Approvals stay on their timeline rows.
  */
 fun pendingRequest(
   pending: PendingThreadRequests,
   responding: Set<String>,
   drafts: Map<String, PendingUserInputDraftAnswer>,
   index: Int,
-): PendingRequest? {
-  val approval: PendingApproval? = pending.approvals.firstOrNull()
-  if (approval != null) {
-    return PendingRequest.Approval(
-      requestId = approval.requestId,
-      requestKind = approval.requestKind,
-      detail = approval.detail,
-      appName = approval.appName,
-      options = approvalOptions(approval.options),
-      count = pending.approvals.size,
-      resumable = approval.resumable,
-      responding = approval.requestId in responding,
-    )
-  }
-
+): PendingRequest.UserInput? {
   val input: PendingUserInput = pending.userInputs.firstOrNull() ?: return null
   return PendingRequest.UserInput(
     item = input.item,
@@ -486,22 +480,23 @@ fun primaryOptions(options: List<ProviderApprovalOption>): List<ProviderApproval
 fun moreOptions(options: List<ProviderApprovalOption>): List<ProviderApprovalOption> =
   options.filterNot { it.decision == "decline" || it.decision == "accept" }
 
-/** `fallbackLabel`, `ComposerPendingApprovalPanel.tsx`. */
-fun approvalLabel(requestKind: String): String = when (requestKind) {
-  "mcp-elicitation" -> "App access approval"
-  "command" -> "Command approval"
-  "file-read" -> "File read approval"
-  "permission" -> "App permission approval"
-  else -> "File change approval"
-}
+/** One entry of `APPROVAL_PRESENTATION`, `TimelinePendingApprovalRow.tsx`. */
+data class ApprovalPresentation(val icon: String, val label: String, val detailLabel: String)
 
-/** What the approval panel shows under its label, `ComposerPendingApprovalPanel.tsx`. */
-fun approvalDetail(approval: PendingRequest.Approval): String =
-  if (!approval.resumable) {
-    "Provider process is gone. Interrupt or restart the run to respond."
-  } else {
-    approval.detail ?: approvalLabel(approval.requestKind)
-  }
+/** `APPROVAL_PRESENTATION`, `apps/web/src/components/chat/TimelinePendingApprovalRow.tsx`. */
+val APPROVAL_PRESENTATION: Map<String, ApprovalPresentation> = mapOf(
+  "command" to ApprovalPresentation("terminal", "Command approval", "Command"),
+  "file-change" to ApprovalPresentation("square-pen", "File change approval", "File change"),
+  "file-read" to ApprovalPresentation("eye", "File read approval", "File to read"),
+  "permission" to
+    ApprovalPresentation("wrench", "App permission approval", "Permission request"),
+  "mcp-elicitation" to
+    ApprovalPresentation("hammer", "App access approval", "App access request"),
+)
+
+/** A kind this build doesn't know reads as a file change, as `fallbackLabel` did. */
+fun approvalPresentation(requestKind: String): ApprovalPresentation =
+  APPROVAL_PRESENTATION[requestKind] ?: APPROVAL_PRESENTATION.getValue("file-change")
 
 /** `option.value ?? option.label`. */
 val UserInputQuestion.Option.answerValue: String get() = value ?: label

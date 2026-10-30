@@ -156,7 +156,7 @@ fun ChatView(
   favicon: ImageBitmap?, // the project's, when ProjectIcons has it
   composer: ComposerState,
   draft: TextFieldState, // what's typed in the composer
-  pending: PendingRequest?, // an approval or question that takes over the composer
+  pending: PendingRequest?, // a question that takes over the composer
   pendingActions: PendingActions,
   footer: ComposerFooterState?, // the thread's model and modes, null until the catalog loads
   footerActions: ComposerFooterActions,
@@ -190,6 +190,9 @@ fun ChatView(
   onOpenThread: ((threadId: String) -> Unit)? = null, // a folded agent message's sender
   onAnswerSecret: (suspend (SecretRequestAnswerInput)
     -> Unit)? = null,
+  approvals: List<PendingApproval> = emptyList(), // answered on their timeline rows
+  responding: Set<String> = emptySet(), // requests answered that the server hasn't resolved
+  onRespondToApproval: ((requestId: String, decision: String) -> Unit)? = null,
 ) {
   val threadId: String? = view?.thread?.id
   val timeline: LazyListState = remember(threadId) { LazyListState(memory.index, memory.offset) }
@@ -278,7 +281,10 @@ fun ChatView(
                 onOpenSetupTerminal = onOpenSetupTerminal,
                 onOpenThread = onOpenThread,
                 threadTitles = threadTitles,
+                onRespondToApproval = onRespondToApproval,
               ),
+              approvals = approvals,
+              responding = responding,
               worktreeSetup = worktreeSetup,
               working = composer.running || composer.sending,
               footer = if (hasTimelineFooter(work = work)) ({ ThreadNow(work = work) }) else null,
@@ -355,6 +361,7 @@ private class TimelineActions(
   val onOpenThread: ((String) -> Unit)? = null,
   /** Thread titles by id, for a folded agent message's sender, `useQuietThreadShell`. */
   val threadTitles: Map<String, String> = emptyMap(),
+  val onRespondToApproval: ((requestId: String, decision: String) -> Unit)? = null,
 )
 
 @Composable
@@ -668,6 +675,8 @@ private fun MessagesTimeline(
   processor: MarkdownProcessor,
   operateReason: String?, // why nothing can change the thread, when it can't
   actions: TimelineActions,
+  approvals: List<PendingApproval>,
+  responding: Set<String>,
   worktreeSetup: WorktreeSetupSnapshot?,
   working: Boolean, // the composer's `isWorking`: a run going or a send on its way
   footer: (@Composable () -> Unit)?, // the thread's present, after the last row
@@ -691,12 +700,15 @@ private fun MessagesTimeline(
   val findExpansion: TimelineExpansion = if (selected?.runId != null) {
     expansion.copy(runIds = expansion.runIds + selected.runId)
   } else expansion
+  val approvalsById: Map<String, PendingApproval> =
+    remember(approvals) { approvals.associateBy { it.requestId } }
   val rows: List<TimelineRow> = remember(
     entries,
     view.runs,
     view.checkpoints,
     findExpansion,
     worktreeSetup,
+    approvalsById.keys,
   ) {
     deriveMessagesTimelineRows(
       timelineEntries = entries,
@@ -710,8 +722,11 @@ private fun MessagesTimeline(
           ?.takeIf { checkpointForRun(view, it) != null }
       },
       worktreeSetup = worktreeSetup,
+      pendingApprovalRequestIds = approvalsById.keys,
     )
   }
+  val unmatched: List<PendingApproval> =
+    remember(rows, approvals) { unmatchedPendingApprovals(rows, approvals) }
   // Until the match reveals, rows inserted above it move it, so follow its row to its new index
   var revealed: Int by remember { mutableIntStateOf(-1) }
   var scrolled: Int by remember { mutableIntStateOf(-1) }
@@ -735,6 +750,9 @@ private fun MessagesTimeline(
     open = open,
     rollbackReason = rollbackBlockReason(operateReason, view),
     secretReason = operateReason,
+    approvals = approvalsById,
+    responding = responding,
+    canOperateThread = operateReason == null,
     itemVisibility = view.itemVisibility,
     threadId = view.thread.id,
     actions = actions,
@@ -762,7 +780,8 @@ private fun MessagesTimeline(
     val side: Dp = if (maxWidth >= 640.dp) 48.dp else 12.dp
     TimelineScrollContainer(
       state = state,
-      keys = rows.map { it.id } + listOfNotNull(TIMELINE_FOOTER.takeIf { footer != null }),
+      keys = rows.map { it.id } +
+        listOfNotNull(TIMELINE_FOOTER.takeIf { footer != null || unmatched.isNotEmpty() }),
       onScrollUp = follow::cancelForUserNavigation,
       modifier = Modifier.fillMaxSize(),
     ) {
@@ -807,9 +826,13 @@ private fun MessagesTimeline(
               }
             }
           }
-          footer?.let { content ->
+          // Approvals no row shows go after the footer, as upstream's list footer has them
+          if (footer != null || unmatched.isNotEmpty()) {
             item(key = TIMELINE_FOOTER) {
-              TimelineListFooter(side) { content() }
+              TimelineListFooter(side) {
+                footer?.invoke()
+                unmatched.forEach { approval -> PendingApprovalRow(approval, context) }
+              }
             }
           }
         }
@@ -859,6 +882,9 @@ private class RowContext(
   val open: SnapshotStateMap<String, Boolean>,
   val rollbackReason: String?,
   val secretReason: String?,
+  val approvals: Map<String, PendingApproval>, // pending, by request id
+  val responding: Set<String>,
+  val canOperateThread: Boolean,
   val itemVisibility: Map<String, String>,
   val threadId: String,
   val actions: TimelineActions,
@@ -868,6 +894,20 @@ private class RowContext(
 
 private fun TimelineRow?.isWorkLog(): Boolean = this is TimelineRow.Work ||
   this is TimelineRow.WorkToggle || this is TimelineRow.WorkLive || this is TimelineRow.Thinking
+
+/** The pending approval [entry] stands for, upstream's `ctx.pendingApprovals.get(requestId)`. */
+private fun RowContext.pendingApproval(entry: WorkLogEntry): PendingApproval? =
+  (entry.item as? TurnItem.ApprovalRequest)?.let { approvals[it.requestId] }
+
+@Composable
+private fun PendingApprovalRow(approval: PendingApproval, context: RowContext) {
+  TimelinePendingApprovalRow(
+    approval = approval,
+    responding = approval.requestId in context.responding,
+    canOperateThread = context.canOperateThread,
+    onRespondToApproval = context.actions.onRespondToApproval,
+  )
+}
 
 /** `TimelineRowContent`'s wrapper padding, MessagesTimeline.tsx:1897, and `WorkLogBlock`'s. */
 private fun TimelineRow.bottomPadding(continuesWorkLog: Boolean): Dp = when (this) {
@@ -978,7 +1018,8 @@ private fun TimelineRowContent(row: TimelineRow, context: RowContext) {
       failed = row.hasFailure,
       onClick = { context.onToggleGroup(row.groupId) },
     )
-    is TimelineRow.WorkLive -> WorkLogLine(
+    is TimelineRow.WorkLive -> context.pendingApproval(row.entry)
+      ?.let { approval -> PendingApprovalRow(approval, context) } ?: WorkLogLine(
       icon = workEntryIcon(row.entry),
       label = row.entry.liveLabel(row.active),
       shimmer = if (row.active) Shimmer.ToolShine else null,
@@ -1329,6 +1370,7 @@ private fun DiffStatLabel(additions: Long?, deletions: Long?) {
 /** One work log entry: its line, and its details underneath when open. */
 @Composable
 private fun WorkEntryRow(entry: WorkLogEntry, label: String, context: RowContext) {
+  context.pendingApproval(entry)?.let { approval -> return PendingApprovalRow(approval, context) }
   val failedError: Boolean = entry.item is TurnItem.Error && entry.status == ToolStatus.Failed
   if (failedError) return FailedErrorRow(entry, label, context.now)
   val expandable: Boolean = entry.hasDetails()
@@ -1503,9 +1545,9 @@ private fun WorkEntryDetails(entry: WorkLogEntry, context: RowContext) {
       Link("Diff", onClick = { context.actions.onDiffFile(item) }, textStyle = small())
     }
 
-    // Answered in the composer; the row keeps the record
+    // Pending, it's a `TimelinePendingApprovalRow`; answered, the row keeps the record
     is TurnItem.ApprovalRequest -> Column(indent, verticalArrangement = gap(4)) {
-      Text(approvalLabel(item.requestKind), style = small(), color = muted())
+      Text(approvalPresentation(item.requestKind).label, style = small(), color = muted())
       item.appName?.let { Text(it, style = small(), color = muted()) }
       item.prompt?.let { Text(it, color = muted()) }
       if (awaitingResponse(item.requestId, item.status, context.requests)) {

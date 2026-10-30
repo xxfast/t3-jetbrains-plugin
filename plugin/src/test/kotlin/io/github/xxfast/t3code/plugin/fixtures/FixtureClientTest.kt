@@ -496,9 +496,12 @@ class FixtureClientTest {
     client.threads.first { threads -> threads.any { it.id == WAITING } }
     val before: ThreadView = client.thread(WAITING).first()
     assertEquals("pending", before.runtimeRequests.single { it.id == REQUEST }.status)
-    val pendingApproval: PendingApproval =
-      derivePendingThreadRequests(before.runtimeRequests, before.items).approvals.single()
+    val approvals: List<PendingApproval> =
+      derivePendingThreadRequests(before.runtimeRequests, before.items).approvals
+    val pendingApproval: PendingApproval = approvals.single { it.requestId == REQUEST }
     assertTrue(pendingApproval.resumable, "Fixture approvals are live, so they can be answered")
+    val gone: PendingApproval = approvals.single { it.requestId != REQUEST }
+    assertFalse(gone.resumable, "The scenario lists one whose provider process is gone")
 
     val respond = Command.RuntimeRequestRespond(
       commandId = "cmd_respond",
@@ -509,8 +512,9 @@ class FixtureClientTest {
     client.dispatch(respond)
 
     val after: ThreadView = client.thread(WAITING).first()
-    val approval: TurnItem.ApprovalRequest =
-      assertIs(after.items.single { it is TurnItem.ApprovalRequest })
+    val approval: TurnItem.ApprovalRequest = assertIs(
+      after.items.single { it is TurnItem.ApprovalRequest && it.requestId == REQUEST },
+    )
     assertEquals("completed", approval.status)
     assertEquals("resolved", after.runtimeRequests.single { it.id == REQUEST }.status)
     assertEquals("running", after.thread.status)

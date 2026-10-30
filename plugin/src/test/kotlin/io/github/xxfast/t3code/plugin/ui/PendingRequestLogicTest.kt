@@ -9,6 +9,7 @@ import io.github.xxfast.t3code.protocol.generated.UserInputQuestion
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.JsonArray
@@ -32,20 +33,21 @@ class PendingRequestLogicTest {
   }
 
   @Test
-  fun `approval labels and detail by kind`() {
-    assertEquals("Command approval", approvalLabel("command"))
-    assertEquals("App access approval", approvalLabel("mcp-elicitation"))
-    assertEquals("File read approval", approvalLabel("file-read"))
-    assertEquals("App permission approval", approvalLabel("permission"))
-    assertEquals("File change approval", approvalLabel("file-change"))
-
-    val approval = PendingRequest.Approval("r", "command", null, null, emptyList(), 1, true, false)
-    assertEquals("Command approval", approvalDetail(approval))
-    assertEquals("ls", approvalDetail(approval.copy(detail = "ls")))
+  fun `approval presentation by kind, a kind this build doesn't know reads as a file change`() {
     assertEquals(
-      "Provider process is gone. Interrupt or restart the run to respond.",
-      approvalDetail(approval.copy(detail = "ls", resumable = false)),
+      ApprovalPresentation("terminal", "Command approval", "Command"),
+      approvalPresentation("command"),
     )
+    assertEquals("App access approval", approvalPresentation("mcp-elicitation").label)
+    assertEquals("File to read", approvalPresentation("file-read").detailLabel)
+    assertEquals("wrench", approvalPresentation("permission").icon)
+    assertEquals("File change approval", approvalPresentation("something-new").label)
+  }
+
+  @Test
+  fun `a full access override explains itself by its kind`() {
+    assertTrue(fullAccessOverrideExplanation("ask_rule").contains("an ask rule"))
+    assertTrue(fullAccessOverrideExplanation("provider_check").contains("safety checks"))
   }
 
   @Test
@@ -59,12 +61,18 @@ class PendingRequestLogicTest {
       request("a3", "file-change", "pending", capability = GONE),
       request("q2", "user_input", "pending"),
     )
-    val items: List<TurnItem> = listOf(approvalItem("a1", prompt = "ls"), questionItem("q1"))
+    val items: List<TurnItem> = listOf(
+      approvalItem("a1", prompt = "ls")
+        .copy(reason = "Lists files", fullAccessOverride = "ask_rule"),
+      questionItem("q1"),
+    )
 
     val pending: PendingThreadRequests = derivePendingThreadRequests(requests, items)
 
     assertEquals(listOf("a1", "a3"), pending.approvals.map { it.requestId })
     assertEquals("ls", pending.approvals[0].detail)
+    assertEquals("Lists files", pending.approvals[0].reason)
+    assertEquals("ask_rule", pending.approvals[0].fullAccessOverride)
     assertTrue(pending.approvals[0].resumable)
     assertNull(pending.approvals[1].detail, "An approval without its item still counts")
     assertFalse(pending.approvals[1].resumable)
@@ -80,22 +88,18 @@ class PendingRequestLogicTest {
   }
 
   @Test
-  fun `an approval goes first, then the first question`() {
+  fun `the composer shows the first question, approvals stay on their rows`() {
     val both = PendingThreadRequests(
       approvals = listOf(PendingApproval("a1", "command", null, null, null, true)),
       userInputs = listOf(PendingUserInput(questionItem("q1"), true, false)),
     )
-    val approval: PendingRequest.Approval =
-      assertIs(pendingRequest(both, setOf("a1"), emptyMap(), 0))
-    assertTrue(approval.responding)
-    assertEquals(DEFAULT_APPROVAL_OPTIONS, approval.options)
-
     val question: PendingRequest.UserInput =
-      assertIs(pendingRequest(both.copy(approvals = emptyList()), emptySet(), emptyMap(), 9))
+      assertNotNull(pendingRequest(both, emptySet(), emptyMap(), 9))
+    assertEquals("q1", question.requestId)
     assertEquals(1, question.questionIndex, "Clamped to the last question")
     assertFalse(question.responding)
-    val nothing: PendingThreadRequests = PendingThreadRequests(emptyList(), emptyList())
-    assertNull(pendingRequest(nothing, emptySet(), emptyMap(), 0))
+    assertTrue(assertNotNull(pendingRequest(both, setOf("q1"), emptyMap(), 0)).responding)
+    assertNull(pendingRequest(both.copy(userInputs = emptyList()), emptySet(), emptyMap(), 0))
   }
 
   @Test

@@ -130,6 +130,112 @@ class MessagesTimelineLogicTest {
   }
 
   @Test
+  fun `a pending approval stays out of its settled turn's fold`() {
+    val items: List<TurnItem> = listOf(
+      user("u", "r1", "10:00"),
+      command("c1", "r1", "10:00:05"),
+      approval("p1", "r1", "10:00:06"),
+      command("c2", "r1", "10:00:15"),
+      assistant("a1", "r1", "10:00:24"),
+    )
+    val runs: List<Run> = listOf(run("r1", 1, started = "10:00", completed = "10:00:24"))
+
+    val pending: List<TimelineRow> = rows(items, runs, pendingApprovalRequestIds = setOf("req-p1"))
+    assertEquals(listOf("u", "turn-fold:r1", "p1", "a1"), pending.map { it.id })
+    val approvalRow: TimelineRow.Work = assertIs(pending[2])
+    assertIs<TurnItem.ApprovalRequest>(approvalRow.entries.single().item)
+    assertEquals(listOf("u", "turn-fold:r1", "a1"), rows(items, runs).map { it.id })
+  }
+
+  @Test
+  fun `a pending approval never joins a tool group, it splits the groups around it`() {
+    val items: List<TurnItem> = listOf(
+      user("u", "r1", "10:00"),
+      command("c1", "r1", "10:00:05"),
+      command("c2", "r1", "10:00:06"),
+      approval("p1", "r1", "10:00:07"),
+      command("c3", "r1", "10:00:08"),
+      command("c4", "r1", "10:00:09"),
+      assistant("a1", "r1", "10:00:10"),
+    )
+    val runs: List<Run> = listOf(run("r1", 1, started = "10:00", completed = "10:00:10"))
+    val expanded = TimelineExpansion(runIds = setOf("r1"))
+
+    val pending: List<TimelineRow> =
+      rows(items, runs, expansion = expanded, pendingApprovalRequestIds = setOf("req-p1"))
+    assertEquals(
+      listOf("u", "turn-fold:r1", "work-toggle:c1", "p1", "work-toggle:c3", "a1"),
+      pending.map { it.id },
+    )
+    assertEquals("Ran 2 commands", assertIs<TimelineRow.WorkToggle>(pending[2]).summary)
+    assertEquals("Ran 2 commands", assertIs<TimelineRow.WorkToggle>(pending[4]).summary)
+
+    // A resolved approval groups like any other entry
+    val resolved: List<TimelineRow> = rows(
+      items.map { if (it.id == "p1") approval("p1", "r1", "10:00:07", "completed") else it },
+      runs,
+      expansion = expanded,
+    )
+    assertEquals(listOf("u", "turn-fold:r1", "work-toggle:c1", "a1"), resolved.map { it.id })
+  }
+
+  @Test
+  fun `a pending approval keeps the activity row from saying the latest tool succeeded`() {
+    val running: Run = run("r1", 1, started = "10:00", completed = null, status = "waiting")
+    val items: List<TurnItem> = listOf(
+      user("u", "r1", "10:00"),
+      approval("p1", "r1", "10:00:05"),
+      command("c1", "r1", "10:00:06"),
+    )
+
+    val pending: List<TimelineRow> = rows(
+      items,
+      listOf(running),
+      runningRun = running,
+      pendingApprovalRequestIds = setOf("req-p1"),
+    )
+    assertEquals(listOf("u", "working-indicator-row", "p1", "work-live:c1"), pending.map { it.id })
+    assertFalse(assertIs<TimelineRow.WorkLive>(pending[3]).active)
+
+    val live: List<TimelineRow> = rows(
+      items.filterNot { it.id == "p1" },
+      listOf(running),
+      runningRun = running,
+    )
+    assertEquals(listOf("u", "working-indicator-row", "live-activity-row"), live.map { it.id })
+  }
+
+  @Test
+  fun `nothing thinks while the run waits on an approval`() {
+    val running: Run = run("r1", 1, started = "10:00", completed = null, status = "waiting")
+    val items: List<TurnItem> = listOf(user("u", "r1", "10:00"), approval("p1", "r1", "10:00:05"))
+
+    val pending: List<TimelineRow> = rows(
+      items,
+      listOf(running),
+      runningRun = running,
+      pendingApprovalRequestIds = setOf("req-p1"),
+    )
+
+    assertEquals(listOf("u", "working-indicator-row", "p1"), pending.map { it.id })
+  }
+
+  @Test
+  fun `pending approvals no work row shows are unmatched`() {
+    val items: List<TurnItem> = listOf(user("u", "r1", "10:00"), approval("p1", "r1", "10:00:05"))
+    val runs: List<Run> = listOf(run("r1", 1, started = "10:00", completed = "10:00:05"))
+    val timeline: List<TimelineRow> =
+      rows(items, runs, pendingApprovalRequestIds = setOf("req-p1", "req-gone"))
+    val approvals: List<PendingApproval> = listOf("req-p1", "req-gone").map { requestId ->
+      PendingApproval(requestId, "command", null, null, null, resumable = true)
+    }
+
+    val unmatched: List<PendingApproval> = unmatchedPendingApprovals(timeline, approvals)
+
+    assertEquals(listOf("req-gone"), unmatched.map { it.requestId })
+  }
+
+  @Test
   fun `group summaries`() {
     val commands: List<WorkLogEntry> =
       listOf(command("a", "r", "10:00"), command("b", "r", "10:00")).map(::projectedWorkEntry)
@@ -465,8 +571,14 @@ class MessagesTimelineLogicTest {
     runs: List<Run>,
     runningRun: Run? = null,
     expansion: TimelineExpansion = TimelineExpansion(),
-  ): List<TimelineRow> =
-    deriveMessagesTimelineRows(deriveTimelineEntries(items), runs, runningRun, expansion)
+    pendingApprovalRequestIds: Set<String> = emptySet(),
+  ): List<TimelineRow> = deriveMessagesTimelineRows(
+    timelineEntries = deriveTimelineEntries(items),
+    runs = runs,
+    runningRun = runningRun,
+    expansion = expansion,
+    pendingApprovalRequestIds = pendingApprovalRequestIds,
+  )
 
   private fun at(time: String): String =
     "2026-10-19T$time${if (time.count { it == ':' } == 1) ":00" else ""}Z"
@@ -560,6 +672,14 @@ class MessagesTimelineLogicTest {
     """{"type":"assistant_message","text":"done","messageId":"m-$id","streaming":false}""",
     id, runId, time,
   )
+
+  /** An `approval_request` for request `req-<id>`. */
+  private fun approval(id: String, runId: String, time: String, status: String = "waiting") =
+    item<TurnItem>(
+      """{"type":"approval_request","requestId":"req-$id","requestKind":"command",
+        |"prompt":"./gradlew check","status":"$status"}""".trimMargin(),
+      id, runId, time,
+    )
 
   private fun command(
     id: String,

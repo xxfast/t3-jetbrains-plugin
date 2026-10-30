@@ -73,9 +73,8 @@ import org.jetbrains.jewel.ui.typography
  * The box at the bottom of the ChatView, upstream's `ChatComposer.tsx`: a [ComposerSurface] with
  * the prompt on top (`data-chat-composer-body`) and the footer below
  * (`data-chat-composer-footer`): [ComposerControls] on the left, the paperclip and
- * [ComposerPrimaryActions] on the right. Plain text only. While the thread waits on you,
- * [pending] takes the body over: an approval hides the prompt and the footer, a question shows
- * its own.
+ * [ComposerPrimaryActions] on the right. Plain text only. While the thread waits on a question,
+ * [pending] takes the body over with its own. Approvals are answered on their timeline rows.
  *
  * There's no resting layout: upstream dropped the scroll fold on desktop (#25869) and only
  * collapses on `isComposerCollapsedMobile`, which the plugin has no use for.
@@ -236,15 +235,11 @@ fun ChatComposer(
         else -> Column(
           modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 16.dp)
-            .padding(bottom = if (pending is PendingRequest.Approval) 16.dp else 8.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
         ) {
-          // Above whatever takes the box, so context added during an approval still shows
+          // Above whatever takes the box, so context added during a question still shows
           ComposerChips(extras, state.enabled, attachmentActions)
           when (pending) {
-            is PendingRequest.Approval ->
-              ComposerPendingApprovalPanel(pending, state.enabled, pendingActions)
-
             is PendingRequest.UserInput ->
               ComposerPendingUserInputPanel(pending, state.enabled, pendingActions)
           }

@@ -263,6 +263,14 @@ fun ChatContent(
       draft = composerDraft,
       pending = request,
       pendingActions = actions,
+      approvals = requests.approvals,
+      responding = pending.responding,
+      onRespondToApproval = { requestId, decision ->
+        view?.let { current ->
+          val id: String = UUID.randomUUID().toString()
+          controller.respond(current, approvalResponse(current.thread.id, requestId, decision, id))
+        }
+      },
       footer = footer,
       footerActions = footerActions,
       onClearReview = { comments.forEach { controller.removeContext(threadId, it.contextId) } },
@@ -522,7 +530,7 @@ private fun rememberContextWindow(
 }
 
 /**
- * The approval or question [view] waits on, and what answering it does. A question's drafts and
+ * The question [view] waits on, and what answering it does. A question's drafts and
  * the question on screen live here, per request, like upstream's `usePendingThreadRequests.ts`.
  */
 @Composable
@@ -546,14 +554,6 @@ private fun rememberPendingRequest(
   fun question(id: String): UserInputQuestion? = questions.find { it.id == id }
 
   val actions = PendingActions(
-    onDecide = { decision ->
-      val approval: PendingRequest.Approval? = current() as? PendingRequest.Approval
-      if (view != null && approval != null) {
-        val id: String = UUID.randomUUID().toString()
-        val answer: Command = approvalResponse(view.thread.id, approval.requestId, decision, id)
-        controller.respond(view, answer)
-      }
-    },
     onToggleOption = { questionId, value ->
       question(questionId)?.let { question ->
         val next: PendingUserInputDraftAnswer =

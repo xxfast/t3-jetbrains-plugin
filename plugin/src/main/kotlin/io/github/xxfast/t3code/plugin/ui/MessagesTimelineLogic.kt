@@ -946,9 +946,10 @@ data class TimelineExpansion(
 )
 
 /**
- * `deriveMessagesTimelineRows`, MessagesTimeline.logic.ts:1316. [runningRun] is the run in
+ * `deriveMessagesTimelineRows`, MessagesTimeline.logic.ts:1386. [runningRun] is the run in
  * flight, if any; [checkpointFiles] finds a run's ready checkpoint files, and [revertTarget] the
- * run a prompt's "revert" goes back to.
+ * run a prompt's "revert" goes back to. [pendingApprovalRequestIds] are the approvals answered on
+ * their rows, which never fold or group.
  */
 fun deriveMessagesTimelineRows(
   timelineEntries: List<TimelineEntry>,
@@ -958,8 +959,12 @@ fun deriveMessagesTimelineRows(
   checkpointFiles: (Run) -> List<CheckpointFileSummary>? = { null },
   revertTarget: (Run) -> Run? = { null },
   worktreeSetup: WorktreeSetupSnapshot? = null,
+  pendingApprovalRequestIds: Set<String> = emptySet(),
 ): List<TimelineRow> {
   val entries: List<TimelineEntry> = settleSupersededReasoning(timelineEntries)
+  fun WorkLogEntry.isPendingApproval(): Boolean =
+    (item as? TurnItem.ApprovalRequest)?.requestId in pendingApprovalRequestIds
+
   val isWorking: Boolean = runningRun != null
   val latestRun: Run? = runs.maxByOrNull { it.ordinal }
   val runsById: Map<String, Run> = runs.associateBy { it.id }
@@ -978,10 +983,14 @@ fun deriveMessagesTimelineRows(
   }
   val folds: Map<String, TurnFold> =
     deriveTurnFolds(entries, terminalIds, latestRun, activeRunIds + failedRunIds)
+  // A pending approval stays out of a collapsed fold, so it can be answered
+  val pendingApprovalEntryIds: Set<String> = entries
+    .filter { it is TimelineEntry.Work && it.entry.isPendingApproval() }
+    .mapTo(mutableSetOf()) { it.id }
   val collapsed: Set<String> = folds.values
     .filter { it.runId !in expansion.runIds }
     .flatMap { it.hiddenEntryIds }
-    .toSet()
+    .toSet() - pendingApprovalEntryIds
 
   fun WorkLogEntry.inActiveRun(): Boolean =
     isWorking && status == ToolStatus.InProgress && runId != null && runId == unsettled
@@ -997,6 +1006,7 @@ fun deriveMessagesTimelineRows(
       if (entry !is TimelineEntry.Work || entry.entry.tone == WorkTone.Error ||
         entry.entry.sourceActivityKind == RUNTIME_ERROR ||
         entry.entry.itemType == "system_notice" || entry.entry.itemType == "notification" ||
+        entry.entry.isPendingApproval() ||
         entry.runId !in activeRunIds ||
         entry.entry.sourceActivityKind == CONTEXT_COMPACTION ||
         entry.id in collapsed || entry.id in folds
@@ -1013,7 +1023,9 @@ fun deriveMessagesTimelineRows(
     it.entry.status == ToolStatus.InProgress ||
       (it.entry.status == null && it.entry.isToolLike())
   }
-  val keepsLive: Boolean = latestRunning != null || latestVisible?.entry?.indicatesSuccess() == true
+  // A pending approval means the latest tool didn't just succeed
+  val keepsLive: Boolean = latestRunning != null ||
+    (latestVisible?.entry?.indicatesSuccess() == true && pendingApprovalRequestIds.isEmpty())
   val latestFailed: Boolean = latestRunning == null && latestVisible != null &&
     latestVisible.entry.status != ToolStatus.Declined && latestVisible.entry.indicatesFailure()
   val activeWorkRows: List<TimelineRow> =
@@ -1144,7 +1156,8 @@ fun deriveMessagesTimelineRows(
         if (work.runId != null && work.runId in compactedRunIds &&
           work.questionAnswer()?.let(::claudeResumeCompactionAge) != null
         ) continue
-        if ((work.runId != null && work.runId in failedRunIds) ||
+        if (work.isPendingApproval() ||
+          (work.runId != null && work.runId in failedRunIds) ||
           (work.itemType == "error" && work.status == ToolStatus.Failed) ||
           work.standalone()
         ) {
@@ -1155,8 +1168,8 @@ fun deriveMessagesTimelineRows(
         while (index < entries.size) {
           val next: TimelineEntry.Work = entries[index] as? TimelineEntry.Work ?: break
           if (next.entry.sourceActivityKind == CONTEXT_COMPACTION || next.entry.standalone() ||
-            next.id in activeIds || next.id in collapsed || next.id in folds ||
-            next.runId != work.runId
+            next.entry.isPendingApproval() || next.id in activeIds || next.id in collapsed ||
+            next.id in folds || next.runId != work.runId
           ) break
           grouped += next.entry
           index += 1
@@ -1246,11 +1259,37 @@ fun deriveMessagesTimelineRows(
     }
   }
   if (isWorking && headerIndex >= entries.size) appendWorkingRow()
-  if (isWorking && !hasActivityRow && !hasActiveCompaction && !compactionOnlyRunFinished) {
+  // Nothing thinks while the run waits on an approval (MessagesTimeline.logic.ts:2103)
+  if (isWorking && !hasActivityRow && !hasActiveCompaction && !compactionOnlyRunFinished &&
+    pendingApprovalRequestIds.isEmpty()
+  ) {
     rows += TimelineRow.Thinking
   }
   placeWorktreeSetup(rows, worktreeSetup, latestRun)
   return attachTrailingToolGroupsToAssistant(rows)
+}
+
+/**
+ * `unmatchedPendingApprovals`, MessagesTimeline.tsx:686: the pending approvals no work row
+ * shows, which the timeline's footer lists instead.
+ */
+fun unmatchedPendingApprovals(
+  rows: List<TimelineRow>,
+  approvals: List<PendingApproval>,
+): List<PendingApproval> {
+  if (approvals.isEmpty()) return approvals
+  val shown: Set<String> = rows
+    .flatMap { row ->
+      when (row) {
+        is TimelineRow.Work -> row.entries
+        is TimelineRow.WorkLive -> listOf(row.entry)
+        else -> emptyList()
+      }
+    }
+    .mapNotNullTo(mutableSetOf()) { entry ->
+      (entry.item as? TurnItem.ApprovalRequest)?.requestId
+    }
+  return approvals.filter { it.requestId !in shown }
 }
 
 /**

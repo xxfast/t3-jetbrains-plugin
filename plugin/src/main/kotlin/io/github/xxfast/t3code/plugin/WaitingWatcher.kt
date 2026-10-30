@@ -14,7 +14,7 @@ import com.intellij.ui.BadgeIconSupplier
 import io.github.xxfast.t3code.plugin.ide.NOTIFICATION_GROUP
 import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ui.UNANSWERED_KINDS
-import io.github.xxfast.t3code.plugin.ui.approvalLabel
+import io.github.xxfast.t3code.plugin.ui.approvalPresentation
 import io.github.xxfast.t3code.plugin.ui.shownUnderParent
 import io.github.xxfast.t3code.plugin.ui.waitingOnYou
 import io.github.xxfast.t3code.protocol.Thread
@@ -116,7 +116,7 @@ fun waitingKey(thread: Thread): String? {
 fun waitingLabel(kind: String?): String = when (kind) {
   null -> "approval"
   "user_input" -> "question"
-  else -> approvalLabel(kind).lowercase()
+  else -> approvalPresentation(kind).label.lowercase()
 }
 
 /** The threads T3 Sidebar lists, not archived and not under a parent, that wait on you. */

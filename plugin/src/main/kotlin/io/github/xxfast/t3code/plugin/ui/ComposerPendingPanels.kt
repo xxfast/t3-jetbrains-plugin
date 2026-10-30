@@ -1,6 +1,5 @@
 package io.github.xxfast.t3code.plugin.ui
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
@@ -30,7 +28,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -61,25 +58,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import io.github.xxfast.t3code.protocol.generated.ProviderApprovalOption
 import io.github.xxfast.t3code.protocol.generated.UserInputQuestion
 import kotlinx.coroutines.delay
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.CheckboxState
 import org.jetbrains.jewel.ui.component.CircularProgressIndicator
 import org.jetbrains.jewel.ui.component.DefaultButton
-import org.jetbrains.jewel.ui.component.Icon
-import org.jetbrains.jewel.ui.component.IconActionButton
 import org.jetbrains.jewel.ui.component.Link
-import org.jetbrains.jewel.ui.component.OutlinedButton
-import org.jetbrains.jewel.ui.component.PopupMenu
 import org.jetbrains.jewel.ui.component.RadioButtonState
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.TextArea
-import org.jetbrains.jewel.ui.component.Tooltip
 import org.jetbrains.jewel.ui.component.styling.CheckboxStyle
 import org.jetbrains.jewel.ui.component.styling.RadioButtonStyle
-import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import org.jetbrains.jewel.ui.painter.hints.Selected
 import org.jetbrains.jewel.ui.painter.hints.Stateful
 import org.jetbrains.jewel.ui.painter.rememberResourcePainterProvider
@@ -88,7 +78,6 @@ import org.jetbrains.jewel.ui.theme.radioButtonStyle
 
 /** What the pending panels can do. The host wires these to the controller. */
 class PendingActions(
-  val onDecide: (decision: String) -> Unit = {},
   val onToggleOption: (questionId: String, value: String) -> Unit = { _, _ -> },
   val onCustomAnswer: (questionId: String, text: String) -> Unit = { _, _ -> },
   /** The next question, or submit on the last one. */
@@ -96,145 +85,6 @@ class PendingActions(
   val onBack: () -> Unit = {},
   val onDismiss: () -> Unit = {},
 )
-
-/**
- * An approval in place of the text field: the kind, the app, the detail, then the decisions.
- * Upstream's `ComposerPendingApprovalPanel.tsx` with `ComposerPendingApprovalActions.tsx`.
- */
-@Composable
-fun ComposerPendingApprovalPanel(
-  approval: PendingRequest.Approval,
-  enabled: Boolean,
-  actions: PendingActions,
-) {
-  val answerable: Boolean = enabled && !approval.responding && approval.resumable
-  Column(
-    modifier = Modifier.fillMaxWidth().padding(end = 6.dp),
-    verticalArrangement = Arrangement.spacedBy(6.dp),
-  ) {
-    Row(
-      horizontalArrangement = Arrangement.spacedBy(8.dp),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      Text(
-        text = approvalLabel(approval.requestKind),
-        style = small(),
-        color = JewelTheme.globalColors.text.warning,
-      )
-      approval.appName?.let { app ->
-        Text(
-          text = app,
-          style = small(),
-          color = JewelTheme.globalColors.text.info,
-          modifier = Modifier.weight(1f, fill = false),
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-        )
-      }
-      Spacer(Modifier.weight(1f))
-      if (approval.count > 1) {
-        Text("1/${approval.count}", style = small(), color = JewelTheme.globalColors.text.info)
-      }
-    }
-    // Commands and paths read as code; an app's own request reads as prose
-    val prose: Boolean = approval.requestKind == "mcp-elicitation" || !approval.resumable
-    Text(
-      text = approvalDetail(approval),
-      style = if (prose) JewelTheme.defaultTextStyle else JewelTheme.editorTextStyle,
-      maxLines = 6,
-      overflow = TextOverflow.Ellipsis,
-    )
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      if (approval.responding) CircularProgressIndicator(Modifier.size(16.dp))
-      primaryOptions(approval.options).forEach { option ->
-        OptionButton(option, enabled = answerable) { actions.onDecide(option.decision) }
-      }
-      val more: List<ProviderApprovalOption> = moreOptions(approval.options)
-      if (more.isNotEmpty()) MoreOptions(more, enabled = answerable, onDecide = actions.onDecide)
-    }
-  }
-}
-
-/** Approve is the default button, everything else outlined; a warning gets an icon and a tip. */
-@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip
-@Composable
-private fun OptionButton(option: ProviderApprovalOption, enabled: Boolean, onClick: () -> Unit) {
-  val button: @Composable () -> Unit = {
-    val label: @Composable () -> Unit = { OptionLabel(option) }
-    if (option.decision == "accept") {
-      DefaultButton(onClick = onClick, enabled = enabled) { label() }
-    } else {
-      OutlinedButton(onClick = onClick, enabled = enabled) { label() }
-    }
-  }
-  val warning: String? = option.warning
-  if (warning == null) button() else Tooltip(tooltip = { Text(warning) }) { button() }
-}
-
-@Composable
-private fun OptionLabel(option: ProviderApprovalOption) {
-  Row(
-    horizontalArrangement = Arrangement.spacedBy(4.dp),
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    if (option.warning != null) Icon(AllIconsKeys.General.Warning, contentDescription = null)
-    Text(
-      text = option.label,
-      modifier = Modifier.widthIn(max = 200.dp),
-      maxLines = 1,
-      overflow = TextOverflow.Ellipsis,
-    )
-  }
-}
-
-/** Upstream's "More approval options" menu, for every decision that isn't accept or decline. */
-@Composable
-private fun MoreOptions(
-  options: List<ProviderApprovalOption>,
-  enabled: Boolean,
-  onDecide: (String) -> Unit,
-) {
-  var open: Boolean by remember { mutableStateOf(false) }
-  Box {
-    IconActionButton(
-      key = AllIconsKeys.Actions.More,
-      contentDescription = "More approval options",
-      onClick = { open = !open },
-      enabled = enabled,
-    )
-    if (open) {
-      PopupMenu(
-        onDismissRequest = {
-          open = false
-          return@PopupMenu true
-        },
-        horizontalAlignment = Alignment.End,
-      ) {
-        options.forEach { option ->
-          selectableItem(
-            selected = false,
-            onClick = {
-              open = false
-              onDecide(option.decision)
-            },
-            enabled = enabled,
-          ) {
-            Column {
-              OptionLabel(option)
-              option.warning?.let { warning ->
-                Text(warning, style = small(), color = JewelTheme.globalColors.text.warning)
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
 
 private val DIGITS: List<Key> = listOf(
   Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight, Key.Nine,

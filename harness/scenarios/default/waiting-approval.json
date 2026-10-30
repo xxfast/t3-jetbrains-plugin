@@ -24,8 +24,8 @@
         "kind": "command",
         "createdAt": "2026-10-19T08:22:40.000Z"
       },
-      "itemCount": 3,
-      "visibleItemCount": 3,
+      "itemCount": 5,
+      "visibleItemCount": 5,
       "hasActionableProposedPlan": false,
       "createdAt": "2026-10-19T08:20:01.000Z",
       "updatedAt": "2026-10-19T08:22:40.000Z"
@@ -79,11 +79,42 @@
         "updatedAt": "2026-10-19T08:22:38.000Z"
       },
       {
+        "type": "command_execution",
+        "id": "c1",
+        "threadId": "thr_01JC49ZK2HWAITING",
+        "runId": "run_01JC49ZK3M1B",
+        "ordinal": 3,
+        "status": "completed",
+        "title": "Check the Gradle version",
+        "input": "./gradlew --version",
+        "output": "Gradle 8.14.3\nKotlin 2.2.20\nJVM 21.0.8 (JetBrains s.r.o.)",
+        "exitCode": 0,
+        "startedAt": "2026-10-19T08:22:20.000Z",
+        "completedAt": "2026-10-19T08:22:24.000Z",
+        "updatedAt": "2026-10-19T08:22:24.000Z"
+      },
+      {
+        "type": "approval_request",
+        "id": "r0",
+        "threadId": "thr_01JC49ZK2HWAITING",
+        "runId": "run_01JC49ZK3M1B",
+        "ordinal": 4,
+        "status": "waiting",
+        "title": "Read a file",
+        "requestId": "req_01JC49ZL9FRD",
+        "requestKind": "file-read",
+        "prompt": "~/.gradle/gradle.properties",
+        "reason": "The signing keys for the Maven publication are read from here.",
+        "fullAccessOverride": "provider_check",
+        "startedAt": "2026-10-19T08:22:30.000Z",
+        "updatedAt": "2026-10-19T08:22:30.000Z"
+      },
+      {
         "type": "approval_request",
         "id": "r1",
         "threadId": "thr_01JC49ZK2HWAITING",
         "runId": "run_01JC49ZK3M1B",
-        "ordinal": 3,
+        "ordinal": 5,
         "status": "waiting",
         "title": "Run a command",
         "requestId": "req_01JC49ZM7TQ2",
@@ -105,7 +136,26 @@
           }
         ],
         "startedAt": "2026-10-19T08:22:40.000Z",
-        "updatedAt": "2026-10-19T08:22:40.000Z"
+        "updatedAt": "2026-10-19T08:22:40.000Z",
+        "reason": "Karma needs a headless Chrome, which isn't on the sandbox's allowlist."
+      }
+    ]
+  },
+  "runtimeRequests": {
+    "thr_01JC49ZK2HWAITING": [
+      {
+        "id": "req_01JC49ZL9FRD",
+        "nodeId": "node_fixture",
+        "providerTurnId": null,
+        "nativeRequestRef": null,
+        "kind": "file-read",
+        "status": "pending",
+        "responseCapability": {
+          "type": "not_resumable",
+          "reason": "provider_restarted"
+        },
+        "createdAt": "2026-10-19T08:22:30.000Z",
+        "resolvedAt": null
       }
     ]
   }
