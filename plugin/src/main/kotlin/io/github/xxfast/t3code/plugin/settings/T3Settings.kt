@@ -7,6 +7,9 @@ import com.intellij.openapi.components.SimplePersistentStateComponent
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.components.service
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /** Where the server is. Nothing secret lives here; the credential is in [T3Credentials]. */
 @Service(Service.Level.APP)
@@ -28,6 +31,21 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
 
     // Upstream's `favorites` (`ModelFavorites`, settings.ts:277), as `instanceId:slug` keys
     var modelFavorites: MutableList<String> by list()
+
+    // Upstream's `threadDetailsItems` (settings.ts:484): sparse show and hide overrides for T3
+    // Thread Details. Missing ids use the default; ids the plugin doesn't know are kept
+    var threadDetailsItems: MutableMap<String, Boolean> by map()
+  }
+
+  private val _threadDetailsItems: MutableStateFlow<Map<String, Boolean>> =
+    MutableStateFlow(emptyMap())
+
+  /** [threadDetailsItems] as it changes, for T3 Thread Details to follow. */
+  val threadDetailsItemsFlow: StateFlow<Map<String, Boolean>> = _threadDetailsItems.asStateFlow()
+
+  override fun loadState(state: State) {
+    super.loadState(state)
+    _threadDetailsItems.value = state.threadDetailsItems.toMap()
   }
 
   var serverUrl: String
@@ -79,6 +97,14 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
     get() = state.modelFavorites.toSet()
     set(value) {
       state.modelFavorites = value.toMutableList()
+    }
+
+  /** See `resolveThreadDetailsVisibility` and `setThreadDetailsItem` for what goes in. */
+  var threadDetailsItems: Map<String, Boolean>
+    get() = state.threadDetailsItems.toMap()
+    set(value) {
+      state.threadDetailsItems = value.toMutableMap()
+      _threadDetailsItems.value = value.toMap()
     }
 
   companion object {

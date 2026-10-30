@@ -5,6 +5,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -33,11 +34,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEvent
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import com.intellij.ui.awt.RelativePoint
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
+import javax.swing.JComponent
+import org.jetbrains.jewel.foundation.LocalComponent
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.Orientation
 import org.jetbrains.jewel.ui.component.CircularProgressIndicator
@@ -67,9 +81,11 @@ class ThreadLineageActions(
  * has a `gitCwd`, then the Lineage, upstream's `ThreadRelationshipsPanel`
  * (ThreadRelationshipsControl.tsx). Automations aren't ported: upstream hides the section without
  * scheduled tasks, and the plugin has none. Upstream hides the Lineage when there's nothing
- * related; so does this. [enabled] is false without the operate scope, which leaves opening rows
- * but no actions. [stoppingId] is the row being stopped. Upstream's card drops to a compact
- * density when short of height; a tool window scrolls instead.
+ * related; so does this. [visible] is what the user chose to show, see [THREAD_DETAILS_ITEMS];
+ * a right click on the card, or the "Choose what to show" row of a card left empty, calls
+ * [onItemsMenu] with where the menu opens. [enabled] is false without the operate scope, which
+ * leaves opening rows but no actions. [stoppingId] is the row being stopped. Upstream's card
+ * drops to a compact density when short of height; a tool window scrolls instead.
  */
 @Composable
 fun ThreadDetails(
@@ -81,21 +97,31 @@ fun ThreadDetails(
   stoppingId: String?,
   enabled: Boolean,
   actions: ThreadLineageActions,
+  visible: ThreadDetailsVisibility,
+  onItemsMenu: (at: RelativePoint) -> Unit,
 ) {
   if (panel == null && lineage == null) return Hint("No details for this thread yet")
   val now: Long = rememberNow(1_000).value.toEpochMilli()
+  val show: ThreadDetailsShow? = panel?.let { state ->
+    resolveThreadDetailsShow(visible, state.openIn != null, state.gitCwd, state.isGitRepo)
+  }
+  val workspace: Boolean = show?.workspace == true
+  val versionControl: Boolean = panel?.gitCwd != null && show?.versionControl == true
+  val related: Boolean = lineage != null && visible[ThreadDetailsItem.Lineage]
   VerticallyScrollableContainer(
     scrollState = rememberScrollState(),
-    modifier = Modifier.fillMaxSize(),
+    modifier = Modifier.fillMaxSize().onSecondaryClick(onItemsMenu),
   ) {
     Column(Modifier.fillMaxWidth()) {
-      if (panel != null) {
-        WorkspaceSection(panel, panelActions)
-        if (panel.gitCwd != null) VersionControlSection(panel, panelActions)
+      if (panel != null && show != null) {
+        if (workspace) WorkspaceSection(panel, panelActions, show)
+        if (versionControl) {
+          VersionControlSection(panel, panelActions, show, visible, separated = workspace)
+        }
       }
-      if (lineage != null) {
+      if (lineage != null && related) {
         ThreadDetailsSection(
-          separated = panel != null,
+          separated = workspace || versionControl,
           title = lineage.title,
           actions = { LineageActions(lineage, busyAction, enabled, actions.onDetach) },
         ) {
@@ -109,8 +135,35 @@ fun ThreadDetails(
           }
         }
       }
+      // Shown only when no section above has content, so an emptied card can be refilled
+      if (!workspace && !versionControl && !related) ChooseWhatToShowRow(onItemsMenu)
     }
   }
+}
+
+/**
+ * The card's `onContextMenu`: a right click nothing inside handled opens the items menu where it
+ * landed. Rows that handle the press themselves keep it.
+ */
+@Composable
+private fun Modifier.onSecondaryClick(onClick: (at: RelativePoint) -> Unit): Modifier {
+  val component: JComponent = LocalComponent.current
+  val density: Density = LocalDensity.current
+  var coordinates: LayoutCoordinates? by remember { mutableStateOf(null) }
+  return this
+    .onGloballyPositioned { coordinates = it }
+    .pointerInput(onClick) {
+      awaitEachGesture {
+        // The main pass reaches the card after its children, so a consumed press was theirs
+        val down: PointerEvent = awaitPointerEvent()
+        val change: PointerInputChange = down.changes.firstOrNull() ?: return@awaitEachGesture
+        if (down.type != PointerEventType.Press) return@awaitEachGesture
+        if (!down.buttons.isSecondaryPressed || change.isConsumed) return@awaitEachGesture
+        change.consume()
+        val root: Offset = coordinates?.localToRoot(change.position) ?: change.position
+        onClick(relativePoint(component, density, root))
+      }
+    }
 }
 
 /** The Lineage heading's "…" menu, shown while a session can detach. */

@@ -29,16 +29,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.intellij.ui.awt.RelativePoint
 import io.github.xxfast.t3code.protocol.generated.ProjectScript
 import io.github.xxfast.t3code.protocol.generated.VcsStatusRemoteResult
+import java.awt.Point
+import javax.swing.JComponent
+import org.jetbrains.jewel.foundation.LocalComponent
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.Orientation
 import org.jetbrains.jewel.ui.component.Divider
@@ -145,35 +153,92 @@ fun ThreadDetailsSection(
   }
 }
 
-/** The Workspace section: the run context, Open in, and the project's scripts. No heading. */
+/**
+ * The Workspace section: the run context, Open in, and the project's scripts, each as [show]
+ * has it. No heading.
+ */
 @Composable
-fun WorkspaceSection(state: ThreadDetailsPanelState, actions: ThreadDetailsPanelActions) {
+fun WorkspaceSection(
+  state: ThreadDetailsPanelState,
+  actions: ThreadDetailsPanelActions,
+  show: ThreadDetailsShow,
+) {
   ThreadDetailsSection(separated = false) {
-    RunContextRow(state, actions.onEnvMode)
-    state.openIn?.let { openIn -> OpenInRow(openIn, actions.onOpenInIde) }
-    ProjectScriptsRow(state, actions.onRun)
+    if (show.environment) RunContextRow(state, actions.onEnvMode)
+    if (show.openIn) state.openIn?.let { openIn -> OpenInRow(openIn, actions.onOpenInIde) }
+    if (show.scripts) ProjectScriptsRow(state, actions.onRun)
   }
 }
 
-/** The Version Control section: the branch, the git quick action with its menu, and Changes. */
+/**
+ * The Version Control section: the branch and its pull request, then `GitActionsControl`'s git
+ * quick action with its menu and Changes, each hidden on its own as upstream's `showActions` and
+ * `showChanges` do. A rule on top when [separated].
+ */
 @Composable
-fun VersionControlSection(state: ThreadDetailsPanelState, actions: ThreadDetailsPanelActions) {
-  ThreadDetailsSection(separated = true) {
-    if (state.isGitRepo) {
+fun VersionControlSection(
+  state: ThreadDetailsPanelState,
+  actions: ThreadDetailsPanelActions,
+  show: ThreadDetailsShow,
+  visible: ThreadDetailsVisibility,
+  separated: Boolean,
+) {
+  ThreadDetailsSection(separated = separated) {
+    if (show.branch) {
       BranchRow(state, actions)
       state.pullRequest?.let { pr -> PullRequestRow(pr, actions.onOpenUrl) }
-      GitActionsGroup(state, actions.onGitAction)
+    }
+    if (!show.git) return@ThreadDetailsSection
+    if (visible[ThreadDetailsItem.GitActions]) {
+      if (state.isGitRepo) {
+        GitActionsGroup(state, actions.onGitAction)
+      } else {
+        // `Initialize Git` runs `vcs.init` upstream; the plugin's protocol doesn't carry it yet
+        PanelRow(
+          leading = { PanelIcon("git-branch-plus") },
+          label = "Not a git repository",
+          enabled = false,
+        )
+      }
+    }
+    if (visible[ThreadDetailsItem.Changes] && state.isGitRepo) {
       ChangesRow(state, actions.onOpenChanges)
-    } else {
-      // `Initialize Git` runs `vcs.init` upstream; the plugin's protocol doesn't carry it yet
-      PanelRow(
-        leading = { PanelIcon("git-branch-plus") },
-        label = "Not a git repository",
-        enabled = false,
-      )
     }
   }
 }
+
+/**
+ * The row an emptied card shows so it can be refilled, ThreadDetailsPanel.tsx:258: sliders and
+ * "Choose what to show". [onClick] gets the row's bottom left, where the menu opens.
+ */
+@Composable
+fun ChooseWhatToShowRow(onClick: (at: RelativePoint) -> Unit) {
+  val component: JComponent = LocalComponent.current
+  val density: Density = LocalDensity.current
+  var bottomLeft: Offset by remember { mutableStateOf(Offset.Zero) }
+  Box(
+    Modifier
+      .fillMaxWidth()
+      .padding(8.dp)
+      .onGloballyPositioned { coordinates ->
+        bottomLeft = coordinates.localToRoot(Offset(0f, coordinates.size.height.toFloat()))
+      },
+  ) {
+    PanelRow(
+      leading = { PanelIcon("sliders-horizontal") },
+      label = "Choose what to show",
+      enabled = true,
+      onClick = { onClick(relativePoint(component, density, bottomLeft)) },
+    )
+  }
+}
+
+/** Compose pixels in the root to the hosting [component]'s Swing coordinates. */
+fun relativePoint(component: JComponent, density: Density, root: Offset): RelativePoint =
+  RelativePoint(
+    component,
+    Point((root.x / density.density).toInt(), (root.y / density.density).toInt()),
+  )
 
 /**
  * `RunContextSelector` in panel mode: the machine's icon, the workspace's, and the machine's

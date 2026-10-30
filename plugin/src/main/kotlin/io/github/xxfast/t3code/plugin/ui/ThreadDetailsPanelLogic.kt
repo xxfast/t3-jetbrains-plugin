@@ -382,3 +382,37 @@ private val TERMINAL_ID = Regex(
   "^term(?:inal)?-(\\d+)(?:-[\\da-f]{8}(?:-[\\da-f]{4}){3}-[\\da-f]{12})?$",
   RegexOption.IGNORE_CASE,
 )
+
+/**
+ * The `show` block in `ThreadDetailsPanel` (ThreadDetailsPanel.tsx:147) at `full` density, the
+ * only one a tool window has: which rows will render, so no empty section steals the divider.
+ * The plugin always has the project's scripts and name once it has a panel, so `scripts` and
+ * `git` drop those checks.
+ */
+class ThreadDetailsShow(
+  val environment: Boolean,
+  val openIn: Boolean,
+  val scripts: Boolean,
+  val branch: Boolean,
+  val git: Boolean,
+) {
+  val workspace: Boolean
+    get() = environment || openIn || scripts
+
+  val versionControl: Boolean
+    get() = branch || git
+}
+
+fun resolveThreadDetailsShow(
+  visible: ThreadDetailsVisibility,
+  showOpenInPicker: Boolean,
+  gitCwd: String?,
+  isGitRepo: Boolean,
+): ThreadDetailsShow = ThreadDetailsShow(
+  environment = visible[ThreadDetailsItem.Environment],
+  openIn = visible[ThreadDetailsItem.OpenIn] && showOpenInPicker,
+  scripts = visible[ThreadDetailsItem.Scripts],
+  branch = gitCwd != null && isGitRepo && visible[ThreadDetailsItem.Branch],
+  git = gitCwd != null &&
+    (visible[ThreadDetailsItem.GitActions] || (visible[ThreadDetailsItem.Changes] && isGitRepo)),
+)

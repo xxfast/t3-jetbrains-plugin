@@ -21,11 +21,13 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
 import io.github.xxfast.t3code.plugin.actions.OPEN_IN_IDE_ACTION
+import io.github.xxfast.t3code.plugin.actions.ThreadDetailsItemsMenuItems
 import io.github.xxfast.t3code.plugin.actions.belongsIn
 import io.github.xxfast.t3code.plugin.actions.gitCwd
 import io.github.xxfast.t3code.plugin.actions.interruptCommand
 import io.github.xxfast.t3code.plugin.actions.openInIdeReason
 import io.github.xxfast.t3code.plugin.actions.performThreadAction
+import io.github.xxfast.t3code.plugin.actions.showThreadDetailsItemsMenu
 import io.github.xxfast.t3code.plugin.actions.stopCommands
 import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ide.VcsStatuses
@@ -36,6 +38,7 @@ import io.github.xxfast.t3code.plugin.ide.notify
 import io.github.xxfast.t3code.plugin.ide.runIdeAction
 import io.github.xxfast.t3code.plugin.ide.showIdeChanges
 import io.github.xxfast.t3code.plugin.ide.threadCwd
+import io.github.xxfast.t3code.plugin.settings.T3Settings
 import io.github.xxfast.t3code.plugin.terminal.TERMINAL_OPERATE
 import io.github.xxfast.t3code.plugin.terminal.ThreadTerminals
 import io.github.xxfast.t3code.plugin.ui.BranchSelectionTarget
@@ -51,6 +54,7 @@ import io.github.xxfast.t3code.plugin.ui.THREAD_STOP
 import io.github.xxfast.t3code.plugin.ui.ThreadDetails
 import io.github.xxfast.t3code.plugin.ui.ThreadDetailsPanelActions
 import io.github.xxfast.t3code.plugin.ui.ThreadDetailsPanelState
+import io.github.xxfast.t3code.plugin.ui.ThreadDetailsVisibility
 import io.github.xxfast.t3code.plugin.ui.ThreadLineage
 import io.github.xxfast.t3code.plugin.ui.ThreadLineageActions
 import io.github.xxfast.t3code.plugin.ui.VcsStatus
@@ -65,6 +69,7 @@ import io.github.xxfast.t3code.plugin.ui.operateBlockReason
 import io.github.xxfast.t3code.plugin.ui.resolveBranchSelectionTarget
 import io.github.xxfast.t3code.plugin.ui.resolvePrimaryRunItem
 import io.github.xxfast.t3code.plugin.ui.resolveQuickAction
+import io.github.xxfast.t3code.plugin.ui.resolveThreadDetailsVisibility
 import io.github.xxfast.t3code.plugin.ui.subagentStopCommand
 import io.github.xxfast.t3code.plugin.ui.supports
 import io.github.xxfast.t3code.plugin.ui.workspaceControlState
@@ -114,6 +119,8 @@ class ThreadDetailsToolWindowFactory : ToolWindowFactory, DumbAware {
     }
     val content: Content = ContentFactory.getInstance().createContent(panel, null, false)
     toolWindow.contentManager.addContent(content)
+    // Where IDE users look for what a tool window shows; the card's right click opens the same
+    toolWindow.setAdditionalGearActions(ThreadDetailsItemsMenuItems())
   }
 }
 
@@ -141,6 +148,8 @@ private fun ThreadDetailsContent(project: Project, threadId: String, view: Threa
   var stoppingId: String? by remember(threadId) { mutableStateOf(null) }
   val scope: CoroutineScope = rememberCoroutineScope()
   val opener: T3Opener = T3Opener.getInstance(project)
+  val items: Map<String, Boolean> by T3Settings.get().threadDetailsItemsFlow.collectAsState()
+  val visible: ThreadDetailsVisibility = remember(items) { resolveThreadDetailsVisibility(items) }
   val (panel: ThreadDetailsPanelState?, panelActions: ThreadDetailsPanelActions) =
     rememberThreadDetailsPanel(project, threadId, view, connection, catalog, projects, threads)
 
@@ -152,6 +161,8 @@ private fun ThreadDetailsContent(project: Project, threadId: String, view: Threa
     busyAction = busyAction,
     stoppingId = stoppingId,
     enabled = operateBlockReason(connection) == null,
+    visible = visible,
+    onItemsMenu = ::showThreadDetailsItemsMenu,
     actions = ThreadLineageActions(
       onOpenThread = opener::openThread,
       // `merge`: on success the merge target opens
