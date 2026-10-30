@@ -5,9 +5,13 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,7 +40,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import io.github.xxfast.t3code.protocol.ConversationMessage
 import io.github.xxfast.t3code.protocol.generated.ChatAttachment
+import java.time.Instant
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.IconActionButton
 import org.jetbrains.jewel.ui.component.IconButton
@@ -54,6 +60,8 @@ class QueuedRunsState(
   val busy: Boolean = false,
   /** The pairing may operate the thread. */
   val enabled: Boolean = true,
+  /** Thread titles by id, for a folded agent message's sender, `useQuietThreadShell`. */
+  val threadTitles: Map<String, String> = emptyMap(),
 )
 
 /** What the strip's buttons do; the host dispatches. */
@@ -64,6 +72,8 @@ class QueuedRunsActions(
   val onRemove: (runId: String) -> Unit = {},
   val onMove: (QueuedRunMove) -> Unit = {},
   val onResume: () -> Unit = {},
+  /** An agent sender's "Open thread", upstream's `onOpenThread`. */
+  val onOpenThread: ((threadId: String) -> Unit)? = null,
 )
 
 /**
@@ -86,6 +96,7 @@ fun QueuedRunsControl(
   val queued: List<QueuedThreadRun> = workflow.queuedRuns
   if (queued.isEmpty()) return
   var expanded: Boolean by remember { mutableStateOf(true) }
+  val now: Instant by rememberNow(60_000L)
   val dark: Boolean = JewelTheme.isDark
   val outline: Color =
     if (dark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f)
@@ -118,6 +129,7 @@ fun QueuedRunsControl(
           index = index,
           state = state,
           actions = actions,
+          now = now,
         )
       }
     }
@@ -177,16 +189,40 @@ private fun QueuedRow(
   index: Int,
   state: QueuedRunsState,
   actions: QueuedRunsActions,
+  now: Instant,
 ) {
   val workflow: ThreadQueueWorkflowState = state.workflow
   val idle: Boolean = state.enabled && !state.busy
   val editing: Boolean = item.run.id == state.editingRunId
   val thumbnails: List<ChatAttachment> = item.attachments.filter { it.type == "image" }
   val preview: String = queuedRunPreviewText(item.text, hasThumbnails = thumbnails.isNotEmpty())
+  // `QueuedMessage`, QueuedRunsControl.tsx:393: a queued turn wears its sent form's attribution
+  val message: ConversationMessage? = item.message
+  val presentation: UserMessagePresentation? =
+    remember(message) { message?.let(::resolveUserMessagePresentation) }
+  val senderThreadId: String? = message?.senderThreadId
+  val senderTitle: String? = senderThreadId?.let(state.threadTitles::get)
+  val fold: MessageFold? = remember(presentation, preview, senderTitle) {
+    queuedMessageFold(presentation, preview, senderTitle)
+  }
+  var expanded: Boolean by remember(item.run.id) { mutableStateOf(false) }
+  val hover: MutableInteractionSource = remember { MutableInteractionSource() }
+  val hovered: Boolean by hover.collectIsHoveredAsState()
+  // Siblings in the list's column, as upstream's fragment: the line, the row, the open body
+  if (presentation?.attribution == "t3code") {
+    // `text-2xs text-muted-foreground/70`, over the text column
+    Text(
+      text = SENT_BY_T3_CODE,
+      style = small(),
+      color = muted().copy(alpha = 0.7f),
+      modifier = Modifier.padding(start = ICON_COLUMN + 4.dp),
+    )
+  }
   Row(
     modifier = Modifier
       .fillMaxWidth()
       .heightIn(min = ROW_MIN_HEIGHT)
+      .hoverable(hover)
       .clip(RoundedCornerShape(4.dp))
       .background(if (editing) accent().copy(alpha = 0.16f) else Color.Transparent),
     verticalAlignment = Alignment.CenterVertically,
@@ -217,14 +253,33 @@ private fun QueuedRow(
     } else {
       Box(Modifier.width(ICON_COLUMN))
     }
-    if (thumbnails.isNotEmpty()) QueuedThumbnails(thumbnails)
-    Tooltip(tooltip = { Text(preview) }, modifier = Modifier.weight(1f)) {
-      Text(
-        text = preview,
+    if (fold != null) {
+      FoldedMessageHeader(
+        fold = fold,
+        expanded = expanded,
+        onToggle = { expanded = !expanded },
+        contentPadding = PaddingValues(horizontal = 4.dp),
         style = small(),
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.weight(1f),
       )
+    } else {
+      if (thumbnails.isNotEmpty()) QueuedThumbnails(thumbnails)
+      Tooltip(tooltip = { Text(preview) }, modifier = Modifier.weight(1f)) {
+        Text(
+          text = preview,
+          style = small(),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+        )
+      }
+    }
+    // The hover meta: an agent sender's thread, then when it was queued
+    if (message != null && hovered) {
+      val openThread: ((String) -> Unit)? = actions.onOpenThread
+      if (presentation?.attribution == "agent" && senderThreadId != null && openThread != null) {
+        Link("Open thread", onClick = { openThread(senderThreadId) }, textStyle = small())
+      }
+      QueuedTimestamp(message.createdAt, now)
     }
     if (editing) {
       Link(
@@ -271,6 +326,23 @@ private fun QueuedRow(
       modifier = Modifier.size(SMALL_BUTTON),
     )
   }
+  // In full, like a sent turn: a queued message is read before it is sent
+  if (fold != null && expanded) {
+    Column(
+      modifier = Modifier.padding(start = ICON_COLUMN + 8.dp, end = 4.dp, bottom = 4.dp),
+      verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+      if (thumbnails.isNotEmpty()) QueuedThumbnails(thumbnails)
+      if (preview.isNotEmpty()) Text(preview, style = small())
+    }
+  }
+}
+
+/** `TimelineRowTimestamp` with `alwaysVisible`: when the message was queued. */
+@Composable
+private fun QueuedTimestamp(at: String, now: Instant) {
+  val instant: Instant = runCatching { Instant.parse(at) }.getOrNull() ?: return
+  Text(formatDayAwareTimestamp(instant, now), style = small(), color = muted())
 }
 
 /** A row's images, 16dp each, upstream's `size-4` thumbnails. */

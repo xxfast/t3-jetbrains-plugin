@@ -20,7 +20,7 @@ class FixtureQueueTest {
   @Test
   fun `reorder, edit and cancel change the queue`() = runTest {
     val client = FixtureClient(default, backgroundScope)
-    queue(client) { it.queuedRuns.size == 2 }
+    queue(client) { it.queuedRuns.size == 4 }
 
     client.dispatch(
       Command.QueuedRunReorder(
@@ -30,7 +30,9 @@ class FixtureQueueTest {
         beforeRunId = FIRST,
       ),
     )
-    queue(client) { state -> state.queuedRuns.map { it.run.id } == listOf(SECOND, FIRST) }
+    queue(client) { state ->
+      state.queuedRuns.map { it.run.id } == listOf(SECOND, FIRST, AGENT, T3CODE)
+    }
 
     client.dispatch(
       Command.QueuedRunEdit(commandId = "c2", threadId = THREAD, runId = FIRST, text = "Edited"),
@@ -42,14 +44,14 @@ class FixtureQueueTest {
     assertEquals(1, edited.queuedRuns.first { it.run.id == SECOND }.attachments.size)
 
     client.dispatch(Command.QueuedRunCancel(commandId = "c3", threadId = THREAD, runId = SECOND))
-    val left: ThreadQueueWorkflowState = queue(client) { it.queuedRuns.size == 1 }
-    assertEquals(FIRST, left.queuedRuns.single().run.id)
+    val left: ThreadQueueWorkflowState = queue(client) { it.queuedRuns.size == 3 }
+    assertEquals(listOf(FIRST, AGENT, T3CODE), left.queuedRuns.map { it.run.id })
   }
 
   @Test
   fun `promoting to steer cancels the queued run and steers its message`() = runTest {
     val client = FixtureClient(default, backgroundScope)
-    queue(client) { it.queuedRuns.size == 2 }
+    queue(client) { it.queuedRuns.size == 4 }
 
     client.dispatch(
       Command.QueuedMessagePromoteToSteer(
@@ -60,7 +62,7 @@ class FixtureQueueTest {
       ),
     )
 
-    queue(client) { it.queuedRuns.size == 1 }
+    queue(client) { it.queuedRuns.size == 3 }
     val view: ThreadView = client.thread(THREAD).first { view ->
       view.items.any { it is TurnItem.UserMessage && it.inputIntent == "promoted_queued_to_steer" }
     }
@@ -73,7 +75,7 @@ class FixtureQueueTest {
   @Test
   fun `an interrupt holds the queue until resumed, which starts the next run`() = runTest {
     val client = FixtureClient(default, backgroundScope)
-    queue(client) { it.queuedRuns.size == 2 }
+    queue(client) { it.queuedRuns.size == 4 }
 
     client.dispatch(
       Command.RunInterrupt(commandId = "c1", threadId = THREAD, runId = RUNNING, holdQueue = true),
@@ -82,7 +84,7 @@ class FixtureQueueTest {
     assertEquals(null, held.activeRun)
 
     client.dispatch(Command.QueueResume(commandId = "c2", threadId = THREAD))
-    val resumed: ThreadQueueWorkflowState = queue(client) { it.queuedRuns.size == 1 }
+    val resumed: ThreadQueueWorkflowState = queue(client) { it.queuedRuns.size == 3 }
     assertFalse(resumed.isHeld)
     assertEquals(FIRST, resumed.activeRun?.id)
   }
@@ -90,7 +92,7 @@ class FixtureQueueTest {
   @Test
   fun `a send queued behind the active run joins the end of the queue`() = runTest {
     val client = FixtureClient(default, backgroundScope)
-    queue(client) { it.queuedRuns.size == 2 }
+    queue(client) { it.queuedRuns.size == 4 }
 
     client.dispatch(
       Command.MessageDispatch(
@@ -105,9 +107,9 @@ class FixtureQueueTest {
       ),
     )
 
-    val state: ThreadQueueWorkflowState = queue(client) { it.queuedRuns.size == 3 }
+    val state: ThreadQueueWorkflowState = queue(client) { it.queuedRuns.size == 5 }
     assertEquals("One more thing", state.queuedRuns.last().text)
-    assertEquals(3L, state.queuedRuns.last().run.queuePosition)
+    assertEquals(5L, state.queuedRuns.last().run.queuePosition)
     assertTrue(state.activeRun?.id == RUNNING)
   }
 
@@ -123,5 +125,7 @@ class FixtureQueueTest {
     const val RUNNING = "run_01JC4C3QR2RUN"
     const val FIRST = "run_01JC4C3QR3Q"
     const val SECOND = "run_01JC4C3QR4Q"
+    const val AGENT = "run_01JC4C3QR5Q"
+    const val T3CODE = "run_01JC4C3QR6Q"
   }
 }

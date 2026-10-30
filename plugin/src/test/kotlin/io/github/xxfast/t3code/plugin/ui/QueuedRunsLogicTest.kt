@@ -17,7 +17,8 @@ import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 
 class QueuedRunsLogicTest {
-  // The harness scenario is the fixture: a running thread with two queued messages
+  // The harness scenario is the fixture: a running thread with four queued messages, the user's
+  // two, a subagent's report and one from T3 Code
   private val view: ThreadView = run {
     val path: Path =
       Path.of(System.getProperty("t3code.scenarios")).resolve("default").resolve("queued.json")
@@ -33,12 +34,12 @@ class QueuedRunsLogicTest {
   }
 
   @Test
-  fun `the scenario queues two messages behind a steerable run`() {
+  fun `the scenario queues four messages behind a steerable run`() {
     val state: ThreadQueueWorkflowState = deriveThreadQueueWorkflowState(view)
     assertEquals(RUNNING, state.activeRun?.id)
-    assertEquals(listOf(FIRST, SECOND), state.queuedRuns.map { it.run.id })
+    assertEquals(listOf(FIRST, SECOND, AGENT, T3CODE), state.queuedRuns.map { it.run.id })
     assertTrue(state.queuedRuns.first().text.startsWith("Then run :kstore-file:check"))
-    assertEquals(listOf("image"), state.queuedRuns.last().attachments.map(ChatAttachment::type))
+    assertEquals(listOf("image"), state.queuedRuns[1].attachments.map(ChatAttachment::type))
     assertTrue(state.canReorder)
     assertTrue(state.canPromoteToSteer)
     assertFalse(state.isHeld)
@@ -54,12 +55,12 @@ class QueuedRunsLogicTest {
       }
     }
     val state: ThreadQueueWorkflowState = deriveThreadQueueWorkflowState(view.copy(runs = runs))
-    assertEquals(listOf(SECOND, FIRST), state.queuedRuns.map { it.run.id })
+    assertEquals(listOf(SECOND, FIRST, AGENT, T3CODE), state.queuedRuns.map { it.run.id })
 
     val unpositioned: List<Run> = view.runs.map { it.copy(queuePosition = null) }
     val byOrdinal: ThreadQueueWorkflowState =
       deriveThreadQueueWorkflowState(view.copy(runs = unpositioned))
-    assertEquals(listOf(FIRST, SECOND), byOrdinal.queuedRuns.map { it.run.id })
+    assertEquals(listOf(FIRST, SECOND, AGENT, T3CODE), byOrdinal.queuedRuns.map { it.run.id })
   }
 
   @Test
@@ -69,7 +70,10 @@ class QueuedRunsLogicTest {
       val completion = DelegatedCompletion(parentRunId = "p", generation = 1, taskIds = listOf("t"))
       message.copy(delegatedCompletion = completion)
     }
-    assertEquals(listOf(SECOND), getUserQueuedThreadRuns(view.runs, messages).map { it.id })
+    assertEquals(
+      listOf(SECOND, AGENT, T3CODE),
+      getUserQueuedThreadRuns(view.runs, messages).map { it.id },
+    )
   }
 
   @Test
@@ -78,6 +82,19 @@ class QueuedRunsLogicTest {
     val state: ThreadQueueWorkflowState =
       deriveThreadQueueWorkflowState(view.copy(messages = messages))
     assertEquals("Queued message", state.queuedRuns.first().text)
+    assertNull(state.queuedRuns.first().message)
+  }
+
+  @Test
+  fun `a queued run carries its message, for the attribution its sent form shows`() {
+    val queued: List<QueuedThreadRun> = deriveThreadQueueWorkflowState(view).queuedRuns
+    assertEquals(queued.map { it.messageId }, queued.map { it.message?.id })
+    val agent: ConversationMessage = assertNotNull(queued[2].message)
+    assertEquals("thr_01JC5L1S2DONE001", agent.senderThreadId)
+    assertEquals("agent", resolveUserMessagePresentation(agent).attribution)
+    val t3code: ConversationMessage = assertNotNull(queued[3].message)
+    assertEquals("t3code", resolveUserMessagePresentation(t3code).attribution)
+    assertNull(resolveUserMessagePresentation(assertNotNull(queued[0].message)).attribution)
   }
 
   @Test
@@ -119,8 +136,9 @@ class QueuedRunsLogicTest {
     val queued: List<QueuedThreadRun> = deriveThreadQueueWorkflowState(view).queuedRuns
     assertNull(queuedRunMoveUp(queued, 0))
     assertEquals(QueuedRunMove(SECOND, FIRST), queuedRunMoveUp(queued, 1))
-    assertEquals(QueuedRunMove(FIRST, null), queuedRunMoveDown(queued, 0))
-    assertNull(queuedRunMoveDown(queued, 1))
+    assertEquals(QueuedRunMove(FIRST, AGENT), queuedRunMoveDown(queued, 0))
+    assertEquals(QueuedRunMove(AGENT, null), queuedRunMoveDown(queued, 2))
+    assertNull(queuedRunMoveDown(queued, 3))
   }
 
   @Test
@@ -171,7 +189,7 @@ class QueuedRunsLogicTest {
 
     assertNull(queuedRunEditCommand(editing(FIRST, emptyList()), "  ", "cmd"))
     val withImage: EditingQueuedRun =
-      editing(SECOND, deriveThreadQueueWorkflowState(view).queuedRuns.last().attachments)
+      editing(SECOND, deriveThreadQueueWorkflowState(view).queuedRuns[1].attachments)
     assertEquals(
       ATTACHMENT_ONLY_BOOTSTRAP_PROMPT,
       queuedRunEditCommand(withImage, "", "cmd")?.text,
@@ -191,5 +209,7 @@ class QueuedRunsLogicTest {
     const val RUNNING = "run_01JC4C3QR2RUN"
     const val FIRST = "run_01JC4C3QR3Q"
     const val SECOND = "run_01JC4C3QR4Q"
+    const val AGENT = "run_01JC4C3QR5Q"
+    const val T3CODE = "run_01JC4C3QR6Q"
   }
 }

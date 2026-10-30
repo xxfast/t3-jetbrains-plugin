@@ -28,10 +28,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.key
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Composable
@@ -184,6 +186,8 @@ fun ChatView(
   memory: TimelineMemory = remember { TimelineMemory() }, // where the timeline was left
   linkFavicons: LinkFaviconSource = NoLinkFavicons, // the favicons in front of external links
   chipActions: MessageChipActions = MessageChipActions(), // what a click on a chip does
+  threadTitles: Map<String, String> = emptyMap(), // by id, for who sent a folded message
+  onOpenThread: ((threadId: String) -> Unit)? = null, // a folded agent message's sender
   onAnswerSecret: (suspend (SecretRequestAnswerInput)
     -> Unit)? = null,
 ) {
@@ -272,6 +276,8 @@ fun ChatView(
                 onRollback = onRollback,
                 onCancelWorktreeSetup = onCancelWorktreeSetup,
                 onOpenSetupTerminal = onOpenSetupTerminal,
+                onOpenThread = onOpenThread,
+                threadTitles = threadTitles,
               ),
               worktreeSetup = worktreeSetup,
               working = composer.running || composer.sending,
@@ -345,6 +351,10 @@ private class TimelineActions(
   val onRollback: (Run) -> Unit,
   val onCancelWorktreeSetup: (() -> Unit)? = null,
   val onOpenSetupTerminal: ((String) -> Unit)? = null,
+  /** An agent sender's "Open thread", upstream's `onOpenThread`. */
+  val onOpenThread: ((String) -> Unit)? = null,
+  /** Thread titles by id, for a folded agent message's sender, `useQuietThreadShell`. */
+  val threadTitles: Map<String, String> = emptyMap(),
 )
 
 @Composable
@@ -1050,24 +1060,48 @@ private fun TurnFoldRow(row: TimelineRow.TurnFold, onToggle: () -> Unit) {
   }
 }
 
-/** `UserTimelineRow`, MessagesTimeline.tsx:2201: a right-aligned bubble, its meta on hover. */
+/**
+ * `UserMessageRow`, TimelineUserMessageRow.tsx:131: a right-aligned bubble, its meta on hover.
+ * Who sent it decides the rest (`resolveUserMessagePresentation`): an automation's prompt
+ * (`AutomationMessageRow`) and another agent's message (`UserTimelineRow`) fold behind a
+ * `FoldedMessageHeader`, and one T3 Code sent itself says so above the bubble.
+ */
 @Composable
 private fun UserMessageRow(row: TimelineRow.Message, context: RowContext) {
   val message: TurnItem.UserMessage = row.entry.item as TurnItem.UserMessage
+  val presentation: UserMessagePresentation =
+    remember(message) { resolveUserMessagePresentation(message) }
+  val automation: Boolean = presentation.attribution == "automation"
+  // An automation shows its prompt without the legacy prefix, and only its text
+  val text: String = if (automation) presentation.text else message.text
   // Context links stay in the text and draw as chips; `copyText` is what the Copy action takes
-  val text: String = message.text
   val copyText: String = remember(text) { stripContextReferences(text) }
   val records: Map<String, JsonElement> = remember(message.context) {
     messageContextRecords(message.context)
   }
   // Upstream's `userImages` go in the grid; files and unknown types stay names
-  val (images: List<ChatAttachment>, others: List<ChatAttachment>) =
-    remember(message.attachments) { message.attachments.partition(::isImageAttachment) }
-  val extras: List<String> = remember(message.context, others) {
-    // Records the text doesn't cite would be invisible otherwise
-    uncitedContextLabels(message.context, text) + others.map { it.name }
+  val (images: List<ChatAttachment>, others: List<ChatAttachment>) = remember(message) {
+    if (automation) emptyList<ChatAttachment>() to emptyList()
+    else message.attachments.partition(::isImageAttachment)
   }
-  val collapsible: Boolean = remember(text) { shouldCollapseUserMessage(text) }
+  val extras: List<String> = remember(message.context, others, automation) {
+    // Records the text doesn't cite would be invisible otherwise
+    if (automation) emptyList()
+    else uncitedContextLabels(message.context, text) + others.map { it.name }
+  }
+  val senderThreadId: String? = message.senderThreadId
+  val senderTitle: String? = senderThreadId?.let(context.actions.threadTitles::get)
+  // Messages from other agents fold to one line so the user's own messages stay easy to find
+  val fold: MessageFold? = remember(presentation, text, senderTitle) {
+    val plainText: String = replaceComposerContextReferences(text) { it.label }
+    sentMessageFold(presentation, plainText, senderTitle)
+  }
+  val folded: Boolean = fold != null
+  var expanded: Boolean by remember(row.id) { mutableStateOf(false) }
+  // `findRevealRef`: a match inside a folded message opens it
+  val findMatch: ThreadFindMatch? = LocalThreadFindHighlight.current?.match
+  LaunchedEffect(findMatch) { if (folded && findMatch != null) expanded = true }
+  val collapsible: Boolean = remember(text, folded) { !folded && shouldCollapseUserMessage(text) }
   var showAll: Boolean by remember(row.id) { mutableStateOf(false) }
   val source: MutableInteractionSource = remember { MutableInteractionSource() }
   val hovered: Boolean by source.collectIsHoveredAsState()
@@ -1078,6 +1112,15 @@ private fun UserMessageRow(row: TimelineRow.Message, context: RowContext) {
       horizontalAlignment = Alignment.End,
       verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+      if (presentation.attribution == "t3code") {
+        // `text-2xs text-muted-foreground/70`
+        Text(
+          text = SENT_BY_T3_CODE,
+          style = small(),
+          color = muted().copy(alpha = 0.7f),
+          modifier = Modifier.padding(end = 4.dp),
+        )
+      }
       intentLabel(message.inputIntent)?.let { intent ->
         Row(
           modifier = Modifier.padding(end = 4.dp),
@@ -1091,58 +1134,88 @@ private fun UserMessageRow(row: TimelineRow.Message, context: RowContext) {
       Column(
         modifier = Modifier
           .widthIn(max = bubbleWidth)
+          .then(if (folded && expanded) Modifier.fillMaxWidth() else Modifier)
           .background(subtle(0.06f), RoundedCornerShape(18.dp))
-          .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+          .then(if (folded) Modifier else Modifier.padding(12.dp)),
       ) {
-        // `mb-2` under the grid, less the column's own spacing
-        MessageImages(images, Modifier.padding(bottom = 6.dp))
-        extras.forEach { line -> Text(line, style = small(), color = muted()) }
-        if (text.isNotEmpty()) {
-          val clip: Modifier =
-            if (collapsible && !showAll && LocalThreadFindHighlight.current?.match == null)
-              Modifier.heightIn(max = 176.dp).clip(RectangleClip)
-            else Modifier
-          ProvideMessageContextRecords(records) {
-            CompositionLocalProvider(LocalUserMessageChips provides true) {
-              Box(clip) { MarkdownText(text, context.processor, fill = false) }
-            }
-          }
+        if (fold != null) {
+          FoldedMessageHeader(fold, expanded, onToggle = { expanded = !expanded })
         }
-        if (collapsible) {
-          Box(Modifier.fillMaxWidth().padding(top = 6.dp), contentAlignment = Alignment.CenterEnd) {
-            Link(
-              text = if (showAll) "Show less" else "Show full message",
-              onClick = { showAll = !showAll },
-              textStyle = small(),
-            )
+        if (!folded || expanded) {
+          Column(
+            modifier = if (folded) {
+              Modifier
+                .padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
+                .heightIn(max = FOLDED_BODY_MAX_HEIGHT)
+                .verticalScroll(rememberScrollState())
+            } else {
+              Modifier
+            },
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+          ) {
+            // `mb-2` under the grid, less the column's own spacing
+            MessageImages(images, Modifier.padding(bottom = 6.dp))
+            extras.forEach { line -> Text(line, style = small(), color = muted()) }
+            if (text.isNotEmpty()) {
+              val clip: Modifier =
+                if (collapsible && !showAll && findMatch == null)
+                  Modifier.heightIn(max = 176.dp).clip(RectangleClip)
+                else Modifier
+              ProvideMessageContextRecords(records) {
+                CompositionLocalProvider(LocalUserMessageChips provides true) {
+                  Box(clip) { MarkdownText(text, context.processor, fill = false) }
+                }
+              }
+            }
+            if (collapsible) {
+              Box(
+                Modifier.fillMaxWidth().padding(top = 6.dp),
+                contentAlignment = Alignment.CenterEnd,
+              ) {
+                Link(
+                  text = if (showAll) "Show less" else "Show full message",
+                  onClick = { showAll = !showAll },
+                  textStyle = small(),
+                )
+              }
+            }
           }
         }
       }
       if (message.status !in QUIET_USER) {
         StatusPill(message.status, JewelTheme.globalColors.text.error)
       }
-      Row(
-        modifier = Modifier.widthIn(max = bubbleWidth).alpha(if (hovered) 1f else 0f),
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        Timestamp(row.entry.createdAt, context.now)
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-          row.revertTo?.let { target ->
-            IconAction(
-              icon = "undo-2",
-              tooltip = rollbackTooltip(target, context.rollbackReason),
-              enabled = context.rollbackReason == null,
-              onClick = { context.actions.onRollback(target) },
-            )
+      // A folded message has no meta until it's opened
+      if (!folded || expanded) {
+        Row(
+          modifier = Modifier.widthIn(max = bubbleWidth).alpha(if (hovered) 1f else 0f),
+          horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          val openThread: ((String) -> Unit)? = context.actions.onOpenThread
+          if (folded && senderThreadId != null && openThread != null) {
+            Link("Open thread", onClick = { openThread(senderThreadId) }, textStyle = small())
           }
-          if (copyText.isNotBlank()) CopyAction(copyText)
+          Timestamp(row.entry.createdAt, context.now)
+          Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            row.revertTo?.let { target ->
+              IconAction(
+                icon = "undo-2",
+                tooltip = rollbackTooltip(target, context.rollbackReason),
+                enabled = context.rollbackReason == null,
+                onClick = { context.actions.onRollback(target) },
+              )
+            }
+            if (copyText.isNotBlank()) CopyAction(copyText)
+          }
         }
       }
     }
   }
 }
+
+/** A folded body's `max-h-96`, 24rem, scrolled past that. */
+private val FOLDED_BODY_MAX_HEIGHT: Dp = 384.dp
 
 private val QUIET_USER: Set<String> = setOf("completed", "pending", "waiting", "running", "")
 

@@ -402,6 +402,23 @@ fun collectComposerContextReferences(text: String): List<ComposerContextReferenc
   }.toList()
 }
 
+/**
+ * `replaceComposerContextReferences`, composerContextReferences.ts:144: each valid link in [text]
+ * becomes what [replace] makes of it.
+ */
+fun replaceComposerContextReferences(
+  text: String,
+  replace: (ComposerContextReferenceOccurrence) -> String,
+): String {
+  val result = StringBuilder()
+  var cursor: Int = 0
+  for (occurrence in collectComposerContextReferences(text)) {
+    result.append(text, cursor, occurrence.start).append(replace(occurrence))
+    cursor = occurrence.end
+  }
+  return result.append(text, cursor, text.length).toString()
+}
+
 /** [text] without its context links, for showing a sent message. Upstream draws them as chips. */
 fun stripContextReferences(text: String): String {
   if (!text.contains("](t3-context:")) return text

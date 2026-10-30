@@ -110,6 +110,48 @@
         "checkpointId": null,
         "contextHandoffId": null,
         "queuePosition": 2
+      },
+      {
+        "id": "run_01JC4C3QR5Q",
+        "threadId": "thr_01JC4C3Q8UQUEUED1",
+        "ordinal": 5,
+        "status": "queued",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC4C3QM5",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-21T09:14:20.000Z",
+        "startedAt": null,
+        "completedAt": null,
+        "checkpointId": null,
+        "contextHandoffId": null,
+        "queuePosition": 3
+      },
+      {
+        "id": "run_01JC4C3QR6Q",
+        "threadId": "thr_01JC4C3Q8UQUEUED1",
+        "ordinal": 6,
+        "status": "queued",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC4C3QM6",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-21T09:14:25.000Z",
+        "startedAt": null,
+        "completedAt": null,
+        "checkpointId": null,
+        "contextHandoffId": null,
+        "queuePosition": 4
       }
     ]
   },
@@ -178,6 +220,35 @@
         "streaming": false,
         "createdAt": "2026-10-21T09:14:10.000Z",
         "updatedAt": "2026-10-21T09:14:10.000Z"
+      },
+      {
+        "createdBy": "agent",
+        "creationSource": "mcp",
+        "senderThreadId": "thr_01JC5L1S2DONE001",
+        "id": "msg_01JC4C3QM5",
+        "threadId": "thr_01JC4C3Q8UQUEUED1",
+        "runId": "run_01JC4C3QR5Q",
+        "nodeId": null,
+        "role": "user",
+        "text": "Survey done: 14 open issues, 3 of them block 1.0.\n\n- #212 `FileCodec` loses data on a failed write\n- #219 iOS `NSFileManager` paths with spaces\n- #224 kotlinx-io 0.8 migration",
+        "attachments": [],
+        "streaming": false,
+        "createdAt": "2026-10-21T09:14:20.000Z",
+        "updatedAt": "2026-10-21T09:14:20.000Z"
+      },
+      {
+        "createdBy": "agent",
+        "creationSource": "server",
+        "id": "msg_01JC4C3QM6",
+        "threadId": "thr_01JC4C3Q8UQUEUED1",
+        "runId": "run_01JC4C3QR6Q",
+        "nodeId": null,
+        "role": "user",
+        "text": "Background command `./gradlew :kstore-file:check` finished with exit code 1. Look at the failures before you go on.",
+        "attachments": [],
+        "streaming": false,
+        "createdAt": "2026-10-21T09:14:25.000Z",
+        "updatedAt": "2026-10-21T09:14:25.000Z"
       }
     ]
   },

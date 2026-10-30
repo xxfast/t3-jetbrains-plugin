@@ -4,9 +4,10 @@ import androidx.compose.ui.text.TextRange
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 
 // Up/Down recall of earlier prompts: upstream's
-// `apps/web/src/components/chat/composerPromptHistory.ts`, `resolveUserMessagePresentation`
-// from `packages/client-runtime/src/userMessage.ts`, and the guards of `navigatePromptHistory`
-// and `isCaretOnVisualEdge` (ChatComposer.tsx:4170, ComposerPromptEditorTiptap.tsx:1749).
+// `apps/web/src/components/chat/composerPromptHistory.ts`, and the guards of
+// `navigatePromptHistory` and `isCaretOnVisualEdge` (ChatComposer.tsx:4170,
+// ComposerPromptEditorTiptap.tsx:1749). Who sent a message is `resolveUserMessagePresentation`,
+// UserMessageLogic.kt.
 
 /** `ComposerPromptHistoryMessage`: what a timeline message brings to the history. */
 data class ComposerPromptHistoryMessage(
@@ -40,45 +41,6 @@ data class ComposerPromptHistoryStep(
   val position: ComposerPromptHistoryPosition?,
   val prompt: String,
 )
-
-/** `resolveUserMessagePresentation`'s answer, userMessage.ts:10. */
-data class UserMessagePresentation(
-  val text: String,
-  /** `"automation"`, `"agent"`, `"t3code"`, or null for what the user typed. */
-  val attribution: String?,
-  val scheduledTaskId: String?,
-)
-
-private val LEGACY_AUTOMATION_PREFIX: Regex =
-  Regex("^\\[Triggered by schedule task: [^\\r\\n]+\\]\\r?\\n\\r?\\n")
-private val LEGACY_AUTOMATION_MESSAGE_ID: Regex =
-  Regex("^scheduled-task-message:(.+):\\d+:(?:scheduled|manual)$")
-
-/** `resolveUserMessagePresentation`, userMessage.ts:10: who a user-role message came from. */
-fun resolveUserMessagePresentation(
-  message: ComposerPromptHistoryMessage,
-): UserMessagePresentation {
-  if (message.role != "user") return UserMessagePresentation(message.text, null, null)
-  if (message.scheduledTaskId != null) {
-    return UserMessagePresentation(message.text, "automation", message.scheduledTaskId)
-  }
-  val legacyPrefix: MatchResult? = LEGACY_AUTOMATION_PREFIX.find(message.text)
-  val legacyTaskId: String? = legacyPrefix
-    ?.let { LEGACY_AUTOMATION_MESSAGE_ID.find(message.id)?.groupValues?.get(1) }
-  if (legacyPrefix != null && (legacyTaskId != null || message.createdBy == "agent")) {
-    return UserMessagePresentation(
-      text = message.text.substring(legacyPrefix.value.length),
-      attribution = "automation",
-      scheduledTaskId = legacyTaskId,
-    )
-  }
-  val attribution: String? = when {
-    message.createdBy != "agent" -> null
-    message.creationSource == "server" -> "t3code"
-    else -> "agent"
-  }
-  return UserMessagePresentation(message.text, attribution, null)
-}
 
 private const val CLAUDE_ULTRATHINK_PREFIX: String = "Ultrathink:\n"
 

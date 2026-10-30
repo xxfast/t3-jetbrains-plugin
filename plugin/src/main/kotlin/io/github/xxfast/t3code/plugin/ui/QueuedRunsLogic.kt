@@ -21,6 +21,8 @@ data class QueuedThreadRun(
   val attachments: List<ChatAttachment>,
   val messageId: String,
   val context: MessageContext? = null,
+  /** Carries the attribution a sent message shows: automation or agent sender. */
+  val message: ConversationMessage? = null,
 )
 
 /** `ThreadQueueWorkflowState`, threadWorkflows.ts:31. */
@@ -95,6 +97,7 @@ fun deriveThreadQueueWorkflowState(view: ThreadView): ThreadQueueWorkflowState {
         attachments = message?.attachments.orEmpty(),
         messageId = run.userMessageId,
         context = message?.context,
+        message = message,
       )
     }
   return ThreadQueueWorkflowState(

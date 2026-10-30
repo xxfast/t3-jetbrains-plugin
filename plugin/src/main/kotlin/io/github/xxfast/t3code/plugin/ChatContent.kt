@@ -236,6 +236,9 @@ fun ChatContent(
       onOpen = { attachment -> images.open(project, attachment) },
     )
   }
+  // Who sent a folded message, by its sender thread's id
+  val threadTitles: Map<String, String> =
+    remember(threads) { threads.associate { it.id to it.title } }
   // The timeline's sent images, read by the user message row only
   CompositionLocalProvider(LocalMessageImages provides imageState) {
     ChatView(
@@ -251,6 +254,8 @@ fun ChatContent(
         onOpenUrl = { url -> BrowserUtil.browse(url) },
         onOpenThread = opener::openThread,
       ),
+      threadTitles = threadTitles,
+      onOpenThread = opener::openThread,
       composer = composer,
       draft = composerDraft,
       pending = request,
@@ -362,6 +367,7 @@ fun ChatContent(
           editingRunId = editing?.runId,
           busy = queueBusy.containsKey(threadId),
           enabled = operable,
+          threadTitles = threadTitles,
         )
       },
       // The background work banner, after the composer knows whether a run is going
@@ -392,6 +398,7 @@ fun ChatContent(
         onRemove = { runId -> view?.let { queuedRuns.cancel(it, runId) } },
         onMove = { move -> view?.let { queuedRuns.reorder(it, move) } },
         onResume = { view?.let(queuedRuns::resume) },
+        onOpenThread = opener::openThread,
       ),
     )
   }

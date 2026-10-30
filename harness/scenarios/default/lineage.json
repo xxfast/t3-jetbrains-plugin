@@ -44,8 +44,8 @@
         "relationshipToParent": "fork"
       },
       "status": "running",
-      "itemCount": 0,
-      "visibleItemCount": 0,
+      "itemCount": 3,
+      "visibleItemCount": 3,
       "hasActionableProposedPlan": false,
       "createdAt": "2026-10-21T07:30:00.000Z",
       "updatedAt": "2026-10-21T07:30:00.000Z",
@@ -890,6 +890,59 @@
         "createdAt": "2026-10-21T07:52:00.000Z",
         "updatedAt": "2026-10-21T07:52:00.000Z",
         "consumedAt": null
+      }
+    ]
+  },
+  "items": {
+    "thr_01JC5L1N1LINEAG1": [
+      {
+        "type": "user_message",
+        "id": "lu1",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R1MAIN",
+        "ordinal": 1,
+        "status": "completed",
+        "messageId": "msg_01JC5L1R1MAIN",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "Fork the release plan and have a subagent survey the open issues before we cut 1.0.",
+        "startedAt": "2026-10-21T07:30:00.000Z",
+        "completedAt": "2026-10-21T07:30:00.000Z",
+        "updatedAt": "2026-10-21T07:30:00.000Z"
+      },
+      {
+        "type": "assistant_message",
+        "id": "la1",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R1MAIN",
+        "ordinal": 2,
+        "status": "completed",
+        "messageId": "msg_01JC5L1A1MAIN",
+        "streaming": false,
+        "text": "Started a subagent to survey the open issues. It reports back here when it's done.",
+        "startedAt": "2026-10-21T07:30:05.000Z",
+        "completedAt": "2026-10-21T07:39:00.000Z",
+        "updatedAt": "2026-10-21T07:39:00.000Z"
+      },
+      {
+        "type": "user_message",
+        "id": "lu2",
+        "threadId": "thr_01JC5L1N1LINEAG1",
+        "runId": "run_01JC5L1R2MAIN",
+        "ordinal": 3,
+        "status": "completed",
+        "messageId": "msg_01JC5L1R2MAIN",
+        "createdBy": "agent",
+        "creationSource": "mcp",
+        "senderThreadId": "thr_01JC5L1S2DONE001",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "\nSurvey done: 14 open issues, 3 of them block 1.0.\n\n- #212 `FileCodec` loses data on a failed write\n- #219 iOS `NSFileManager` paths with spaces\n- #224 kotlinx-io 0.8 migration\n\nThe rest are docs and nice-to-haves, listed in the subagent thread.",
+        "startedAt": "2026-10-21T07:45:00.000Z",
+        "completedAt": "2026-10-21T07:45:00.000Z",
+        "updatedAt": "2026-10-21T07:45:00.000Z"
       }
     ]
   }
