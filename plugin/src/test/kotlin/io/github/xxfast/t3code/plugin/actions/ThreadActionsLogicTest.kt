@@ -1,7 +1,11 @@
 package io.github.xxfast.t3code.plugin.actions
 
 import io.github.xxfast.t3code.plugin.fixtures.Scenario
+import io.github.xxfast.t3code.plugin.ui.BASE_THREAD
+import io.github.xxfast.t3code.plugin.ui.BulkMenuItem
+import io.github.xxfast.t3code.plugin.ui.OrderKeyAssignment
 import io.github.xxfast.t3code.plugin.ui.ProjectFilter
+import io.github.xxfast.t3code.plugin.ui.SidebarThreadDropPlan
 import io.github.xxfast.t3code.plugin.ui.SnoozePreset
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.Project
@@ -54,9 +58,9 @@ class ThreadActionsLogicTest {
   }
 
   @Test
-  fun `read-only keeps mark unread and copy, as threadActionRequiresOperate`() {
+  fun `read-only keeps mark unread and copy, as threadActionRequiresOperate, and mute`() {
     val operating: List<ThreadActionKind> = ThreadActionKind.entries.filter { it.requiresOperate }
-    assertEquals(ThreadActionKind.entries - operating, listOf(MARK_UNREAD, COPY))
+    assertEquals(ThreadActionKind.entries - operating, listOf(MARK_UNREAD, COPY, MUTE))
     assertTrue(ThreadActionKind.FilterByProject in operating)
     val done: Thread = row.copy(latestRunCompletedAt = "2026-10-19T09:00:00Z")
     assertNull(disabledReason(MARK_UNREAD, connected("orchestration:read"), done))
@@ -165,7 +169,58 @@ class ThreadActionsLogicTest {
     assertIs<Command.ThreadArchive>(archiveCommand(row, "c"))
     assertIs<Command.ThreadUnarchive>(archiveCommand(row.copy(archivedAt = "x"), "c"))
     assertEquals(Command.ThreadPin(commandId = "c", threadId = row.id), pinCommand(row, "c"))
+    assertEquals(
+      Command.ThreadPin(commandId = "c", threadId = row.id, orderKey = "g"),
+      pinCommand(row, "c", orderKey = "g"),
+    )
     assertIs<Command.ThreadUnpin>(pinCommand(row.copy(pinnedAt = "x"), "c"))
+  }
+
+  @Test
+  fun `a drop sends its lifecycle first, then the order keys`() {
+    var next = 0
+    val ids: () -> String = { "c${next++}" }
+    val keys = listOf(OrderKeyAssignment(row.id, "g"))
+    val moveActive = SidebarThreadDropPlan.MoveActive(
+      order = listOf(row.id),
+      assignments = keys,
+      unpin = true,
+      unsettle = true,
+      unsnooze = true,
+    )
+    val unpinned: List<Command> = dropCommands(moveActive, row, emptyList(), ids).map { it.command }
+    assertEquals(
+      listOf(
+        Command.ThreadUnpin(commandId = "c0", threadId = row.id),
+        Command.ThreadUnsettle(commandId = "c1", threadId = row.id, reason = "user"),
+        Command.ThreadUnsnooze(commandId = "c2", threadId = row.id, reason = "user"),
+        Command.ThreadActiveReorder(commandId = "c3", threadId = row.id, orderKey = "g"),
+      ),
+      unpinned,
+    )
+    val pinned: List<DropStep> = dropCommands(
+      SidebarThreadDropPlan.Pin(listOf(row.id), orderKey = "g", extraAssignments = keys),
+      row, emptyList(), ids,
+    )
+    assertEquals(
+      listOf(
+        Command.ThreadPin(commandId = "c4", threadId = row.id, orderKey = "g"),
+        Command.ThreadPinReorder(commandId = "c5", threadId = row.id, orderKey = "g"),
+      ),
+      pinned.map { it.command },
+    )
+    val failures: List<String> = pinned.map { it.failure }
+    assertEquals(listOf("Failed to pin thread", "Failed to reorder pinned threads"), failures)
+    assertEquals(emptyList(), dropCommands(SidebarThreadDropPlan.Settle, row, emptyList(), ids))
+  }
+
+  @Test
+  fun `a drop onto pinned without a planned key takes the top of the pinned rows`() {
+    val head: Thread = row.copy(id = "head", pinnedAt = "2026-10-19T09:00:00Z", pinOrderKey = "m")
+    val plan = SidebarThreadDropPlan.Pin(listOf(row.id), orderKey = null, emptyList())
+    val pin = dropCommands(plan, row, listOf(head)) { "c" }.single().command
+    assertIs<Command.ThreadPin>(pin)
+    assertTrue(assertNotNull(pin.orderKey) < "m")
   }
 
   @Test
@@ -211,6 +266,71 @@ class ThreadActionsLogicTest {
     val expected = Command.ThreadMetadataUpdate(commandId = "c", threadId = row.id, title = "T")
     assertEquals(expected, renameCommand(row, "T", "c"))
   }
+
+  @Test
+  fun `the bulk menu counts every row, unpin and regenerate only the ones they act on`() {
+    val pinned: Thread = BASE_THREAD.copy(id = "p", pinnedAt = AT)
+    val settled: Thread = BASE_THREAD.copy(id = "s", settledOverride = "settled")
+    val regenerating: Thread =
+      BASE_THREAD.copy(id = "r", titleRegeneration = ThreadTitleRegeneration("q", AT))
+    val rows: List<Thread> = listOf(pinned, settled, regenerating)
+    val menu: BulkThreadMenu = bulkMenu(rows)
+    assertEquals(BulkEntry(BulkMenuItem("Unpin (1)"), listOf(pinned)), menu.unpin)
+    assertEquals(BulkEntry(BulkMenuItem("Settle (3)"), listOf(pinned, regenerating)), menu.settle)
+    assertEquals(BulkEntry(BulkMenuItem("Snooze (3)"), rows), menu.snooze)
+    val regenerate = BulkEntry(BulkMenuItem("Regenerate titles (2)"), listOf(pinned, settled))
+    assertEquals(regenerate, menu.regenerateTitles)
+    assertEquals(BulkEntry(BulkMenuItem("Mark unread (3)"), rows), menu.markUnread)
+    assertEquals(BulkEntry(BulkMenuItem("Delete (3)"), rows), menu.delete)
+  }
+
+  @Test
+  fun `the bulk menu leaves out what the server or the rows can't do`() {
+    val idle: Thread = BASE_THREAD.copy(id = "a")
+    val asking: Thread = BASE_THREAD.copy(
+      id = "b",
+      settledOverride = "settled",
+      pendingRuntimeRequest = PendingRuntimeRequestSummary("q", "command", AT),
+    )
+    assertNull(bulkMenu(listOf(idle), pinning = false).unpin, "Pins need threadPinning")
+    assertNull(bulkMenu(listOf(idle.copy(pinnedAt = AT)), pinning = false).unpin)
+    assertNull(bulkMenu(listOf(idle), snooze = false).snooze)
+    assertNull(bulkMenu(listOf(idle, asking)).snooze, "One row waiting on you keeps them all")
+    assertNull(bulkMenu(listOf(idle), titleRegeneration = false).regenerateTitles)
+    assertTrue(bulkMenu(listOf(asking)).settle.item.disabled, "Nothing left to settle")
+    val busy: Thread = idle.copy(titleRegeneration = ThreadTitleRegeneration("q", AT))
+    val all: BulkEntry? = bulkMenu(listOf(busy)).regenerateTitles
+    assertEquals(BulkEntry(BulkMenuItem("Regenerating… (1)", disabled = true), emptyList()), all)
+  }
+
+  @Test
+  fun `a read-only pairing greys the bulk menu except Mark unread`() {
+    val menu: BulkThreadMenu = bulkMenu(listOf(BASE_THREAD.copy(pinnedAt = AT)), operable = false)
+    assertTrue(menu.unpin!!.item.disabled)
+    assertTrue(menu.settle.item.disabled)
+    assertTrue(menu.snooze!!.item.disabled)
+    assertTrue(menu.regenerateTitles!!.item.disabled)
+    assertFalse(menu.markUnread.item.disabled)
+    assertTrue(menu.delete.item.disabled)
+  }
+
+  @Test
+  fun `bulk delete and snooze say how many`() {
+    assertEquals("Delete 1 thread?", bulkDeletePrompt(1))
+    assertEquals("Delete 3 threads?", bulkDeletePrompt(3))
+    assertEquals("Failed to snooze 1 thread", bulkSnoozeFailureTitle(failed = 1, snoozed = 2))
+    assertEquals("Failed to snooze 2 threads", bulkSnoozeFailureTitle(failed = 2, snoozed = 1))
+    assertEquals("Failed to snooze threads", bulkSnoozeFailureTitle(failed = 3, snoozed = 0))
+  }
+
+  private fun bulkMenu(
+    rows: List<Thread>,
+    pinning: Boolean = true,
+    snooze: Boolean = true,
+    titleRegeneration: Boolean = true,
+    operable: Boolean = true,
+  ): BulkThreadMenu =
+    bulkThreadMenu(rows, pinning, snooze, titleRegeneration, operable, Instant.parse(AT))
 
   @Test
   fun `regenerate title waits for the one in flight`() {
@@ -314,9 +434,12 @@ private fun connected(vararg permissions: String): ConnectionState.Connected =
     ),
   )
 
+private const val AT: String = "2026-10-19T09:00:00Z"
+
 private val OPERATING: ConnectionState = connected("orchestration:read", OPERATE)
 
 private val MARK_UNREAD: ThreadActionKind = ThreadActionKind.MarkUnread
+private val MUTE: ThreadActionKind = ThreadActionKind.Mute
 
 private val COPY: ThreadActionKind = ThreadActionKind.Copy
 

@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListItemInfo
+import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -39,6 +40,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -111,6 +113,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import org.jetbrains.jewel.bridge.toComposeColor
 import org.jetbrains.jewel.foundation.GlobalColors
+import org.jetbrains.jewel.foundation.code.highlighting.CodeHighlighter
+import org.jetbrains.jewel.foundation.code.highlighting.NoOpCodeHighlighter
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.intui.markdown.bridge.ProvideMarkdownStyling
 import org.jetbrains.jewel.intui.markdown.bridge.create
@@ -139,7 +143,7 @@ import org.jetbrains.jewel.ui.typography
 
 /** The editor scheme's background, read again whenever the theme changes. */
 @Composable
-private fun editorBackground(): Color {
+internal fun editorBackground(): Color {
   return remember(JewelTheme.globalColors) {
     EditorColorsManager.getInstance().globalScheme.defaultBackground.toComposeColor()
   }
@@ -182,17 +186,26 @@ fun ChatView(
   queueActions: QueuedRunsActions = QueuedRunsActions(),
   backgroundWork: BackgroundWorkState? = null, // the provider's pending work, the timeline's end
   backgroundWorkActions: BackgroundWorkActions = BackgroundWorkActions(),
+  branchMismatch: BranchMismatchBannerState? = null, // the checkout moved off the thread's branch
+  branchMismatchActions: BranchMismatchBannerActions = BranchMismatchBannerActions(),
+  limitRecovery: UsageLimitRecoveryState? = null, // a usage limit stopped the thread
+  onLimitRecovery: (LimitRecoveryAction) -> Unit = {}, // its resume and snooze toggles
+  threadError: ThreadErrorBannerState? = null, // the thread's last error, over the timeline
+  threadErrorActions: ThreadErrorBannerActions = ThreadErrorBannerActions(),
   mentions: ComposerMentions = ComposerMentions(), // what the composer's `@` and `#` menus read
   memory: TimelineMemory = remember { TimelineMemory() }, // where the timeline was left
   linkFavicons: LinkFaviconSource = NoLinkFavicons, // the favicons in front of external links
   chipActions: MessageChipActions = MessageChipActions(), // what a click on a chip does
   threadTitles: Map<String, String> = emptyMap(), // by id, for who sent a folded message
-  onOpenThread: ((threadId: String) -> Unit)? = null, // a folded agent message's sender
+  // A folded agent message's sender, or a subagent row's child thread; the crumb's when null
+  onOpenThread: ((threadId: String) -> Unit)? = null,
   onAnswerSecret: (suspend (SecretRequestAnswerInput)
     -> Unit)? = null,
   approvals: List<PendingApproval> = emptyList(), // answered on their timeline rows
   responding: Set<String> = emptySet(), // requests answered that the server hasn't resolved
   onRespondToApproval: ((requestId: String, decision: String) -> Unit)? = null,
+  codeHighlighter: CodeHighlighter = NoOpCodeHighlighter, // the IDE's, for code blocks
+  subagentLookup: SubagentLookup = SubagentLookup(), // what the subagent rows look up
 ) {
   val threadId: String? = view?.thread?.id
   val timeline: LazyListState = remember(threadId) { LazyListState(memory.index, memory.offset) }
@@ -205,14 +218,21 @@ fun ChatView(
   // The chips' inks, solved for the theme, for the timeline and the composer alike
   val chipVariables: Map<String, String> = rememberContextChipVariables(editorBackground())
   // Upstream's `bg-background` is the page, so the editor's background rather than the panel's
-  // Escape bubbles up from wherever focus is in the chat, after the composer's menus had a go
+  // Escape bubbles up from wherever focus is in the chat, after the composer's menus had a go.
+  // A Sidebar row dragged over it as context doesn't select or press anything on the way.
   CompositionLocalProvider(LocalContextChipVariables provides chipVariables) {
-  Column(Modifier.fillMaxSize().background(editorBackground()).onKeyEvent { event ->
-    if (memory.find.isOpen && event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
-      memory.find.close()
-      true
-    } else false
-  }) {
+  Column(
+    Modifier
+      .fillMaxSize()
+      .background(editorBackground())
+      .ignoresThreadContextDrag()
+      .onKeyEvent { event ->
+        if (memory.find.isOpen && event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+          memory.find.close()
+          true
+        } else false
+      },
+  ) {
     ChatHeader(view, project, favicon, vcs, header)
     ThreadFindBar(memory.find)
     // A stream that fails after rendering keeps the thread and says so on top
@@ -252,6 +272,7 @@ fun ChatView(
             markdownStyling = styling,
             markdownProcessor = processor,
             markdownBlockRenderer = renderer,
+            codeHighlighter = codeHighlighter,
           ) {
             // `useThreadLifecycle`'s `backgroundWorkNow`, the footer's work line
             val work: ThreadNowItem? = backgroundWork?.let { state ->
@@ -280,12 +301,14 @@ fun ChatView(
                 onRollback = onRollback,
                 onCancelWorktreeSetup = onCancelWorktreeSetup,
                 onOpenSetupTerminal = onOpenSetupTerminal,
-                onOpenThread = onOpenThread,
+                // A folded agent message's sender, else a subagent row's child thread
+                onOpenThread = onOpenThread ?: header.onOpenThread,
                 threadTitles = threadTitles,
                 onRespondToApproval = onRespondToApproval,
               ),
               approvals = approvals,
               responding = responding,
+              subagentLookup = subagentLookup,
               worktreeSetup = worktreeSetup,
               working = composer.running || composer.sending,
               // `timelineFooter` (ChatView.tsx:3014): what it's doing now, then your queued turns
@@ -301,6 +324,17 @@ fun ChatView(
           }
           }
         }
+      }
+      // `ChatBannerLane`: the thread's last error pinned over the timeline's top
+      if (view != null && threadError != null) {
+        ThreadErrorBanner(
+          state = threadError,
+          actions = threadErrorActions,
+          modifier = Modifier
+            .align(Alignment.TopCenter)
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp)
+            .widthIn(max = 768.dp),
+        )
       }
       // Upstream's `scrollToEndClearance + 4` above the composer
       if (view != null && view.items.isNotEmpty()) {
@@ -334,6 +368,26 @@ fun ChatView(
           onInterrupt = onInterrupt,
           onSteerQueued = queue?.let { state -> queuedSteerShortcut(state, queueActions) },
           onEditQueued = queue?.let { state -> queuedEditShortcut(state, queueActions) },
+          // `ComposerBannerStack`, the items in `composerBannerItems`' order. The queue and the
+          // background work are the timeline's footer now, so nothing rides `attachedAbove`
+          attachedAbove = run {
+            val banners: List<ComposerBannerItem> = listOfNotNull(
+              limitRecovery?.let(ComposerBannerItem::LimitRecovery),
+              branchMismatch?.let(ComposerBannerItem::BranchMismatch),
+            )
+            if (banners.isEmpty()) return@run null
+            {
+              ComposerBannerStack(items = banners, attachedAbove = null) { item, attached ->
+                when (item) {
+                  is ComposerBannerItem.LimitRecovery ->
+                    UsageLimitRecoveryBanner(item.state, onLimitRecovery, attached)
+                  is ComposerBannerItem.BranchMismatch ->
+                    BranchMismatchBanner(item.state, branchMismatchActions, attached)
+                  is ComposerBannerItem.BackgroundWork -> Unit
+                }
+              }
+            }
+          },
           extras = extras,
           attachmentActions = attachmentActions,
           contextWindow = contextWindow,
@@ -361,8 +415,8 @@ private class TimelineActions(
   val onRollback: (Run) -> Unit,
   val onCancelWorktreeSetup: (() -> Unit)? = null,
   val onOpenSetupTerminal: ((String) -> Unit)? = null,
-  /** An agent sender's "Open thread", upstream's `onOpenThread`. */
-  val onOpenThread: ((String) -> Unit)? = null,
+  /** An agent sender's or a subagent row's "Open thread", upstream's `onOpenThread`. */
+  val onOpenThread: ((threadId: String) -> Unit)? = null,
   /** Thread titles by id, for a folded agent message's sender, `useQuietThreadShell`. */
   val threadTitles: Map<String, String> = emptyMap(),
   val onRespondToApproval: ((requestId: String, decision: String) -> Unit)? = null,
@@ -681,6 +735,7 @@ private fun MessagesTimeline(
   actions: TimelineActions,
   approvals: List<PendingApproval>,
   responding: Set<String>,
+  subagentLookup: SubagentLookup,
   worktreeSetup: WorktreeSetupSnapshot?,
   working: Boolean, // the composer's `isWorking`: a run going or a send on its way
   footer: (@Composable () -> Unit)?, // the thread's present, after the last row
@@ -688,7 +743,10 @@ private fun MessagesTimeline(
   modifier: Modifier = Modifier,
 ) {
   val running: Run? = activeRun(view.runs)
-  val now: Instant by rememberNow(if (running != null) 1_000 else 30_000)
+  // A subagent can keep working after its parent's run settles, and its row counts the seconds
+  val ticking: Boolean =
+    running != null || view.subagents.any { isOrchestrationV2WorkActive(it.status) }
+  val now: Instant by rememberNow(if (ticking) 1_000 else 30_000)
   var expansion: TimelineExpansion by memory::expansion
   val entries: List<TimelineEntry> = remember(view.items) { deriveTimelineEntries(view.items) }
   val find: ThreadFindState = memory.find
@@ -764,6 +822,14 @@ private fun MessagesTimeline(
     onToggleGroup = { groupId ->
       expansion = expansion.copy(workGroupIds = expansion.workGroupIds.toggle(groupId))
     },
+    expandedGroups = expansion.workGroupIds,
+    subagents = SubagentRowsContext(
+      live = view.subagents,
+      parentThread = view.thread,
+      lookup = subagentLookup,
+      nowMs = now.toEpochMilli(),
+      onOpenThread = actions.onOpenThread,
+    ),
   )
   val anchored: Int? = anchoredIndex(rows, follow.anchor)
   FollowTail(state, follow, memory, anchored, animated = working)
@@ -776,6 +842,20 @@ private fun MessagesTimeline(
       follow.scrollToEnd()
     }
   }
+  // `TimelineMinimap`'s ticks, and the rows on screen that light them, MessagesTimeline.tsx
+  val minimapItems: List<TimelineMinimapItem> = remember(rows) { deriveTimelineMinimapItems(rows) }
+  val minimapVisibleRange: TimelineMinimapVisibleRange by remember(state) {
+    derivedStateOf {
+      val info: LazyListLayoutInfo = state.layoutInfo
+      resolveTimelineMinimapVisibleRange(
+        buffered = info.visibleItemsInfo,
+        viewportStart = info.viewportStartOffset,
+        viewportEnd = info.viewportEndOffset,
+      )
+    }
+  }
+  val minimapViewOffset: Int = with(LocalDensity.current) { 8.dp.roundToPx() }
+  val scope: CoroutineScope = rememberCoroutineScope()
 
   var viewport: Rect by remember { mutableStateOf(Rect.Zero) }
   val bottomCovered: Float = with(LocalDensity.current) { bottomInset.toPx() + 16.dp.toPx() }
@@ -842,6 +922,22 @@ private fun MessagesTimeline(
         }
       }
     }
+    // The lane the rows lay out, upstream's `[data-timeline-root]` width
+    val laneWidth: Dp = minOf(maxWidth, MAX_CONTENT_WIDTH) - side * 2
+    TimelineMinimap(
+      items = minimapItems,
+      hasPersistentGutter =
+        resolveTimelineMinimapHasPersistentGutter(maxWidth.value, laneWidth.value),
+      hitStripWidth = resolveTimelineMinimapHitStripWidth(maxWidth.value, laneWidth.value),
+      visibleRange = { minimapVisibleRange },
+      viewportHeight = maxHeight,
+      onSelect = { item ->
+        follow.cancelForUserNavigation()
+        // `viewOffset: 24`, of which the list's top padding is 16
+        scope.launch { state.animateScrollToItem(item.rowIndex, -minimapViewOffset) }
+      },
+      modifier = Modifier.align(Alignment.CenterStart),
+    )
   }
 }
 
@@ -894,6 +990,8 @@ private class RowContext(
   val actions: TimelineActions,
   val onToggleRun: (String) -> Unit,
   val onToggleGroup: (String) -> Unit,
+  val expandedGroups: Set<String>,
+  val subagents: SubagentRowsContext,
 )
 
 private fun TimelineRow?.isWorkLog(): Boolean = this is TimelineRow.Work ||
@@ -1032,7 +1130,7 @@ private fun TimelineRowContent(row: TimelineRow, context: RowContext) {
     TimelineRow.Thinking ->
       WorkLogLine(icon = "brain", label = "Thinking", shimmer = Shimmer.ActivityFocus)
     is TimelineRow.ContextCompaction -> ContextCompactionRow(row)
-    is TimelineRow.Event -> EventRow(row.item, context)
+    is TimelineRow.Event -> EventRow(row, context)
     is TimelineRow.Plan -> PlanCard(row.item, context.processor)
     is TimelineRow.WorktreeSetup -> WorktreeSetupCard(
       snapshot = row.snapshot,
@@ -1699,9 +1797,14 @@ private fun ContextCompactionRow(row: TimelineRow.ContextCompaction) {
 
 private const val CONTEXT_COMPACTED: String = "Context compacted"
 
-/** `V2EventTimelineRow`: lifecycle events as dividers, the rest as a card. */
+/**
+ * `V2EventTimelineRow`: secret requests and subagents as their cards, links or a group,
+ * lifecycle events as dividers, the rest as a card.
+ */
 @Composable
-private fun EventRow(item: TurnItem, context: RowContext) {
+private fun EventRow(row: TimelineRow.Event, context: RowContext) {
+  val item: TurnItem = row.item
+  val subagents: List<TurnItem.TurnItemSubagent>? = row.subagents
   if (item is TurnItem.SecretRequest) {
     SecretRequestCard(
       item = item,
@@ -1710,6 +1813,20 @@ private fun EventRow(item: TurnItem, context: RowContext) {
       disabledReason = context.secretReason,
       onAnswer = context.actions.onAnswerSecret,
     )
+    return
+  }
+  if (item is TurnItem.TurnItemSubagent) {
+    if (subagents != null && subagents.size > 1) {
+      val groupId: String = subagentGroupId(row.id)
+      V2SubagentGroup(
+        items = subagents,
+        context = context.subagents,
+        expanded = groupId in context.expandedGroups,
+        onToggle = { context.onToggleGroup(groupId) },
+      )
+    } else {
+      SubagentTimelineLink(item, context.subagents)
+    }
     return
   }
   when (item.type) {
@@ -1885,6 +2002,8 @@ private fun chatMarkdownProcessor(
     MessageChipsProcessorExtension(skills),
     ExternalLinkFaviconProcessorExtension,
   ),
+  // The fence's language as written, for the IDE to resolve (`chatCodeLanguage`)
+  languageRecognizer = ::fenceMimeType,
 )
 
 private fun chatMarkdownRenderer(

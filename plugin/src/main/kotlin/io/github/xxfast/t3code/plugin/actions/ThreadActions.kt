@@ -1,6 +1,7 @@
 package io.github.xxfast.t3code.plugin.actions
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.Presentation
@@ -10,12 +11,14 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.MessageDialogBuilder
 import com.intellij.openapi.ui.Messages
 import io.github.xxfast.t3code.plugin.ChatController
 import io.github.xxfast.t3code.plugin.NewThread
 import io.github.xxfast.t3code.plugin.SidebarFolders
+import io.github.xxfast.t3code.plugin.SidebarNavigation
 import io.github.xxfast.t3code.plugin.SidebarRename
 import io.github.xxfast.t3code.plugin.T3
 import io.github.xxfast.t3code.plugin.ThreadSelection
@@ -24,10 +27,12 @@ import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ide.ThreadVirtualFile
 import io.github.xxfast.t3code.plugin.ide.ThreadVisits
 import io.github.xxfast.t3code.plugin.ide.notify
+import io.github.xxfast.t3code.plugin.settings.T3ProjectState
 import io.github.xxfast.t3code.plugin.settings.T3Settings
 import io.github.xxfast.t3code.plugin.ui.ProjectFilter
 import io.github.xxfast.t3code.plugin.ui.SnoozePreset
 import io.github.xxfast.t3code.plugin.ui.THREAD_AUTO_SETTLE_OPT_OUT
+import io.github.xxfast.t3code.plugin.ui.THREAD_PIN_REORDER
 import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SNOOZE
 import io.github.xxfast.t3code.plugin.ui.THREAD_TITLE_REGENERATION
@@ -35,15 +40,18 @@ import io.github.xxfast.t3code.plugin.ui.ThreadSections
 import io.github.xxfast.t3code.plugin.ui.cards
 import io.github.xxfast.t3code.plugin.ui.keepEmptyFolders
 import io.github.xxfast.t3code.plugin.ui.nextCard
-import io.github.xxfast.t3code.plugin.ui.runtimeStatus
-import io.github.xxfast.t3code.plugin.ui.sections
 import io.github.xxfast.t3code.plugin.ui.pickSnoozePreset
 import io.github.xxfast.t3code.plugin.ui.resolveSnoozePresets
+import io.github.xxfast.t3code.plugin.ui.runtimeStatus
+import io.github.xxfast.t3code.plugin.ui.sections
 import io.github.xxfast.t3code.plugin.ui.settled
 import io.github.xxfast.t3code.plugin.ui.sidebarFolderGroups
 import io.github.xxfast.t3code.plugin.ui.snoozed
+import io.github.xxfast.t3code.plugin.ui.supports
+import io.github.xxfast.t3code.plugin.ui.topOfPinnedRunOrderKey
 import io.github.xxfast.t3code.protocol.DEFAULT_SNOOZE_PRESETS
 import io.github.xxfast.t3code.protocol.Project as T3Project
+import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.SnoozePresetSetting
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.Thread
@@ -137,8 +145,9 @@ class ArchiveThreadAction : ThreadAction(ThreadActionKind.Archive) {
 }
 
 /**
- * Pin or unpin: upstream's `pinThread` and `unpinThread`, commands.ts:444 and 493. Unpinning
- * offers an undo that pins it back in place, useThreadActions.ts:681.
+ * Pin or unpin: upstream's `pinThread` and `unpinThread`, commands.ts:444 and 493. A pin goes to
+ * the top of the pinned rows on a server that stores their order. Unpinning offers an undo that
+ * pins it back in place, useThreadActions.ts:681.
  */
 class PinThreadAction : ThreadAction(ThreadActionKind.Pin) {
   override fun present(presentation: Presentation, row: Thread?) {
@@ -149,18 +158,29 @@ class PinThreadAction : ThreadAction(ThreadActionKind.Pin) {
 
   override suspend fun perform(target: ThreadTarget) {
     val row: Thread = target.row
-    val undos: ThreadUndos = ThreadUndos.getInstance(target.project)
-    if (!row.pinned) {
-      undos.undo.invalidate(UndoKind.PIN, row.id)
-      target.client.dispatch(pinCommand(row, target.commandId()))
+    if (row.pinned) {
+      target.unpin()
       return
     }
-    undos.undoable(
-      UndoKind.PIN, row.id, UndoAction.Unpinned, "Failed to undo unpin",
-      send = { target.client.dispatch(pinCommand(row, target.commandId())) },
-      revert = { target.client.dispatch(repinCommand(row, target.commandId())) },
-    )
+    ThreadUndos.getInstance(target.project).undo.invalidate(UndoKind.PIN, row.id)
+    val catalog: ServerInfo? = ChatController.getInstance(target.project).catalog.value
+    val orderKey: String? = if (catalog.supports(THREAD_PIN_REORDER)) {
+      topOfPinnedRunOrderKey(target.client.threads.value)
+    } else {
+      null
+    }
+    target.client.dispatch(pinCommand(row, target.commandId(), orderKey))
   }
+}
+
+/** `attemptUnpin`: unpins a pinned [ThreadTarget.row], with an undo that pins it back. */
+internal suspend fun ThreadTarget.unpin() {
+  val undos: ThreadUndos = ThreadUndos.getInstance(project)
+  undos.undoable(
+    UndoKind.PIN, row.id, UndoAction.Unpinned, "Failed to undo unpin",
+    send = { client.dispatch(pinCommand(row, commandId())) },
+    revert = { client.dispatch(repinCommand(row, commandId())) },
+  )
 }
 
 /**
@@ -169,12 +189,36 @@ class PinThreadAction : ThreadAction(ThreadActionKind.Pin) {
  */
 class MarkUnreadAction : ThreadAction(ThreadActionKind.MarkUnread) {
   override suspend fun perform(target: ThreadTarget) {
-    ThreadVisits.getInstance(target.project).markedUnread(target.row)
-    // Read-only pairings keep the item, as upstream's menu does; there it stays a local mark,
-    // where upstream's dispatch fails without a word (useThreadActions.ts:202)
-    if (blockedBy(target.client.connection.value) != null) return
-    val command = Command.ThreadMarkUnread(commandId = target.commandId(), threadId = target.row.id)
-    target.client.dispatch(command)
+    target.markUnread()
+  }
+}
+
+/** `markThreadUnread`, useThreadActions.ts:202: the local mark, then the command. */
+internal suspend fun ThreadTarget.markUnread() {
+  ThreadVisits.getInstance(project).markedUnread(row)
+  // Read-only pairings keep the item, as upstream's menu does; there it stays a local mark,
+  // where upstream's dispatch fails without a word
+  if (blockedBy(client.connection.value) != null) return
+  client.dispatch(Command.ThreadMarkUnread(commandId = commandId(), threadId = row.id))
+}
+
+/**
+ * "Mute notifications" or "Unmute notifications". Plugin-only, upstream has no mute: a muted
+ * thread gets no balloon from [io.github.xxfast.t3code.plugin.ThreadNotificationCoordinator] and
+ * still counts on T3 Sidebar's badge. Kept per IDE project in [T3ProjectState].
+ */
+class MuteThreadAction : ThreadAction(ThreadActionKind.Mute) {
+  override fun update(e: AnActionEvent) {
+    super.update(e)
+    val project: Project = e.project ?: return
+    val id: String = e.threadId(project) ?: return
+    val muted: Boolean = T3ProjectState.getInstance(project).isMuted(id)
+    e.presentation.text = if (muted) "Unmute notifications" else "Mute notifications"
+  }
+
+  override suspend fun perform(target: ThreadTarget) {
+    val state: T3ProjectState = T3ProjectState.getInstance(target.project)
+    state.setMuted(target.row.id, !state.isMuted(target.row.id))
   }
 }
 
@@ -242,6 +286,34 @@ class CopyThreadIdAction : CopyAction() {
 }
 
 /**
+ * "Project settings" (threadActionMenu.logic.ts), after Copy: [openProjectSettings] on the
+ * context's [T3DataKeys.PROJECT_ID], else the thread's project. Enabled on a read-only pairing,
+ * as `threadActionRequiresOperate` leaves it; the dialog shows the values and can't save.
+ */
+class ProjectSettingsAction : AnAction(), DumbAware {
+  override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+
+  override fun update(e: AnActionEvent) {
+    val project: Project? = e.project
+    e.presentation.isEnabledAndVisible = project != null && projectId(e, project) != null
+  }
+
+  override fun actionPerformed(e: AnActionEvent) {
+    val project: Project = e.project ?: return
+    val projectId: String = projectId(e, project) ?: return
+    openProjectSettings(project, projectId)
+  }
+
+  private fun projectId(e: AnActionEvent, project: Project): String? {
+    val client: T3Client = T3.get().client
+    val id: String = e.getData(T3DataKeys.PROJECT_ID)
+      ?: e.threadRow(project, client)?.projectId
+      ?: return null
+    return id.takeIf { client.projects.value.any { it.id == id } }
+  }
+}
+
+/**
  * Settle or un-settle: upstream's `attemptSettle` and `attemptUnsettle`, Sidebar.tsx:3238 and
  * 3284. Settling the thread this window has open moves on to the next card, the way upstream's
  * `planForwardNavigation` does: picked before the command, followed once it lands.
@@ -253,42 +325,59 @@ class SettleThreadAction : ThreadAction(ThreadActionKind.Settle, THREAD_SETTLEME
 
   override suspend fun perform(target: ThreadTarget) {
     val row: Thread = target.row
-    val command: Command = settleCommand(row, target.commandId())
-    val undos: ThreadUndos = ThreadUndos.getInstance(target.project)
-    if (row.settled) {
-      undos.undo.invalidate(UndoKind.SETTLE, row.id)
-      target.client.dispatch(command)
+    if (!row.settled) {
+      target.settle()
       return
     }
-    // Settling drops the pin and the snooze; an older undo of either would un-settle it
-    undos.undo.invalidate(UndoKind.PIN, row.id)
-    undos.undo.invalidate(UndoKind.SNOOZE, row.id)
-    undos.undoable(
-      UndoKind.SETTLE, row.id, UndoAction.Settled, "Failed to undo settle",
-      send = { target.park(command) },
-      revert = {
-        unsettleUndoCommands(row, target.commandId()).forEach { target.client.dispatch(it) }
-      },
-    )
+    ThreadUndos.getInstance(target.project).undo.invalidate(UndoKind.SETTLE, row.id)
+    target.client.dispatch(settleCommand(row, target.commandId()))
   }
 }
 
 /**
- * Sends [command], which takes the row out of the inbox (a settle or a snooze), and when it's the
- * thread this window has open moves on to the next card. The card is picked before the command
- * goes, as upstream's `planForwardNavigation` (Sidebar.tsx:3213) does.
+ * `attemptSettle`: settles an unsettled [ThreadTarget.row], with an undo. [coParking] are the
+ * other rows a bulk settle takes out with it, which the open thread doesn't move on to.
  */
-private suspend fun ThreadTarget.park(command: Command) {
+internal suspend fun ThreadTarget.settle(coParking: Set<String> = emptySet()) {
+  val command: Command = settleCommand(row, commandId())
+  val undos: ThreadUndos = ThreadUndos.getInstance(project)
+  // Settling drops the pin and the snooze; an older undo of either would un-settle it
+  undos.undo.invalidate(UndoKind.PIN, row.id)
+  undos.undo.invalidate(UndoKind.SNOOZE, row.id)
+  undos.undoable(
+    UndoKind.SETTLE, row.id, UndoAction.Settled, "Failed to undo settle",
+    send = { park(command, coParking) },
+    revert = { unsettleUndoCommands(row, commandId()).forEach { client.dispatch(it) } },
+  )
+}
+
+/**
+ * Sends [command], which takes the row out of the inbox (a settle or a snooze), and when it's the
+ * thread this window has open moves on to the next card that isn't one of [coParking]. The card
+ * is picked before the command goes, as upstream's `planForwardNavigation` (Sidebar.tsx:1522)
+ * does: the rows the Sidebar lists ([SidebarNavigation.ordered], Working shelf and folders as
+ * shown), minus the snoozed and settled ones. With no Sidebar listing the row, the inbox's cards.
+ */
+private suspend fun ThreadTarget.park(command: Command, coParking: Set<String> = emptySet()) {
   val next: String? = if (ThreadSelection.getInstance(project).selected.value == row.id) {
     val filter: ProjectFilter = ProjectAwareness.getInstance(project).filter.value
     val projects: List<T3Project> = client.projects.value
     val boring: Boolean = T3Settings.get().boringSidebarEnabled
+    val threads: List<Thread> = client.threads.value
     val sections: ThreadSections = sections(
-      client.threads.value, query = "", filter,
+      threads, filter,
       folderGroups = sidebarFolderGroups(projects, filter, boring),
       keepEmptyFolders = keepEmptyFolders(projects, filter, query = ""),
     )
-    nextCard(sections.cards(SidebarFolders.get().projectExpandedById.value, row.id), row.id)
+    val listed: List<String> = SidebarNavigation.getInstance(project).ordered.value
+    val cards: List<Thread> = if (row.id in listed) {
+      val parked: Set<String> = (sections.snoozed + sections.settled).map { it.id }.toSet()
+      val byId: Map<String, Thread> = threads.associateBy { it.id }
+      listed.filterNot { it in parked }.mapNotNull(byId::get)
+    } else {
+      sections.cards(SidebarFolders.get().projectExpandedById.value, row.id)
+    }
+    nextCard(cards, row.id, coParking)
   } else {
     null
   }
@@ -391,12 +480,15 @@ class CustomSnoozeAction : ThreadAction(ThreadActionKind.Snooze, THREAD_SNOOZE) 
   }
 }
 
-/** `snoozeThread`, useThreadActions.ts:849, with "Wake" as its undo. */
-private suspend fun ThreadTarget.snooze(until: Instant) {
+/**
+ * `snoozeThread`, useThreadActions.ts:849, with "Wake" as its undo. [coParking] as for
+ * [settle], upstream's `coSnoozingKeys`.
+ */
+internal suspend fun ThreadTarget.snooze(until: Instant, coParking: Set<String> = emptySet()) {
   val undos: ThreadUndos = ThreadUndos.getInstance(project)
   undos.undoable(
     UndoKind.SNOOZE, row.id, UndoAction.Snoozed, "Failed to wake thread",
-    send = { park(snoozeCommand(row, until, commandId())) },
+    send = { park(snoozeCommand(row, until, commandId()), coParking) },
     revert = { client.dispatch(wakeCommand(row, commandId())) },
   )
 }
@@ -459,26 +551,38 @@ class RegenerateTitleAction :
  */
 class DeleteThreadAction : ThreadAction(ThreadActionKind.Delete) {
   override suspend fun perform(target: ThreadTarget) {
-    val row: Thread = target.row
     val asks: Boolean = T3Settings.get().confirmThreadDelete
-    if (asks && !target.confirm(deletePrompt(row), DELETE_WARNING, "Delete")) return
-    if (row.runtimeStatus() != null) {
-      stopCommands(target.view(), target.commandId()).forEach { target.client.dispatch(it) }
-    }
-    target.client.dispatch(deleteCommand(row, target.commandId()))
-    withContext(Dispatchers.EDT) {
-      val editors: FileEditorManager = FileEditorManager.getInstance(target.project)
-      editors.openFiles
-        .filter { file -> file is ThreadVirtualFile && file.threadId == row.id }
-        .forEach(editors::closeFile)
-      val selection: ThreadSelection = ThreadSelection.getInstance(target.project)
-      if (selection.selected.value == row.id) selection.select(null)
-    }
+    if (asks && !target.confirm(deletePrompt(target.row), DELETE_WARNING, "Delete")) return
+    target.delete()
   }
 }
 
-/** Upstream's confirm dialog: [prompt], then [detail], with [yes] as the button. */
+/** [DeleteThreadAction] once it's confirmed: stop the session, delete, close its tab. */
+internal suspend fun ThreadTarget.delete() {
+  if (row.runtimeStatus() != null) {
+    stopCommands(view(), commandId()).forEach { client.dispatch(it) }
+  }
+  client.dispatch(deleteCommand(row, commandId()))
+  withContext(Dispatchers.EDT) {
+    val editors: FileEditorManager = FileEditorManager.getInstance(project)
+    editors.openFiles
+      .filter { file -> file is ThreadVirtualFile && file.threadId == row.id }
+      .forEach(editors::closeFile)
+    val selection: ThreadSelection = ThreadSelection.getInstance(project)
+    if (selection.selected.value == row.id) selection.select(null)
+  }
+}
+
 private suspend fun ThreadTarget.confirm(prompt: String, detail: String?, yes: String): Boolean =
+  confirm(project, prompt, detail, yes)
+
+/** Upstream's confirm dialog: [prompt], then [detail], with [yes] as the button. */
+internal suspend fun confirm(
+  project: Project,
+  prompt: String,
+  detail: String?,
+  yes: String,
+): Boolean =
   withContext(Dispatchers.EDT) {
     MessageDialogBuilder.yesNo(prompt, detail.orEmpty())
       .yesText(yes)

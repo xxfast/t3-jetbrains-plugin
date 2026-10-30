@@ -576,6 +576,110 @@ class MessagesTimelineLogicTest {
     )
   }
 
+  @Test
+  fun `consecutive subagents of one provider turn are one row`() {
+    val running: Run = run("r1", 1, started = "10:00", completed = null, status = "running")
+    val rows: List<TimelineRow> = rows(
+      items = listOf(
+        user("u", "r1", "10:00"),
+        subagent("s1", "r1", "10:01", turn = "p1"),
+        subagent("s2", "r1", "10:02", turn = "p1"),
+        subagent("s3", "r1", "10:03", turn = "p2"),
+        assistant("a", "r1", "10:04"),
+        subagent("s4", "r1", "10:05", turn = "p2"),
+      ),
+      runs = listOf(running),
+      runningRun = running,
+    )
+    val events: List<TimelineRow.Event> = rows.filterIsInstance<TimelineRow.Event>()
+    assertEquals(listOf("s1", "s3", "s4"), events.map { it.id })
+    assertEquals(listOf("s1", "s2"), events[0].subagents?.map { it.id })
+    // Another provider turn, or anything in between, starts a new row
+    assertEquals(null, events[1].subagents)
+    assertEquals(null, events[2].subagents)
+  }
+
+  @Test
+  fun `a delegate call goes once its task id names a child of the run`() {
+    val running: Run = run("r1", 1, started = "10:00", completed = null, status = "running")
+    fun ids(vararg extra: TurnItem): List<String> = rows(
+      items = listOf(user("u", "r1", "10:00"), *extra, subagent("s", "r1", "10:05", sub = "task")),
+      runs = listOf(running),
+      runningRun = running,
+    ).flatMap { row -> (row as? TimelineRow.Work)?.entries?.map { it.id } ?: listOf(row.id) }
+    val matched: TurnItem = delegate("d", """{"structuredContent":{"taskId":"task"}}""")
+    assertFalse("d" in ids(matched))
+    // Wrapped in a JSON string inside a content block, as some agents send it
+    val wrapped: TurnItem =
+      delegate("d", """{"content":[{"type":"text","text":"{\"taskId\":\"task\"}"}]}""")
+    assertFalse("d" in ids(wrapped))
+    assertTrue("d" in ids(delegate("d", """{"taskId":"another"}""")))
+    assertTrue("d" in ids(delegate("d", """{"isError":true,"taskId":"task"}""")))
+    assertTrue("d" in ids(delegate("d", """{"taskId":"task"}""", status = "failed")))
+    assertTrue("d" in ids(delegate("d", """{"taskId":"task"}""", tool = "delegate")))
+  }
+
+  @Test
+  fun `knows the delegate tool however the agent prefixes it`() {
+    listOf(
+      "mcp__t3-code__delegate_task",
+      "t3-code.delegate_task",
+      "t3_code·delegate_task",
+      "t3code__delegate_task",
+      "delegate_task",
+      "t3-code-thr_1_delegate_task",
+      "mcp__t3-code__delegate_task completed",
+    ).forEach { name -> assertEquals("delegate_task", resolveT3McpToolName(name), name) }
+    assertEquals(null, resolveT3McpToolName("mcp__other__delegate_task"))
+    assertEquals(null, resolveT3McpToolName("Task"))
+  }
+
+  @Test
+  fun `a subagent still working keeps its turn's cards out of the fold`() {
+    val rows: List<TimelineRow> = rows(
+      items = listOf(
+        user("u", "r1", "10:00"),
+        command("c", "r1", "10:00:05"),
+        subagent("s1", "r1", "10:00:06", turn = "p1", status = "running"),
+        subagent("s2", "r1", "10:00:07", turn = "p1"),
+        subagent("s3", "r1", "10:00:08", turn = "p2"),
+        assistant("a", "r1", "10:00:10"),
+      ),
+      runs = listOf(run("r1", 1, started = "10:00", completed = "10:00:10")),
+    )
+    assertEquals(listOf("u", "turn-fold:r1", "s1", "a"), rows.map { it.id })
+    assertEquals(listOf("s1", "s2"), assertIs<TimelineRow.Event>(rows[2]).subagents?.map { it.id })
+  }
+
+  private fun subagent(
+    id: String,
+    runId: String,
+    time: String,
+    turn: String = "p1",
+    sub: String = "sub-$id",
+    status: String = "completed",
+  ): TurnItem = item(
+    """
+      {
+        "type": "subagent", "providerTurnId": "$turn", "status": "$status",
+        "subagentId": "$sub", "origin": "app_owned", "driver": "codex",
+        "providerInstanceId": "codex", "childThreadId": "child-$id", "prompt": "Look",
+        "result": null
+      }
+    """,
+    id, runId, time,
+  )
+
+  private fun delegate(
+    id: String,
+    output: String,
+    status: String = "completed",
+    tool: String = "mcp__t3-code__delegate_task",
+  ): TurnItem = item(
+    """{"type":"dynamic_tool","toolName":"$tool","input":{},"output":$output,"status":"$status"}""",
+    id, "r1", "10:01",
+  )
+
   private fun rows(
     items: List<TurnItem>,
     runs: List<Run>,

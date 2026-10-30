@@ -15,3 +15,4 @@ rootProject.name = "t3-jetbrains-plugin"
 
 include(":protocol")
 include(":plugin")
+include(":cli")

@@ -32,12 +32,12 @@ class MessageChipsLogicTest {
           "path":"docs/ROADMAP.md"}""",
       ),
     )
-    assertEquals(MessageChipKind.MENTION, chip.kind)
+    assertEquals(ContextChipKind.MENTION, chip.kind)
     assertEquals("ROADMAP.md", chip.label)
-    assertEquals(MessageChipIcon.FILE, chip.icon)
+    assertEquals(ContextChipIcon.FILE, chip.icon)
     assertEquals("docs/ROADMAP.md", chip.iconPath)
     assertEquals(MessageChipAction.OpenFile("docs/ROADMAP.md"), chip.action)
-    assertFalse(chip.unresolved)
+    assertEquals(ContextChipState.NORMAL, chip.state)
   }
 
   @Test
@@ -48,16 +48,16 @@ class MessageChipsLogicTest {
       "src/",
       record("""{"kind":"mention","contextId":"m","label":"src/","path":"src/"}"""),
     )
-    assertEquals(MessageChipIcon.FOLDER, chip.icon)
+    assertEquals(ContextChipIcon.FOLDER, chip.icon)
   }
 
   @Test
   fun `a missing record is an unresolved chip with the link's label`() {
     val chip: MessageChip = messageContextChip("review-comment", "gone", "old selection", null)
-    assertTrue(chip.unresolved)
+    assertEquals(ContextChipState.UNRESOLVED, chip.state)
     assertEquals("old selection", chip.label)
-    assertEquals(MessageChipIcon.UNAVAILABLE, chip.icon)
-    assertEquals(MessageChipKind.NEUTRAL, chip.kind)
+    assertEquals(ContextChipIcon.UNAVAILABLE, chip.icon)
+    assertEquals(ContextChipKind.NEUTRAL, chip.kind)
   }
 
   @Test
@@ -68,7 +68,7 @@ class MessageChipsLogicTest {
       "x",
       record("""{"kind":"skill","contextId":"x","name":"x"}"""),
     )
-    assertTrue(chip.unresolved)
+    assertEquals(ContextChipState.UNRESOLVED, chip.state)
   }
 
   @Test
@@ -102,9 +102,9 @@ class MessageChipsLogicTest {
           "startIndex":24,"endIndex":24,"rangeLabel":"L25","text":"note","diff":"- x"}""",
       ),
     )
-    assertEquals(MessageChipKind.REVIEW_COMMENT, chip.kind)
+    assertEquals(ContextChipKind.REVIEW_COMMENT, chip.kind)
     assertEquals("ROADMAP.md L25", chip.label)
-    assertEquals(MessageChipIcon.REVIEW_COMMENT, chip.icon)
+    assertEquals(ContextChipIcon.REVIEW_COMMENT, chip.icon)
     assertNull(chip.action)
   }
 
@@ -122,12 +122,12 @@ class MessageChipsLogicTest {
           "headBranch":"a","baseBranch":"b","state":"$state","isDraft":$draft}}""",
       ),
     )
-    assertEquals(MessageChipKind.PR_MERGED, chip("merged").kind)
-    assertEquals(MessageChipIcon.PULL_REQUEST_MERGED, chip("merged").icon)
-    assertEquals(MessageChipKind.PR_OPEN, chip("open").kind)
-    assertEquals(MessageChipKind.PR_DRAFT, chip("open", draft = true).kind)
-    assertEquals(MessageChipIcon.PULL_REQUEST_DRAFT, chip("open", draft = true).icon)
-    assertEquals(MessageChipKind.PR_CLOSED, chip("closed").kind)
+    assertEquals(ContextChipKind.PR_MERGED, chip("merged").kind)
+    assertEquals(ContextChipIcon.PULL_REQUEST_MERGED, chip("merged").icon)
+    assertEquals(ContextChipKind.PR_OPEN, chip("open").kind)
+    assertEquals(ContextChipKind.PR_DRAFT, chip("open", draft = true).kind)
+    assertEquals(ContextChipIcon.PULL_REQUEST_DRAFT, chip("open", draft = true).icon)
+    assertEquals(ContextChipKind.PR_CLOSED, chip("closed").kind)
     assertEquals("#41", chip("merged").label)
     assertEquals(MessageChipAction.OpenUrl("https://github.com/x/y/pull/41"), chip("merged").action)
   }
@@ -143,9 +143,9 @@ class MessageChipsLogicTest {
           "sizeBytes":2048}""",
       ),
     )
-    assertEquals(MessageChipKind.IMAGE, chip.kind)
+    assertEquals(ContextChipKind.IMAGE, chip.kind)
     assertEquals("2 KB", chip.detail)
-    assertEquals(MessageChipIcon.IMAGE, chip.icon)
+    assertEquals(ContextChipIcon.IMAGE, chip.icon)
   }
 
   @Test
@@ -159,8 +159,8 @@ class MessageChipsLogicTest {
           "sizeBytes":1}""",
       ),
     )
-    assertEquals(MessageChipKind.VIDEO, chip.kind)
-    assertEquals(MessageChipIcon.VIDEO, chip.icon)
+    assertEquals(ContextChipKind.VIDEO, chip.kind)
+    assertEquals(ContextChipIcon.VIDEO, chip.icon)
   }
 
   @Test
@@ -174,7 +174,7 @@ class MessageChipsLogicTest {
           "environmentId":"env"}""",
       ),
     )
-    assertEquals(MessageChipKind.THREAD, chip.kind)
+    assertEquals(ContextChipKind.THREAD, chip.kind)
     assertEquals(MessageChipAction.OpenThread("thr_1"), chip.action)
   }
 
@@ -287,20 +287,20 @@ class MessageChipsLogicTest {
   @Test
   fun `a document file takes its family's chip kind in any case`() {
     listOf(
-      "pdf" to MessageChipKind.DOC_PDF,
-      "doc" to MessageChipKind.DOC_WORD,
-      "docx" to MessageChipKind.DOC_WORD,
-      "odt" to MessageChipKind.DOC_WORD,
-      "rtf" to MessageChipKind.DOC_WORD,
-      "xls" to MessageChipKind.DOC_SPREADSHEET,
-      "xlsx" to MessageChipKind.DOC_SPREADSHEET,
-      "ods" to MessageChipKind.DOC_SPREADSHEET,
-      "csv" to MessageChipKind.DOC_SPREADSHEET,
-      "tsv" to MessageChipKind.DOC_SPREADSHEET,
-      "ppt" to MessageChipKind.DOC_SLIDES,
-      "pptx" to MessageChipKind.DOC_SLIDES,
-      "odp" to MessageChipKind.DOC_SLIDES,
-      "epub" to MessageChipKind.DOC_EPUB,
+      "pdf" to ContextChipKind.DOC_PDF,
+      "doc" to ContextChipKind.DOC_WORD,
+      "docx" to ContextChipKind.DOC_WORD,
+      "odt" to ContextChipKind.DOC_WORD,
+      "rtf" to ContextChipKind.DOC_WORD,
+      "xls" to ContextChipKind.DOC_SPREADSHEET,
+      "xlsx" to ContextChipKind.DOC_SPREADSHEET,
+      "ods" to ContextChipKind.DOC_SPREADSHEET,
+      "csv" to ContextChipKind.DOC_SPREADSHEET,
+      "tsv" to ContextChipKind.DOC_SPREADSHEET,
+      "ppt" to ContextChipKind.DOC_SLIDES,
+      "pptx" to ContextChipKind.DOC_SLIDES,
+      "odp" to ContextChipKind.DOC_SLIDES,
+      "epub" to ContextChipKind.DOC_EPUB,
     ).forEach { (extension, kind) ->
       listOf("report.$extension", "folder/REPORT.${extension.uppercase()}").forEach { path ->
         assertEquals(kind, documentChipKindForFileName(path), path)
@@ -309,21 +309,21 @@ class MessageChipsLogicTest {
     listOf("App.kt", "README", "pdf", "docs/", "archive.pdf.zip").forEach { path ->
       assertNull(documentChipKindForFileName(path), path)
     }
-    assertTrue(MessageChipKind.DOC_EPUB.isDocument)
-    assertFalse(MessageChipKind.FILE.isDocument)
+    assertTrue(ContextChipKind.DOC_EPUB.isDocument)
+    assertFalse(ContextChipKind.FILE.isDocument)
   }
 
   @Test
   fun `document chips take their family's kind, others keep theirs`() {
-    assertEquals(MessageChipKind.DOC_PDF, fileLinkChip(FilePathPosition("docs/spec.pdf")).kind)
-    assertEquals(MessageChipKind.MENTION, fileLinkChip(FilePathPosition("src/App.kt")).kind)
+    assertEquals(ContextChipKind.DOC_PDF, fileLinkChip(FilePathPosition("docs/spec.pdf")).kind)
+    assertEquals(ContextChipKind.MENTION, fileLinkChip(FilePathPosition("src/App.kt")).kind)
     val mention: MessageChip = messageContextChip(
       "mention",
       "m",
       "deck.pptx",
       record("""{"kind":"mention","contextId":"m","label":"deck.pptx","path":"talks/deck.pptx"}"""),
     )
-    assertEquals(MessageChipKind.DOC_SLIDES, mention.kind)
+    assertEquals(ContextChipKind.DOC_SLIDES, mention.kind)
     val file: MessageChip = messageContextChip(
       "file",
       "f",
@@ -333,7 +333,7 @@ class MessageChipsLogicTest {
           |"sizeBytes":10}""".trimMargin(),
       ),
     )
-    assertEquals(MessageChipKind.DOC_SPREADSHEET, file.kind)
+    assertEquals(ContextChipKind.DOC_SPREADSHEET, file.kind)
   }
 
   @Test
@@ -346,12 +346,12 @@ class MessageChipsLogicTest {
       foreground = Color.Black,
       error = Color.Red,
     )
-    assertEquals(Color(0xFF0077CC), inks.ink(MessageChipKind.FILE))
-    assertEquals(Color.Black, inks.ink(MessageChipKind.FILE, ContextChipState.UNRESOLVED))
-    assertEquals(Color(0xFFCC0000), inks.ink(MessageChipKind.FILE, ContextChipState.INVALID))
-    assertEquals(Color.Black, inks.ink(MessageChipKind.NEUTRAL))
+    assertEquals(Color(0xFF0077CC), inks.ink(ContextChipKind.FILE))
+    assertEquals(Color.Black, inks.ink(ContextChipKind.FILE, ContextChipState.UNRESOLVED))
+    assertEquals(Color(0xFFCC0000), inks.ink(ContextChipKind.FILE, ContextChipState.INVALID))
+    assertEquals(Color.Black, inks.ink(ContextChipKind.NEUTRAL))
     val unsolved = ContextChipInks(error = Color.Red)
-    assertEquals(Color.Red, unsolved.ink(MessageChipKind.FILE, ContextChipState.INVALID))
-    assertEquals(Color.White, inks.copy(message = Color.White).ink(MessageChipKind.FILE))
+    assertEquals(Color.Red, unsolved.ink(ContextChipKind.FILE, ContextChipState.INVALID))
+    assertEquals(Color.White, inks.copy(message = Color.White).ink(ContextChipKind.FILE))
   }
 }

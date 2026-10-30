@@ -76,6 +76,7 @@ import java.awt.Desktop
 import java.io.File
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
 import io.github.xxfast.t3code.protocol.generated.ChatAttachment
+import io.github.xxfast.t3code.protocol.generated.LimitRecoveryUpdate
 import io.github.xxfast.t3code.protocol.generated.MessageContext
 import java.awt.Image
 import java.io.IOException
@@ -171,6 +172,24 @@ class ChatController(private val project: Project, private val scope: CoroutineS
 
   /** Threads whose background work banner's Stop is still being dispatched. */
   val stoppingBackgroundWork: StateFlow<Set<String>> = _stoppingBackgroundWork
+
+  private val _dismissedBanners: MutableStateFlow<Set<String>> = MutableStateFlow(emptySet())
+
+  /**
+   * The banner keys dismissed this session, upstream's `sessionDismissedBranchMismatchKeys`:
+   * module state there, so gone on restart, and per window here.
+   */
+  val dismissedBanners: StateFlow<Set<String>> = _dismissedBanners
+
+  private val _restoringBranch: MutableStateFlow<Set<String>> = MutableStateFlow(emptySet())
+
+  /** Threads whose branch mismatch notice's "Restore branch" is still switching. */
+  val restoringBranch: StateFlow<Set<String>> = _restoringBranch
+
+  private val _savingLimitRecovery: MutableStateFlow<Set<String>> = MutableStateFlow(emptySet())
+
+  /** Threads whose usage limit recovery change is still on its way. */
+  val savingLimitRecovery: StateFlow<Set<String>> = _savingLimitRecovery
 
   private val _catalog: MutableStateFlow<ServerInfo?> = MutableStateFlow(null)
 
@@ -314,12 +333,13 @@ class ChatController(private val project: Project, private val scope: CoroutineS
   /**
    * Checks then reads [paths] off the EDT and attaches each, see [attach]. Folders among them
    * become file links in the prompt instead, see [addFolders], the split upstream's
-   * `splitTransferredFiles` makes for a drop or a paste.
+   * `splitTransferredFiles` makes for a drop or a paste. Without [withFolders] they're left out,
+   * as a drop on a Sidebar row does (`addFolders: () => {}`, SidebarThreadRow.tsx).
    */
-  fun attachFiles(threadId: String, paths: List<Path>) {
+  fun attachFiles(threadId: String, paths: List<Path>, withFolders: Boolean = true) {
     scope.launch(Dispatchers.IO) {
       val (folders: List<Path>, files: List<Path>) = paths.partition { Files.isDirectory(it) }
-      if (folders.isNotEmpty()) addFolders(threadId, folders)
+      if (folders.isNotEmpty() && withFolders) addFolders(threadId, folders)
       for (path in files) attachFile(threadId, path)
     }
   }
@@ -808,6 +828,89 @@ class ChatController(private val project: Project, private val scope: CoroutineS
         update(threadId) { pending -> pending.copy(error = reason) }
       } finally {
         _stoppingBackgroundWork.update { it - threadId }
+      }
+    }
+  }
+
+  /** A banner's dismiss, by the key upstream remembers it with. */
+  fun dismissBanner(key: String) {
+    _dismissedBanners.update { it + key }
+  }
+
+  /**
+   * The usage limit recovery banner's toggles, `RecoveryActions`' `onChange`
+   * (UsageLimitRecoveryBanner.tsx): `thread.metadata.update { limitRecovery }`, "Saving..."
+   * until the server answers, a refusal as a balloon, upstream's toast.
+   */
+  fun updateLimitRecovery(threadId: String, update: LimitRecoveryUpdate, failure: String) {
+    if (threadId in _savingLimitRecovery.value) return
+    _savingLimitRecovery.update { it + threadId }
+    scope.launch {
+      try {
+        client.dispatch(
+          Command.ThreadMetadataUpdate(
+            commandId = UUID.randomUUID().toString(),
+            threadId = threadId,
+            limitRecovery = update,
+          ),
+        )
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        LOG.info("Couldn't change the limit recovery on $threadId", e)
+        notify(project, e.message ?: "An error occurred.", NotificationType.ERROR, title = failure)
+      } finally {
+        _savingLimitRecovery.update { it - threadId }
+      }
+    }
+  }
+
+  /**
+   * The branch mismatch notice's "Restore branch", upstream's `handleSwitchCheckoutToThread`
+   * (useThreadLifecycle.tsx): checks the thread's branch out in the project's checkout at [cwd],
+   * then records the branch the server answers with on the thread if it differs. Failures
+   * are balloons, upstream's toasts. Upstream also sends `worktreePath: null`; the thread is
+   * already in the checkout, and `T3Json` drops a null, so it's left out.
+   */
+  fun restoreThreadBranch(view: ThreadView, cwd: String, threadBranch: String) {
+    val threadId: String = view.thread.id
+    if (threadId in _restoringBranch.value) return
+    _restoringBranch.update { it + threadId }
+    scope.launch {
+      try {
+        val result: VcsSwitchRefResult = try {
+          client.switchRef(VcsSwitchRefInput(cwd = cwd, refName = threadBranch))
+        } catch (e: CancellationException) {
+          throw e
+        } catch (e: Exception) {
+          LOG.info("Couldn't switch $cwd to $threadBranch", e)
+          val reason: String = e.message ?: e.javaClass.simpleName
+          notify(project, reason, NotificationType.ERROR, title = "Failed to switch checkout")
+          return@launch
+        }
+        val next: String = result.refName ?: threadBranch
+        if (next == view.thread.branch) return@launch
+        try {
+          client.dispatch(
+            Command.ThreadMetadataUpdate(
+              commandId = UUID.randomUUID().toString(),
+              threadId = threadId,
+              branch = next,
+            ),
+          )
+        } catch (e: CancellationException) {
+          throw e
+        } catch (e: Exception) {
+          LOG.info("Couldn't record $next on $threadId", e)
+          notify(
+            project,
+            e.message ?: e.javaClass.simpleName,
+            NotificationType.ERROR,
+            title = "Checkout switched, but the thread could not be updated",
+          )
+        }
+      } finally {
+        _restoringBranch.update { it - threadId }
       }
     }
   }

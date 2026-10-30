@@ -7,8 +7,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -36,18 +34,9 @@ import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.ui.awt.RelativePoint
@@ -94,14 +83,16 @@ class AttachmentActions(
 
 /**
  * The draft's images as tiles, then the editor's selection, its review comments and other files
- * as chips, above the text field. Images are upstream's composer tiles (`ChatComposer.tsx:6763`): a wrapping row
- * with `gap-2`, each `h-16 w-16 rounded-lg border` with the picture cropped to fill, a click to
- * see it whole, the upload's percentage along the bottom, a retry when it failed and a remove
- * button in the corner; videos join them as play tiles. The chips are like upstream's composer
- * context chips: a comment by its label (`Paths.kt L10 to L20`), a file by name and
- * `formatAttachmentSize` (its percentage while it uploads), the error colour when it failed
- * (click to retry), and a remove button on each. The selection is ours, a comment's chip marked
- * "selected". Then why the last attach was refused, or why Send waits.
+ * as chips, above the text field. Images are upstream's composer tiles
+ * (`ChatComposer.tsx:6763`): a wrapping row with `gap-2`, each `h-16 w-16 rounded-lg border` with
+ * the picture cropped to fill, a click to see it whole, the upload's percentage along the
+ * bottom, a retry when it failed and a remove button in the corner; videos join them as play
+ * tiles. The chips are upstream's composer context chips, each a [ContextChip] with
+ * `ContextChipAction`'s remove: a comment by its label (`Paths.kt L10 to L20`) or a pull request
+ * in its state ([reviewCommentChip]), a file as `FileChip` by name and `formatAttachmentSize` in
+ * its document kind's ink, its percentage while it uploads, `invalid` with "upload failed" when
+ * it failed (click to retry), an SVG led by its drawing (`SvgFileChip`). The selection is ours,
+ * a comment's chip marked "selected". Then why the last attach was refused, or why Send waits.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -130,17 +121,15 @@ fun ComposerChips(extras: DraftExtras, enabled: Boolean, actions: AttachmentActi
       modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
       horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-      if (selection != null) Chip(
-        kind = MessageChipKind.REVIEW_COMMENT,
-        label = selection.label,
+      if (selection != null) ReviewCommentContextChip(
+        comment = selection,
         detail = "selected",
         enabled = enabled,
         onRemove = { actions.onRemoveContext(selection.contextId) },
       )
       extras.comments.forEach { comment ->
-        Chip(
-          kind = MessageChipKind.REVIEW_COMMENT,
-          label = comment.label,
+        ReviewCommentContextChip(
+          comment = comment,
           detail = null,
           enabled = enabled,
           onRemove = { actions.onRemoveContext(comment.contextId) },
@@ -149,25 +138,29 @@ fun ComposerChips(extras: DraftExtras, enabled: Boolean, actions: AttachmentActi
       files.forEach { attachment ->
         val failed: Upload.Failed? = attachment.upload as? Upload.Failed
         val uploading: Upload.Uploading? = attachment.upload as? Upload.Uploading
-        Chip(
+        val size: String = formatAttachmentSize(attachment.sizeBytes)
+        ContextChip(
           // `FileChip`: a document's own kind, else a file's. An SVG with its drawing is
           // `SvgFileChip`, which is an `ImageChipButton`
           kind = when {
-            attachment.preview != null -> MessageChipKind.IMAGE
-            else -> documentChipKindForFileName(attachment.name) ?: MessageChipKind.FILE
+            attachment.preview != null -> ContextChipKind.IMAGE
+            else -> documentChipKindForFileName(attachment.name) ?: ContextChipKind.FILE
           },
-          label = attachment.name,
-          // `ChatComposer.tsx:7052`: the percentage while it uploads, else the size
-          detail = failed?.reason
-            ?: uploading?.let { formatAttachmentUploadProgress(it.progress) }
-            ?: formatAttachmentSize(attachment.sizeBytes),
+          label = middleTruncateAttachmentName(attachment.name),
+          icon = ContextChipIcon.FILE,
+          iconPath = attachment.name,
+          // `FileContextChip`: the size, then `uploadStatusSuffix`
+          detail = when {
+            failed != null -> "$size upload failed"
+            uploading != null -> "$size ${formatAttachmentUploadProgress(uploading.progress)}"
+            else -> size
+          },
+          state = if (failed != null) ContextChipState.INVALID else ContextChipState.NORMAL,
+          // `attachmentTooltip`
+          tooltip = listOfNotNull(attachment.name, size, failed?.let { "\n${it.reason}" })
+            .joinToString("\n"),
           enabled = enabled,
-          failed = failed != null,
-          onClick = if (failed != null) {
-            { actions.onRetryAttachment(attachment.id) }
-          } else {
-            null
-          },
+          onClick = failed?.let { { actions.onRetryAttachment(attachment.id) } },
           onRemove = { actions.onRemoveAttachment(attachment.id) },
           // `SvgFileChip`: an SVG leads with its drawing, the plain chip when it didn't render
           thumbnail = attachment.preview,
@@ -301,106 +294,24 @@ private fun AttachmentTile(
   }
 }
 
-/**
- * A composer chip as upstream's `ContextChip` draws one: no frame, a `1em` icon (the file type's,
- * a review comment's glyph, or an SVG's own drawing) and the label in the [kind]'s ink, the error
- * ink when its upload [failed] (`invalid`). One that does something underlines its label on hover.
- */
+/** A review comment or pull request in the draft, as [reviewCommentChip] draws it in a message. */
 @Composable
-private fun Chip(
-  kind: MessageChipKind,
-  label: String,
+private fun ReviewCommentContextChip(
+  comment: ReviewCommentContext,
   detail: String?,
   enabled: Boolean,
   onRemove: () -> Unit,
-  failed: Boolean = false,
-  onClick: (() -> Unit)? = null,
-  thumbnail: ImageBitmap? = null,
 ) {
-  val style: TextStyle = JewelTheme.typography.small
-  val density: Density = LocalDensity.current
-  val ink: Color =
-    currentContextChipInks().ink(kind, ContextChipState.INVALID.takeIf { failed })
-  val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
-  val hovered: Boolean by interactions.collectIsHoveredAsState()
-  val click: (() -> Unit)? = onClick?.takeIf { enabled }
-  val decoration: TextDecoration? = TextDecoration.Underline.takeIf { click != null && hovered }
-  Row(
-    modifier = if (click == null) {
-      Modifier
-    } else {
-      Modifier
-        .pointerHoverIcon(PointerIcon.Hand)
-        .clickable(interactionSource = interactions, indication = null, onClick = click)
-    },
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    // `size-[1em]`, an em of the chip's text, and `gap-[0.2em]` before the label
-    val em: Dp = with(density) { style.fontSize.toDp() }
-    Box(Modifier.padding(end = em * COMPOSER_CHIP_GAP_EM)) {
-      if (thumbnail != null) {
-        // `ImageChipButton`'s `rounded-sm object-cover`
-        Image(
-          bitmap = thumbnail,
-          contentDescription = null,
-          contentScale = ContentScale.Crop,
-          modifier = Modifier.size(em).clip(RoundedCornerShape(2.dp)),
-        )
-      } else {
-        ChipIcon(kind, label, ink, em)
-      }
-    }
-    Text(
-      text = label,
-      style = style.copy(fontWeight = FontWeight.Medium, textDecoration = decoration),
-      color = ink,
-      maxLines = 1,
-    )
-    if (detail != null) {
-      // `gap-[0.33em]`, then the size in the ink too
-      Text(
-        text = detail,
-        style = style.copy(textDecoration = decoration),
-        color = ink,
-        maxLines = 1,
-        modifier = Modifier.padding(start = em * 0.33f),
-      )
-    }
-    IconActionButton(
-      key = AllIconsKeys.General.Close,
-      contentDescription = "Remove",
-      onClick = onRemove,
-      enabled = enabled,
-    )
-  }
-}
-
-/** A composer chip's icon: a review comment's glyph, or the IDE's icon for the file's type. */
-@Composable
-private fun ChipIcon(kind: MessageChipKind, name: String, ink: Color, size: Dp) {
-  if (kind == MessageChipKind.REVIEW_COMMENT) {
-    Glyph("message-circle", ink, size)
-    return
-  }
-  val scale: Float = LocalDensity.current.density
-  val bitmap: ImageBitmap? = remember(name, scale) { fileTypeIcon(name, scale) }
-  // A document's icon is stroked in the ink, `--document-icon-stroke`; other types keep theirs
-  val filter: ColorFilter? = ColorFilter.tint(ink).takeIf { kind.isDocument }
-  if (bitmap != null) {
-    Image(
-      bitmap = bitmap,
-      contentDescription = null,
-      modifier = Modifier.size(size),
-      colorFilter = filter,
-    )
-  } else {
-    Icon(
-      key = AllIconsKeys.FileTypes.Any_type,
-      contentDescription = null,
-      modifier = Modifier.size(size),
-      colorFilter = filter,
-    )
-  }
+  val chip: MessageChip = remember(comment) { reviewCommentChip(comment) }
+  ContextChip(
+    kind = chip.kind,
+    label = chip.label,
+    icon = chip.icon,
+    detail = detail,
+    tooltip = chip.tooltip,
+    enabled = enabled,
+    onRemove = onRemove,
+  )
 }
 
 /**
@@ -416,6 +327,7 @@ fun AttachButton(enabled: Boolean, actions: AttachmentActions) {
     }
   }
 }
+
 /**
  * Files dragged from outside the IDE onto the chat, as [onFiles]. Upstream's
  * `makeWorkspaceFileDropHandlers` (chat/workspaceFileDrop.ts) on the whole chat canvas: the

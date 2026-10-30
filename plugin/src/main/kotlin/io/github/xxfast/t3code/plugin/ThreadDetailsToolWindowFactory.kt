@@ -42,6 +42,7 @@ import io.github.xxfast.t3code.plugin.settings.T3Settings
 import io.github.xxfast.t3code.plugin.terminal.TERMINAL_OPERATE
 import io.github.xxfast.t3code.plugin.terminal.ThreadTerminals
 import io.github.xxfast.t3code.plugin.ui.BranchSelectionTarget
+import io.github.xxfast.t3code.plugin.ui.DraftThread
 import io.github.xxfast.t3code.plugin.ui.EnvMode
 import io.github.xxfast.t3code.plugin.ui.LOCAL_SERVER_STOP
 import io.github.xxfast.t3code.plugin.ui.Hint
@@ -51,7 +52,10 @@ import io.github.xxfast.t3code.plugin.ui.OpenInState
 import io.github.xxfast.t3code.plugin.ui.IdeRunConfiguration
 import io.github.xxfast.t3code.plugin.ui.RefPickerActions
 import io.github.xxfast.t3code.plugin.ui.RunItem
+import io.github.xxfast.t3code.plugin.ui.ScheduledTaskActions
+import io.github.xxfast.t3code.plugin.ui.ScheduledTasksLoad
 import io.github.xxfast.t3code.plugin.ui.THREAD_STOP
+import io.github.xxfast.t3code.plugin.ui.ThreadAutomationsState
 import io.github.xxfast.t3code.plugin.ui.ThreadDetails
 import io.github.xxfast.t3code.plugin.ui.ThreadDetailsPanelActions
 import io.github.xxfast.t3code.plugin.ui.ThreadDetailsPanelState
@@ -62,6 +66,7 @@ import io.github.xxfast.t3code.plugin.ui.ThreadServersActions
 import io.github.xxfast.t3code.plugin.ui.ThreadServersState
 import io.github.xxfast.t3code.plugin.ui.VcsStatus
 import io.github.xxfast.t3code.plugin.ui.WorkspaceControlState
+import io.github.xxfast.t3code.plugin.ui.boundTasks
 import io.github.xxfast.t3code.plugin.ui.buildMenuItems
 import io.github.xxfast.t3code.plugin.ui.canChangeThreadBranch
 import io.github.xxfast.t3code.plugin.ui.changesTotals
@@ -91,6 +96,7 @@ import io.github.xxfast.t3code.protocol.generated.DiscoveredLocalServer
 import io.github.xxfast.t3code.protocol.generated.DiscoveredLocalServerList
 import io.github.xxfast.t3code.protocol.generated.PreviewStopLocalServerInput
 import io.github.xxfast.t3code.protocol.generated.ProjectScript
+import io.github.xxfast.t3code.protocol.generated.ScheduledTask
 import io.github.xxfast.t3code.protocol.generated.VcsRef
 import io.github.xxfast.t3code.protocol.has
 import io.github.xxfast.t3code.protocol.resolveProjectScripts
@@ -137,6 +143,7 @@ class ThreadDetailsToolWindowFactory : ToolWindowFactory, DumbAware {
 /**
  * [ThreadDetails] wired to the IDE: the Workspace and Version Control sections from the shell
  * row, the thread view, the checkout's `subscribeVcsStatus` and this window's roots; the
+ * Servers from [rememberThreadServers]; the Automations from `scheduledTasks.subscribe`; the
  * Lineage from the shell list and the thread's projection, its actions dispatched as upstream's
  * `ThreadRelationshipsPanel` does, one at a time.
  */
@@ -164,6 +171,25 @@ private fun ThreadDetailsContent(project: Project, threadId: String, view: Threa
     rememberThreadDetailsPanel(project, threadId, view, connection, catalog, projects, threads)
   val (servers: ThreadServersState, serverActions: ThreadServersActions) =
     rememberThreadServers(project, threadId, connection, catalog)
+  // Upstream leaves Automations out of a draft's details, `!props.draftId`
+  val drafts: Map<String, DraftThread> by DraftThreads.get().drafts.collectAsState()
+  val scheduled: ScheduledTasksLoad = rememberScheduledTasks(client, connected)
+  var busyTaskId: String? by remember(threadId) { mutableStateOf(null) }
+  val automations: ThreadAutomationsState? = if (threadId in drafts) null else {
+    ThreadAutomationsState(
+      tasks = boundTasks(scheduled.tasks.orEmpty(), threadId),
+      error = scheduled.error,
+      blocked = operateBlockReason(connection),
+      busyTaskId = busyTaskId,
+    )
+  }
+  val editor: (() -> Unit)? = remember(project) { scheduledTasksEditor(project) }
+  // `toggleEnabled` and `runNow`: one call at a time, none without the operate scope
+  fun act(task: ScheduledTask, title: String, call: suspend () -> Unit) {
+    if (busyTaskId != null || operateBlockReason(connection) != null) return
+    busyTaskId = task.id
+    scope.launchTaskCall(project, title, call) { busyTaskId = null }
+  }
 
   ThreadDetails(
     threadId = threadId,
@@ -177,6 +203,18 @@ private fun ThreadDetailsContent(project: Project, threadId: String, view: Threa
     enabled = operateBlockReason(connection) == null,
     visible = visible,
     onItemsMenu = ::showThreadDetailsItemsMenu,
+    automations = automations,
+    automationActions = ScheduledTaskActions(
+      onRunNow = { task ->
+        act(task, "Could not run automation") { client.runScheduledTask(task.id) }
+      },
+      onEnabledChange = { task, enabled ->
+        act(task, "Could not update automation") {
+          client.setScheduledTaskEnabled(task.id, enabled)
+        }
+      },
+    ),
+    onManageAutomations = editor,
     actions = ThreadLineageActions(
       onOpenThread = opener::openThread,
       // `merge`: on success the merge target opens

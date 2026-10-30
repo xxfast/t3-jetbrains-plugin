@@ -13,9 +13,6 @@ plugins {
   alias(libs.plugins.intellij.platform)
 }
 
-group = "io.github.xxfast"
-version = "0.1.0"
-
 repositories {
   mavenCentral()
   intellijPlatform {

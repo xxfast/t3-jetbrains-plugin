@@ -8,9 +8,19 @@ import io.github.xxfast.t3code.protocol.generated.ThreadLinkedPullRequest
 import io.github.xxfast.t3code.protocol.generated.ThreadPullRequestLink
 import io.github.xxfast.t3code.protocol.generated.ThreadPullRequestSnapshot
 import io.github.xxfast.t3code.protocol.pinned
+import java.nio.file.Path
+import java.text.Normalizer
 import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeParseException
+import java.util.Locale
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /** Thread and run statuses that mean work is in flight. */
 val RUNNING: Set<String> = setOf("preparing", "queued", "starting", "running")
@@ -46,6 +56,14 @@ class RowActions(
   val rename: ((threadId: String) -> Unit)? = null,
   /** Ends renaming in place: what was typed, or null for Escape. */
   val renamed: (threadId: String, typed: String?) -> Unit = { _, _ -> },
+  /** Unpins from the pin glyph. Null leaves the glyph a picture. */
+  val unpin: ((threadId: String) -> Unit)? = null,
+  /** Sends a drop. Null means rows don't drag: the server doesn't store pin orders. */
+  val drop: ((threadId: String, plan: SidebarThreadDropPlan) -> Unit)? = null,
+  /** Whether the server stores active orders; without it a drop can't arrange active rows. */
+  val reorderActive: Boolean = false,
+  /** Files dropped on a row, `handleThreadFileDrop`. Null means rows take no file drop. */
+  val fileDrop: ((threadId: String, files: List<Path>) -> Unit)? = null,
 )
 
 /** What rows show besides the thread: their running terminals. */
@@ -303,7 +321,8 @@ data class FilterChoice(
  * The project picker: "All projects", then the projects this window has [open], then the rest,
  * with a [divider] above the rest when both are there (ours: an IDE window is about its own
  * projects). [scoped] is upstream's `scopedProjectGroups`, the projects the filter lists in server
- * order, for the trigger's favicons and [tooltip].
+ * order, for the trigger's favicons and [tooltip]. A [query] keeps only the projects it matches,
+ * upstream's `filterSidebarProjectScopeItems` (Sidebar.logic.ts): "All projects" goes.
  */
 data class FilterChoices(
   val entries: List<FilterChoice>,
@@ -316,12 +335,18 @@ fun filterChoices(
   projects: List<Project>,
   filter: ProjectFilter,
   open: Set<String> = emptySet(),
+  query: String = "",
 ): FilterChoices {
+  val searching: Boolean = query.isNotBlank()
   val scoped: List<Project> = filter.scopedProjects(projects)
-  val (ours: List<Project>, rest: List<Project>) = projects.partition { it.id in open }
+  val listed: List<Project> =
+    if (searching) projects.filter { projectScopeMatches(it.title, query) } else projects
+  val (ours: List<Project>, rest: List<Project>) = listed.partition { it.id in open }
   val entries: List<FilterChoice> = buildList {
     // Upstream's "all" always clears the scope, Shift or not
-    add(FilterChoice(ALL_PROJECTS, null, scoped.isEmpty(), ProjectFilter.All, ProjectFilter.All))
+    if (!searching) {
+      add(FilterChoice(ALL_PROJECTS, null, scoped.isEmpty(), ProjectFilter.All, ProjectFilter.All))
+    }
     (ours + rest).forEach { project ->
       add(
         FilterChoice(
@@ -347,22 +372,36 @@ const val ALL_PROJECTS: String = "All projects"
 const val FILTER_BY_PROJECT: String = "Filter threads by project"
 
 /**
- * What the Sidebar says with no rows to show, so a narrowing filter is visible as one. The scoped
- * wording is upstream's (Sidebar.tsx, the empty thread list).
+ * Whether the picker's [query] matches [label]: base-ui's `useComboboxFilter().contains`,
+ * a substring match ignoring case and accents.
  */
-fun emptyHint(projects: List<Project>, query: String, filter: ProjectFilter): String {
+fun projectScopeMatches(label: String, query: String): Boolean =
+  foldForSearch(label).contains(foldForSearch(query.trim()))
+
+private val MARKS: Regex = Regex("\\p{M}+")
+
+private fun foldForSearch(text: String): String =
+  Normalizer.normalize(text, Normalizer.Form.NFD).replace(MARKS, "").lowercase(Locale.ROOT)
+
+/**
+ * What the Sidebar says with no rows to show, the empty state in upstream's Sidebar.tsx: "No
+ * projects yet" (with Add project under it), "No threads in these projects yet" scoped to
+ * several, "No threads in X yet" scoped to one, else "No threads yet".
+ */
+fun emptyHint(projects: List<Project>, filter: ProjectFilter): String {
+  if (projects.isEmpty()) return NO_PROJECTS
   val scoped: List<Project> = filter.scopedProjects(projects)
   return when {
-    projects.isEmpty() -> "No projects yet. Open the T3 Code desktop app to add one."
-    query.isNotBlank() -> "No threads match"
     scoped.size > 1 -> "No threads in these projects yet"
     scoped.isNotEmpty() -> "No threads in ${scoped.single().title} yet"
-    else -> "No threads"
+    else -> "No threads yet"
   }
 }
 
+const val NO_PROJECTS: String = "No projects yet"
+
 /**
- * Splits [threads] matching [query] by title, as `partitionSidebarThreads` (Sidebar.tsx:594)
+ * Splits [threads] into the Sidebar's sections, as `partitionSidebarThreads` (Sidebar.tsx:594)
  * does. Inbox is pinned rows (by `pinOrderKey`, keyless ones newest first) then active rows.
  * With the Working shelf on ([working] is the tracker's observation) active rows that are
  * working move to the shelf, by `sortWorkingThreadsBySend`, and the rest sort by
@@ -377,7 +416,6 @@ fun emptyHint(projects: List<Project>, query: String, filter: ProjectFilter): St
  */
 fun sections(
   threads: List<Thread>,
-  query: String,
   filter: ProjectFilter = ProjectFilter.All,
   settlement: Boolean = true,
   snooze: Boolean = true,
@@ -388,12 +426,8 @@ fun sections(
   folderGroups: List<Project>? = null,
   keepEmptyFolders: Boolean = false,
 ): ThreadSections {
-  val needle: String = query.trim()
   val visible: List<Thread> = threads.filter {
-    !it.archived &&
-      !it.shownUnderParent &&
-      filter.allows(it.projectId) &&
-      it.title.contains(needle, ignoreCase = true)
+    !it.archived && !it.shownUnderParent && filter.allows(it.projectId)
   }
   val (snoozed: List<Thread>, awake: List<Thread>) =
     visible.partition { snooze && it.snoozed(now, pendingSubagentRequests[it.id]) }
@@ -442,11 +476,139 @@ fun routeThreadOnly(threads: List<Thread>, routeThreadId: String?): List<Thread>
  * Where settling the open [current] thread moves to: the next inbox card after it, wrapping
  * round, as `planForwardNavigation` (Sidebar.tsx:3213) picks it. Null when [current] isn't a
  * card or it's the only one; upstream then starts a new thread, which the plugin can't yet (#17).
+ * [coParking] are the cards a bulk settle or snooze takes out with it, skipped too.
  */
-fun nextCard(inbox: List<Thread>, current: String): String? {
+fun nextCard(inbox: List<Thread>, current: String, coParking: Set<String> = emptySet()): String? {
   val index: Int = inbox.indexOfFirst { it.id == current }
   if (index == -1) return null
-  return (inbox.drop(index + 1) + inbox.take(index)).firstOrNull()?.id
+  return (inbox.drop(index + 1) + inbox.take(index)).firstOrNull { it.id !in coParking }?.id
+}
+
+// Keyboard navigation: apps/web/src/components/Sidebar.logic.ts and the `thread.previous`,
+// `thread.next` and `thread.jump.N` commands of apps/web/src/keybindings.ts.
+
+/** `ThreadTraversalDirection`. */
+enum class ThreadTraversalDirection { Previous, Next }
+
+/** `THREAD_JUMP_KEYBINDING_COMMANDS`, packages/contracts/src/keybindings.ts: jumps 1 to 9. */
+const val THREAD_JUMP_COUNT: Int = 9
+
+/**
+ * `resolveAdjacentThreadId`: the row before or after [currentThreadId] in [threadIds], no wrap.
+ * With nothing open, previous is the last row and next the first. Null at either end, or when
+ * the open thread isn't a row.
+ */
+fun resolveAdjacentThreadId(
+  threadIds: List<String>,
+  currentThreadId: String?,
+  direction: ThreadTraversalDirection,
+): String? {
+  if (threadIds.isEmpty()) return null
+  if (currentThreadId == null) {
+    return if (direction == ThreadTraversalDirection.Previous) threadIds.last() else threadIds[0]
+  }
+  val currentIndex: Int = threadIds.indexOf(currentThreadId)
+  if (currentIndex == -1) return null
+  return when (direction) {
+    ThreadTraversalDirection.Previous -> threadIds.getOrNull(currentIndex - 1)
+    ThreadTraversalDirection.Next -> threadIds.getOrNull(currentIndex + 1)
+  }
+}
+
+/**
+ * `resolveSidebarRowThreadId`: subagents have no row, so an open one stands for its nearest
+ * non-subagent ancestor. A broken chain (missing parent, cycle) resolves to [threadId] itself.
+ */
+fun resolveSidebarRowThreadId(threadId: String, threads: List<Thread>): String {
+  val byId: Map<String, Thread> = threads.associateBy { it.id }
+  val visited: MutableSet<String> = mutableSetOf()
+  var thread: Thread? = byId[threadId]
+  while (thread != null && thread.shownUnderParent) {
+    val parent: String = thread.lineage.parentThreadId ?: return threadId
+    if (!visited.add(thread.id)) return threadId
+    thread = byId[parent]
+  }
+  return thread?.id ?: threadId
+}
+
+/**
+ * Upstream's `orderedThreadKeys` (`useSidebarThreads`, Sidebar.tsx:523): the rows as listed,
+ * which prev, next and jump N walk. The pinned rows, the active rows (in boring mode each open
+ * folder's, by [projectExpandedById], see [cards]), then the Working, snoozed and settled
+ * shelves, the settled one's first [settledShown] plus the open row when it's further down. A
+ * closed shelf or folder only keeps the open row, [routeRowThreadId]. Upstream walks these even
+ * while searching; here the results replace them, since they're the rows on screen then.
+ */
+fun orderedThreadIds(
+  sections: ThreadSections,
+  shelves: Shelves,
+  settledShown: Int,
+  routeRowThreadId: String?,
+  projectExpandedById: Map<String, Boolean> = emptyMap(),
+): List<String> {
+  val settled: List<Thread> = if (sections.settled.size <= settledShown) {
+    sections.settled
+  } else {
+    sections.settled.take(settledShown) +
+      routeThreadOnly(sections.settled.drop(settledShown), routeRowThreadId)
+  }
+  fun shelf(open: Boolean, threads: List<Thread>): List<Thread> =
+    if (open) threads else routeThreadOnly(threads, routeRowThreadId)
+  val cards: List<Thread> = sections.cards(projectExpandedById, routeRowThreadId)
+  val working: List<Thread> = shelf(shelves.working, sections.working)
+  val snoozed: List<Thread> = shelf(shelves.snoozed, sections.snoozed)
+  val rendered: List<Thread> = shelf(shelves.settled, settled)
+  return (cards + working + snoozed + rendered).map { it.id }
+}
+
+/** Modifier keys as `ShortcutModifierStateLike` has them. */
+data class ShortcutModifiers(
+  val ctrl: Boolean = false,
+  val meta: Boolean = false,
+  val alt: Boolean = false,
+  val shift: Boolean = false,
+)
+
+/**
+ * `shouldShowThreadJumpHintsForModifiers`: the [held] modifiers are exactly those of one of the
+ * jump actions' [shortcuts], as `matchesKeybindingShortcutModifiers` compares them. With no
+ * jump bound, never.
+ */
+fun shouldShowThreadJumpHints(
+  held: ShortcutModifiers,
+  shortcuts: Collection<ShortcutModifiers>,
+): Boolean = shortcuts.any { it == held }
+
+/** `THREAD_JUMP_HINT_SHOW_DELAY_MS`: how long the modifier is held before the hints show. */
+const val THREAD_JUMP_HINT_SHOW_DELAY_MS: Long = 200
+
+/**
+ * `createThreadJumpHintVisibilityController`: the hints show once the modifier has been held
+ * for [delayMs] and hide as soon as it's let go. [sync] wants one thread, [scope]'s.
+ */
+class ThreadJumpHintVisibility(
+  private val scope: CoroutineScope,
+  private val delayMs: Long = THREAD_JUMP_HINT_SHOW_DELAY_MS,
+) {
+  private val state: MutableStateFlow<Boolean> = MutableStateFlow(false)
+  val visible: StateFlow<Boolean> = state.asStateFlow()
+
+  private var pendingShow: Job? = null
+
+  fun sync(shouldShow: Boolean) {
+    if (!shouldShow) {
+      pendingShow?.cancel()
+      pendingShow = null
+      state.value = false
+      return
+    }
+    if (state.value || pendingShow != null) return
+    pendingShow = scope.launch {
+      delay(delayMs)
+      pendingShow = null
+      state.value = true
+    }
+  }
 }
 
 /** How many rows "Show N more" reveals, `0` when all [total] are already [shown]. */

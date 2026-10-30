@@ -42,7 +42,11 @@ internal class MotionItem(
  * least its min height and that item takes what the others leave.
  */
 @Composable
-internal fun MotionColumn(items: List<MotionItem>, modifier: Modifier = Modifier) {
+internal fun MotionColumn(
+  items: List<MotionItem>,
+  modifier: Modifier = Modifier,
+  lifted: String? = null, // the key of a row drawn over the others, the one being dragged
+) {
   val scope: CoroutineScope = rememberCoroutineScope()
   val motion: ListMotion = remember { ListMotion(scope) }
   motion.compose(items)
@@ -91,7 +95,8 @@ internal fun MotionColumn(items: List<MotionItem>, modifier: Modifier = Modifier
       }
       for ((key, placeable) in rows) {
         val row: RowMotion = motion.row(key)
-        placeable.placeWithLayer(0, next.getValue(key).top.toInt()) {
+        val z: Float = if (key == lifted) 1f else 0f
+        placeable.placeWithLayer(0, next.getValue(key).top.toInt(), zIndex = z) {
           translationY = row.offset.floatValue
           alpha = row.alpha.floatValue
         }

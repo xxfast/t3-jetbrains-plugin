@@ -188,16 +188,7 @@ class ComposerPromptChipsLogicTest {
     val review: ServerProviderSkill = skill("review", displayName = "Code Review")
     val text = "Run ${skillReplacement(review)}now"
     assertEquals(
-      listOf(
-        ComposerPromptChip(
-          start = 4,
-          end = 11,
-          kind = "skill",
-          label = "Code Review",
-          icon = ComposerPromptChipIcon.SKILL,
-          accent = MessageChipKind.SKILL,
-        ),
-      ),
+      listOf(ComposerPromptChip(4, 11, "skill", "Code Review", ContextChipIcon.SKILL)),
       chips(text, listOf(review)),
     )
   }
@@ -220,8 +211,8 @@ class ComposerPromptChipsLogicTest {
           end = 8 + link.length,
           kind = "mention",
           label = "my file.kt",
-          icon = ComposerPromptChipIcon.FILE,
-          accent = MessageChipKind.MENTION,
+          icon = ContextChipIcon.FILE,
+          iconPath = "src/my file.kt",
         ),
       ),
       chips(text),
@@ -240,8 +231,7 @@ class ComposerPromptChipsLogicTest {
           end = 4 + reference.length,
           kind = "thread",
           label = "Fix the build",
-          icon = ComposerPromptChipIcon.THREAD,
-          accent = MessageChipKind.THREAD,
+          icon = ContextChipIcon.THREAD,
         ),
       ),
       chips(text, extras = DraftExtras().withThread(record)),
@@ -268,8 +258,8 @@ class ComposerPromptChipsLogicTest {
           end = text.length - 1,
           kind = "review-comment",
           label = "#42",
-          icon = ComposerPromptChipIcon.PULL_REQUEST_MERGED,
-          accent = MessageChipKind.PR_MERGED,
+          icon = ContextChipIcon.PULL_REQUEST_MERGED,
+          accent = ContextChipKind.PR_MERGED,
         ),
       ),
       chips(text, extras = DraftExtras().withComment(comment)),
@@ -310,11 +300,11 @@ class ComposerPromptChipsLogicTest {
       chips(text, extras = extras).map { it.label to it.detail },
     )
     assertEquals(
-      listOf(ComposerPromptChipIcon.IMAGE, ComposerPromptChipIcon.FILE),
+      listOf(ContextChipIcon.IMAGE, ContextChipIcon.FILE),
       chips(text, extras = extras).map { it.icon },
     )
     assertEquals(
-      listOf(MessageChipKind.IMAGE, MessageChipKind.FILE),
+      listOf(ContextChipKind.IMAGE, ContextChipKind.FILE),
       chips(text, extras = extras).map { it.accent },
     )
   }
@@ -333,10 +323,10 @@ class ComposerPromptChipsLogicTest {
       contextReference("file", toKindScopedComposerContextId("file", "a1"), "Q3 Report.PDF")
     val chip: ComposerPromptChip =
       chips("$reference ", extras = DraftExtras(attachments = listOf(report))).single()
-    assertEquals(MessageChipKind.DOC_PDF, chip.accent)
+    assertEquals(ContextChipKind.DOC_PDF, chip.accent)
     assertEquals(ContextChipState.INVALID, chip.state)
     val sheet: String = serializeComposerFileLink("data/sales.xlsx")
-    assertEquals(MessageChipKind.DOC_SPREADSHEET, chips("$sheet ").single().accent)
+    assertEquals(ContextChipKind.DOC_SPREADSHEET, chips("$sheet ").single().accent)
   }
 
   @Test
@@ -349,8 +339,7 @@ class ComposerPromptChipsLogicTest {
           end = text.length - 1,
           kind = "image",
           label = "gone.png",
-          icon = ComposerPromptChipIcon.UNAVAILABLE,
-          state = ContextChipState.UNRESOLVED,
+          icon = ContextChipIcon.UNAVAILABLE,
         ),
       ),
       chips(text),
@@ -388,7 +377,7 @@ class ComposerPromptChipsLogicTest {
   @Test
   fun `a chip shows its icon slot, label, size and a closing space`() {
     val chip =
-      ComposerPromptChip(0, 10, "image", "my shot.png", ComposerPromptChipIcon.IMAGE, "2 KB")
+      ComposerPromptChip(0, 10, "image", "my shot.png", ContextChipIcon.IMAGE, "2 KB")
     val display: ComposerChipDisplay = composerChipDisplay(chip)
     assertEquals(" my shot.png 2 KB ", display.text)
     assertEquals("2 KB", display.text.substring(display.detail!!.first, display.detail.last + 1))
@@ -396,7 +385,7 @@ class ComposerPromptChipsLogicTest {
 
   @Test
   fun `a long label ellipsises`() {
-    val chip = ComposerPromptChip(0, 1, "thread", "x".repeat(60), ComposerPromptChipIcon.THREAD)
+    val chip = ComposerPromptChip(0, 1, "thread", "x".repeat(60), ContextChipIcon.THREAD)
     assertEquals(COMPOSER_CHIP_LABEL_MAX_CHARS + 2, composerChipDisplay(chip).text.length)
     assertTrue(composerChipDisplay(chip).text.trimEnd(' ').endsWith("…"))
   }
@@ -417,7 +406,7 @@ class ComposerPromptChipsLogicTest {
 
   // Atomic edits
 
-  private val chip = ComposerPromptChip(4, 10, "skill", "Ab", ComposerPromptChipIcon.SKILL)
+  private val chip = ComposerPromptChip(4, 10, "skill", "Ab", ContextChipIcon.SKILL)
 
   @Test
   fun `backspace into a chip deletes the whole chip`() {
@@ -550,7 +539,7 @@ class ComposerPromptChipsLogicTest {
 
   // Separating typed text from a chip, upstream's paste padding
 
-  private val mention = ComposerPromptChip(4, 10, "mention", "a.kt", ComposerPromptChipIcon.FILE)
+  private val mention = ComposerPromptChip(4, 10, "mention", "a.kt", ContextChipIcon.FILE)
 
   @Test
   fun `text typed at a chip's leading edge gets a space after it`() {
@@ -594,7 +583,7 @@ class ComposerPromptChipsLogicTest {
 
   @Test
   fun `a context link needs no space`() {
-    val thread = ComposerPromptChip(4, 10, "thread", "Fix", ComposerPromptChipIcon.THREAD)
+    val thread = ComposerPromptChip(4, 10, "thread", "Fix", ContextChipIcon.THREAD)
     assertEquals(
       ComposerPromptInsertion("X", 1),
       separateComposerPromptInsertion(listOf(thread), 4, 4, "X"),

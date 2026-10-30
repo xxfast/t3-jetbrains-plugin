@@ -54,26 +54,30 @@ val COMPOSER_SHAPE: Shape = RoundedCornerShape(24.dp)
  * The composer's card, `ComposerSurface.tsx`'s `Shell`, `Host` and `Main`: a solid
  * `--chat-composer-glass-surface` (upstream's backdrop blur left out), a hairline outline (`--chat-composer-outline`, black at 8% light, white at 5% dark) and
  * `shadow-composer` (`0 12px 28px -18px` black at 40%) on light themes only. [highlight] is the
- * drag-over ring.
+ * file drag-over ring, [contextOver] a Sidebar row dragged over it.
  */
 @Composable
 fun ComposerSurface(
   modifier: Modifier = Modifier,
   highlight: Boolean = false,
+  contextOver: Boolean = false,
   content: @Composable () -> Unit,
 ) {
   val dark: Boolean = JewelTheme.isDark
   val outline: Color =
     if (dark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f)
+  // A row over it is `data-thread-context-over`'s `bg-accent/45 ring-1 ring-inset ring-primary/70`
+  val ring: Color = if (contextOver) accent().copy(alpha = 0.7f) else outline
   Box(
     modifier = modifier
       .then(if (dark) Modifier else Modifier.dropShadow(COMPOSER_SHAPE, COMPOSER_SHADOW))
       .clip(COMPOSER_SHAPE)
       .background(composerGlassSurface())
       .then(if (highlight) Modifier.background(subtle(0.06f)) else Modifier)
+      .then(if (contextOver && !highlight) Modifier.background(subtle(0.07f)) else Modifier)
       // Lit, the ring is `WorkspaceFileDropOverlay`'s `border-2 border-dashed border-primary/60`
       .then(if (highlight) Modifier.dashedRing(accent().copy(alpha = 0.6f)) else Modifier)
-      .then(if (highlight) Modifier else Modifier.border(1.dp, outline, COMPOSER_SHAPE)),
+      .then(if (highlight) Modifier else Modifier.border(1.dp, ring, COMPOSER_SHAPE)),
   ) {
     content()
   }

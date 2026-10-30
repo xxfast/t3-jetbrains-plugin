@@ -115,6 +115,15 @@ fun textForEndInsertion(prompt: String, text: String): String {
   return if (needsLeadingSpace) " $text" else text
 }
 
+/**
+ * `insertComposerText(text, "cursor", { ensureLeadingBoundary: true })`: what goes in at
+ * [cursor], a space first when the character before it isn't whitespace.
+ */
+fun textForCaretInsertion(prompt: String, cursor: Int, text: String): String {
+  val before: Char? = prompt.getOrNull(cursor - 1)
+  return if (before != null && !before.isWhitespace()) " $text" else text
+}
+
 /** What `addComposerFolders` inserts for one folder: its file link and a space. */
 fun folderLinkText(path: String): String = "${serializeComposerFileLink(path)} "
 

@@ -19,6 +19,8 @@
   </dependencies>
 
   <depends optional="true" config-file="t3code-terminal.xml">org.jetbrains.plugins.terminal</depends>
+  <!-- JCEF left core for its own plugin in 262; 2025.3.0 has no such id and keeps it in core -->
+  <depends optional="true" config-file="t3code-jcef.xml">com.intellij.modules.jcef</depends>
 
   <extensions defaultExtensionNs="com.intellij">
     <toolWindow
@@ -36,6 +38,8 @@
     <postStartupActivity implementation="io.github.xxfast.t3code.plugin.LaunchOpen"/>
     <fileEditorProvider
       implementation="io.github.xxfast.t3code.plugin.ide.ThreadFileEditorProvider"/>
+    <fileEditorProvider
+      implementation="io.github.xxfast.t3code.plugin.web.T3WebViewEditorProvider"/>
     <applicationConfigurable
       parentId="tools"
       instance="io.github.xxfast.t3code.plugin.settings.T3Configurable"
@@ -74,6 +78,25 @@
       class="io.github.xxfast.t3code.plugin.actions.FindPreviousInThreadAction"
       text="Find Previous in T3 Thread" use-shortcut-of="FindPrevious"/>
 
+    <!-- The escape hatch: pages the plugin doesn't own, in the server's web UI in a JCEF tab -->
+    <group id="T3Code.WebView" text="T3 Code" popup="true" icon="AllIcons.General.Web">
+      <add-to-group group-id="ToolsMenu" anchor="last"/>
+      <action
+        id="T3Code.OpenWebView.Settings"
+        class="io.github.xxfast.t3code.plugin.web.OpenServerSettingsWebViewAction"
+        text="Server settings"
+        description="Open the T3 server's settings in a T3 web view"/>
+      <action
+        id="T3Code.OpenWebView.Providers"
+        class="io.github.xxfast.t3code.plugin.web.OpenProviderSetupWebViewAction"
+        text="Provider setup"
+        description="Open the T3 server's provider setup in a T3 web view"/>
+      <action
+        id="T3Code.OpenWebView.ScheduledTasks"
+        class="io.github.xxfast.t3code.plugin.web.OpenScheduledTasksWebViewAction"
+        text="Scheduled tasks"
+        description="Open the T3 server's scheduled tasks in a T3 web view"/>
+    </group>
     <!-- Harness only (fixture mode): throws so the error dialog and its report button show -->
     <action
       id="T3Code.ThrowTestError"
@@ -99,7 +122,7 @@
 
     <!-- Upstream's thread action menu (threadActionMenu.logic.ts), its order and separators:
          the ChatView's title and a Sidebar row's context menu. Open in IDE and Open terminal
-         are the plugin's own, after upstream's items. No Project settings: the plugin has none -->
+         are the plugin's own, after upstream's items. -->
     <group id="T3Code.ThreadActions" text="T3 Code Thread" popup="false">
       <action
         id="T3Code.NewThreadOnBranch"
@@ -198,6 +221,12 @@
           text="Thread ID"
           description="Copy the thread's ID"/>
       </group>
+      <action
+        id="T3Code.ProjectSettings"
+        class="io.github.xxfast.t3code.plugin.actions.ProjectSettingsAction"
+        text="Project settings"
+        description="The project's name and icon"
+        icon="AllIcons.General.Settings"/>
       <separator/>
       <action
         id="T3Code.ToggleArchive"
@@ -218,6 +247,90 @@
         text="Open in IDE"
         description="Focus the IDE window that has the thread's checkout open, else open it in a new one"
         icon="AllIcons.Actions.MenuOpen"/>
+      <!-- The thread in the server's web UI, the way to its PR review guide (no route upstream) -->
+      <action
+        id="T3Code.OpenWebView.Thread"
+        class="io.github.xxfast.t3code.plugin.web.OpenThreadWebViewAction"
+        text="Open in T3 web view"
+        description="Open the thread in the server's web UI, where its PR review guide is"
+        icon="AllIcons.General.Web"/>
+      <!-- Plugin-only, upstream has no mute. Local to this IDE project, so read-only pairings
+           keep it -->
+      <separator/>
+      <action
+        id="T3Code.ToggleMute"
+        class="io.github.xxfast.t3code.plugin.actions.MuteThreadAction"
+        text="Mute notifications"
+        description="Mute or unmute the thread's notification balloons in this project"/>
+    </group>
+
+    <!-- A project's menu: a right-click or Shift+F10 on a row of the Sidebar's project picker -->
+    <group id="T3Code.ProjectActions" text="T3 Code Project" popup="false">
+      <reference ref="T3Code.ProjectSettings"/>
+    </group>
+    <!-- Upstream's preview and device panes (#68). The preview is right panel state with no
+         route, so it's the thread's page in a T3 web view; the device panel is native and
+         read-only -->
+    <action
+      id="T3Code.OpenPreview"
+      class="io.github.xxfast.t3code.plugin.web.OpenPreviewAction"
+      text="Open preview"
+      description="Open the thread in a T3 web view, where its preview is in the right panel"
+      icon="AllIcons.Actions.Preview">
+      <add-to-group
+        group-id="T3Code.ThreadActions"
+        anchor="after"
+        relative-to-action="T3Code.OpenWebView.Thread"/>
+    </action>
+    <action
+      id="T3Code.DevicePanel"
+      class="io.github.xxfast.t3code.plugin.device.OpenDevicePanelAction"
+      text="Device panel"
+      description="Show the T3 server's simulators and emulators, read-only">
+      <add-to-group group-id="T3Code.WebView" anchor="last"/>
+    </action>
+
+    <!-- Upstream's bulk menu (Sidebar.tsx's handleMultiSelectContextMenu), its order and no
+         separators: a right-click on a row in the Sidebar's multi-selection. The labels carry
+         the counts, set as the menu opens -->
+    <group id="T3Code.ThreadBulkActions" text="T3 Code Threads" popup="false">
+      <action
+        id="T3Code.Bulk.Unpin"
+        class="io.github.xxfast.t3code.plugin.actions.BulkUnpinAction"
+        text="Unpin"
+        description="Unpin the selected threads"
+        icon="AllIcons.General.PinSelected"/>
+      <action
+        id="T3Code.Bulk.Settle"
+        class="io.github.xxfast.t3code.plugin.actions.BulkSettleAction"
+        text="Settle"
+        description="Settle the selected threads"
+        icon="AllIcons.Actions.Checked"/>
+      <group
+        id="T3Code.Bulk.Snooze"
+        class="io.github.xxfast.t3code.plugin.actions.BulkSnoozeGroup"
+        text="Snooze"
+        description="Take the selected threads out of the inbox until later"
+        icon="AllIcons.Vcs.History"
+        popup="true"/>
+      <action
+        id="T3Code.Bulk.RegenerateTitles"
+        class="io.github.xxfast.t3code.plugin.actions.BulkRegenerateTitlesAction"
+        text="Regenerate titles"
+        description="Have the server write new titles for the selected threads"
+        icon="AllIcons.Actions.Refresh"/>
+      <action
+        id="T3Code.Bulk.MarkUnread"
+        class="io.github.xxfast.t3code.plugin.actions.BulkMarkUnreadAction"
+        text="Mark unread"
+        description="Show the selected threads' latest runs as unseen"
+        icon="AllIcons.Toolwindows.NotificationsNew"/>
+      <action
+        id="T3Code.Bulk.Delete"
+        class="io.github.xxfast.t3code.plugin.actions.BulkDeleteAction"
+        text="Delete"
+        description="Delete the selected threads and their conversation history"
+        icon="AllIcons.General.Delete"/>
     </group>
 
     <!-- Upstream's chat.new: the "New thread in..." picker. In the IDE's New and Generate popups,
@@ -240,6 +353,65 @@
       description="Undo the latest settle, snooze, unpin or archive"
       icon="AllIcons.Actions.Undo"
       use-shortcut-of="$Undo"/>
+
+    <!-- Upstream's thread.previous, thread.next and thread.jump.1 to 9, down the Sidebar's rows.
+         No default keys: upstream's mod+shift+[ and ] are code block selection here and editor
+         tabs on macOS, mod+1 to 9 are bookmarks here and tool windows on macOS -->
+    <action
+      id="T3Code.PreviousThread"
+      class="io.github.xxfast.t3code.plugin.actions.PreviousThreadAction"
+      text="Previous T3 Thread"
+      description="Open the thread above the open one in the T3 Sidebar"/>
+    <action
+      id="T3Code.NextThread"
+      class="io.github.xxfast.t3code.plugin.actions.NextThreadAction"
+      text="Next T3 Thread"
+      description="Open the thread below the open one in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread1"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 1"
+      description="Open the first thread in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread2"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 2"
+      description="Open the second thread in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread3"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 3"
+      description="Open the third thread in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread4"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 4"
+      description="Open the fourth thread in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread5"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 5"
+      description="Open the fifth thread in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread6"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 6"
+      description="Open the sixth thread in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread7"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 7"
+      description="Open the seventh thread in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread8"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 8"
+      description="Open the eighth thread in the T3 Sidebar"/>
+    <action
+      id="T3Code.JumpToThread9"
+      class="io.github.xxfast.t3code.plugin.actions.JumpToThreadAction"
+      text="Jump to T3 Thread 9"
+      description="Open the ninth thread in the T3 Sidebar"/>
 
     <!-- Paste over the composer with files or an image on the clipboard attaches them -->
     <action

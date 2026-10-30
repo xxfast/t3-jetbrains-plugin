@@ -13,14 +13,15 @@ import kotlinx.serialization.json.longOrNull
 // Chips in a sent message, what upstream's `ChatMarkdown` draws in place of a context link
 // (`UserMessageContextChips.tsx`), a `$skill` token (`SkillInlineText.tsx`) and a file link or
 // an inline code path (`MarkdownFileLink.tsx`). The rules that pick a chip's kind, label and icon
-// live here, IDE-free; `MessageChips.kt` draws them.
+// live here, IDE-free; `MessageChips.kt` draws them. The kinds, states and icons are the
+// composer's too, `ContextChip.kt` draws all of them.
 
 /**
- * Upstream's `ContextChipKind` (`ContextChip.tsx`): the chip's [accent], its key in
- * [CONTEXT_CHIP_ACCENTS], whose ink `contextChipVariables` solves per theme. Neutral has none,
- * upstream's `currentColor`.
+ * Upstream's `ContextChipKind`, `contextChipVariants`' `kind` (`ContextChip.tsx`): the chip's
+ * [accent], its key in [CONTEXT_CHIP_ACCENTS], whose ink `contextChipVariables` solves per
+ * theme. Neutral has none, upstream's `currentColor`.
  */
-enum class MessageChipKind(val accent: String?) {
+enum class ContextChipKind(val accent: String?) {
   NEUTRAL(null),
   IMAGE("image"),
   VIDEO("video"),
@@ -37,6 +38,7 @@ enum class MessageChipKind(val accent: String?) {
   PR_CLOSED("pr-closed"),
   SKILL("skill"),
   THREAD("thread"),
+  CITATION("citation"),
   DOC_PDF("doc-pdf"),
   DOC_WORD("doc-word"),
   DOC_SPREADSHEET("doc-spreadsheet"),
@@ -48,46 +50,46 @@ enum class MessageChipKind(val accent: String?) {
  * One of the `doc-*` kinds, whose icon upstream strokes in the chip's ink
  * (`--document-icon-stroke` in `ContextChip.tsx`).
  */
-val MessageChipKind.isDocument: Boolean
+val ContextChipKind.isDocument: Boolean
   get() = accent?.startsWith("doc-") == true
-
-/** Upstream's `state` on `ContextChip`: ink in the current text colour, or in the error one. */
-enum class ContextChipState {
-  UNRESOLVED,
-  INVALID,
-}
 
 // `T3_PIERRE_ICONS.byFileExtension`'s document families (apps/web/src/pierre-icons.ts), through
 // `DOCUMENT_CHIP_KINDS` to the chip kind each one takes
-private val DOCUMENT_CHIP_KINDS: Map<String, MessageChipKind> = mapOf(
-  "pdf" to MessageChipKind.DOC_PDF,
-  "doc" to MessageChipKind.DOC_WORD,
-  "docx" to MessageChipKind.DOC_WORD,
-  "odt" to MessageChipKind.DOC_WORD,
-  "rtf" to MessageChipKind.DOC_WORD,
-  "xls" to MessageChipKind.DOC_SPREADSHEET,
-  "xlsx" to MessageChipKind.DOC_SPREADSHEET,
-  "ods" to MessageChipKind.DOC_SPREADSHEET,
-  "csv" to MessageChipKind.DOC_SPREADSHEET,
-  "tsv" to MessageChipKind.DOC_SPREADSHEET,
-  "ppt" to MessageChipKind.DOC_SLIDES,
-  "pptx" to MessageChipKind.DOC_SLIDES,
-  "odp" to MessageChipKind.DOC_SLIDES,
-  "epub" to MessageChipKind.DOC_EPUB,
+private val DOCUMENT_CHIP_KINDS: Map<String, ContextChipKind> = mapOf(
+  "pdf" to ContextChipKind.DOC_PDF,
+  "doc" to ContextChipKind.DOC_WORD,
+  "docx" to ContextChipKind.DOC_WORD,
+  "odt" to ContextChipKind.DOC_WORD,
+  "rtf" to ContextChipKind.DOC_WORD,
+  "xls" to ContextChipKind.DOC_SPREADSHEET,
+  "xlsx" to ContextChipKind.DOC_SPREADSHEET,
+  "ods" to ContextChipKind.DOC_SPREADSHEET,
+  "csv" to ContextChipKind.DOC_SPREADSHEET,
+  "tsv" to ContextChipKind.DOC_SPREADSHEET,
+  "ppt" to ContextChipKind.DOC_SLIDES,
+  "pptx" to ContextChipKind.DOC_SLIDES,
+  "odp" to ContextChipKind.DOC_SLIDES,
+  "epub" to ContextChipKind.DOC_EPUB,
 )
 
 /**
  * `documentChipKindForFileName` (apps/web/src/pierre-icons.ts): the document kind for a file
  * whose icon is one of the document families, by its extension in any case, else null.
  */
-fun documentChipKindForFileName(fileName: String): MessageChipKind? {
+fun documentChipKindForFileName(fileName: String): ContextChipKind? {
   val basename: String = fileBasename(fileName)
   if ('.' !in basename) return null
   return DOCUMENT_CHIP_KINDS[basename.substringAfterLast('.').lowercase()]
 }
 
+/**
+ * `contextChipVariants`' `state`: unresolved inks in the current text colour (a record that's
+ * gone), invalid in the error one (a failure).
+ */
+enum class ContextChipState { NORMAL, UNRESOLVED, INVALID }
+
 /** What a chip's leading icon shows; a file's is its type's, see [MessageChip.iconPath]. */
-enum class MessageChipIcon {
+enum class ContextChipIcon {
   SKILL,
   FILE,
   FOLDER,
@@ -116,19 +118,19 @@ sealed interface MessageChipAction {
 
 /**
  * One chip: upstream's [kind] for its colours, the [label], the [icon] ([iconPath] names the
- * file whose type icon a [MessageChipIcon.FILE] shows), a smaller [detail] after the label
- * (an attachment's size), the [tooltip], and what a click does. [unresolved] is upstream's
- * `unresolved` state, a record the message no longer carries, inked in the text colour.
+ * file whose type icon a [ContextChipIcon.FILE] shows), a smaller [detail] after the label
+ * (an attachment's size), the [tooltip], and what a click does. A [ContextChipState.UNRESOLVED]
+ * [state] is a record the message no longer carries, inked in the text colour.
  */
 data class MessageChip(
-  val kind: MessageChipKind,
+  val kind: ContextChipKind,
   val label: String,
-  val icon: MessageChipIcon,
+  val icon: ContextChipIcon,
   val iconPath: String? = null,
   val detail: String? = null,
   val tooltip: String? = null,
   val action: MessageChipAction? = null,
-  val unresolved: Boolean = false,
+  val state: ContextChipState = ContextChipState.NORMAL,
 )
 
 private val lenientJson: Json = Json { ignoreUnknownKeys = true }
@@ -149,20 +151,20 @@ fun messageContextChip(
 ): MessageChip {
   val fields: JsonObject? = (record as? JsonObject)?.takeIf { it.string("kind") == kind }
   val unavailable = MessageChip(
-    kind = MessageChipKind.NEUTRAL,
+    kind = ContextChipKind.NEUTRAL,
     label = label,
-    icon = MessageChipIcon.UNAVAILABLE,
+    icon = ContextChipIcon.UNAVAILABLE,
     tooltip = "This context is no longer available",
-    unresolved = true,
+    state = ContextChipState.UNRESOLVED,
   )
   if (fields == null) return unavailable
   return when (kind) {
     "mention" -> {
       val path: String = fields.string("path") ?: return unavailable
       MessageChip(
-        kind = documentChipKindForFileName(path) ?: MessageChipKind.MENTION,
+        kind = documentChipKindForFileName(path) ?: ContextChipKind.MENTION,
         label = fields.string("label") ?: label,
-        icon = if (path.endsWith('/')) MessageChipIcon.FOLDER else MessageChipIcon.FILE,
+        icon = if (path.endsWith('/')) ContextChipIcon.FOLDER else ContextChipIcon.FILE,
         iconPath = path,
         tooltip = path,
         action = MessageChipAction.OpenFile(path),
@@ -172,9 +174,9 @@ fun messageContextChip(
     "skill" -> {
       val name: String = fields.string("name") ?: return unavailable
       MessageChip(
-        kind = MessageChipKind.SKILL,
+        kind = ContextChipKind.SKILL,
         label = fields.string("label")?.ifEmpty { null } ?: name,
-        icon = MessageChipIcon.SKILL,
+        icon = ContextChipIcon.SKILL,
         tooltip = "$$name",
       )
     }
@@ -183,9 +185,9 @@ fun messageContextChip(
       val title: String = fields.string("title") ?: return unavailable
       val threadId: String? = fields.string("threadId")
       MessageChip(
-        kind = MessageChipKind.THREAD,
+        kind = ContextChipKind.THREAD,
         label = title,
-        icon = MessageChipIcon.THREAD,
+        icon = ContextChipIcon.THREAD,
         tooltip = title,
         action = threadId?.let { MessageChipAction.OpenThread(it) },
       )
@@ -202,15 +204,15 @@ fun messageContextChip(
       val video: Boolean = !image && mimeType.startsWith("video/")
       MessageChip(
         kind = when {
-          image -> MessageChipKind.IMAGE
-          video -> MessageChipKind.VIDEO
-          else -> documentChipKindForFileName(name) ?: MessageChipKind.FILE
+          image -> ContextChipKind.IMAGE
+          video -> ContextChipKind.VIDEO
+          else -> documentChipKindForFileName(name) ?: ContextChipKind.FILE
         },
         label = middleTruncateAttachmentName(name),
         icon = when {
-          image -> MessageChipIcon.IMAGE
-          video -> MessageChipIcon.VIDEO
-          else -> MessageChipIcon.FILE
+          image -> ContextChipIcon.IMAGE
+          video -> ContextChipIcon.VIDEO
+          else -> ContextChipIcon.FILE
         },
         iconPath = name,
         detail = size,
@@ -219,23 +221,23 @@ fun messageContextChip(
     }
 
     "terminal" -> MessageChip(
-      kind = MessageChipKind.TERMINAL,
+      kind = ContextChipKind.TERMINAL,
       label = fields.string("label") ?: label,
-      icon = MessageChipIcon.TERMINAL,
+      icon = ContextChipIcon.TERMINAL,
       tooltip = fields.string("terminalLabel"),
     )
 
     "element" -> MessageChip(
-      kind = MessageChipKind.ELEMENT,
+      kind = ContextChipKind.ELEMENT,
       label = fields.string("label") ?: label,
-      icon = MessageChipIcon.ELEMENT,
+      icon = ContextChipIcon.ELEMENT,
       tooltip = fields.string("pageTitle")?.ifBlank { null } ?: fields.string("pageUrl"),
     )
 
     "preview-annotation" -> MessageChip(
-      kind = MessageChipKind.PREVIEW_ANNOTATION,
+      kind = ContextChipKind.PREVIEW_ANNOTATION,
       label = fields.string("label") ?: label,
-      icon = MessageChipIcon.ELEMENT,
+      icon = ContextChipIcon.ELEMENT,
       tooltip = fields.string("pageTitle")?.ifBlank { null } ?: fields.string("pageUrl"),
     )
 
@@ -257,24 +259,27 @@ fun pullRequestContextDisplayState(comment: ReviewCommentContext): String? =
   comment.pullRequest?.let { if (it.state == "open" && it.isDraft) "draft" else it.state }
 
 /** `PULL_REQUEST_CHIP_KINDS` (`contextChipParts.tsx`) for [comment]'s display state. */
-fun pullRequestChipKind(comment: ReviewCommentContext): MessageChipKind =
+fun pullRequestChipKind(comment: ReviewCommentContext): ContextChipKind =
   when (pullRequestContextDisplayState(comment)) {
-    "open" -> MessageChipKind.PR_OPEN
-    "draft" -> MessageChipKind.PR_DRAFT
-    "merged" -> MessageChipKind.PR_MERGED
-    "closed" -> MessageChipKind.PR_CLOSED
-    else -> MessageChipKind.PULL_REQUEST
+    "open" -> ContextChipKind.PR_OPEN
+    "draft" -> ContextChipKind.PR_DRAFT
+    "merged" -> ContextChipKind.PR_MERGED
+    "closed" -> ContextChipKind.PR_CLOSED
+    else -> ContextChipKind.PULL_REQUEST
   }
 
-// The review-comment handler's kinds and icons
-private fun reviewCommentChip(comment: ReviewCommentContext): MessageChip {
+/**
+ * The review-comment handler's chip: a comment's, or a pull request's by its state through
+ * [pullRequestChipKind] and `PULL_REQUEST_STATE_PRESENTATION`'s icons.
+ */
+fun reviewCommentChip(comment: ReviewCommentContext): MessageChip {
   val label: String = reviewCommentContextLabel(comment)
   val pullRequest: PullRequestContextMetadata? = comment.pullRequest
   if (!isPullRequestSummaryContext(comment)) {
     return MessageChip(
-      kind = MessageChipKind.REVIEW_COMMENT,
+      kind = ContextChipKind.REVIEW_COMMENT,
       label = label,
-      icon = MessageChipIcon.REVIEW_COMMENT,
+      icon = ContextChipIcon.REVIEW_COMMENT,
       tooltip = listOf(comment.filePath, comment.rangeLabel, comment.text.trim())
         .filter { it.isNotEmpty() }
         .joinToString("\n"),
@@ -285,10 +290,10 @@ private fun reviewCommentChip(comment: ReviewCommentContext): MessageChip {
     kind = pullRequestChipKind(comment),
     label = label,
     icon = when (state) {
-      "draft" -> MessageChipIcon.PULL_REQUEST_DRAFT
-      "merged" -> MessageChipIcon.PULL_REQUEST_MERGED
-      "closed" -> MessageChipIcon.PULL_REQUEST_CLOSED
-      else -> MessageChipIcon.PULL_REQUEST
+      "draft" -> ContextChipIcon.PULL_REQUEST_DRAFT
+      "merged" -> ContextChipIcon.PULL_REQUEST_MERGED
+      "closed" -> ContextChipIcon.PULL_REQUEST_CLOSED
+      else -> ContextChipIcon.PULL_REQUEST
     },
     tooltip = pullRequest?.let {
       "#${it.number} ${it.title}\n${it.headBranch} → ${it.baseBranch}"
@@ -334,9 +339,9 @@ fun matchInlineSkills(text: String, skills: List<ServerProviderSkill>): List<Inl
 
 /** `SkillChip`: the skill's display name, upstream's `formatProviderSkillDisplayName`. */
 fun skillChip(skill: ServerProviderSkill): MessageChip = MessageChip(
-  kind = MessageChipKind.SKILL,
+  kind = ContextChipKind.SKILL,
   label = formatProviderSkillDisplayName(skill),
-  icon = MessageChipIcon.SKILL,
+  icon = ContextChipIcon.SKILL,
   tooltip = "$${skill.name}",
 )
 
@@ -560,9 +565,9 @@ fun fileLinkLabel(file: FilePathPosition): String = listOfNotNull(
 
 /** `MarkdownFileLink`: a chip that opens [file] in the IDE. */
 fun fileLinkChip(file: FilePathPosition): MessageChip = MessageChip(
-  kind = documentChipKindForFileName(file.path) ?: MessageChipKind.MENTION,
+  kind = documentChipKindForFileName(file.path) ?: ContextChipKind.MENTION,
   label = fileLinkLabel(file),
-  icon = if (file.path.endsWith('/')) MessageChipIcon.FOLDER else MessageChipIcon.FILE,
+  icon = if (file.path.endsWith('/')) ContextChipIcon.FOLDER else ContextChipIcon.FILE,
   iconPath = file.path,
   tooltip = file.path,
   action = MessageChipAction.OpenFile(file.path, file.line),

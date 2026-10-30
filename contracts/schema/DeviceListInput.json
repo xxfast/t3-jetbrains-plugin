@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "DeviceListInput",
+  "title": "DeviceListInput",
+  "type": "object",
+  "properties": {
+    "updateTool": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "hub",
+            "agent"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "inspectOnly": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "retryHostId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "additionalProperties": true
+}

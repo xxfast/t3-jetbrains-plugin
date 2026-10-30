@@ -1,10 +1,17 @@
 package io.github.xxfast.t3code.plugin
 
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
+import com.intellij.icons.AllIcons
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.CommonShortcuts
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.openapi.ide.CopyPasteManager
@@ -19,6 +26,7 @@ import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
 import io.github.xxfast.t3code.plugin.actions.OPEN_TERMINAL_ACTION
+import io.github.xxfast.t3code.plugin.actions.PIN_ACTION
 import io.github.xxfast.t3code.plugin.actions.SETTLE_ACTION
 import io.github.xxfast.t3code.plugin.actions.SNOOZE_GROUP
 import io.github.xxfast.t3code.plugin.actions.ThreadUndos
@@ -26,7 +34,10 @@ import io.github.xxfast.t3code.plugin.actions.UNDO_ACTION
 import io.github.xxfast.t3code.plugin.actions.UndoNotice
 import io.github.xxfast.t3code.plugin.actions.WAKE_ACTION
 import io.github.xxfast.t3code.plugin.actions.blockedBy
+import io.github.xxfast.t3code.plugin.actions.dropThread
+import io.github.xxfast.t3code.plugin.actions.openProjectSettings
 import io.github.xxfast.t3code.plugin.actions.performThreadAction
+import io.github.xxfast.t3code.plugin.actions.showThreadBulkMenu
 import io.github.xxfast.t3code.plugin.actions.showThreadMenu
 import io.github.xxfast.t3code.plugin.actions.undoText
 import io.github.xxfast.t3code.plugin.ide.ProjectAwareness
@@ -42,24 +53,39 @@ import io.github.xxfast.t3code.plugin.ui.RowActions
 import io.github.xxfast.t3code.plugin.ui.RowDetails
 import io.github.xxfast.t3code.plugin.ui.Shelves
 import io.github.xxfast.t3code.plugin.ui.Sidebar
+import io.github.xxfast.t3code.plugin.ui.THREAD_ACTIVE_REORDER
+import io.github.xxfast.t3code.plugin.ui.THREAD_JUMP_COUNT
+import io.github.xxfast.t3code.plugin.ui.THREAD_PINNING
+import io.github.xxfast.t3code.plugin.ui.THREAD_PIN_REORDER
 import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SNOOZE
+import io.github.xxfast.t3code.plugin.ui.ThreadSearch
+import io.github.xxfast.t3code.plugin.ui.ThreadSelectionState
 import io.github.xxfast.t3code.plugin.ui.supports
+import io.github.xxfast.t3code.plugin.ui.threadSearch
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.ServerInfo
-import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.T3Client
+import io.github.xxfast.t3code.protocol.generated.SearchThreadsInput
+import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import java.awt.Point
 import java.awt.datatransfer.StringSelection
+import java.time.Instant
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.JComponent
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import org.jetbrains.jewel.bridge.JewelComposePanel
 import io.github.xxfast.t3code.protocol.Project as T3Project
 
-/** "T3 Sidebar": T3's sidebar. Opening a thread is [T3Opener.openThread]'s business. */
+/**
+ * "T3 Sidebar": T3's sidebar, a "Threads" tab, plus a "Scheduled" one for the server's
+ * scheduled tasks. Opening a thread is [T3Opener.openThread]'s business.
+ */
 class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
   // Runs when the tool window registers, before it's ever opened
   override fun init(toolWindow: ToolWindow) {
-    WaitingWatcher.getInstance(toolWindow.project).attach(toolWindow)
+    ThreadNotificationCoordinator.getInstance(toolWindow.project).attach(toolWindow)
   }
 
   override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
@@ -72,12 +98,19 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
     val controller: ChatController = ChatController.getInstance(project)
     val renamer: SidebarRename = SidebarRename.getInstance(project)
     val undos: ThreadUndos = ThreadUndos.getInstance(project)
+    val picks: SidebarMultiSelection = SidebarMultiSelection.getInstance(project)
+    val navigation: SidebarNavigation = SidebarNavigation.getInstance(project)
+    navigation.watch(toolWindow)
+    // Out here so the Escape action below can clear it too
+    val search = TextFieldState()
+    val searchFocused = AtomicBoolean(false)
     val panel: JComponent = JewelComposePanel {
       val filter: ProjectFilter by awareness.filter.collectAsState()
       val open: Set<String> by awareness.open.collectAsState()
       val connection by client.connection.collectAsState()
       val projects by client.projects.collectAsState()
       val threads by client.threads.collectAsState()
+      val stale: Instant? by t3.stale.collectAsState()
       val selected: String? by selection.selected.collectAsState()
       val favicons by icons.favicons.collectAsState()
       LaunchedEffect(projects) { icons.ensure(projects) }
@@ -97,6 +130,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
             onReconnect = t3::reconnect,
             onPair = t3::pair,
             onOpenSettings = { T3.openSettings(project) },
+            staleSince = stale,
           )
         }
       }
@@ -123,6 +157,21 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
           },
           rename = if (operable) renamer::start else null,
           renamed = renamer::end,
+          unpin = action(THREAD_PINNING, PIN_ACTION),
+          // Upstream drags only where the server stores pin orders, `partitionSidebarThreads`
+          drop = if (can(THREAD_PINNING) && can(THREAD_PIN_REORDER)) {
+            { threadId, plan -> dropThread(project, threadId, plan) }
+          } else {
+            null
+          },
+          reorderActive = catalog.supports(THREAD_ACTIVE_REORDER),
+          // `handleThreadFileDrop`: the thread opens and the files join its draft. Drafts live
+          // in the controller by thread id, composer or not, so upstream's pending drop store
+          // (`sidebarPendingFileDropStore.ts`) has nothing to carry them across here.
+          fileDrop = { threadId, files ->
+            opener.openThread(threadId)
+            controller.attachFiles(threadId, files, withFolders = false)
+          },
         )
       }
       val terminals: Map<String, List<String>> by RunningTerminals.get().byThread.collectAsState()
@@ -158,6 +207,23 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
       // Read with each notice, so a keymap change shows up on the next one
       val undoLabel: String =
         remember(undo) { undoText(KeymapUtil.getFirstKeyboardShortcutText(UNDO_ACTION)) }
+      val picked: ThreadSelectionState by picks.selection.collectAsState()
+      // `useThreadSearch`: only a connected server is asked, upstream's `environmentIds`
+      val messages: ThreadSearch by remember {
+        val queries: Flow<String> =
+          combine(snapshotFlow { search.text.toString() }, client.connection) { query, state ->
+            if (state is ConnectionState.Connected) query else ""
+          }
+        threadSearch(queries) { query -> client.searchThreads(SearchThreadsInput(query)).matches }
+      }.collectAsState(ThreadSearch())
+      // Read as the hints come up, so a key just bound in the keymap shows on the next hold
+      val hints: Boolean by navigation.hints.collectAsState()
+      val jumpLabels: List<String?> = remember(hints) {
+        if (!hints) return@remember emptyList()
+        (1..THREAD_JUMP_COUNT).map { n ->
+          KeymapUtil.getFirstKeyboardShortcutText("$JUMP_TO_THREAD_ACTION$n").ifEmpty { null }
+        }
+      }
       Sidebar(
         projects = projects,
         threads = threads,
@@ -166,11 +232,29 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         favicons = favicons,
         providers = providers,
         header = header,
-        onContextMenu = { threadId, x, y -> showThreadMenu(project, threadId, x, y) },
+        // A picked row opens the bulk menu, `handleThreadContextMenu`
+        onContextMenu = { threadId, x, y ->
+          val now: ThreadSelectionState = picks.selection.value
+          if (now.hasSelection && threadId in now.selectedThreadKeys) {
+            showThreadBulkMenu(project, now.selectedThreadKeys.toList(), x, y)
+          } else {
+            showThreadMenu(project, threadId, x, y)
+          }
+        },
         filter = filter,
         open = open,
-        onFilterChange = awareness::choose,
+        // A selection made under one scope can hold rows the next one hides, upstream's
+        // `setProjectScopeKey`
+        onOpenProjectScope = { at ->
+          showProjectScope(project, at) { choice ->
+            picks.clear()
+            awareness.choose(choice)
+          }
+        },
         onNewThread = if (operable) NewThread.getInstance(project)::open else null,
+        // Upstream's Add project, the command palette's; creating one needs operate
+        onAddProject = { addProject(project) },
+        addProjectBlocked = blockedBy(connection),
         onOpenSettings = { T3.openSettings(project) },
         settlement = settlement,
         snooze = snooze,
@@ -185,16 +269,47 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         undo = undo,
         undoLabel = undoLabel,
         onUndo = { undos.undoLatest() },
+        selection = picked,
+        onSelectionChange = picks::change,
+        search = search,
+        onSearchFocus = searchFocused::set,
+        messages = messages,
+        onOrderedThreadIds = navigation::order,
+        jumpLabels = jumpLabels,
+        stale = stale != null,
       )
     }
-    val content: Content = ContentFactory.getInstance().createContent(panel, null, false)
+    // Escape drops the multi-selection, as upstream's `_chat.tsx` keydown does. An action on the
+    // panel rather than a Compose key handler, as the IDE's keymap sees Escape first. Off while
+    // renaming, so the rename field's Escape still cancels it. In the search field with a query
+    // it clears the search instead, as `handleThreadSearchKeyDown` stops it going further.
+    object : DumbAwareAction() {
+      override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+      private fun clearsSearch(): Boolean = searchFocused.get() && search.text.isNotBlank()
+
+      override fun update(e: AnActionEvent) {
+        e.presentation.isEnabled = clearsSearch() ||
+          picks.selection.value.hasSelection && renamer.renaming.value == null
+      }
+
+      override fun actionPerformed(e: AnActionEvent) {
+        if (clearsSearch()) search.clearText() else picks.clear()
+      }
+    }.registerCustomShortcutSet(CommonShortcuts.ESCAPE, panel, toolWindow.disposable)
+    val content: Content = ContentFactory.getInstance().createContent(panel, "Threads", false)
     toolWindow.contentManager.addContent(content)
+    // Upstream's Settings > Scheduled tasks, read-only here
+    val scheduled: JComponent = JewelComposePanel { ScheduledTasksContent(project) }
+    toolWindow.contentManager.addContent(
+      ContentFactory.getInstance().createContent(scheduled, "Scheduled", false),
+    )
   }
 }
 
 /**
  * A folder header's context menu, upstream's `handleProjectFolderContextMenu` (Sidebar.tsx:1209):
- * New thread and Copy path. Project settings isn't there, the plugin has none to open.
+ * New thread, Copy path and Project settings.
  */
 private fun showFolderMenu(
   project: Project,
@@ -208,6 +323,11 @@ private fun showFolderMenu(
   group.add(
     DumbAwareAction.create("Copy path") {
       CopyPasteManager.getInstance().setContents(StringSelection(target.workspaceRoot))
+    },
+  )
+  group.add(
+    DumbAwareAction.create("Project settings", AllIcons.General.Settings) {
+      openProjectSettings(project, target.id)
     },
   )
   JBPopupFactory.getInstance()

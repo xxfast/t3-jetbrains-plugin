@@ -1,0 +1,107 @@
+{
+  "threads": [
+    {
+      "id": "thr_01JC4A1F0QLIMIT",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Demo: usage limit",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC4A1F0QLIMIT"
+      },
+      "status": "failed",
+      "latestRunId": "run_01JC4ALIMIT01",
+      "latestRunRequestedAt": "2026-10-26T00:50:00.000Z",
+      "latestRunStartedAt": "2026-10-26T00:50:01.000Z",
+      "latestRunCompletedAt": "2026-10-26T01:00:00.000Z",
+      "lastError": "Codex usage limit reached for this account. Resets in about two hours.",
+      "lastErrorClass": "usage_limit",
+      "usageLimitResetAt": "2026-12-31T23:00:00.000Z",
+      "latestUserMessageAt": "2026-10-26T00:50:00.000Z",
+      "itemCount": 3,
+      "visibleItemCount": 3,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-26T00:50:00.000Z",
+      "updatedAt": "2026-10-26T01:00:00.000Z"
+    }
+  ],
+  "runs": {
+    "thr_01JC4A1F0QLIMIT": [
+      {
+        "id": "run_01JC4ALIMIT01",
+        "threadId": "thr_01JC4A1F0QLIMIT",
+        "ordinal": 1,
+        "status": "failed",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "userMessageId": "msg_limit_u1",
+        "requestedAt": "2026-10-26T00:50:00.000Z",
+        "startedAt": "2026-10-26T00:50:01.000Z",
+        "completedAt": "2026-10-26T01:00:00.000Z"
+      }
+    ]
+  },
+  "items": {
+    "thr_01JC4A1F0QLIMIT": [
+      {
+        "type": "user_message",
+        "id": "limit_u1",
+        "threadId": "thr_01JC4A1F0QLIMIT",
+        "runId": "run_01JC4ALIMIT01",
+        "ordinal": 1,
+        "status": "completed",
+        "messageId": "msg_limit_u1",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "Port the remaining benchmarks.",
+        "startedAt": "2026-10-26T00:50:00.000Z",
+        "completedAt": "2026-10-26T00:50:00.000Z",
+        "updatedAt": "2026-10-26T00:50:00.000Z"
+      },
+      {
+        "type": "assistant_message",
+        "id": "limit_a1",
+        "threadId": "thr_01JC4A1F0QLIMIT",
+        "runId": "run_01JC4ALIMIT01",
+        "ordinal": 2,
+        "status": "completed",
+        "messageId": "msg_limit_a1",
+        "streaming": false,
+        "text": "Starting with `bench/src/jvmMain/kotlin/Codec.kt`.",
+        "startedAt": "2026-10-26T00:50:05.000Z",
+        "completedAt": "2026-10-26T00:59:00.000Z",
+        "updatedAt": "2026-10-26T00:59:00.000Z"
+      },
+      {
+        "type": "error",
+        "id": "limit_e1",
+        "threadId": "thr_01JC4A1F0QLIMIT",
+        "runId": "run_01JC4ALIMIT01",
+        "ordinal": 3,
+        "status": "failed",
+        "failure": {
+          "class": "usage_limit",
+          "message": "Codex usage limit reached for this account. Resets in about two hours.",
+          "code": null,
+          "retryable": false,
+          "resetAt": "2026-12-31T23:00:00.000Z"
+        },
+        "startedAt": "2026-10-26T01:00:00.000Z",
+        "completedAt": "2026-10-26T01:00:00.000Z",
+        "updatedAt": "2026-10-26T01:00:00.000Z"
+      }
+    ]
+  }
+}

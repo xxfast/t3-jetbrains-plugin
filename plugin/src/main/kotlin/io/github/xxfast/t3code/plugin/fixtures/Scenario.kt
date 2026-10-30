@@ -17,9 +17,13 @@ import io.github.xxfast.t3code.protocol.Subagent
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.decodeSnoozePresets
+import io.github.xxfast.t3code.protocol.generated.DeviceDetail
+import io.github.xxfast.t3code.protocol.generated.DeviceServiceState
 import io.github.xxfast.t3code.protocol.generated.DiscoveredLocalServer
+import io.github.xxfast.t3code.protocol.generated.PreviewSessionSnapshot
 import io.github.xxfast.t3code.protocol.generated.ProjectEntry
 import io.github.xxfast.t3code.protocol.generated.PullRequestListEntry
+import io.github.xxfast.t3code.protocol.generated.ScheduledTask
 import io.github.xxfast.t3code.protocol.generated.ServerAuthDescriptor
 import io.github.xxfast.t3code.protocol.generated.ServerProviderSkill
 import io.github.xxfast.t3code.protocol.generated.ServerProviderUsageLimits
@@ -75,6 +79,19 @@ class ScenarioFile(
   val olderPullRequests: List<PullRequestListEntry> = emptyList(),
   /** Web servers `subscribeDiscoveredLocalServers` lists, across every thread. */
   val discoveredServers: List<DiscoveredLocalServer> = emptyList(),
+  /**
+   * Changes to a thread's row per thread id, each a partial row with an `after` in milliseconds,
+   * played one after another from load, so a thread can complete or fail while you watch.
+   */
+  val transitions: Map<String, List<JsonObject>> = emptyMap(),
+  /** What `scheduledTasks.subscribe` lists. */
+  val scheduledTasks: List<ScheduledTask> = emptyList(),
+  /** Open preview tabs per thread, what `preview.list` answers. */
+  val previewSessions: Map<String, List<PreviewSessionSnapshot>> = emptyMap(),
+  /** What `subscribeDeviceState` and `device.list` answer. */
+  val deviceState: DeviceServiceState? = null,
+  /** What `device.detail` answers, found by `hostId` and `deviceId`. */
+  val deviceDetails: List<DeviceDetail> = emptyList(),
 )
 
 @Serializable
@@ -88,6 +105,9 @@ class ScenarioConnection(
 
 /** A turn item and how long to wait before it shows up, in milliseconds. */
 class FixtureItem(val item: TurnItem, val after: Long)
+
+/** Fields laid over a thread's row, and how long to wait before they are, in milliseconds. */
+class FixtureTransition(val fields: JsonObject, val after: Long)
 
 /**
  * A scenario file, decoded all the way down so a bad file fails at load, not mid-replay.
@@ -122,6 +142,11 @@ class Scenario(
   val discoveredServers: List<DiscoveredLocalServer> = emptyList(),
   /** The connection's extra `environment.capabilities`, from every file that sets some. */
   val capabilities: Set<String> = emptySet(),
+  val transitions: Map<String, List<FixtureTransition>> = emptyMap(),
+  val scheduledTasks: List<ScheduledTask> = emptyList(),
+  val previewSessions: Map<String, List<PreviewSessionSnapshot>> = emptyMap(),
+  val deviceState: DeviceServiceState? = null,
+  val deviceDetails: List<DeviceDetail> = emptyList(),
 ) {
   companion object {
     fun decode(text: String): Scenario {
@@ -152,15 +177,20 @@ class Scenario(
         olderPullRequests = file.olderPullRequests,
         discoveredServers = file.discoveredServers,
         capabilities = file.connection?.capabilities.orEmpty(),
+        transitions = file.transitions.mapValues { (_, entries) -> entries.map(::transition) },
+        scheduledTasks = file.scheduledTasks,
+        previewSessions = file.previewSessions,
+        deviceState = file.deviceState,
+        deviceDetails = file.deviceDetails,
       )
     }
 
     /**
-     * One scenario out of a directory's files, in order. Projects, threads and terminals dedupe
-     * by id, first wins, discovered servers by pid and port. Runs, items, requests, sessions,
-     * checkpoints and provider threads append per thread. The last file that sets a connection
-     * wins, and a directory that sets none is connected; capabilities add up across files. So do
-     * snooze presets, and a directory that sets none has upstream's defaults.
+     * One scenario out of a directory's files, in order. Projects, threads, terminals and
+     * scheduled tasks dedupe by id, first wins, discovered servers by pid and port. Runs, items,
+     * requests, sessions, checkpoints and provider threads append per thread. The last file that
+     * sets a connection wins, and a directory that sets none is connected; capabilities add up
+     * across files. So do snooze presets, and a directory that sets none has upstream's defaults.
      */
     fun merge(parts: List<Scenario>): Scenario = Scenario(
       connection = parts.lastOrNull { it.connection != null }?.connection
@@ -192,6 +222,11 @@ class Scenario(
       olderPullRequests = parts.flatMap { it.olderPullRequests }.distinctBy { it.url },
       discoveredServers = parts.flatMap { it.discoveredServers }.distinctBy { it.pid to it.port },
       capabilities = parts.flatMap { it.capabilities }.toSet(),
+      transitions = parts.map { it.transitions }.fold(emptyMap(), ::append),
+      scheduledTasks = parts.flatMap { it.scheduledTasks }.distinctBy { it.id },
+      previewSessions = parts.map { it.previewSessions }.fold(emptyMap(), ::append),
+      deviceState = parts.lastOrNull { it.deviceState != null }?.deviceState,
+      deviceDetails = parts.flatMap { it.deviceDetails }.distinctBy { it.hostId to it.deviceId },
     )
 
     fun failed(name: String, message: String): Scenario = Scenario(
@@ -252,4 +287,9 @@ private fun fixtureItem(entry: JsonObject): FixtureItem {
     JsonObject(entry - "after"),
   )
   return FixtureItem(item, after)
+}
+
+private fun transition(entry: JsonObject): FixtureTransition {
+  val after: Long = (entry["after"] as? JsonPrimitive)?.long ?: 0
+  return FixtureTransition(JsonObject(entry - "after"), after)
 }

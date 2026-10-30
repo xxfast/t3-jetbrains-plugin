@@ -69,7 +69,7 @@ class SidebarFoldersTest {
       thread("done", project = "router", settledOverride = "settled"),
     )
     val sections: ThreadSections =
-      sections(threads, "", folderGroups = listOf(kstore, router), keepEmptyFolders = false)
+      sections(threads, folderGroups = listOf(kstore, router), keepEmptyFolders = false)
     val folders: List<ProjectFolder> = sections.folders!!
     assertEquals(listOf("kstore", "router"), folders.map { it.project.id })
     assertEquals(listOf("new", "old"), folders[0].threads.map { it.id })
@@ -80,7 +80,7 @@ class SidebarFoldersTest {
 
   @Test
   fun `without folder groups there are no folders`() {
-    assertNull(sections(listOf(thread("a")), "").folders)
+    assertNull(sections(listOf(thread("a"))).folders)
   }
 
   @Test
@@ -164,14 +164,14 @@ class SidebarFoldersTest {
       thread("pinned", project = "router", pinnedAt = EPOCH),
     )
     val sections: ThreadSections =
-      sections(threads, "", folderGroups = listOf(kstore, router), keepEmptyFolders = false)
+      sections(threads, folderGroups = listOf(kstore, router), keepEmptyFolders = false)
     val closed: Map<String, Boolean> = mapOf("router" to false)
     assertEquals(
       listOf("pinned", "a", "b", "c"),
       sections.cards(closed, routeThreadId = "c").map { it.id },
     )
     assertEquals("b", nextCard(sections.cards(closed, routeThreadId = "a"), "a"))
-    val flat: ThreadSections = sections(threads, "")
+    val flat: ThreadSections = sections(threads)
     assertEquals(flat.inbox, flat.cards(closed, routeThreadId = null))
   }
 
@@ -208,7 +208,7 @@ class SidebarFoldersTest {
       .sortedBy { it.name }
     val scenario: Scenario = Scenario.merge(files.map { Scenario.decode(it.readText()) })
     val sections: ThreadSections = sections(
-      scenario.threads, "", folderGroups = scenario.projects, keepEmptyFolders = false,
+      scenario.threads, folderGroups = scenario.projects, keepEmptyFolders = false,
     )
     val folders: List<ProjectFolder> = sections.folders!!
     assertEquals(listOf("KStore", "Decompose-Router"), folders.map { it.project.title })

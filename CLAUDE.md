@@ -63,23 +63,31 @@ How it fits together:
 - Composables take state, not the client. That's what makes fixture and real interchangeable, and
   it's what makes screenshot tests possible later.
 - A scenario is a folder in `harness/scenarios/`; the fixture client merges every `*.json` in it.
-  `default/` is the thread list plus one demo thread per thread-level state (`running.json`,
+  `default/` is the thread list plus one demo thread per thread-level state (`running.json`, whose
+  provider thread has a context usage with a cost, so the meter's card shows a Cost line,
   `waiting-approval.json`, `waiting-question.json`, `unknown-items.json`, `many-items.json`
-  (its file changes 2 to 6 are the diff shapes `getTurnItem` answers: a raw add, a raw delete,
-  a patch that omits one of three files, a truncated hunk, content without a diff; the fixture
-  client strips diffs from the thread stream like the server), `stopped.json` ending in a run
-  the user stopped, `unread.json`, `snoozed.json` with one sleeping and one woken,
-  `settled.json` with enough older settled threads for "Show N more",
-  `compaction.json` with a user `/compact`, one T3 sent before the cache expired, a stopped one,
-  a failed one and an `onReturn` one compacting over `after` delays, `background-work.json`
-  with a settled run whose provider still waits on two commands and a subagent (the work line
-  at the end of the timeline), and a second thread waiting on one subagent whose `progress`
-  moves on over `after` delays, `tasks.json` with `todo_list` updates that land as Tasks rows
-  over `after` delays, `subagent-approval.json` with a running parent whose subagent waits on
-  an approval (it stays in the inbox, out of the Working shelf), `worktree-setup.json` with a
-  first turn whose worktree is still being prepared, `permissions.json` with a thread on a model
-  without traits (the fixture server's `defaultRuntimeMode` is Supervised, so most threads hide
-  the permissions chip, the full access ones show it and this one keeps an icon), `skills.json`
+  (five runs for the timeline minimap; its file changes 2 to 6 are the diff shapes
+  `getTurnItem` answers: a raw add, a raw delete, a patch that omits one of three files, a
+  truncated hunk, content without a diff; the fixture client strips diffs from the thread
+  stream like the server), `stopped.json` ending in a run the user stopped, `unread.json`,
+  `snoozed.json` with one sleeping and one woken, `settled.json` with enough older settled
+  threads for "Show N more", `compaction.json` with a user `/compact`, one T3 sent before the
+  cache expired, a stopped one, a failed one and an `onReturn` one compacting over `after`
+  delays, `background-work.json` with a settled run whose provider still waits on two commands
+  and a subagent (the work line at the end of the timeline), and a second thread waiting on one
+  subagent whose `progress` moves on over `after` delays, `tasks.json` with `todo_list` updates
+  that land as Tasks rows over `after` delays, `subagent-approval.json` with a running parent
+  whose subagent waits on an approval (it stays in the inbox, out of the Working shelf),
+  `code-blocks.json` with Kotlin, TypeScript, JSON, shell, bare and unknown fences and a Kotlin
+  block that streams in, `usage-limit.json` with a run a usage limit stopped (the recovery
+  banner above the composer; the plain error banner over the timeline is `unread.json`'s
+  failed "Run the wasmJs browser tests headless"), `notifications.json` with `transitions`,
+  thread-level `after`s that lay fields over a row: "Fix predictive back on iOS 26" completes
+  8 s after load and "Benchmark the IndexedDB codec" fails 4 s later, for the "Thread
+  completed" and "Thread failed" balloons, `worktree-setup.json` with a first turn whose
+  worktree is still being prepared, `permissions.json` with a thread on a model without traits
+  (the fixture server's `defaultRuntimeMode` is Supervised, so most threads hide the
+  permissions chip, the full access ones show it and this one keeps an icon), `skills.json`
   with provider skills and a
   workspace snapshot for the `$` menu, `files.json` with the files and folders `@` searches,
   `lineage.json` with a fork that has a parent, a fork of its own, running, finished and failed
@@ -91,16 +99,25 @@ How it fits together:
   fixture server's `defaultProjectScripts` ("Lint") the way `resolveProjectScripts` has it),
   `servers.json` with two web servers for the running thread, one a terminal started and one
   the agent did, for T3 Thread Details' Servers (a stop removes the row until the next
-  reload), and its `connection.json` grants the
+  reload), `scheduled-tasks.json` with three scheduled tasks for T3 Sidebar's Scheduled tab
+  (every 30 min, weekdays at 09:00, and a paused webhook one whose last run failed; Run now
+  goes running, then succeeded 2 s later), the 30 min one bound to `lineage.json`'s parent,
+  "Plan the KStore 1.0 release", so its T3 Thread Details shows Automations, `devices.json`
+  with a preview tab on the running thread (so "Open preview" is on there and off elsewhere)
+  and a device state for the Device panel: a stopped Pixel on this machine and a running
+  iPhone on an SSH host, the iPhone's `device.detail` included; scenarios without one read as
+  device support off, and its `connection.json` grants the
   operate, terminal and `source-control:write` scopes so every action is live, the branch
   pickers included, advertises `localServerStop` for the servers' stop buttons, and sets the
   server's `settings.snoozePresets` (tomorrow 08:00, 2 h, 20 min, out of order) so the snooze
   menu shows them soonest first. `disconnected/`, `pairing/`, `auth-error/`, `read-only/` (no operate) and
   `empty-server/` cover connection-level states; the ones with threads carry a byte-for-byte copy
-  of `default/list.json`. `boring/` is that copy plus default's `connection.json` and
-  `waiting-approval.json`, for the boring sidebar: turn it on by hand in Settings > Tools >
-  T3 Code > Beta, then close KStore's folder for its attention dot. Shapes are the same `:protocol` types the real client decodes, so
-  scenarios double as test fixtures.
+  of `default/list.json`. `disconnected/` lists them as the last snapshot, dimmed, read-only and
+  marked stale under the banner (`ShellSnapshotCache`, #71). `boring/` is that copy plus
+  default's `connection.json` and `waiting-approval.json`, for the boring sidebar: turn it on
+  by hand in Settings > Tools > T3 Code > Beta, then close KStore's folder for its attention
+  dot. Shapes are the same `:protocol` types the real client decodes, so scenarios double as
+  test fixtures.
 - Items may carry an `after` delay in milliseconds. The fixture client replays them in order so a
   "running" thread visibly grows, which is the only way to design streaming.
 - The fixture client watches its directory. Edit a JSON file, the tool window updates. No rebuild
@@ -346,6 +363,17 @@ Hard-won, so recorded here rather than rediscovered.
   `runHarness` boots the local IDE (263 here) while `runIde` and users run 2025.3, so a
   Jewel-level change only counts once it's seen on 2025.3: drop `t3.localIde` from the
   worktree's `local.properties` for that run.
+- Chat View code blocks highlight through Jewel's `CodeHighlighterFactory` (public, a project
+  service). Its `LexerBasedCodeHighlighter` is Kotlin `internal`, which `javap` doesn't show;
+  only the compiler says. It finds a language by `MimeType.displayName().lowercase()` through
+  `LanguageUtil.findRegisteredLanguage` (id or display name, any case), and Jewel's default
+  fence recognizer drops `ts`, `tsx` and `zsh` and gives TypeScript a mime that never
+  resolves. So the processor carries the fence word as written (`fenceMimeType`) and
+  `ChatCodeHighlighter` resolves it the composer's way and hands Jewel the language's id. It
+  also captures the global scheme when asked, not when it re-highlights, so the wrapper asks
+  again on every `EditorColorsManager.TOPIC`. No flicker while a block streams: Jewel collects
+  with `collectAsState(initial = plain)`, and `produceState` keeps the last value across a new
+  flow, so only a freshly composed block shows plain for a frame.
 - `IntelliJIconKey.fromPlatformIcon` on 2025.3 loads the Swing icon's resource through the
   plugin's classloader, so another plugin's icon (Kotlin, Markdown file types) logs a SEVERE
   per use and draws a square. Paint the `javax.swing.Icon` into a `BufferedImage` at the
@@ -354,6 +382,11 @@ Hard-won, so recorded here rather than rediscovered.
   and favicons share one (`MessageChipsRendererExtension` wraps the favicon one). An inline
   content placeholder's width goes through `sp` and rounds; give it a whole pixel of slack or
   the label ellipsises.
+- Jewel's `CodeHighlighter` gained a second abstract overload on 262, `highlight(code,
+  language: String)`, and the markdown renderer calls it for fence words Jewel has no mime type
+  for. A class implementing the 2025.3 interface must declare that descriptor by hand, as a
+  plain method (`ChatCodeHighlighter`), or it throws `AbstractMethodError` at runtime.
+  `verifyPlugin` doesn't catch it; only running on a 2026.x IDE does (2026-10-27).
 - A Search Everywhere-shaped chooser is `com.intellij.ide.actions.BigPopupUI` (public, what
   `SearchEverywhereUI` and `RunAnythingPopupUI` extend), shown with `createComponentPopupBuilder`
   and `showCenteredInCurrentWindow`. Learned on the model picker, 2026-10-21:
@@ -370,6 +403,27 @@ Hard-won, so recorded here rather than rediscovered.
     SEVERE) until it has a font.
   - `org.jetbrains.jewel.foundation.LocalComponent` (experimental, not internal) is the Swing
     component hosting a composable, for anchoring a `JBPopup` to Compose content.
+- The JCEF web view (#22, 2026-10-27) can't use the browser-session cookie.
+  `POST /api/auth/browser-session` takes a one-time pairing credential, not an access token,
+  and minting one (`POST /api/auth/pairing-token`) needs `access:write`; the live server
+  answers the plugin's token with 403 `insufficient_scope`. So `T3WebViewEditor` adds
+  `Authorization: Bearer` to every request to the server's origin (`isServerOrigin`, `ws` as
+  `http`) in a `CefResourceRequestHandler`; `/api/auth/session` then says authenticated and
+  `POST /api/auth/websocket-ticket` answers. The web app's primary socket only sends the
+  cookie, so the socket works only if CEF lets the handler touch the upgrade; the handler logs
+  each path at debug to tell. The pages render, but saving needs the scopes the plugin
+  doesn't ask for (`settings:write`, `providers:manage`). Asking for `access:write` would
+  allow the cookie, at the cost of every user pairing again. Unknown GETs serve the SPA, so
+  deep links work.
+- JCEF left core in 262 for a bundled, OS and arch specific plugin, `com.intellij.modules.jcef`
+  (`plugins/jcef-plugin`, `JBCefApp` in its `intellij.platform.ui.jcef` content module). A
+  plugin that doesn't depend on it gets `ClassNotFoundException: com.intellij.ui.jcef.JBCefApp`
+  at runtime; `verifyPlugin` doesn't catch it, only running on 262 does (2026-10-27). On
+  2025.3.0, our compile target, JCEF is in core `app.jar` and the id doesn't exist (the docs
+  say the alias came in 2025.3.1), so a required depends would stop the plugin loading there.
+  The plugin has it as an optional `<depends>` with an empty `t3code-jcef.xml`, keeps the web
+  view in `plugin.xml`, and calls `JBCefApp` first through `isJcefSupported()`, which catches
+  `LinkageError` and falls back to the system browser.
 
 ## Style
 

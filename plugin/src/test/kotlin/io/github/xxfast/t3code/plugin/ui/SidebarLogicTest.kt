@@ -7,12 +7,19 @@ import io.github.xxfast.t3code.protocol.generated.PendingRuntimeRequestSummary
 import io.github.xxfast.t3code.protocol.generated.ThreadLinkedPullRequest
 import io.github.xxfast.t3code.protocol.generated.ThreadPullRequestLink
 import io.github.xxfast.t3code.protocol.generated.ThreadPullRequestSnapshot
+import io.github.xxfast.t3code.protocol.generated.ThreadSearchMatch
 import java.time.Duration
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
 
 class SidebarLogicTest {
@@ -42,7 +49,7 @@ class SidebarLogicTest {
   @Test
   fun `subagents are hidden`() {
     val threads: List<Thread> = listOf(thread("parent"), thread("sub", relationship = "subagent"))
-    assertEquals(listOf("parent"), sections(threads, "").inbox.map { it.id })
+    assertEquals(listOf("parent"), sections(threads).inbox.map { it.id })
   }
 
   @Test
@@ -54,7 +61,7 @@ class SidebarLogicTest {
       thread("archived", archivedAt = "2026-10-19T00:00:00Z"),
       thread("busy", activeRunId = "r"),
     )
-    val sections: ThreadSections = sections(threads, "")
+    val sections: ThreadSections = sections(threads)
     assertEquals(setOf("idle", "running", "busy"), sections.inbox.map { it.id }.toSet())
     assertEquals(listOf("done"), sections.settled.map { it.id })
   }
@@ -62,7 +69,7 @@ class SidebarLogicTest {
   @Test
   fun `without settlement on the server settled rows stay in the inbox`() {
     val threads: List<Thread> = listOf(thread("idle"), thread("done", settledOverride = "settled"))
-    val sections: ThreadSections = sections(threads, "", settlement = false)
+    val sections: ThreadSections = sections(threads, settlement = false)
     assertEquals(setOf("idle", "done"), sections.inbox.map { it.id }.toSet())
     assertEquals(emptyList(), sections.settled)
   }
@@ -76,10 +83,10 @@ class SidebarLogicTest {
         .copy(snoozedUntil = "2026-10-20T09:00:00Z"),
       thread("woken").copy(snoozedUntil = "2026-10-19T09:00:00Z"),
     )
-    val sections: ThreadSections = sections(threads, "", now = now)
+    val sections: ThreadSections = sections(threads, now = now)
     assertEquals(listOf("sooner", "later"), sections.snoozed.map { it.id })
     assertEquals(listOf("woken"), sections.inbox.map { it.id })
-    val unsupported: ThreadSections = sections(threads, "", snooze = false, now = now)
+    val unsupported: ThreadSections = sections(threads, snooze = false, now = now)
     assertEquals(emptyList(), unsupported.snoozed)
     assertEquals(listOf("sooner"), unsupported.settled.map { it.id })
   }
@@ -103,6 +110,150 @@ class SidebarLogicTest {
   }
 
   @Test
+  fun `previous and next step one row and stop at the ends`() {
+    val ids: List<String> = listOf("a", "b", "c")
+    val previous: ThreadTraversalDirection = ThreadTraversalDirection.Previous
+    val next: ThreadTraversalDirection = ThreadTraversalDirection.Next
+    assertEquals("a", resolveAdjacentThreadId(ids, "b", previous))
+    assertEquals("c", resolveAdjacentThreadId(ids, "b", next))
+    assertNull(resolveAdjacentThreadId(ids, "a", previous), "No wrap at the top")
+    assertNull(resolveAdjacentThreadId(ids, "c", next), "No wrap at the bottom")
+    assertEquals("c", resolveAdjacentThreadId(ids, null, previous), "Nothing open: the last")
+    assertEquals("a", resolveAdjacentThreadId(ids, null, next), "Nothing open: the first")
+    assertNull(resolveAdjacentThreadId(ids, "gone", next), "The open thread isn't a row")
+    assertNull(resolveAdjacentThreadId(emptyList(), null, next))
+  }
+
+  @Test
+  fun `an open subagent stands for its nearest row`() {
+    fun child(id: String, parent: String?): Thread = thread(id, relationship = "subagent")
+      .let { it.copy(lineage = it.lineage.copy(parentThreadId = parent)) }
+    val threads: List<Thread> =
+      listOf(thread("root"), child("sub", "root"), child("subsub", "sub"), child("orphan", null))
+    assertEquals("root", resolveSidebarRowThreadId("subsub", threads))
+    assertEquals("root", resolveSidebarRowThreadId("root", threads))
+    assertEquals("orphan", resolveSidebarRowThreadId("orphan", threads), "Broken chain: itself")
+    assertEquals("unknown", resolveSidebarRowThreadId("unknown", threads))
+    val cycle: List<Thread> = listOf(child("x", "y"), child("y", "x"))
+    assertEquals("x", resolveSidebarRowThreadId("x", cycle), "A cycle: itself")
+  }
+
+  @Test
+  fun `navigation walks the rows on screen, a closed shelf only keeping the open one`() {
+    val sections = ThreadSections(
+      inbox = listOf(thread("p"), thread("a")),
+      settled = listOf(thread("s1"), thread("s2"), thread("s3")),
+      snoozed = listOf(thread("z1"), thread("z2")),
+    )
+    val open = Shelves(settled = true, snoozed = true)
+    assertEquals(
+      listOf("p", "a", "z1", "z2", "s1", "s2", "s3"),
+      orderedThreadIds(sections, open, settledShown = 10, routeRowThreadId = null),
+    )
+    assertEquals(
+      listOf("p", "a", "z1", "z2", "s1"),
+      orderedThreadIds(sections, open, settledShown = 1, routeRowThreadId = null),
+      "Only the settled page",
+    )
+    assertEquals(
+      listOf("p", "a", "z1", "z2", "s1", "s3"),
+      orderedThreadIds(sections, open, settledShown = 1, routeRowThreadId = "s3"),
+      "The open row past the page comes along",
+    )
+    assertEquals(
+      listOf("p", "a", "z2"),
+      orderedThreadIds(sections, Shelves(), settledShown = 10, routeRowThreadId = "z2"),
+      "Closed shelves keep only the open row",
+    )
+    assertEquals(
+      listOf("p", "a", "s3"),
+      orderedThreadIds(sections, Shelves(), settledShown = 1, routeRowThreadId = "s3"),
+      "Even past the page",
+    )
+  }
+
+  @Test
+  fun `navigation walks the Working shelf after the inbox, and open folders in place`() {
+    val working = ThreadSections(
+      inbox = listOf(thread("a")),
+      settled = listOf(thread("s")),
+      snoozed = listOf(thread("z")),
+      working = listOf(thread("w1"), thread("w2")),
+    )
+    val open = Shelves(settled = true, snoozed = true, working = true)
+    assertEquals(
+      listOf("a", "w1", "w2", "z", "s"),
+      orderedThreadIds(working, open, settledShown = 10, routeRowThreadId = null),
+    )
+    assertEquals(
+      listOf("a", "w2", "z", "s"),
+      orderedThreadIds(working, open.copy(working = false), 10, routeRowThreadId = "w2"),
+      "A closed Working shelf keeps only the open row",
+    )
+    val pinned: Thread = thread("p", pinnedAt = TEN_TO)
+    val kstore: Project = project("kstore", "KStore")
+    val router: Project = project("router", "Router")
+    val folders = ThreadSections(
+      inbox = listOf(pinned, thread("k1"), thread("k2"), thread("r1")),
+      settled = emptyList(),
+      folders = listOf(
+        ProjectFolder(kstore, listOf(thread("k1"), thread("k2"))),
+        ProjectFolder(router, listOf(thread("r1"))),
+      ),
+    )
+    val closed: Map<String, Boolean> = mapOf("kstore" to false)
+    assertEquals(
+      listOf("p", "r1"),
+      orderedThreadIds(folders, Shelves(), 10, routeRowThreadId = null, closed),
+      "A closed folder's rows aren't walked",
+    )
+    assertEquals(
+      listOf("p", "k2", "r1"),
+      orderedThreadIds(folders, Shelves(), 10, routeRowThreadId = "k2", closed),
+      "Except the open one",
+    )
+  }
+
+  @Test
+  fun `jump hints want exactly a jump shortcut's modifiers`() {
+    val ctrlAlt = ShortcutModifiers(ctrl = true, alt = true)
+    val bound: List<ShortcutModifiers> = listOf(ctrlAlt, ShortcutModifiers(meta = true))
+    assertTrue(shouldShowThreadJumpHints(ctrlAlt, bound))
+    assertTrue(shouldShowThreadJumpHints(ShortcutModifiers(meta = true), bound))
+    assertFalse(shouldShowThreadJumpHints(ShortcutModifiers(ctrl = true), bound), "Not all held")
+    assertFalse(
+      shouldShowThreadJumpHints(ctrlAlt.copy(shift = true), bound),
+      "One too many held",
+    )
+    assertFalse(shouldShowThreadJumpHints(ctrlAlt, emptyList()), "No jump bound")
+  }
+
+  @Test
+  fun `jump hints show after a hold and hide at once`() = runTest {
+    val hints = ThreadJumpHintVisibility(this)
+    hints.sync(true)
+    advanceTimeBy(THREAD_JUMP_HINT_SHOW_DELAY_MS - 1)
+    assertFalse(hints.visible.value, "Not yet")
+    hints.sync(true)
+    advanceTimeBy(2)
+    assertTrue(hints.visible.value, "A second sync doesn't restart the wait")
+    hints.sync(false)
+    assertFalse(hints.visible.value)
+    hints.sync(true)
+    advanceTimeBy(THREAD_JUMP_HINT_SHOW_DELAY_MS / 2)
+    hints.sync(false)
+    advanceTimeBy(THREAD_JUMP_HINT_SHOW_DELAY_MS)
+    assertFalse(hints.visible.value, "Let go before the delay")
+  }
+
+  @Test
+  fun `a bulk settle moves on past the cards settling with it`() {
+    val inbox: List<Thread> = listOf(thread("a"), thread("b"), thread("c"), thread("d"))
+    assertEquals("d", nextCard(inbox, "b", coParking = setOf("b", "c")))
+    assertNull(nextCard(inbox, "a", coParking = setOf("a", "b", "c", "d")))
+  }
+
+  @Test
   fun `inbox is pinned by order key, then active newest first`() {
     val threads: List<Thread> = listOf(
       thread("old", createdAt = "2026-10-19T08:00:00Z"),
@@ -115,7 +266,7 @@ class SidebarLogicTest {
     )
     assertEquals(
       listOf("pin-a", "pin-b", "pin-keyless", "woken", "new", "old", "keyed"),
-      sections(threads, "").inbox.map { it.id },
+      sections(threads).inbox.map { it.id },
     )
   }
 
@@ -131,7 +282,7 @@ class SidebarLogicTest {
     )
     assertEquals(
       listOf("active-later", "new", "old"),
-      sections(threads, "").settled.map { it.id },
+      sections(threads).settled.map { it.id },
     )
   }
 
@@ -147,15 +298,118 @@ class SidebarLogicTest {
   }
 
   @Test
-  fun `search matches title case-insensitively`() {
+  fun `search matches title case-insensitively, in the list's order`() {
     val threads: List<Thread> = listOf(
-      thread("a", title = "Fix Predictive Back", settledOverride = "settled"),
-      thread("b", title = "Release notes"),
       thread("c", title = "Back to basics", status = "running"),
+      thread("b", title = "Release notes"),
+      thread("a", title = "Fix Predictive Back", settledOverride = "settled"),
     )
-    val sections: ThreadSections = sections(threads, "  back ")
-    assertEquals(listOf("c"), sections.inbox.map { it.id })
-    assertEquals(listOf("a"), sections.settled.map { it.id })
+    assertEquals(listOf("c", "a"), searchSidebarThreads(threads, "  back ").map { it.id })
+    assertTrue(searchSidebarThreads(threads, "  ").isEmpty())
+  }
+
+  @Test
+  fun `search matches a pull request's number, repository and title`() {
+    val threads: List<Thread> = listOf(
+      thread("a", title = "Release", pullRequests = listOf(link(212, "open"))),
+      thread("b", title = "Other"),
+    )
+    assertEquals(listOf("a"), searchSidebarThreads(threads, "#212").map { it.id })
+    assertEquals(listOf("a"), searchSidebarThreads(threads, "pr 212").map { it.id })
+    assertEquals(
+      listOf("a"),
+      searchSidebarThreads(threads, "t3-jetbrains-plugin#212").map { it.id },
+    )
+    assertTrue(searchSidebarThreads(threads, "#213").isEmpty())
+  }
+
+  @Test
+  fun `a dismissed stack member isn't searched, a legacy link is without links`() {
+    val dismissed: Thread =
+      thread("a", pullRequests = listOf(link(7, "open", source = "stack-dismissed")))
+    assertTrue(searchSidebarThreads(listOf(dismissed), "#7").isEmpty())
+    val legacy: Thread = thread("b", pullRequests = emptyList())
+      .copy(linkedPullRequest = ThreadLinkedPullRequest("kstore", "xxfast/KStore", 9, "u"))
+    assertEquals(listOf("#9", "xxfast/KStore#9", "u"), threadPullRequestSearchTerms(legacy))
+    val branch: Thread = thread("c", pullRequests = listOf(link(3, "open")))
+      .copy(branchPullRequest = ThreadLinkedPullRequest("kstore", "xxfast/KStore", 2, "v"))
+    assertEquals("#2", threadPullRequestSearchTerms(branch).first())
+    assertTrue("PR 3" in threadPullRequestSearchTerms(branch))
+  }
+
+  @Test
+  fun `message matches follow title matches, once each`() {
+    val threads: List<Thread> = listOf(
+      thread("a", title = "Nothing here"),
+      thread("b", title = "Codec docs"),
+      thread("c", title = "Also nothing"),
+    )
+    val results: List<Thread> = searchSidebarThreads(threads, "codec", setOf("c", "b", "x"))
+    assertEquals(listOf("b", "c"), results.map { it.id })
+  }
+
+  @Test
+  fun `the pull request badge shows when every word matches, accents aside`() {
+    val row: Thread = thread("a", pullRequests = listOf(link(212, "open")))
+    assertTrue(pullRequestMatchesSearchQuery(row, "#212"))
+    assertTrue(pullRequestMatchesSearchQuery(row, "pr  212"))
+    assertFalse(pullRequestMatchesSearchQuery(row, "pr 213"))
+    assertFalse(pullRequestMatchesSearchQuery(row, " "))
+    assertEquals("cafe", normalizeSearchText(" Café "))
+  }
+
+  @Test
+  fun `the highlight wraps and resets when the results reorder`() {
+    assertEquals(1, moveSearchHighlight(0, 3, down = true))
+    assertEquals(0, moveSearchHighlight(2, 3, down = true))
+    assertEquals(2, moveSearchHighlight(0, 3, down = false))
+    assertNull(moveSearchHighlight(0, 0, down = true))
+    val highlight = SearchHighlight(orderKey = "a b", index = 1)
+    assertEquals(1, highlight.activeIn("a b"))
+    assertEquals(0, highlight.activeIn("b a"))
+  }
+
+  @Test
+  fun `an excerpt highlights every match, folding only ASCII case`() {
+    assertEquals(
+      listOf("Use " to false, "Codec" to true, " and " to false, "codec" to true),
+      highlightSearchText("Use Codec and codec", " codec "),
+    )
+    assertEquals(listOf("plain" to false), highlightSearchText("plain", ""))
+  }
+
+  @Test
+  fun `message search debounces, needs two characters and swallows failures`() = runTest {
+    val asked: MutableList<String> = mutableListOf()
+    val queries = MutableStateFlow("")
+    val states: MutableList<ThreadSearch> = mutableListOf()
+    val job = launch {
+      threadSearch(queries) { query ->
+        asked += query
+        if (query == "boom") error("down")
+        listOf(ThreadSearchMatch("t", "p", "user", "a $query b", null))
+      }.toList(states)
+    }
+    runCurrent()
+    queries.value = "c"
+    runCurrent()
+    queries.value = "co"
+    runCurrent()
+    advanceTimeBy(THREAD_SEARCH_DEBOUNCE_MS / 2)
+    queries.value = " cod "
+    runCurrent()
+    assertEquals(ThreadSearch(pending = true), states.last())
+    advanceTimeBy(THREAD_SEARCH_DEBOUNCE_MS + 1)
+    assertEquals(listOf("cod"), asked, "The keystroke before it never went out")
+    assertEquals("a cod b", states.last().matches.single().snippet)
+    assertFalse(states.last().pending)
+    queries.value = "boom"
+    advanceTimeBy(THREAD_SEARCH_DEBOUNCE_MS + 1)
+    assertEquals(ThreadSearch(), states.last())
+    queries.value = ""
+    runCurrent()
+    assertEquals(ThreadSearch(), states.last())
+    job.cancel()
   }
 
   @Test
@@ -292,22 +546,45 @@ class SidebarLogicTest {
       thread("c").copy(projectId = "other"),
     )
     fun shown(filter: ProjectFilter): List<String> =
-      sections(threads, "", filter).inbox.map { it.id }
+      sections(threads, filter).inbox.map { it.id }
     assertEquals(listOf("a", "b", "c"), shown(ProjectFilter.All).sorted())
     assertEquals(listOf("b"), shown(ProjectFilter.Only(setOf("router"))))
     assertEquals(listOf("a", "b"), shown(ProjectFilter.Only(setOf("kstore", "router"))).sorted())
   }
 
   @Test
-  fun `an empty list says when the filter is why`() {
+  fun `an empty list says when the filter is why, naming the project`() {
     val projects: List<Project> = listOf(project("kstore", "KStore"), project("router", "Router"))
     val one: ProjectFilter = ProjectFilter.Only(setOf("kstore"))
     val two: ProjectFilter = ProjectFilter.Only(setOf("kstore", "router"))
-    assertEquals("No threads in KStore yet", emptyHint(projects, "", one))
-    assertEquals("No threads in these projects yet", emptyHint(projects, "", two))
-    assertEquals("No threads", emptyHint(projects, "", ProjectFilter.All))
-    assertEquals("No threads match", emptyHint(projects, "x", one))
-    assertTrue(emptyHint(emptyList(), "", one).startsWith("No projects yet"))
+    assertEquals("No threads in KStore yet", emptyHint(projects, one))
+    assertEquals("No threads in these projects yet", emptyHint(projects, two))
+    assertEquals("No threads yet", emptyHint(projects, ProjectFilter.All))
+    assertEquals("No threads yet", emptyHint(projects, ProjectFilter.Only(setOf("gone"))))
+    assertEquals("No projects yet", emptyHint(emptyList(), one))
+  }
+
+  @Test
+  fun `searching the picker keeps the matching projects only, in order`() {
+    val projects: List<Project> = listOf(
+      project("kstore", "KStore"), project("router", "Decompose-Router"), project("nuget", "NuGet"),
+    )
+    val both: ProjectFilter = ProjectFilter.Only(setOf("kstore", "router"))
+    val matched: FilterChoices = filterChoices(projects, both, setOf("nuget"), query = " U ")
+    assertEquals(listOf("NuGet", "Decompose-Router"), matched.entries.map { it.label })
+    assertEquals(1, matched.divider)
+    val badged: List<String> = matched.entries.filter { it.selected }.map { it.label }
+    assertEquals(listOf("Decompose-Router"), badged)
+    assertEquals(listOf("kstore", "router"), matched.scoped.map { it.id }, "Scope isn't searched")
+    val none: FilterChoices = filterChoices(projects, ProjectFilter.All, query = "zzz")
+    assertEquals(emptyList(), none.entries, "No All projects while searching")
+  }
+
+  @Test
+  fun `a picker match ignores case and accents`() {
+    assertTrue(projectScopeMatches("Café Router", "cafe"))
+    assertTrue(projectScopeMatches("KStore", "sto"))
+    assertFalse(projectScopeMatches("KStore", "router"))
   }
 
   @Test

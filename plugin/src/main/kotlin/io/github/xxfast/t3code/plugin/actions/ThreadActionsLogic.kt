@@ -1,11 +1,17 @@
 package io.github.xxfast.t3code.plugin.actions
 
 import io.github.xxfast.t3code.plugin.ui.READ_ONLY as COMPOSER_READ_ONLY
+import io.github.xxfast.t3code.plugin.ui.BulkMenuItem
+import io.github.xxfast.t3code.plugin.ui.OrderKeyAssignment
 import io.github.xxfast.t3code.plugin.ui.ProjectFilter
+import io.github.xxfast.t3code.plugin.ui.SidebarThreadDropPlan
 import io.github.xxfast.t3code.plugin.ui.operateBlockReason
 import io.github.xxfast.t3code.plugin.ui.SnoozePreset
+import io.github.xxfast.t3code.plugin.ui.buildBulkTitleRegenerationContextMenuItem
+import io.github.xxfast.t3code.plugin.ui.buildBulkUnpinContextMenuItem
 import io.github.xxfast.t3code.plugin.ui.canSnooze
 import io.github.xxfast.t3code.plugin.ui.settled
+import io.github.xxfast.t3code.plugin.ui.topOfPinnedRunOrderKey
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Run
@@ -33,17 +39,18 @@ val INTERRUPTIBLE: Set<String> = setOf("preparing", "starting", "running", "wait
 
 enum class ThreadActionKind {
   Stop, Interrupt, NewThreadOnBranch, Archive, Pin, MarkUnread, Settle, AutoSettle, Snooze, Wake,
-  Rename, RegenerateTitle, Delete, FilterByProject, Copy,
+  Rename, RegenerateTitle, Delete, FilterByProject, Copy, Mute,
 }
 
 /**
  * `threadActionRequiresOperate`, threadActionMenu.logic.ts:92: read markers and copying stay
  * available to a read-only pairing. Filter by project isn't on upstream's list, so it greys too.
  * Upstream's new thread on a branch is a draft a read-only pairing could open; the plugin greys
- * it, as the draft could never be sent.
+ * it, as the draft could never be sent. Mute is plugin-only and local, so it never greys.
  */
 val ThreadActionKind.requiresOperate: Boolean
-  get() = this != ThreadActionKind.MarkUnread && this != ThreadActionKind.Copy
+  get() = this != ThreadActionKind.MarkUnread && this != ThreadActionKind.Copy &&
+    this != ThreadActionKind.Mute
 
 /**
  * Why no command can go out on [connection], or null when one can: [operateBlockReason], the one
@@ -66,7 +73,7 @@ fun disabledReason(
     ThreadActionKind.Stop, ThreadActionKind.NewThreadOnBranch, ThreadActionKind.Pin,
     ThreadActionKind.Settle, ThreadActionKind.AutoSettle, ThreadActionKind.Wake,
     ThreadActionKind.Rename, ThreadActionKind.Delete, ThreadActionKind.FilterByProject,
-    ThreadActionKind.Copy -> null
+    ThreadActionKind.Copy, ThreadActionKind.Mute -> null
     ThreadActionKind.RegenerateTitle ->
       if (row.titleRegeneration == null) null else "Already regenerating the title"
     // threadActionMenu.logic.ts's `canSnoozeNow`
@@ -153,13 +160,80 @@ fun archiveCommand(row: Thread, commandId: String): Command =
 fun unarchiveCommand(row: Thread, commandId: String): Command =
   Command.ThreadUnarchive(commandId = commandId, threadId = row.id)
 
-/** `pinThread` without an order key, or `unpinThread`. */
-fun pinCommand(row: Thread, commandId: String): Command =
+/**
+ * `pinThread` or `unpinThread`. A pin carries [orderKey] only to a server that stores pin orders,
+ * where it's [topOfPinnedRunOrderKey] (useThreadActions.ts's `pinThread`).
+ */
+fun pinCommand(row: Thread, commandId: String, orderKey: String? = null): Command =
   if (row.pinned) {
     Command.ThreadUnpin(commandId = commandId, threadId = row.id)
   } else {
-    Command.ThreadPin(commandId = commandId, threadId = row.id)
+    Command.ThreadPin(commandId = commandId, threadId = row.id, orderKey = orderKey)
   }
+
+/** One command of a drop, and upstream's toast title when it fails. */
+data class DropStep(val command: Command, val failure: String)
+
+/**
+ * What dropping [row] by [plan] sends, in order, stopping at the first failure:
+ * `handleThreadDragEnd` (Sidebar.tsx). Lifecycle first (the server refuses an active reorder on
+ * a pinned or settled row, and a pin reorder on an unpinned one), then the order keys. A drop
+ * onto pinned is a `thread.pin` even for a row that's pinned already (a snoozed pin), which wakes
+ * it. A pin without a planned key takes the top of the pinned run, as `pinThread` does. A settle
+ * is [SETTLE_ACTION]'s business, for its undo, so it sends nothing here.
+ */
+fun dropCommands(
+  plan: SidebarThreadDropPlan,
+  row: Thread,
+  threads: List<Thread>,
+  commandId: () -> String,
+): List<DropStep> = buildList {
+  fun pinReorder(assignment: OrderKeyAssignment) = DropStep(
+    Command.ThreadPinReorder(
+      commandId = commandId(),
+      threadId = assignment.id,
+      orderKey = assignment.orderKey,
+    ),
+    "Failed to reorder pinned threads",
+  )
+  when (plan) {
+    SidebarThreadDropPlan.None, SidebarThreadDropPlan.Settle -> Unit
+
+    is SidebarThreadDropPlan.MoveActive -> {
+      if (plan.unpin) {
+        val unpin = Command.ThreadUnpin(commandId = commandId(), threadId = row.id)
+        add(DropStep(unpin, "Failed to unpin thread"))
+      }
+      if (plan.unsettle) {
+        val unsettle =
+          Command.ThreadUnsettle(commandId = commandId(), threadId = row.id, reason = "user")
+        add(DropStep(unsettle, "Failed to un-settle thread"))
+      }
+      if (plan.unsnooze) {
+        val wake =
+          Command.ThreadUnsnooze(commandId = commandId(), threadId = row.id, reason = "user")
+        add(DropStep(wake, "Failed to wake thread"))
+      }
+      plan.assignments.forEach { assignment ->
+        val reorder = Command.ThreadActiveReorder(
+          commandId = commandId(),
+          threadId = assignment.id,
+          orderKey = assignment.orderKey,
+        )
+        add(DropStep(reorder, "Failed to reorder active threads"))
+      }
+    }
+
+    is SidebarThreadDropPlan.Pin -> {
+      val orderKey: String? = plan.orderKey ?: topOfPinnedRunOrderKey(threads)
+      val pin = Command.ThreadPin(commandId = commandId(), threadId = row.id, orderKey = orderKey)
+      add(DropStep(pin, "Failed to pin thread"))
+      plan.extraAssignments.forEach { add(pinReorder(it)) }
+    }
+
+    is SidebarThreadDropPlan.ReorderPinned -> plan.assignments.forEach { add(pinReorder(it)) }
+  }
+}
 
 /**
  * `settleThread` or `unsettleThread` (commands.ts:438 and 499), by where [row] is now. Un-settle
@@ -282,3 +356,69 @@ fun unsettleUndoCommands(row: Thread, commandId: String): List<Command> = buildL
     add(Command.ThreadSnooze(commandId = id, threadId = row.id, snoozedUntil = until))
   }
 }
+
+/** A bulk menu entry and the rows it acts on, which aren't always all of them. */
+data class BulkEntry(val item: BulkMenuItem, val targets: List<Thread>)
+
+/**
+ * The bulk menu `handleMultiSelectContextMenu` (Sidebar.tsx) builds for the picked [rows], in
+ * its order. Null entries aren't shown. Settle isn't behind `threadSettlement` there, so it
+ * isn't here either. [pinning], [snooze] and [titleRegeneration] are the server's capabilities;
+ * without [operable] everything but Mark unread greys, upstream's `canOperateThreads`.
+ */
+data class BulkThreadMenu(
+  val unpin: BulkEntry?,
+  val settle: BulkEntry,
+  val snooze: BulkEntry?,
+  val regenerateTitles: BulkEntry?,
+  val markUnread: BulkEntry,
+  val delete: BulkEntry,
+)
+
+fun bulkThreadMenu(
+  rows: List<Thread>,
+  pinning: Boolean,
+  snooze: Boolean,
+  titleRegeneration: Boolean,
+  operable: Boolean,
+  now: Instant,
+): BulkThreadMenu {
+  val count: Int = rows.size
+  val settling: List<Thread> = rows.filter { !it.settled }
+  val canSnoozeSelection: Boolean = snooze && rows.all { it.canSnooze(now) }
+  val supported: List<Thread> = if (titleRegeneration) rows else emptyList()
+  val regeneratable: List<Thread> = supported.filter { it.titleRegeneration == null }
+  val pinned: List<Thread> = if (pinning) rows.filter { it.pinned } else emptyList()
+  fun BulkMenuItem.unless(blocked: Boolean): BulkMenuItem = copy(disabled = disabled || blocked)
+  return BulkThreadMenu(
+    unpin = buildBulkUnpinContextMenuItem(pinned.size)
+      ?.let { BulkEntry(it.unless(!operable), pinned) },
+    settle = BulkEntry(
+      BulkMenuItem("Settle ($count)", disabled = settling.isEmpty() || !operable),
+      settling,
+    ),
+    snooze = if (canSnoozeSelection) {
+      BulkEntry(BulkMenuItem("Snooze ($count)", disabled = !operable), rows)
+    } else {
+      null
+    },
+    regenerateTitles = buildBulkTitleRegenerationContextMenuItem(supported.size, regeneratable.size)
+      ?.let { BulkEntry(it.unless(!operable), regeneratable) },
+    markUnread = BulkEntry(BulkMenuItem("Mark unread ($count)"), rows),
+    delete = BulkEntry(BulkMenuItem("Delete ($count)", disabled = !operable), rows),
+  )
+}
+
+/** The bulk delete's confirmation, Sidebar.tsx's `handleMultiSelectContextMenu`. */
+fun bulkDeletePrompt(count: Int): String = "Delete $count thread${if (count == 1) "" else "s"}?"
+
+const val BULK_DELETE_WARNING: String =
+  "This permanently clears conversation history for these threads."
+
+/** A bulk snooze's toast when some of it failed: how many, or all of it. */
+fun bulkSnoozeFailureTitle(failed: Int, snoozed: Int): String =
+  if (snoozed > 0) {
+    "Failed to snooze $failed thread${if (failed == 1) "" else "s"}"
+  } else {
+    "Failed to snooze threads"
+  }

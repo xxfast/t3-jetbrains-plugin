@@ -7,7 +7,6 @@ import androidx.compose.foundation.text.input.InputTransformation
 import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldBuffer
 import androidx.compose.foundation.text.input.TextFieldState
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -37,9 +36,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.isSpecified
 import io.github.xxfast.t3code.protocol.generated.ServerProviderSkill
-import org.jetbrains.jewel.ui.icon.IconKey
-import org.jetbrains.jewel.ui.icons.AllIconsKeys
-import org.jetbrains.jewel.ui.painter.rememberResourcePainterProvider
 
 /** A highlighted token in a code block's code, [start] to [end] in that code. */
 data class ComposerCodeHighlight(val start: Int, val end: Int, val style: SpanStyle)
@@ -161,7 +157,7 @@ class ComposerPromptDecorations {
       ?.let { SpanStyle(letterSpacing = it) }
 
     // `text-3xs`, the size after the name
-    ComposerPromptStyleKind.CHIP_DETAIL -> SpanStyle(fontSize = COMPOSER_CHIP_DETAIL_SCALE.em)
+    ComposerPromptStyleKind.CHIP_DETAIL -> SpanStyle(fontSize = CONTEXT_CHIP_DETAIL_SCALE.em)
 
     else -> textStyles[kind]
   }
@@ -301,31 +297,6 @@ fun composerPromptCaretLine(
   return layout.getLineForOffset(offset)
 }
 
-/** The IDE icon each [ComposerPromptChipIcon] draws, the `@` and `#` menus' where they share. */
-private val ComposerPromptChipIcon.key: IconKey
-  get() = when (this) {
-    // Upstream's `SkillChipIcon` (`SKILL_CHIP_ICON_SVG`, lucide's `box`): the IDE's box glyph
-    ComposerPromptChipIcon.SKILL -> AllIconsKeys.Nodes.Artifact
-    ComposerPromptChipIcon.FILE -> AllIconsKeys.FileTypes.Any_type
-    ComposerPromptChipIcon.FOLDER -> AllIconsKeys.Nodes.Folder
-    ComposerPromptChipIcon.IMAGE -> AllIconsKeys.FileTypes.Image
-    ComposerPromptChipIcon.THREAD -> AllIconsKeys.Toolwindows.ToolWindowMessages
-    ComposerPromptChipIcon.PULL_REQUEST -> AllIconsKeys.Vcs.Branch
-    ComposerPromptChipIcon.PULL_REQUEST_MERGED -> AllIconsKeys.Vcs.Merge
-    // Upstream's `MessageCircleIcon`
-    ComposerPromptChipIcon.REVIEW_COMMENT -> AllIconsKeys.General.Balloon
-    // Upstream's `circle-dashed` for an unresolved chip
-    ComposerPromptChipIcon.UNAVAILABLE -> AllIconsKeys.FileTypes.Unknown
-  }
-
-/** A painter per chip icon, for [composerPromptDecorationBackgrounds]. */
-@Composable
-fun rememberComposerPromptChipPainters(): Map<ComposerPromptChipIcon, Painter> =
-  ComposerPromptChipIcon.entries.associateWith { icon ->
-    val key: IconKey = icon.key
-    rememberResourcePainterProvider(key, key.iconClass).getPainter().value
-  }
-
 /**
  * How the blocks look: the quote's bar (`border-left: 2px`), the rule, the task checkbox
  * (`0.95rem`), the code block's frame.
@@ -354,7 +325,7 @@ fun Modifier.composerPromptDecorationBackgrounds(
   layout: State<(() -> TextLayoutResult?)?>,
   scroll: ScrollState,
   contentPadding: PaddingValues,
-  painters: Map<ComposerPromptChipIcon, Painter>,
+  painters: (icon: ContextChipIcon, iconPath: String?) -> Painter?,
   blockStyle: ComposerPromptBlockStyle,
 ): Modifier = drawBehind {
   val text: String = draft.text.toString()
@@ -394,39 +365,32 @@ fun Modifier.composerPromptDecorationBackgrounds(
   }
 }
 
-// `ContextChip` has no frame: only the icon, `size-[1em]` and centred on the line, in the kind's
-// ink. A file's, a folder's and an image's are the IDE's own icons and keep their colours,
-// but for a document's.
+// `ContextChip` has no frame: only the icon, `size-[1em]` and centred on the line. The lucide
+// glyphs take the kind's ink; a file's, a folder's and an image's are the IDE's own icons and
+// keep their colours, but for a document's, which `--document-icon-stroke` strokes in the ink.
 private fun DrawScope.drawChipIcons(
   presentation: ComposerPromptPresentation,
   result: TextLayoutResult,
-  painters: Map<ComposerPromptChipIcon, Painter>,
+  painters: (icon: ContextChipIcon, iconPath: String?) -> Painter?,
   inks: ContextChipInks,
 ) {
   val fontSize: TextUnit = result.layoutInput.style.fontSize
   val icon: Float =
-    if (fontSize.isSpecified) fontSize.toPx() * COMPOSER_CHIP_ICON_EM else 14.dp.toPx()
+    if (fontSize.isSpecified) fontSize.toPx() * CONTEXT_CHIP_ICON_EM else 14.dp.toPx()
   for (chip in presentation.chips) {
-    val painter: Painter = painters[chip.icon] ?: continue
+    val painter: Painter = painters(chip.icon, chip.iconPath) ?: continue
     val start: Int = presentation.displayOffset(chip.start)
     val slot: Rect = result.getBoundingBox(start)
     val line: Int = result.getLineForOffset(start)
     val centreY: Float = (result.getLineTop(line) + result.getLineBottom(line)) / 2
     val ink: Color = inks.ink(chip.accent, chip.state)
-    // A document's icon is stroked in the ink too, `--document-icon-stroke`
-    val tinted: Boolean = chip.icon !in UNTINTED_CHIP_ICONS || chip.accent.isDocument
+    val tinted: Boolean = contextChipGlyph(chip.icon) != null || chip.accent.isDocument
     val tint: ColorFilter? = ColorFilter.tint(ink).takeIf { ink != Color.Unspecified && tinted }
     translate(slot.left, centreY - icon / 2) {
       with(painter) { draw(Size(icon, icon), colorFilter = tint) }
     }
   }
 }
-
-private val UNTINTED_CHIP_ICONS: Set<ComposerPromptChipIcon> = setOf(
-  ComposerPromptChipIcon.FILE,
-  ComposerPromptChipIcon.FOLDER,
-  ComposerPromptChipIcon.IMAGE,
-)
 
 // The source line [start] to [end]'s visual lines
 private fun visualLines(
@@ -519,10 +483,3 @@ private fun DrawScope.drawCodeBlock(
   drawRoundRect(style.codeBackground, box.topLeft, box.size, radius)
   drawRoundRect(style.codeOutline, box.topLeft, box.size, radius, style = Stroke(1.dp.toPx()))
 }
-
-/** A chip's icon and the gap after it, in the prompt's font size: `size-[1em]`, `gap-[0.2em]`. */
-const val COMPOSER_CHIP_ICON_EM: Float = 1f
-const val COMPOSER_CHIP_GAP_EM: Float = 0.2f
-
-/** An attachment chip's size against its name, `text-3xs`. */
-const val COMPOSER_CHIP_DETAIL_SCALE: Float = 0.7f

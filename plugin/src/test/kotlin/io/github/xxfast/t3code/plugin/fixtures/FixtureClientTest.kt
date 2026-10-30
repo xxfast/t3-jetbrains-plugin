@@ -32,6 +32,8 @@ import io.github.xxfast.t3code.plugin.review.checkpointForRun
 import io.github.xxfast.t3code.protocol.Checkpoint
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.DEFAULT_SNOOZE_PRESETS
+import io.github.xxfast.t3code.protocol.Project
+import io.github.xxfast.t3code.protocol.ProjectRecord
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ServerSession
@@ -52,17 +54,28 @@ import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.ChatAttachment
 import io.github.xxfast.t3code.protocol.generated.ChatFileAttachment
 import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.DeviceDetailInput
+import io.github.xxfast.t3code.protocol.generated.DeviceServiceState
+import io.github.xxfast.t3code.protocol.generated.DeviceSummary
+import io.github.xxfast.t3code.protocol.generated.LimitRecoveryUpdate
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
+import io.github.xxfast.t3code.protocol.generated.ProjectIconOverride
+import io.github.xxfast.t3code.protocol.generated.ProjectMutation
+import io.github.xxfast.t3code.protocol.generated.ScheduledTask
+import io.github.xxfast.t3code.protocol.generated.SearchThreadsInput
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
+import io.github.xxfast.t3code.protocol.generated.StoredProjectIcon
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchResult
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchWorkspaceStrategy
+import io.github.xxfast.t3code.protocol.generated.ThreadSearchMatch
+import io.github.xxfast.t3code.protocol.generated.ThreadTokenUsageSnapshot
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import io.github.xxfast.t3code.protocol.generated.VcsListRefsInput
-import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
 import io.github.xxfast.t3code.protocol.generated.UserInputQuestion
+import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
 import io.github.xxfast.t3code.protocol.has
 import io.github.xxfast.t3code.protocol.pinned
 import java.nio.file.Files
@@ -82,6 +95,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -144,15 +158,33 @@ class FixtureClientTest {
     val scenario: Scenario = Scenario.merge(parts)
     val connected: ConnectionState.Connected = assertIs(scenario.connection)
     assertTrue(connected.session.has("orchestration:operate"), "Thread actions work in default")
-    assertEquals(55, scenario.threads.size)
+    assertEquals(57, scenario.threads.size)
     val demos: Set<String> = scenario.threads
       .filter { it.title.startsWith("Demo: ") }
       .map { it.id }
       .toSet()
     assertEquals(
-      setOf(THREAD, WAITING, QUESTION, UNKNOWN, MANY, WORKTREE, QUEUED, HELD_QUEUE, LINEAGE,
-        BACKGROUND_WORK, BACKGROUND_SUBAGENT, STOPPED, "secret-demo", "tasks-demo",
-        "thr_01JC7C0M0COMPACT1", "thr_01JC6P0RMSNOTRAITS", "thr_01JC7A1P0SUBWAIT01"),
+      setOf(
+        THREAD,
+        WAITING,
+        QUESTION,
+        UNKNOWN,
+        MANY,
+        WORKTREE,
+        QUEUED,
+        HELD_QUEUE,
+        LINEAGE,
+        BACKGROUND_WORK,
+        BACKGROUND_SUBAGENT,
+        STOPPED,
+        CODE_BLOCKS,
+        LIMIT,
+        "secret-demo",
+        "tasks-demo",
+        "thr_01JC7C0M0COMPACT1",
+        "thr_01JC6P0RMSNOTRAITS",
+        "thr_01JC7A1P0SUBWAIT01",
+      ),
       demos,
     )
   }
@@ -225,6 +257,19 @@ class FixtureClientTest {
   }
 
   @Test
+  fun `running thread carries a context usage with a cost`() {
+    val text: String = default.resolve("running.json").readText()
+    val scenario: Scenario = Scenario.decode(text)
+    val thread: Thread = scenario.threads.single { it.id == THREAD }
+    val usage: ThreadTokenUsageSnapshot? = scenario.providerThreads.getValue(THREAD)
+      .single { it.id == thread.activeProviderThreadId }
+      .contextUsage
+    assertEquals(90_000L, usage?.usedTokens)
+    assertEquals(200_000L, usage?.maxTokens)
+    assertEquals(ThreadTokenUsageSnapshot.Cost(0.42, "USD"), usage?.cost)
+  }
+
+  @Test
   fun `many items has a few hundred`() {
     val text: String = default.resolve("many-items.json").readText()
     assertTrue(Scenario.decode(text).items.values.single().size >= 300)
@@ -261,6 +306,27 @@ class FixtureClientTest {
   }
 
   @Test
+  fun `transitions change a row after their delay, stamping it`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val before: Thread = client.threads
+      .first { threads -> threads.any { it.id == COMPLETES } }
+      .first { it.id == COMPLETES }
+    assertEquals("running", before.status)
+
+    val done: Thread = client.threads
+      .first { threads -> threads.any { it.id == COMPLETES && it.status == "completed" } }
+      .first { it.id == COMPLETES }
+    assertNull(done.activeRunId)
+    assertTrue(done.updatedAt > before.updatedAt, "A transition stamps updatedAt")
+
+    val failed: Thread = client.threads
+      .first { threads -> threads.any { it.id == FAILS && it.status == "failed" } }
+      .first { it.id == FAILS }
+    assertNotNull(failed.lastError)
+    assertEquals(before.title, client.threads.value.first { it.id == COMPLETES }.title)
+  }
+
+  @Test
   fun `the last file that sets a connection wins`(@TempDir directory: Path) = runTest {
     directory.resolve("a.json").writeText("""{ "connection": { "state": "authError" } }""")
     directory.resolve("b.json").writeText("""{ "connection": { "state": "unpaired" } }""")
@@ -280,6 +346,106 @@ class FixtureClientTest {
 
     val connection: ConnectionState = client.connection.first { it != ConnectionState.Connecting }
     assertIs<ConnectionState.Connected>(connection)
+  }
+
+  @Test
+  fun `message search finds one message a thread, a user's ahead of the agent's`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == THREAD } }
+
+    val readString: List<ThreadSearchMatch> =
+      client.searchThreads(SearchThreadsInput("READSTRING")).matches
+    assertEquals(listOf(THREAD), readString.map { it.threadId })
+    assertEquals("user", readString.single().source)
+    assertEquals(
+      "Don't decode by hand. Is there a proper replacement for readString? The notes in " +
+        "`docs/migration-guide.docx` say so, and `docs/kstore-spec.pdf` too.",
+      readString.single().snippet,
+    )
+    val agent: ThreadSearchMatch =
+      client.searchThreads(SearchThreadsInput("passes now")).matches.single()
+    assertEquals(MANY to "assistant", agent.threadId to agent.source)
+    val bump: List<ThreadSearchMatch> =
+      client.searchThreads(SearchThreadsInput("kotlinx-io to 0.8")).matches
+    assertEquals(setOf(THREAD, WORKTREE), bump.map { it.threadId }.toSet())
+    assertEquals(1, client.searchThreads(SearchThreadsInput("kotlinx-io", limit = 1)).matches.size)
+  }
+
+  @Test
+  fun `a project update renames and re-icons the project in the shell`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val before: Project = client.projects.first { it.isNotEmpty() }.first()
+    val icon = ProjectIconOverride.Emoji(emoji = "🦀")
+
+    val stored: ProjectRecord = client.mutateProject(
+      ProjectMutation.ProjectUpdate(
+        commandId = "c1",
+        projectId = before.id,
+        title = "Store",
+        projectIcon = icon,
+      ),
+    )
+
+    assertEquals("Store", stored.title)
+    val after: Project = client.projects.first { it.first().title == "Store" }.first()
+    assertEquals(StoredProjectIcon.Emoji(emoji = "🦀"), after.projectIcon)
+    assertEquals(before.workspaceRoot, after.workspaceRoot)
+  }
+
+  @Test
+  fun `a project create adds one, and refuses a taken root`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val listed: List<Project> = client.projects.first { it.isNotEmpty() }
+    fun create(id: String, root: String) = ProjectMutation.ProjectCreate(
+      commandId = "c-$id",
+      projectId = id,
+      title = "fresh",
+      workspaceRoot = root,
+      createWorkspaceRootIfMissing = true,
+    )
+
+    client.mutateProject(create("prj_fresh", "/code/fresh"))
+
+    val after: List<Project> = client.projects.first { it.size == listed.size + 1 }
+    assertEquals("prj_fresh" to "fresh", after.last().id to after.last().title)
+    val taken: T3Exception.Rpc = assertFailsWith {
+      client.mutateProject(create("prj_other", listed.first().workspaceRoot))
+    }
+    assertEquals("ProjectMutationError", taken.tag)
+    assertFailsWith<T3Exception.Rpc> { client.mutateProject(create("prj_fresh", "/code/x")) }
+  }
+
+  @Test
+  fun `a long message's snippet is the window around the match`() {
+    val text: String = "a".repeat(300) + " needle " + "b".repeat(300)
+    val snippet: String = buildSearchSnippet(text, "NEEDLE")
+    assertEquals(238, snippet.length, "236 characters and an ellipsis each side")
+    // The match starts 72 characters in, the space before it included
+    assertTrue(snippet.startsWith("…" + "a".repeat(71) + " needle"), snippet)
+    assertEquals("short text", buildSearchSnippet(" short\n text ", "x"))
+  }
+
+  @Test
+  fun `scheduled tasks run now and toggle over the scenario's`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val tasks: List<ScheduledTask> = client.scheduledTasks().first { it.isNotEmpty() }
+    assertEquals(listOf("interval", "fixed_time", "webhook"), tasks.map { it.schedule.type })
+    assertFalse(tasks.single { it.id == PR_REVIEW }.enabled, "The webhook one starts paused")
+    assertEquals(PARENT, tasks.single { it.id == TRIAGE }.threadId, "Its Automations show it")
+    // A passed `nextRunAt` rolls forward, so the harness never shows a next run in the past
+    val now: Instant = Instant.now()
+    tasks.mapNotNull { it.nextRunAt }.forEach { at -> assertTrue(Instant.parse(at).isAfter(now)) }
+
+    val started: ScheduledTask = client.runScheduledTask(TRIAGE)
+    assertEquals("running", started.lastRunStatus)
+    val done: ScheduledTask = client.scheduledTasks()
+      .first { list -> list.first { it.id == TRIAGE }.lastRunStatus == "succeeded" }
+      .first { it.id == TRIAGE }
+    assertEquals(42, done.runCount)
+
+    assertFalse(client.setScheduledTaskEnabled(TRIAGE, false).enabled)
+    assertFalse(client.scheduledTasks().first().first { it.id == TRIAGE }.enabled)
+    assertFailsWith<T3Exception.Rpc> { client.runScheduledTask("sched_missing") }
   }
 
   @Test
@@ -427,6 +593,30 @@ class FixtureClientTest {
       client.thread(THREAD).first { view -> view.items.any { it is TurnItem.UserMessage } }
     val prompt = running.items.filterIsInstance<TurnItem.UserMessage>().first()
     assertEquals(listOf(true, false, false), prompt.attachments.map(::isImageAttachment))
+  }
+
+  @Test
+  fun `the running demo has a preview open and other threads don't`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { it.isNotEmpty() }
+    assertEquals(listOf("browser-1"), client.previewSessions(THREAD).sessions.map { it.tabId })
+    assertEquals(emptyList(), client.previewSessions("thr_nope").sessions)
+  }
+
+  @Test
+  fun `default lists two devices and reads the running one's detail`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val state: DeviceServiceState = client.deviceState().first()
+    assertEquals(listOf("Pixel 9 API 36", "iPhone 17 Pro"), state.devices.map { it.name })
+    assertEquals(state.devices, client.devices().devices)
+    val running: DeviceSummary = state.devices.single { it.booted }
+    val detail = client.deviceDetail(DeviceDetailInput(running.hostId, running.id))
+    assertEquals("io.github.xxfast.kstore.sample", detail.foregroundApp?.id)
+    val stopped: DeviceSummary = state.devices.single { !it.booted }
+    val missing: T3Exception.Rpc = assertFailsWith {
+      client.deviceDetail(DeviceDetailInput(stopped.hostId, stopped.id))
+    }
+    assertEquals("DeviceNotFoundError", missing.tag)
   }
 
   private fun image(size: Int) = AttachmentCreateUploadUrlInput.Image(
@@ -711,6 +901,43 @@ class FixtureClientTest {
   }
 
   @Test
+  fun `metadata update records a branch`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == IDLE } }
+
+    client.dispatch(Command.ThreadMetadataUpdate(commandId = "c", threadId = IDLE, branch = "dev"))
+    client.threads.first { row(it).branch == "dev" }
+  }
+
+  @Test
+  fun `limit recovery keeps the other half, and a snooze sleeps until the reset`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    client.threads.first { threads -> threads.any { it.id == LIMIT } }
+    val run = "run_01JC4ALIMIT01"
+    val reset = "2099-01-01T00:00:00.000Z"
+    fun recovery(command: String, update: LimitRecoveryUpdate) = Command.ThreadMetadataUpdate(
+      commandId = command,
+      threadId = LIMIT,
+      limitRecovery = update,
+    )
+
+    client.dispatch(recovery("c1", LimitRecoveryUpdate(run, reset, autoResume = true)))
+    client.threads.first { row(it, LIMIT).limitRecovery?.autoResume == true }
+
+    client.dispatch(recovery("c2", LimitRecoveryUpdate(run, reset, snooze = true)))
+    val snoozed: Thread = client.threads.first { row(it, LIMIT).snoozedUntil != null }
+      .let { row(it, LIMIT) }
+    assertEquals(reset, snoozed.snoozedUntil)
+    assertEquals(true, snoozed.limitRecovery?.autoResume)
+
+    client.dispatch(recovery("c3", LimitRecoveryUpdate(run, reset, snooze = false)))
+    client.threads.first { row(it, LIMIT).snoozedUntil == null }
+
+    val past = LimitRecoveryUpdate(run, "2020-01-01T00:00:00.000Z", snooze = true)
+    assertFailsWith<T3Exception.Rpc> { client.dispatch(recovery("c4", past)) }
+  }
+
+  @Test
   fun `delete takes the thread off the list`() = runTest {
     val client = FixtureClient(default, backgroundScope)
     client.threads.first { threads -> threads.any { it.id == IDLE } }
@@ -990,6 +1217,8 @@ class FixtureClientTest {
     JsonObject(mapOf(*entries)).toString()
 
   private companion object {
+    const val COMPLETES = "thr_01JC4B2W5RROUTER1"
+    const val FAILS = "thr_01JC3A0P7SPAUSED1"
     const val THREAD = "thr_01JC4A1F0QWMIGRATE"
     const val WAITING = "thr_01JC49ZK2HWAITING"
     const val UNKNOWN = "thr_01JC4C0X1UNKNOWN"
@@ -1000,8 +1229,13 @@ class FixtureClientTest {
     const val QUEUED = "thr_01JC4C3Q8UQUEUED1"
     const val HELD_QUEUE = "thr_01JC4C3Q8UQUEUED2"
     const val LINEAGE = "thr_01JC5L1N1LINEAG1"
+    const val TRIAGE = "sched_01JC6A0T0TRIAGE01"
+    const val PARENT = "thr_01JC5L1N0PARENT1"
+    const val PR_REVIEW = "sched_01JC6A0T2PRREVIEW"
     const val BACKGROUND_WORK = "thr_01JC6B1K0BGWORK01"
     const val BACKGROUND_SUBAGENT = "thr_01JC6B2S0BGAGENT1"
+    const val CODE_BLOCKS = "thr_01JC6C0D0CODEBLKS"
+    const val LIMIT = "thr_01JC4A1F0QLIMIT"
     const val PINNED = "thr_01JC4B2W5RROUTER1"
     const val SETTLED = "thr_01JC1A2B3CSETTLE01"
     const val RUN = "run_fixture_m1"

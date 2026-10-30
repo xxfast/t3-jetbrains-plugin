@@ -49,7 +49,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.intellij.ui.awt.RelativePoint
+import io.github.xxfast.t3code.protocol.generated.ScheduledTask
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
+import java.time.Instant
 import javax.swing.JComponent
 import org.jetbrains.jewel.foundation.LocalComponent
 import org.jetbrains.jewel.foundation.theme.JewelTheme
@@ -57,6 +59,7 @@ import org.jetbrains.jewel.ui.Orientation
 import org.jetbrains.jewel.ui.component.CircularProgressIndicator
 import org.jetbrains.jewel.ui.component.Divider
 import org.jetbrains.jewel.ui.component.Icon
+import org.jetbrains.jewel.ui.component.IconActionButton
 import org.jetbrains.jewel.ui.component.IconButton
 import org.jetbrains.jewel.ui.component.PopupMenu
 import org.jetbrains.jewel.ui.component.Text
@@ -76,16 +79,28 @@ class ThreadLineageActions(
 )
 
 /**
+ * What T3 Thread Details' Automations shows: the scheduled tasks bound to the thread, or why
+ * they didn't load. [blocked] is why they can't change, [busyTaskId] the one with a call out.
+ */
+class ThreadAutomationsState(
+  val tasks: List<ScheduledTask>,
+  val error: String?,
+  val blocked: String?,
+  val busyTaskId: String?,
+)
+
+/**
  * "T3 Thread Details", upstream's `ThreadDetailsPanel` (apps/web/src/components/chat/
  * ThreadDetailsPanel.tsx): the Workspace section, the Version Control section when the thread
- * has a `gitCwd`, the [servers] its terminals and agent started (`ThreadServersPanel`), then the
- * Lineage, upstream's `ThreadRelationshipsPanel` (ThreadRelationshipsControl.tsx). Automations
- * aren't ported: upstream hides the section without scheduled tasks, and the plugin has none.
- * Upstream hides the Lineage when there's nothing related; so does this. [visible] is what the
- * user chose to show, see [THREAD_DETAILS_ITEMS]; a right click on the card, or the "Choose
- * what to show" row of a card left empty, calls [onItemsMenu] with where the menu opens. [enabled] is false without the operate scope, which
- * leaves opening rows but no actions. [stoppingId] is the row being stopped. Upstream's card
- * drops to a compact density when short of height; a tool window scrolls instead.
+ * has a `gitCwd`, the [servers] its terminals and agent started (`ThreadServersPanel`), the
+ * Automations (ThreadAutomationsPanel.tsx), then the Lineage, upstream's
+ * `ThreadRelationshipsPanel` (ThreadRelationshipsControl.tsx). Upstream hides the Automations
+ * without bound tasks or an error, and the Lineage when there's nothing related; so does this.
+ * [visible] is what the user chose to show, see [THREAD_DETAILS_ITEMS]; a right click on the
+ * card, or the "Choose what to show" row of a card left empty, calls [onItemsMenu] with where
+ * the menu opens. [enabled] is false without the operate scope, which leaves opening rows but
+ * no actions. [stoppingId] is the row being stopped. Upstream's card drops to a compact density
+ * when short of height; a tool window scrolls instead.
  */
 @Composable
 fun ThreadDetails(
@@ -101,8 +116,15 @@ fun ThreadDetails(
   actions: ThreadLineageActions,
   visible: ThreadDetailsVisibility,
   onItemsMenu: (at: RelativePoint) -> Unit,
+  automations: ThreadAutomationsState? = null,
+  automationActions: ScheduledTaskActions = ScheduledTaskActions(),
+  onManageAutomations: (() -> Unit)? = null,
 ) {
-  if (panel == null && lineage == null) return Hint("No details for this thread yet")
+  val showsAutomations: Boolean =
+    automations != null && (automations.error != null || automations.tasks.isNotEmpty())
+  if (panel == null && lineage == null && !showsAutomations) {
+    return Hint("No details for this thread yet")
+  }
   val now: Long = rememberNow(1_000).value.toEpochMilli()
   val show: ThreadDetailsShow? = panel?.let { state ->
     resolveThreadDetailsShow(visible, state.openIn != null, state.gitCwd, state.isGitRepo)
@@ -110,6 +132,7 @@ fun ThreadDetails(
   val workspace: Boolean = show?.workspace == true
   val versionControl: Boolean = panel?.gitCwd != null && show?.versionControl == true
   val serversShown: Boolean = visible[ThreadDetailsItem.Servers] && servers.servers.isNotEmpty()
+  val automationsShown: Boolean = visible[ThreadDetailsItem.Automations] && showsAutomations
   val related: Boolean = lineage != null && visible[ThreadDetailsItem.Lineage]
   VerticallyScrollableContainer(
     scrollState = rememberScrollState(),
@@ -125,9 +148,17 @@ fun ThreadDetails(
       if (serversShown) {
         ThreadServersPanel(servers, serverActions, separated = workspace || versionControl)
       }
+      if (automations != null && automationsShown) {
+        AutomationsSection(
+          state = automations,
+          separated = workspace || versionControl || serversShown,
+          actions = automationActions,
+          onManage = onManageAutomations,
+        )
+      }
       if (lineage != null && related) {
         ThreadDetailsSection(
-          separated = workspace || versionControl || serversShown,
+          separated = workspace || versionControl || serversShown || automationsShown,
           title = lineage.title,
           actions = { LineageActions(lineage, busyAction, enabled, actions.onDetach) },
         ) {
@@ -142,7 +173,7 @@ fun ThreadDetails(
         }
       }
       // Shown only when no section above has content, so an emptied card can be refilled
-      if (!workspace && !versionControl && !serversShown && !related) {
+      if (!workspace && !versionControl && !serversShown && !automationsShown && !related) {
         ChooseWhatToShowRow(onItemsMenu)
       }
     }
@@ -172,6 +203,57 @@ private fun Modifier.onSecondaryClick(onClick: (at: RelativePoint) -> Unit): Mod
         onClick(relativePoint(component, density, root))
       }
     }
+}
+
+/**
+ * `ThreadAutomationsPanel`: "Automations", its manage button when this IDE can edit them, the
+ * error, then a row per bound task, as the Scheduled tab draws them. Upstream's per-row edit
+ * pencil deep links into a task; the manage button stands in for both.
+ */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip sits on Compose's TooltipArea
+@Composable
+private fun AutomationsSection(
+  state: ThreadAutomationsState,
+  separated: Boolean,
+  actions: ScheduledTaskActions,
+  onManage: (() -> Unit)?,
+) {
+  val now: Instant = rememberNow(60_000).value
+  ThreadDetailsSection(
+    separated = separated,
+    title = "Automations",
+    actions = {
+      if (onManage != null) {
+        IconActionButton(
+          key = AllIconsKeys.General.Settings,
+          contentDescription = "Manage scheduled tasks",
+          onClick = onManage,
+          tooltip = { Text("Manage scheduled tasks") },
+        )
+      }
+    },
+  ) {
+    state.error?.let { error ->
+      Text(
+        text = "Could not load automations: $error",
+        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        style = small(),
+        color = DESTRUCTIVE,
+      )
+    }
+    state.tasks.forEach { task ->
+      key(task.id) {
+        ScheduledTaskRow(
+          task = task,
+          line = taskScheduleLine(task, now),
+          blocked = state.blocked,
+          // One call at a time across the section, as upstream's `busyTaskId`
+          busy = state.busyTaskId != null,
+          actions = actions,
+        )
+      }
+    }
+  }
 }
 
 /** The Lineage heading's "…" menu, shown while a session can detach. */

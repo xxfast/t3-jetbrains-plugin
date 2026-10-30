@@ -14,8 +14,11 @@ Unofficial. Built for my own use, published in case it's useful to others.
 ## Status
 
 0.1.0 is the first release. Built and tested on IntelliJ IDEA, against T3 Code 0.1.2. Android
-Studio and Rider are checked by the plugin verifier on every build. Other IDEs on IntelliJ
-Platform 2025.3 and later share IDEA's platform build and should work; report it if one doesn't.
+Studio and Rider are checked by the plugin verifier on every build. Android Studio 2026.1 was
+also opened by hand (2026-10-27, the design harness): the Sidebar, the Chat View, Thread
+Details, sending and the composer banners all worked; Rider hasn't been tried by hand yet.
+Other IDEs on IntelliJ Platform 2025.3 and later share IDEA's platform build and should work;
+report it if one doesn't.
 What each release adds is in its [release notes](https://github.com/xxfast/t3-jetbrains-plugin/releases);
 what's next is in the [milestones](https://github.com/xxfast/t3-jetbrains-plugin/milestones).
 
@@ -51,12 +54,28 @@ client is a supported shape, not a hack.
 
 | Module | What |
 | --- | --- |
-| `:protocol` | Plain Kotlin client for the T3 server. No IDE dependency. Reusable for a CLI or anything else. |
+| `:protocol` | Plain Kotlin client for the T3 server. No IDE dependency. Reusable for a CLI or anything else, see [Protocol](#protocol). |
 | `:plugin` | The JetBrains plugin. Jewel UI on top of `:protocol`. |
+| `:cli` | A tiny command-line client on `:protocol` alone, see [CLI](#cli). |
 | `contracts/` | Pinned upstream version and the schema generator. |
 | `harness/` | Fixture scenarios for the design harness. `./gradlew runHarness` opens a sandbox IDE on them. |
 
 Targets IntelliJ Platform 2025.3 and later, so IDEA, Android Studio, WebStorm, Rider and friends.
+
+## CLI
+
+`:cli` pairs, lists threads and tails one using nothing but `:protocol`, a proof that the client
+holds up without an IDE. Run it with `./gradlew :cli:run --args="threads"`, more in
+[`cli/README.md`](cli/README.md).
+
+## Protocol
+
+`:protocol` publishes to Maven Central as `io.github.xxfast:t3code-protocol`, same version as the
+plugin, JDK 21 bytecode. Its POM declares no dependencies, they're `compileOnly` so the plugin
+picks where they come from. Bring your own `kotlin-stdlib`, `kotlinx-coroutines-core` and
+`kotlinx-serialization-json` (versions in `gradle/libs.versions.toml`), as
+[`:cli`](cli/build.gradle.kts) does. `generated/` is generated from upstream, see
+[`contracts/`](contracts/README.md).
 
 ## Roadmap
 

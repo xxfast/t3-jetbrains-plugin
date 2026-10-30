@@ -2,7 +2,10 @@ package io.github.xxfast.t3code.plugin.fixtures
 
 import com.intellij.openapi.diagnostic.Logger
 import io.github.xxfast.t3code.plugin.ui.PULL_REQUESTS
+import io.github.xxfast.t3code.plugin.ui.THREAD_ACTIVE_REORDER
 import io.github.xxfast.t3code.plugin.ui.THREAD_AUTO_SETTLE_OPT_OUT
+import io.github.xxfast.t3code.plugin.ui.THREAD_PINNING
+import io.github.xxfast.t3code.plugin.ui.THREAD_PIN_REORDER
 import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SNOOZE
 import io.github.xxfast.t3code.plugin.ui.THREAD_TITLE_REGENERATION
@@ -17,6 +20,7 @@ import io.github.xxfast.t3code.protocol.generated.TurnItem as GenTurnItem
 import io.github.xxfast.t3code.protocol.FileContents
 import io.github.xxfast.t3code.protocol.OrchestrationV2Command
 import io.github.xxfast.t3code.protocol.Project
+import io.github.xxfast.t3code.protocol.ProjectRecord
 import io.github.xxfast.t3code.protocol.ProviderSession
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
@@ -39,11 +43,19 @@ import io.github.xxfast.t3code.protocol.generated.BooleanProviderOptionDescripto
 import io.github.xxfast.t3code.protocol.generated.ChatFileAttachment
 import io.github.xxfast.t3code.protocol.generated.ChatImageAttachment
 import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.DeviceDetail
+import io.github.xxfast.t3code.protocol.generated.DeviceDetailInput
+import io.github.xxfast.t3code.protocol.generated.DeviceListInput
+import io.github.xxfast.t3code.protocol.generated.DeviceServiceState
 import io.github.xxfast.t3code.protocol.generated.LatestVisibleMessageSummary
+import io.github.xxfast.t3code.protocol.generated.LimitRecovery
+import io.github.xxfast.t3code.protocol.generated.LimitRecoveryUpdate
 import io.github.xxfast.t3code.protocol.generated.ModelCapabilities
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
+import io.github.xxfast.t3code.protocol.generated.ProjectMutation
+import io.github.xxfast.t3code.protocol.generated.PreviewListResult
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
 import io.github.xxfast.t3code.protocol.generated.ProjectScript
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesResult
@@ -52,6 +64,8 @@ import io.github.xxfast.t3code.protocol.generated.PullRequestListEntry
 import io.github.xxfast.t3code.protocol.generated.PullRequestListInput
 import io.github.xxfast.t3code.protocol.generated.PullRequestListResult
 import io.github.xxfast.t3code.protocol.generated.PullRequestRef
+import io.github.xxfast.t3code.protocol.generated.ScheduledTask
+import io.github.xxfast.t3code.protocol.generated.ScheduledTaskSchedule
 import io.github.xxfast.t3code.protocol.generated.ProviderOptionChoice
 import io.github.xxfast.t3code.protocol.generated.SecretRequestAnswerInput
 import io.github.xxfast.t3code.protocol.generated.SelectProviderOptionDescriptor
@@ -66,6 +80,8 @@ import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TerminalMetadataStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TerminalSessionSnapshot
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
+import io.github.xxfast.t3code.protocol.generated.SearchThreadsInput
+import io.github.xxfast.t3code.protocol.generated.SearchThreadsResult
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchResult
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchWorkspaceStrategy
 import io.github.xxfast.t3code.protocol.generated.ThreadProjection
@@ -87,6 +103,8 @@ import io.github.xxfast.t3code.protocol.has
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.io.path.extension
@@ -96,6 +114,7 @@ import kotlin.io.path.name
 import kotlin.io.path.nameWithoutExtension
 import kotlin.io.path.readText
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -118,6 +137,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -163,6 +183,9 @@ class FixtureClient(
   /** The fake assistant replies in flight, by thread id, so an interrupt can stop one. */
   private val replies: ConcurrentHashMap<String, Job> = ConcurrentHashMap()
 
+  /** The scenario's `transitions` playing, restarted when the directory reloads. */
+  private var transitions: Job? = null
+
   /** What [terminalWrite] echoes, by `threadId/terminalId`. */
   private val terminals: ConcurrentHashMap<String, MutableSharedFlow<TerminalAttachStreamEvent>> =
     ConcurrentHashMap()
@@ -187,9 +210,9 @@ class FixtureClient(
     if (!on) ConnectionState.Disconnected else scenario?.connection ?: ConnectionState.Connecting
   }.stateIn(scope, SharingStarted.Eagerly, ConnectionState.Connecting)
 
-  override val projects: StateFlow<List<Project>> = loaded
-    .map { scenario -> scenario?.projects.orEmpty() }
-    .stateIn(scope, SharingStarted.Eagerly, emptyList())
+  override val projects: StateFlow<List<Project>> = combine(loaded, overlay) { scenario, overlay ->
+    overlay.projectsOver(scenario?.projects.orEmpty())
+  }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
   override val threads: StateFlow<List<Thread>> = combine(loaded, overlay) { scenario, overlay ->
     val created: List<Thread> = overlay.created.mapNotNull { overlay.threads[it] }
@@ -312,6 +335,35 @@ class FixtureClient(
     val known: List<PullRequestListEntry> =
       scenario?.pullRequests.orEmpty() + scenario?.olderPullRequests.orEmpty()
     return fixturePullRequestDetail(known, ref)
+  }
+
+  /** The scenario's `previewSessions` for [threadId]. */
+  override suspend fun previewSessions(threadId: String): PreviewListResult = PreviewListResult(
+    sessions = loaded.value?.previewSessions?.get(threadId).orEmpty(),
+    serverEpoch = "fixture",
+    revision = 0,
+  )
+
+  /** The scenario's `deviceState`, after a moment as a rescan takes one. */
+  override suspend fun devices(input: DeviceListInput): DeviceServiceState {
+    delay(DEVICE_SCAN_MILLIS)
+    return deviceStateOf(loaded.value)
+  }
+
+  /** The scenario's `deviceState`, again each time the directory reloads. */
+  override fun deviceState(): Flow<DeviceServiceState> = loaded
+    .filterNotNull()
+    .map(::deviceStateOf)
+
+  /** One of the scenario's `deviceDetails`, else upstream's `DeviceNotFoundError`. */
+  override suspend fun deviceDetail(input: DeviceDetailInput): DeviceDetail {
+    val hostId: String = input.hostId ?: LOCAL_DEVICE_HOST_ID
+    return loaded.value?.deviceDetails
+      ?.find { it.hostId == hostId && it.deviceId == input.deviceId }
+      ?: throw T3Exception.Rpc(
+        "DeviceNotFoundError",
+        "Device ${input.deviceId} was not found on host $hostId.",
+      )
   }
 
   override suspend fun projectFavicon(cwd: String, path: String?): ByteArray? = null
@@ -447,6 +499,35 @@ class FixtureClient(
         )
       }
 
+      // Orchestrator.ts:2796 rejects a reorder outside its section, then 3153 and 3161 apply it
+      is Command.ThreadPinReorder -> {
+        val row: Thread? = rowOf(overlay.value, command.threadId)
+        if (row?.pinnedAt == null) {
+          throw T3Exception.Rpc(
+            "OrchestratorDispatchError",
+            "Thread ${command.threadId} is not pinned and cannot be reordered.",
+          )
+        }
+        updateRow(command.threadId) { pinned ->
+          val keyUnchanged: Boolean = pinned.pinOrderKey == command.orderKey
+          pinned.copy(
+            pinOrderKey = command.orderKey,
+            updatedAt = if (keyUnchanged) pinned.updatedAt else now,
+          )
+        }
+      }
+
+      is Command.ThreadActiveReorder -> {
+        val row: Thread? = rowOf(overlay.value, command.threadId)
+        if (row?.pinnedAt != null || row?.settledOverride == "settled") {
+          throw T3Exception.Rpc(
+            "OrchestratorDispatchError",
+            "Thread ${command.threadId} is not active and cannot be reordered.",
+          )
+        }
+        updateRow(command.threadId) { active -> active.copy(activeOrderKey = command.orderKey) }
+      }
+
       // Orchestrator.ts:2839
       is Command.ThreadSettle -> updateRow(command.threadId) { row ->
         val wasPinned: Boolean = row.pinnedAt != null
@@ -499,13 +580,18 @@ class FixtureClient(
         )
       }
 
-      // Orchestrator.ts:2941, the title half. A regeneration stands in for the server's title
-      // generator: it runs a couple of seconds, then completes with a made-up title
+      // Orchestrator.ts:2941, the title and branch halves. A regeneration stands in for the
+      // server's title generator: it runs a couple of seconds, then completes with a made-up title
       is Command.ThreadMetadataUpdate -> {
         val title: String? = command.title
         if (title != null) {
           updateRow(command.threadId) { row -> row.copy(title = title, updatedAt = now) }
         }
+        val branch: String? = command.branch
+        if (branch != null) {
+          updateRow(command.threadId) { row -> row.copy(branch = branch, updatedAt = now) }
+        }
+        command.limitRecovery?.let { update -> updateLimitRecovery(command, update, now) }
         if (command.regenerateTitle == true) {
           regenerateTitle(command.threadId, command.commandId, now)
         }
@@ -751,6 +837,26 @@ class FixtureClient(
   override suspend fun listRefs(input: VcsListRefsInput): VcsListRefsResult =
     fixtureListRefs(input, refs.value, currentRef.value)
 
+  // Slow enough that the Sidebar's "Searching thread messages…" shows in the harness
+  override suspend fun searchThreads(input: SearchThreadsInput): SearchThreadsResult {
+    delay(SEARCH_LATENCY)
+    val overlay: Overlay = overlay.value
+    return fixtureSearchThreads(input, threads.value) { threadId -> itemsOf(overlay, threadId) }
+  }
+
+  // The Sidebar redraws off the overlay, as it would off the shell's next snapshot
+  override suspend fun mutateProject(mutation: ProjectMutation): ProjectRecord {
+    val now: String = Instant.now().toString()
+    var stored: ProjectRecord? = null
+    overlay.update { overlay ->
+      val current: List<Project> = overlay.projectsOver(loaded.value?.projects.orEmpty())
+      val (next: Overlay, record: ProjectRecord) = overlay.mutateProject(current, mutation, now)
+      stored = record
+      next
+    }
+    return checkNotNull(stored)
+  }
+
   override suspend fun switchRef(input: VcsSwitchRefInput): VcsSwitchRefResult {
     val ref: VcsRef = refs.value.find { it.name == input.refName }
       ?: throw T3Exception.Rpc("GitCommandError", "No ref ${input.refName}")
@@ -772,6 +878,79 @@ class FixtureClient(
     }
     if (input.switchRef == true) currentRef.value = input.refName
     return VcsCreateRefResult(refName = input.refName)
+  }
+
+  /**
+   * The scenario's `scheduledTasks`, with what [runScheduledTask] and the toggle changed. A
+   * `nextRunAt` that has passed rolls forward, so the file doesn't go stale.
+   */
+  override fun scheduledTasks(): Flow<List<ScheduledTask>> =
+    combine(loaded.filterNotNull(), overlay) { scenario, overlay ->
+      scenario.scheduledTasks.map { task -> rolledForward(overlay.scheduledTasks[task.id] ?: task) }
+    }.distinctUntilChanged()
+
+  /** Running at once, succeeded a moment later, as a quick run would on the server. */
+  override suspend fun runScheduledTask(id: String): ScheduledTask {
+    val started: ScheduledTask = updateScheduledTask(id) { task ->
+      val now: String = Instant.now().toString()
+      task.copy(lastRunAt = now, lastRunStatus = "running", lastRunError = null, updatedAt = now)
+    }
+    scope.launch {
+      delay(SCHEDULED_RUN_MILLIS)
+      // The directory may have reloaded without it meanwhile
+      runCatching {
+        updateScheduledTask(id) { task ->
+          task.copy(
+            lastRunStatus = "succeeded",
+            runCount = task.runCount + 1,
+            updatedAt = Instant.now().toString(),
+          )
+        }
+      }
+    }
+    return started
+  }
+
+  override suspend fun setScheduledTaskEnabled(id: String, enabled: Boolean): ScheduledTask =
+    updateScheduledTask(id) { task ->
+      task.copy(enabled = enabled, updatedAt = Instant.now().toString())
+    }
+
+  /** An interval steps by its interval, a fixed time by a day until it's on one of its weekdays. */
+  private fun rolledForward(task: ScheduledTask): ScheduledTask {
+    val now: Instant = Instant.now()
+    var next: Instant = task.nextRunAt?.let(Instant::parse) ?: return task
+    if (next.isAfter(now)) return task
+    when (val schedule: ScheduledTaskSchedule = task.schedule) {
+      is ScheduledTaskSchedule.Interval -> {
+        val every: Long = schedule.everyMs.takeIf { it > 0 } ?: return task
+        while (!next.isAfter(now)) next = next.plusMillis(every)
+      }
+
+      is ScheduledTaskSchedule.FixedTime -> {
+        // Upstream's weekdays count from Sunday, 0 to 6
+        val days: List<Long> = schedule.weekdays.orEmpty().filter { it in 0L..6L }
+        fun on(at: Instant): Boolean = days.isEmpty() ||
+          at.atZone(ZoneId.systemDefault()).dayOfWeek.value % 7L in days
+        while (!next.isAfter(now) || !on(next)) next = next.plus(1, ChronoUnit.DAYS)
+      }
+
+      else -> return task
+    }
+    return task.copy(nextRunAt = next.toString())
+  }
+
+  private fun updateScheduledTask(
+    id: String,
+    change: (ScheduledTask) -> ScheduledTask,
+  ): ScheduledTask {
+    val listed: ScheduledTask = loaded.value?.scheduledTasks?.find { it.id == id }
+      ?: throw T3Exception.Rpc("ScheduledTaskError", "Scheduled task not found.")
+    val next: Overlay = overlay.updateAndGet { overlay ->
+      val changed: ScheduledTask = change(overlay.scheduledTasks[id] ?: listed)
+      overlay.copy(scheduledTasks = overlay.scheduledTasks + (id to changed))
+    }
+    return next.scheduledTasks.getValue(id)
   }
 
   /** The setup stream for [threadId], seeded from the scenario's `worktreeSetups` if it has one. */
@@ -1190,6 +1369,49 @@ class FixtureClient(
     attachments = message.attachments,
   )
 
+  /**
+   * `thread.metadata.update`'s `limitRecovery` half, Orchestrator.ts at the pinned tag: a snooze
+   * past the reset is refused, the other field carries over for the same run and reset, a
+   * snooze sleeps the thread until the reset and turning it off wakes it. The server's checks
+   * that the limit is still the latest failure aren't done.
+   */
+  private fun updateLimitRecovery(
+    command: Command.ThreadMetadataUpdate,
+    update: LimitRecoveryUpdate,
+    now: String,
+  ) {
+    val reset: Instant = Instant.parse(update.resetAt)
+    if (update.snooze == true && !reset.isAfter(Instant.parse(now))) {
+      throw T3Exception.Rpc(
+        "OrchestratorDispatchError",
+        "The reset time has passed. Retry the thread manually.",
+      )
+    }
+    updateRow(command.threadId) { row ->
+      val previous: LimitRecovery? = row.limitRecovery
+        ?.takeIf { it.runId == update.runId && it.resetAt == update.resetAt }
+      val next = LimitRecovery(
+        requestId = command.commandId,
+        runId = update.runId,
+        resetAt = update.resetAt,
+        autoResume = update.autoResume ?: previous?.autoResume ?: false,
+        snooze = update.snooze ?: previous?.snooze ?: false,
+      )
+      val current: LimitRecovery? = row.limitRecovery
+      val snoozedUntil: String? = row.snoozedUntil
+      val wasSnoozedUntilReset: Boolean = current?.snooze == true &&
+        snoozedUntil != null &&
+        Instant.parse(snoozedUntil) == Instant.parse(current.resetAt)
+      when {
+        next.snooze == true && reset.isAfter(Instant.parse(now)) ->
+          row.copy(limitRecovery = next, snoozedUntil = next.resetAt, snoozedAt = now)
+        wasSnoozedUntilReset ->
+          row.copy(limitRecovery = next, snoozedUntil = null, snoozedAt = null)
+        else -> row.copy(limitRecovery = next)
+      }
+    }
+  }
+
   private fun updateRow(threadId: String, change: (Thread) -> Thread) =
     overlay.update { overlay -> overlay.withRow(threadId, change) }
 
@@ -1452,6 +1674,9 @@ class FixtureClient(
       THREAD_AUTO_SETTLE_OPT_OUT,
       THREAD_SNOOZE,
       THREAD_TITLE_REGENERATION,
+      THREAD_PINNING,
+      THREAD_PIN_REORDER,
+      THREAD_ACTIVE_REORDER,
       PULL_REQUESTS,
     ) + loaded.value?.capabilities.orEmpty(),
     environmentLabel = "Fixture MacBook",
@@ -1559,7 +1784,22 @@ class FixtureClient(
     overlay.value = Overlay(sequence = sequence.get())
     refreshedSnapshots.clear()
     stoppedServers.value = emptySet()
-    loaded.value = load(files)
+    transitions?.cancel()
+    val scenario: Scenario = load(files)
+    loaded.value = scenario
+    transitions = play(scenario.transitions)
+  }
+
+  /** Each thread's transitions in order, every one laid over its row and stamping `updatedAt`. */
+  private fun play(transitions: Map<String, List<FixtureTransition>>): Job = scope.launch {
+    transitions.forEach { (threadId, steps) ->
+      launch {
+        steps.forEach { step ->
+          delay(step.after)
+          updateRow(threadId) { row -> row.with(step.fields, Instant.now().toString()) }
+        }
+      }
+    }
   }
 
   private fun load(files: List<Path>): Scenario {
@@ -1589,6 +1829,28 @@ private const val STOP_SERVER_MILLIS: Long = 800
 /** How long the fake `projects.searchEntries` takes. */
 private const val SEARCH_ENTRIES_MILLIS: Long = 150
 
+/** How long a scheduled task's run now stays running. */
+private const val SCHEDULED_RUN_MILLIS: Long = 2_000
+/** How long the fake `device.list` rescan takes. */
+private const val DEVICE_SCAN_MILLIS: Long = 300
+
+/** Upstream's `LOCAL_DEVICE_HOST_ID`, the host a device target without one means. */
+private const val LOCAL_DEVICE_HOST_ID: String = "local"
+
+/** The scenario's device state, or a server with device support off when it has none. */
+private fun deviceStateOf(scenario: Scenario?): DeviceServiceState = scenario?.deviceState
+  ?: DeviceServiceState(
+    hostStatus = "disabled",
+    hostStatuses = emptyMap(),
+    devices = emptyList(),
+    sessions = emptyList(),
+    onboardingCompleted = false,
+    agentAccessEnabled = false,
+    hubBasePath = "",
+    revision = 0,
+    hosts = emptyList(),
+  )
+
 /** The fixture server's `environment.environmentId`. */
 const val FIXTURE_ENVIRONMENT_ID: String = "env_fixture"
 
@@ -1597,6 +1859,9 @@ private const val SETUP_GRACE_MILLIS: Long = 30_000
 
 /** How long the fixture's title generator takes, and the mark it leaves on the title. */
 private val TITLE_REGENERATION: Duration = 2.seconds
+
+/** How long a message search takes in fixture mode. */
+private val SEARCH_LATENCY: Duration = 800.milliseconds
 private const val REGENERATED: String = " (regenerated)"
 
 /** Item statuses that are still going; an interrupt cancels them. */
@@ -1607,6 +1872,13 @@ private val ACTIVE_RUN: Set<String> = setOf("preparing", "starting", "running", 
 
 private const val QUEUED_RUN_START_REFUSED: String =
   "A queued user message can only be sent now while the thread is stopped."
+
+/** This row with [fields] laid over it, through its JSON, updated at [now] unless they say. */
+private fun Thread.with(fields: JsonObject, now: String): Thread {
+  val json: JsonObject = T3Json.encodeToJsonElement(Thread.serializer(), this).jsonObject
+  val updated: Map<String, JsonElement> = json + ("updatedAt" to JsonPrimitive(now)) + fields
+  return T3Json.decodeFromJsonElement(Thread.serializer(), JsonObject(updated))
+}
 
 /** [item], whatever its type, closed as cancelled at [now], through its JSON to stay generic. */
 private fun cancelled(item: TurnItem, now: String): TurnItem {

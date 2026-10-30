@@ -187,11 +187,11 @@ class ThreadInboxTest {
     val tracker: InboxReturnTracker = FakeClock().tracker()
     val requests: Map<String, PendingSubagentRequest> = pendingSubagentRequestsByThread(threads)
     val observation: InboxObservation = tracker.observe(threads, requests)
-    val sections: ThreadSections = sections(threads, "", working = observation)
+    val sections: ThreadSections = sections(threads, working = observation)
     assertEquals(listOf("busy"), sections.working.map { it.id })
     assertEquals(setOf("pinned", "done", "parent"), sections.inbox.map { it.id }.toSet())
     assertEquals("pinned", sections.inbox.first().id)
-    val off: ThreadSections = sections(threads, "")
+    val off: ThreadSections = sections(threads)
     assertTrue(off.working.isEmpty())
     assertEquals(4, off.inbox.size)
   }
@@ -205,7 +205,7 @@ class ThreadInboxTest {
   }
 
   private fun shelf(observation: InboxObservation, vararg threads: Thread): ThreadSections =
-    sections(threads.toList(), "", working = observation)
+    sections(threads.toList(), working = observation)
 
   /** A wall clock tests move by hand, and the one timer the tracker keeps. */
   private class FakeClock {

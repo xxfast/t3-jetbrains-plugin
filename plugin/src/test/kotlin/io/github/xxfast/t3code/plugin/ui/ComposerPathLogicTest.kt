@@ -127,4 +127,16 @@ class ComposerPathLogicTest {
     assertEquals(1, extras.records("see ${threadContextReference(record)} please").size)
     assertEquals(0, extras.records("see nothing").size)
   }
+
+  @Test
+  fun `a dropped thread adds a record once, and only for a shell the composer knows`() {
+    fun shell(id: String, title: String): ComposerThreadCandidate =
+      ComposerThreadCandidate("env", id, title, updatedAt = "2026-10-27T00:00:00Z", null)
+    val shells: List<ComposerThreadCandidate> = listOf(shell("a", "Alpha"), shell("b", "Beta"))
+    val had: ThreadContextRecord = threadContextRecord("env", "a", "Alpha")
+    val records: List<ThreadContextRecord> =
+      droppedThreadContextRecords(listOf("a", "b", "b", "gone"), shells, "env", listOf(had))
+    assertEquals(listOf("thread_b"), records.map { it.contextId })
+    assertEquals("Beta", records.single().title)
+  }
 }

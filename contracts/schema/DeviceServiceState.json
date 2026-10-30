@@ -1,0 +1,562 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "DeviceServiceState",
+  "title": "DeviceServiceState",
+  "type": "object",
+  "properties": {
+    "supportsHostRetry": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "supportsToolUpdate": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "supportsToolInspection": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "supportsEasHosts": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "supportsSimlockHosts": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "hostStatus": {
+      "type": "string",
+      "enum": [
+        "disabled",
+        "idle",
+        "installing",
+        "starting",
+        "ready",
+        "failed"
+      ]
+    },
+    "hostStatusDetail": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "hostStatuses": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "idle",
+              "installing",
+              "starting",
+              "ready",
+              "failed"
+            ]
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "androidDiscoveryIncomplete": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "devices": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DeviceSummary"
+      }
+    },
+    "sessions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DeviceSession"
+      }
+    },
+    "bootingDevices": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "hostId": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "platform": {
+                "type": "string",
+                "enum": [
+                  "ios",
+                  "android"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "booted": {
+                "type": "boolean"
+              },
+              "physical": {
+                "type": "boolean"
+              },
+              "threadId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "hostId",
+              "id",
+              "platform",
+              "name",
+              "version",
+              "booted",
+              "physical",
+              "threadId"
+            ],
+            "additionalProperties": true
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "onboardingCompleted": {
+      "type": "boolean"
+    },
+    "agentAccessEnabled": {
+      "type": "boolean"
+    },
+    "hubBasePath": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "hosts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "platforms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/DevicePlatformAvailability"
+            }
+          },
+          "tools": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DeviceToolVersions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "toolInspectionError": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hubInstalled": {
+            "type": "boolean"
+          },
+          "agentDeviceInstalled": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "local",
+              "ssh"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "platforms",
+          "hubInstalled",
+          "agentDeviceInstalled",
+          "kind"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "easHosts": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "platforms": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/DevicePlatformAvailability"
+                }
+              },
+              "tools": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DeviceToolVersions"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "toolInspectionError": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "hubInstalled": {
+                "type": "boolean"
+              },
+              "agentDeviceInstalled": {
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "eas"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "platforms",
+              "hubInstalled",
+              "agentDeviceInstalled",
+              "kind"
+            ],
+            "additionalProperties": true
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "simlockHosts": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "platforms": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/DevicePlatformAvailability"
+                }
+              },
+              "tools": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DeviceToolVersions"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "toolInspectionError": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "hubInstalled": {
+                "type": "boolean"
+              },
+              "agentDeviceInstalled": {
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "simlock"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "platforms",
+              "hubInstalled",
+              "agentDeviceInstalled",
+              "kind"
+            ],
+            "additionalProperties": true
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "hostStatus",
+    "hostStatuses",
+    "devices",
+    "sessions",
+    "onboardingCompleted",
+    "agentAccessEnabled",
+    "hubBasePath",
+    "revision",
+    "hosts"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "DevicePlatformAvailability": {
+      "type": "object",
+      "properties": {
+        "platform": {
+          "type": "string",
+          "enum": [
+            "ios",
+            "android"
+          ]
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "platform",
+        "available"
+      ],
+      "additionalProperties": true
+    },
+    "DeviceSession": {
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string"
+        },
+        "hostId": {
+          "type": "string"
+        },
+        "deviceId": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string",
+          "enum": [
+            "ios",
+            "android"
+          ]
+        },
+        "openedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "threadId",
+        "hostId",
+        "deviceId",
+        "platform",
+        "openedAt"
+      ],
+      "additionalProperties": true
+    },
+    "DeviceSummary": {
+      "type": "object",
+      "properties": {
+        "hostId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string",
+          "enum": [
+            "ios",
+            "android"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "booted": {
+          "type": "boolean"
+        },
+        "physical": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "hostId",
+        "id",
+        "platform",
+        "name",
+        "version",
+        "booted",
+        "physical"
+      ],
+      "additionalProperties": true
+    },
+    "DeviceToolVersion": {
+      "type": "object",
+      "properties": {
+        "requiredVersion": {
+          "type": "string"
+        },
+        "installedVersions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "runningVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "requiredVersion",
+        "installedVersions",
+        "runningVersion"
+      ],
+      "additionalProperties": true
+    },
+    "DeviceToolVersions": {
+      "type": "object",
+      "properties": {
+        "hub": {
+          "$ref": "#/$defs/DeviceToolVersion"
+        },
+        "agent": {
+          "$ref": "#/$defs/DeviceToolVersion"
+        }
+      },
+      "required": [
+        "hub",
+        "agent"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

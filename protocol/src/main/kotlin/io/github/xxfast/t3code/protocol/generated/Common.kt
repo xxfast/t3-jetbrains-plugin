@@ -152,6 +152,74 @@ public data class ChatUnknownAttachment(
 )
 
 @Serializable
+public data class DeviceForegroundApp(
+  val id: String,
+  val name: String? = null,
+  val version: String? = null,
+)
+
+@Serializable
+public data class DevicePlatformAvailability(
+  val platform: String,
+  val available: Boolean,
+  val reason: String? = null,
+)
+
+@Serializable
+public data class DeviceSession(
+  val threadId: String,
+  val hostId: String,
+  val deviceId: String,
+  val platform: String,
+  val openedAt: String,
+)
+
+@Serializable
+public data class DeviceSettings(
+  val appearance: String? = null,
+  val textSize: String? = null,
+  val reduceMotion: Boolean? = null,
+  val increaseContrast: Boolean? = null,
+  val reduceTransparency: Boolean? = null,
+  val showBorders: Boolean? = null,
+  val voiceOver: Boolean? = null,
+  val liquidGlass: String? = null,
+  val colorFilter: String? = null,
+  val networkEnabled: Boolean? = null,
+  val location: DeviceSettings.Location? = null,
+) {
+  @Serializable
+  public data class Location(
+    val latitude: Double,
+    val longitude: Double,
+  )
+}
+
+@Serializable
+public data class DeviceSummary(
+  val hostId: String,
+  val id: String,
+  val platform: String,
+  val name: String,
+  val version: String,
+  val booted: Boolean,
+  val physical: Boolean,
+)
+
+@Serializable
+public data class DeviceToolVersion(
+  val requiredVersion: String,
+  val installedVersions: List<String>,
+  val runningVersion: String?,
+)
+
+@Serializable
+public data class DeviceToolVersions(
+  val hub: DeviceToolVersion,
+  val agent: DeviceToolVersion,
+)
+
+@Serializable
 public data class DiscoveredLocalServer(
   val host: String,
   val port: Long,
@@ -159,7 +227,7 @@ public data class DiscoveredLocalServer(
   val processName: String?,
   val pid: Long?,
   val terminal: TerminalClearInput?,
-  val agent: WorktreeSetupCancelInput? = null,
+  val agent: PreviewListInput? = null,
 )
 
 @Serializable
@@ -185,6 +253,18 @@ public data class ModelSelection(
   val model: JsonElement,
   // TODO(contracts): unconstrained upstream (Schema.Unknown or an opaque type)
   val options: JsonElement? = null,
+)
+
+@Serializable
+public data class ThreadSearchMatch(
+  val threadId: String,
+  val projectId: String,
+  val source: String,
+  val snippet: String,
+  val messageCreatedAt: String?,
+  val quality: Double? = null,
+  val hits: Long? = null,
+  val messageId: String? = null,
 )
 
 @Serializable
@@ -1668,12 +1748,309 @@ public data class PastedTextAttachmentSource(
   @SerialName("_tag") val tag: String,
 )
 
+@Serializable(with = PreviewNavStatusSerializer::class)
+public sealed interface PreviewNavStatus {
+  public val tag: String
+
+  @Serializable
+  public data class Idle(
+    @SerialName("_tag") @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val tag: String = "Idle",
+  ) : PreviewNavStatus
+
+  @Serializable
+  public data class Loading(
+    @SerialName("_tag") @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    override val tag: String = "Loading",
+    val url: String,
+    val title: String,
+  ) : PreviewNavStatus
+
+  @Serializable
+  public data class Success(
+    @SerialName("_tag") @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    override val tag: String = "Success",
+    val url: String,
+    val title: String,
+  ) : PreviewNavStatus
+
+  @Serializable
+  public data class LoadFailed(
+    @SerialName("_tag") @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    override val tag: String = "LoadFailed",
+    val url: String,
+    val title: String,
+    val code: Long,
+    val description: String,
+    val download: PreviewNavStatus.LoadFailed.Download? = null,
+  ) : PreviewNavStatus {
+    @Serializable
+    public data class Download(
+      val id: String,
+      val fileName: String,
+    )
+  }
+
+  /** A variant this build doesn't know. [raw] is the whole object as received. */
+  @Serializable(with = UnknownPreviewNavStatusSerializer::class)
+  public data class Unknown(
+    override val tag: String,
+    val raw: JsonObject,
+  ) : PreviewNavStatus
+}
+
+public object PreviewNavStatusSerializer : KSerializer<PreviewNavStatus> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<PreviewNavStatus> =
+    when (element["_tag"]?.jsonPrimitive?.contentOrNull) {
+      "Idle" -> PreviewNavStatus.Idle.serializer()
+      "Loading" -> PreviewNavStatus.Loading.serializer()
+      "Success" -> PreviewNavStatus.Success.serializer()
+      "LoadFailed" -> PreviewNavStatus.LoadFailed.serializer()
+      else -> PreviewNavStatus.Unknown.serializer()
+    }
+
+  override fun deserialize(decoder: Decoder): PreviewNavStatus {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(PreviewNavStatus.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: PreviewNavStatus) {
+    when (value) {
+      is PreviewNavStatus.Idle -> PreviewNavStatus.Idle.serializer().serialize(encoder, value)
+      is PreviewNavStatus.Loading -> PreviewNavStatus.Loading.serializer().serialize(encoder, value)
+      is PreviewNavStatus.Success -> PreviewNavStatus.Success.serializer().serialize(encoder, value)
+      is PreviewNavStatus.LoadFailed ->
+        PreviewNavStatus.LoadFailed.serializer().serialize(encoder, value)
+      is PreviewNavStatus.Unknown -> PreviewNavStatus.Unknown.serializer().serialize(encoder, value)
+    }
+  }
+}
+
+public object UnknownPreviewNavStatusSerializer : KSerializer<PreviewNavStatus.Unknown> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  override fun deserialize(decoder: Decoder): PreviewNavStatus.Unknown {
+    val raw: JsonObject = (decoder as JsonDecoder).decodeJsonElement().jsonObject
+    fun string(key: String): String? = raw[key]?.jsonPrimitive?.contentOrNull
+    return PreviewNavStatus.Unknown(
+      tag = string("_tag") ?: "unknown",
+      raw = raw,
+    )
+  }
+
+  override fun serialize(encoder: Encoder, value: PreviewNavStatus.Unknown) {
+    (encoder as JsonEncoder).encodeJsonElement(value.raw)
+  }
+}
+
+@Serializable
+public data class PreviewSessionSnapshot(
+  val threadId: String,
+  val tabId: String,
+  val navStatus: PreviewNavStatus,
+  val canGoBack: Boolean,
+  val canGoForward: Boolean,
+  val viewport: PreviewViewportSetting? = null,
+  val colorScheme: String? = null,
+  val zoomFactor: Double? = null,
+  val profileId: String? = null,
+  val runtime: String? = null,
+  val headless: Boolean? = null,
+  val automationOwner: String? = null,
+  val reveal: Boolean? = null,
+  val revealRequest: PreviewSessionSnapshot.RevealRequest? = null,
+  val updatedAt: String,
+) {
+  @Serializable
+  public data class RevealRequest(
+    val id: String,
+    val force: Boolean,
+  )
+}
+
+@Serializable(with = PreviewViewportSettingSerializer::class)
+public sealed interface PreviewViewportSetting {
+  public val tag: String
+
+  @Serializable
+  public data class Fill(
+    @SerialName("_tag") @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val tag: String = "fill",
+  ) : PreviewViewportSetting
+
+  @Serializable
+  public data class Freeform(
+    @SerialName("_tag") @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    override val tag: String = "freeform",
+    val width: Long,
+    val height: Long,
+  ) : PreviewViewportSetting
+
+  @Serializable
+  public data class Preset(
+    @SerialName("_tag") @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    override val tag: String = "preset",
+    val width: Long,
+    val height: Long,
+    val presetId: String,
+  ) : PreviewViewportSetting
+
+  /** A variant this build doesn't know. [raw] is the whole object as received. */
+  @Serializable(with = UnknownPreviewViewportSettingSerializer::class)
+  public data class Unknown(
+    override val tag: String,
+    val raw: JsonObject,
+  ) : PreviewViewportSetting
+}
+
+public object PreviewViewportSettingSerializer : KSerializer<PreviewViewportSetting> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<PreviewViewportSetting> =
+    when (element["_tag"]?.jsonPrimitive?.contentOrNull) {
+      "fill" -> PreviewViewportSetting.Fill.serializer()
+      "freeform" -> PreviewViewportSetting.Freeform.serializer()
+      "preset" -> PreviewViewportSetting.Preset.serializer()
+      else -> PreviewViewportSetting.Unknown.serializer()
+    }
+
+  override fun deserialize(decoder: Decoder): PreviewViewportSetting {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(PreviewViewportSetting.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: PreviewViewportSetting) {
+    when (value) {
+      is PreviewViewportSetting.Fill ->
+        PreviewViewportSetting.Fill.serializer().serialize(encoder, value)
+      is PreviewViewportSetting.Freeform ->
+        PreviewViewportSetting.Freeform.serializer().serialize(encoder, value)
+      is PreviewViewportSetting.Preset ->
+        PreviewViewportSetting.Preset.serializer().serialize(encoder, value)
+      is PreviewViewportSetting.Unknown ->
+        PreviewViewportSetting.Unknown.serializer().serialize(encoder, value)
+    }
+  }
+}
+
+public object UnknownPreviewViewportSettingSerializer :
+  KSerializer<PreviewViewportSetting.Unknown> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  override fun deserialize(decoder: Decoder): PreviewViewportSetting.Unknown {
+    val raw: JsonObject = (decoder as JsonDecoder).decodeJsonElement().jsonObject
+    fun string(key: String): String? = raw[key]?.jsonPrimitive?.contentOrNull
+    return PreviewViewportSetting.Unknown(
+      tag = string("_tag") ?: "unknown",
+      raw = raw,
+    )
+  }
+
+  override fun serialize(encoder: Encoder, value: PreviewViewportSetting.Unknown) {
+    (encoder as JsonEncoder).encodeJsonElement(value.raw)
+  }
+}
+
 @Serializable
 public data class ProjectEntry(
   val path: String,
   val kind: String,
   val ignored: Boolean? = null,
 )
+
+@Serializable(with = ProjectIconOverrideSerializer::class)
+public sealed interface ProjectIconOverride {
+  public val kind: String
+
+  @Serializable
+  public data class Lucide(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "lucide",
+    val name: String,
+    val color: String,
+  ) : ProjectIconOverride
+
+  @Serializable
+  public data class Emoji(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "emoji",
+    val emoji: String,
+  ) : ProjectIconOverride
+
+  @Serializable
+  public data class Monogram(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "monogram",
+    val text: String,
+    val color: String,
+  ) : ProjectIconOverride
+
+  /** A variant this build doesn't know. [raw] is the whole object as received. */
+  @Serializable(with = UnknownProjectIconOverrideSerializer::class)
+  public data class Unknown(
+    override val kind: String,
+    val raw: JsonObject,
+  ) : ProjectIconOverride
+}
+
+public object ProjectIconOverrideSerializer : KSerializer<ProjectIconOverride> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<ProjectIconOverride> =
+    when (element["kind"]?.jsonPrimitive?.contentOrNull) {
+      "lucide" -> ProjectIconOverride.Lucide.serializer()
+      "emoji" -> ProjectIconOverride.Emoji.serializer()
+      "monogram" -> ProjectIconOverride.Monogram.serializer()
+      else -> ProjectIconOverride.Unknown.serializer()
+    }
+
+  override fun deserialize(decoder: Decoder): ProjectIconOverride {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(ProjectIconOverride.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: ProjectIconOverride) {
+    when (value) {
+      is ProjectIconOverride.Lucide ->
+        ProjectIconOverride.Lucide.serializer().serialize(encoder, value)
+      is ProjectIconOverride.Emoji ->
+        ProjectIconOverride.Emoji.serializer().serialize(encoder, value)
+      is ProjectIconOverride.Monogram ->
+        ProjectIconOverride.Monogram.serializer().serialize(encoder, value)
+      is ProjectIconOverride.Unknown ->
+        ProjectIconOverride.Unknown.serializer().serialize(encoder, value)
+    }
+  }
+}
+
+public object UnknownProjectIconOverrideSerializer : KSerializer<ProjectIconOverride.Unknown> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  override fun deserialize(decoder: Decoder): ProjectIconOverride.Unknown {
+    val raw: JsonObject = (decoder as JsonDecoder).decodeJsonElement().jsonObject
+    fun string(key: String): String? = raw[key]?.jsonPrimitive?.contentOrNull
+    return ProjectIconOverride.Unknown(
+      kind = string("kind") ?: "unknown",
+      raw = raw,
+    )
+  }
+
+  override fun serialize(encoder: Encoder, value: ProjectIconOverride.Unknown) {
+    (encoder as JsonEncoder).encodeJsonElement(value.raw)
+  }
+}
 
 @Serializable
 public data class ProjectScript(
@@ -1949,6 +2326,201 @@ public data class RepositoryOrigin(
   val canonicalKey: String,
   val remoteUrl: String? = null,
   val displayName: String? = null,
+)
+
+@Serializable(with = ScheduledTaskScheduleSerializer::class)
+public sealed interface ScheduledTaskSchedule {
+  public val type: String
+
+  @Serializable
+  public data class Interval(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "interval",
+    val everyMs: Long,
+  ) : ScheduledTaskSchedule
+
+  @Serializable
+  public data class FixedTime(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "fixed_time",
+    val timeOfDay: String,
+    val weekdays: List<Long>? = null,
+  ) : ScheduledTaskSchedule
+
+  @Serializable
+  public data class Webhook(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "webhook",
+    val signature: ScheduledTaskWebhookSignature?,
+    val maxDeliveryAgeMinutes: Long? = null,
+    val dedupe: ScheduledTaskSchedule.Webhook.Dedupe? = null,
+    val filters: List<ScheduledTaskWebhookFilter>? = null,
+  ) : ScheduledTaskSchedule {
+    @Serializable
+    public data class Dedupe(
+      val replayKey: String? = null,
+      val coalesceKey: String? = null,
+      val coalesceWindowSeconds: Long? = null,
+    )
+  }
+
+  /** A variant this build doesn't know. [raw] is the whole object as received. */
+  @Serializable(with = UnknownScheduledTaskScheduleSerializer::class)
+  public data class Unknown(
+    override val type: String,
+    val raw: JsonObject,
+  ) : ScheduledTaskSchedule
+}
+
+public object ScheduledTaskScheduleSerializer : KSerializer<ScheduledTaskSchedule> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<ScheduledTaskSchedule> =
+    when (element["type"]?.jsonPrimitive?.contentOrNull) {
+      "interval" -> ScheduledTaskSchedule.Interval.serializer()
+      "fixed_time" -> ScheduledTaskSchedule.FixedTime.serializer()
+      "webhook" -> ScheduledTaskSchedule.Webhook.serializer()
+      else -> ScheduledTaskSchedule.Unknown.serializer()
+    }
+
+  override fun deserialize(decoder: Decoder): ScheduledTaskSchedule {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(ScheduledTaskSchedule.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: ScheduledTaskSchedule) {
+    when (value) {
+      is ScheduledTaskSchedule.Interval ->
+        ScheduledTaskSchedule.Interval.serializer().serialize(encoder, value)
+      is ScheduledTaskSchedule.FixedTime ->
+        ScheduledTaskSchedule.FixedTime.serializer().serialize(encoder, value)
+      is ScheduledTaskSchedule.Webhook ->
+        ScheduledTaskSchedule.Webhook.serializer().serialize(encoder, value)
+      is ScheduledTaskSchedule.Unknown ->
+        ScheduledTaskSchedule.Unknown.serializer().serialize(encoder, value)
+    }
+  }
+}
+
+public object UnknownScheduledTaskScheduleSerializer : KSerializer<ScheduledTaskSchedule.Unknown> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  override fun deserialize(decoder: Decoder): ScheduledTaskSchedule.Unknown {
+    val raw: JsonObject = (decoder as JsonDecoder).decodeJsonElement().jsonObject
+    fun string(key: String): String? = raw[key]?.jsonPrimitive?.contentOrNull
+    return ScheduledTaskSchedule.Unknown(
+      type = string("type") ?: "unknown",
+      raw = raw,
+    )
+  }
+
+  override fun serialize(encoder: Encoder, value: ScheduledTaskSchedule.Unknown) {
+    (encoder as JsonEncoder).encodeJsonElement(value.raw)
+  }
+}
+
+@Serializable
+public data class ScheduledTaskWebhookEndpoint(
+  val path: String,
+  val url: String?,
+  val hasSecret: Boolean,
+)
+
+@Serializable(with = ScheduledTaskWebhookFilterSerializer::class)
+public sealed interface ScheduledTaskWebhookFilter {
+  public val path: String
+  public val op: String
+
+  @Serializable
+  public data class Equals(
+    override val path: String,
+    override val op: String,
+    val value: String,
+  ) : ScheduledTaskWebhookFilter
+
+  @Serializable
+  public data class In(
+    override val path: String,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val op: String = "in",
+    val value: List<String>,
+  ) : ScheduledTaskWebhookFilter
+
+  @Serializable
+  public data class Exists(
+    override val path: String,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val op: String = "exists",
+  ) : ScheduledTaskWebhookFilter
+
+  /** A variant this build doesn't know. [raw] is the whole object as received. */
+  @Serializable(with = UnknownScheduledTaskWebhookFilterSerializer::class)
+  public data class Unknown(
+    override val path: String,
+    override val op: String,
+    val raw: JsonObject,
+  ) : ScheduledTaskWebhookFilter
+}
+
+public object ScheduledTaskWebhookFilterSerializer : KSerializer<ScheduledTaskWebhookFilter> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  private fun select(element: JsonObject): DeserializationStrategy<ScheduledTaskWebhookFilter> =
+    when (element["op"]?.jsonPrimitive?.contentOrNull) {
+      "equals", "notEquals", "startsWith" -> ScheduledTaskWebhookFilter.Equals.serializer()
+      "in" -> ScheduledTaskWebhookFilter.In.serializer()
+      "exists" -> ScheduledTaskWebhookFilter.Exists.serializer()
+      else -> ScheduledTaskWebhookFilter.Unknown.serializer()
+    }
+
+  override fun deserialize(decoder: Decoder): ScheduledTaskWebhookFilter {
+    val input: JsonDecoder = decoder as JsonDecoder
+    val element: JsonObject = input.decodeJsonElement().jsonObject
+    return try {
+      input.json.decodeFromJsonElement(select(element), element)
+    } catch (_: IllegalArgumentException) {
+      input.json.decodeFromJsonElement(ScheduledTaskWebhookFilter.Unknown.serializer(), element)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: ScheduledTaskWebhookFilter) {
+    when (value) {
+      is ScheduledTaskWebhookFilter.Equals ->
+        ScheduledTaskWebhookFilter.Equals.serializer().serialize(encoder, value)
+      is ScheduledTaskWebhookFilter.In ->
+        ScheduledTaskWebhookFilter.In.serializer().serialize(encoder, value)
+      is ScheduledTaskWebhookFilter.Exists ->
+        ScheduledTaskWebhookFilter.Exists.serializer().serialize(encoder, value)
+      is ScheduledTaskWebhookFilter.Unknown ->
+        ScheduledTaskWebhookFilter.Unknown.serializer().serialize(encoder, value)
+    }
+  }
+}
+
+public object UnknownScheduledTaskWebhookFilterSerializer :
+  KSerializer<ScheduledTaskWebhookFilter.Unknown> {
+  override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+  override fun deserialize(decoder: Decoder): ScheduledTaskWebhookFilter.Unknown {
+    val raw: JsonObject = (decoder as JsonDecoder).decodeJsonElement().jsonObject
+    fun string(key: String): String? = raw[key]?.jsonPrimitive?.contentOrNull
+    return ScheduledTaskWebhookFilter.Unknown(
+      path = string("path") ?: "",
+      op = string("op") ?: "unknown",
+      raw = raw,
+    )
+  }
+
+  override fun serialize(encoder: Encoder, value: ScheduledTaskWebhookFilter.Unknown) {
+    (encoder as JsonEncoder).encodeJsonElement(value.raw)
+  }
+}
+
+@Serializable
+public data class ScheduledTaskWebhookSignature(
+  val header: String,
+  val encoding: String,
+  val prefix: String,
 )
 
 @Serializable

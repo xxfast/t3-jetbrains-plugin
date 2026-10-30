@@ -1,0 +1,14 @@
+{
+  "transitions": {
+    "thr_01JC4B2W5RROUTER1": [
+      { "after": 8000, "status": "completed", "activeRunId": null }
+    ],
+    "thr_01JC3A0P7SPAUSED1": [
+      {
+        "after": 12000,
+        "status": "failed",
+        "lastError": "Gradle daemon disappeared unexpectedly while running :benchmarks:jsBrowserTest"
+      }
+    ]
+  }
+}

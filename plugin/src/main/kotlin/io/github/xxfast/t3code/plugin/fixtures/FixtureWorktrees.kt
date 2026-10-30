@@ -21,6 +21,8 @@ val FIXTURE_REFS: List<VcsRef> = listOf(
   ),
   VcsRef(name = "fix/sidebar-sort", current = false, isDefault = false, worktreePath = null),
   VcsRef(name = "release/0.1", current = false, isDefault = false, worktreePath = null),
+  // The branch "Add a versioned migration sample" ran on, for its branch mismatch notice
+  VcsRef(name = "docs-migrations", current = false, isDefault = false, worktreePath = null),
   VcsRef(
     name = "origin/main",
     isRemote = true,

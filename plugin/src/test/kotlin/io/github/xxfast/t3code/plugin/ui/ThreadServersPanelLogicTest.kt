@@ -1,8 +1,8 @@
 package io.github.xxfast.t3code.plugin.ui
 
 import io.github.xxfast.t3code.protocol.generated.DiscoveredLocalServer
+import io.github.xxfast.t3code.protocol.generated.PreviewListInput
 import io.github.xxfast.t3code.protocol.generated.TerminalClearInput
-import io.github.xxfast.t3code.protocol.generated.WorktreeSetupCancelInput
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -63,6 +63,6 @@ class ThreadServersPanelLogicTest {
     processName = processName,
     pid = pid,
     terminal = terminalThread?.let { TerminalClearInput(threadId = it, terminalId = "default") },
-    agent = agentThread?.let { WorktreeSetupCancelInput(threadId = it) },
+    agent = agentThread?.let { PreviewListInput(threadId = it) },
   )
 }

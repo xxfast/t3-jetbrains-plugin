@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ScheduledTaskError",
+  "title": "ScheduledTaskError",
+  "type": "object",
+  "properties": {
+    "_tag": {
+      "type": "string",
+      "enum": [
+        "ScheduledTaskError"
+      ]
+    },
+    "message": {
+      "type": "string"
+    },
+    "taskId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "cause": {
+      "anyOf": [
+        {},
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "_tag",
+    "message"
+  ],
+  "additionalProperties": true
+}

@@ -2,6 +2,7 @@
 # Tracks the stdlib bundled by IntelliJ 2025.3, the lowest platform we support
 kotlin = "2.2.20"
 intellijPlatformPlugin = "2.19.0"
+mavenPublish = "0.37.0"
 kotlinx-coroutines = "1.10.1"
 kotlinx-serialization = "1.9.0"
 junit-jupiter = "5.13.4"
@@ -25,3 +26,4 @@ kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 intellij-platform = { id = "org.jetbrains.intellij.platform", version.ref = "intellijPlatformPlugin" }
+maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "mavenPublish" }

@@ -2,16 +2,25 @@ package io.github.xxfast.t3code.protocol
 
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
+import io.github.xxfast.t3code.protocol.generated.DeviceDetail
+import io.github.xxfast.t3code.protocol.generated.DeviceDetailInput
+import io.github.xxfast.t3code.protocol.generated.DeviceListInput
+import io.github.xxfast.t3code.protocol.generated.DeviceServiceState
 import io.github.xxfast.t3code.protocol.generated.DiscoveredLocalServerList
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
+import io.github.xxfast.t3code.protocol.generated.PreviewListResult
 import io.github.xxfast.t3code.protocol.generated.PreviewStopLocalServerInput
+import io.github.xxfast.t3code.protocol.generated.ProjectMutation
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesResult
 import io.github.xxfast.t3code.protocol.generated.PullRequestDetail
 import io.github.xxfast.t3code.protocol.generated.PullRequestListInput
 import io.github.xxfast.t3code.protocol.generated.PullRequestListResult
 import io.github.xxfast.t3code.protocol.generated.PullRequestRef
+import io.github.xxfast.t3code.protocol.generated.ScheduledTask
+import io.github.xxfast.t3code.protocol.generated.SearchThreadsInput
+import io.github.xxfast.t3code.protocol.generated.SearchThreadsResult
 import io.github.xxfast.t3code.protocol.generated.SecretRequestAnswerInput
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
@@ -146,6 +155,18 @@ public interface T3Client {
   public suspend fun listRefs(input: VcsListRefsInput): VcsListRefsResult
 
   /**
+   * `orchestration.searchThreads`: user and assistant messages containing `input.query`, at most
+   * one match per thread, with a snippet around it. The query is 2 to 200 characters.
+   */
+  public suspend fun searchThreads(input: SearchThreadsInput): SearchThreadsResult
+
+  /**
+   * `projects.mutate` (`orchestration:operate`): creates, updates or deletes a project. The
+   * shell snapshot follows with the change; the answer is the stored project.
+   */
+  public suspend fun mutateProject(mutation: ProjectMutation): ProjectRecord
+
+  /**
    * `vcs.switchRef` (`source-control:write`): checks `refName` out in `cwd`. A remote ref
    * gets a local branch; the answer names what's checked out now.
    */
@@ -153,6 +174,23 @@ public interface T3Client {
 
   /** `vcs.createRef` (`source-control:write`): a new branch in `cwd`, checked out with `switchRef`. */
   public suspend fun createRef(input: VcsCreateRefInput): VcsCreateRefResult
+
+  /**
+   * `scheduledTasks.subscribe` (`orchestration:read`): every scheduled task, the whole list again
+   * on each change. The server sends the current list first, `scheduledTasks.list`'s answer, so
+   * there's no separate list call. A task that doesn't decode is dropped, as upstream's
+   * `ForwardCompatibleArray` drops it.
+   */
+  public fun scheduledTasks(): Flow<List<ScheduledTask>>
+
+  /** `scheduledTasks.runNow` (`orchestration:operate`): runs task [id] now. The task after. */
+  public suspend fun runScheduledTask(id: String): ScheduledTask
+
+  /**
+   * `scheduledTasks.setEnabled` (`orchestration:operate`): pauses or resumes task [id], only the
+   * flag, so it can't undo an edit made elsewhere. The task after.
+   */
+  public suspend fun setScheduledTaskEnabled(id: String, enabled: Boolean): ScheduledTask
 
   /**
    * `terminal.attach`: a snapshot first (replay its `history`), then live events. Cancelling
@@ -231,6 +269,24 @@ public interface T3Client {
   public suspend fun persistAttachments(
     input: PersistChatAttachmentsInput,
   ): PersistChatAttachmentsResult
+
+  /**
+   * `preview.list` (`orchestration:read`): [threadId]'s open preview tabs. Opening, navigating
+   * or closing one needs `preview:operate`, which the plugin doesn't ask for.
+   */
+  public suspend fun previewSessions(threadId: String): PreviewListResult
+
+  /**
+   * `device.list` (`orchestration:read` with an empty [input]): rescans the device hosts and
+   * answers the state after. `retryHostId` and `updateTool` need `orchestration:operate`.
+   */
+  public suspend fun devices(input: DeviceListInput = DeviceListInput()): DeviceServiceState
+
+  /** `subscribeDeviceState` (`orchestration:read`): the state first, then each change. */
+  public fun deviceState(): Flow<DeviceServiceState>
+
+  /** `device.detail` (`orchestration:read`): one device's settings and foreground app. */
+  public suspend fun deviceDetail(input: DeviceDetailInput): DeviceDetail
 
   /** `server.getConfig`, the parts the plugin uses. Cached per connection. */
   public suspend fun serverInfo(): ServerInfo

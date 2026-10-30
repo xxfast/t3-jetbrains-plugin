@@ -1,57 +1,28 @@
 package io.github.xxfast.t3code.plugin.ui
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ProvidableCompositionLocal
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.graphics.toComposeImageBitmap
-import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
-import com.intellij.openapi.fileTypes.FileType
-import com.intellij.openapi.fileTypes.FileTypeManager
-import com.intellij.openapi.fileTypes.UnknownFileType
 import io.github.xxfast.t3code.protocol.generated.ServerProviderSkill
-import java.awt.Graphics2D
-import java.awt.RenderingHints
-import java.awt.image.BufferedImage
 import java.net.URLDecoder
 import java.net.URLEncoder
-import javax.swing.Icon
 import kotlin.math.ceil
-import kotlin.math.roundToInt
 import kotlinx.serialization.json.JsonElement
 import org.commonmark.node.AbstractVisitor
 import org.commonmark.node.Code
@@ -66,11 +37,6 @@ import org.jetbrains.jewel.markdown.InlineMarkdown
 import org.jetbrains.jewel.markdown.extensions.ImageRendererExtension
 import org.jetbrains.jewel.markdown.extensions.MarkdownProcessorExtension
 import org.jetbrains.jewel.markdown.extensions.MarkdownRendererExtension
-import org.jetbrains.jewel.ui.component.Icon
-import org.jetbrains.jewel.ui.component.Text
-import org.jetbrains.jewel.ui.component.Tooltip
-import org.jetbrains.jewel.ui.icon.IconKey
-import org.jetbrains.jewel.ui.icons.AllIconsKeys
 
 // Chips in a message's markdown, upstream's `ContextChip` (`ContextChip.tsx`) where
 // `ChatMarkdown.tsx` draws one: a context link (`renderContextReference`), a `$skill`
@@ -249,6 +215,14 @@ class MessageChipActions(
   val onOpenThread: (threadId: String) -> Unit = {},
 )
 
+private fun MessageChipActions.perform(action: MessageChipAction) {
+  when (action) {
+    is MessageChipAction.OpenFile -> onOpenFile(action.path, action.line)
+    is MessageChipAction.OpenUrl -> onOpenUrl(action.url)
+    is MessageChipAction.OpenThread -> onOpenThread(action.threadId)
+  }
+}
+
 /** The chips' actions, from the view that hosts the markdown. */
 val LocalMessageChipActions: ProvidableCompositionLocal<MessageChipActions> =
   staticCompositionLocalOf { MessageChipActions() }
@@ -323,13 +297,13 @@ data class ContextChipInks(
    * `contextChipVariants`' `--context-chip-accent` for [kind] and [state], then the bubble's
    * `--context-chip-message` over it (`TimelineUserMessageRow.tsx`'s `BUBBLE_CHIP_CLASS_NAME`).
    */
-  fun ink(kind: MessageChipKind, state: ContextChipState? = null): Color {
+  fun ink(kind: ContextChipKind, state: ContextChipState = ContextChipState.NORMAL): Color {
     if (message != null) return message
     return when (state) {
       ContextChipState.UNRESOLVED -> foreground
       ContextChipState.INVALID ->
         variables[CONTEXT_CHIP_INVALID_VARIABLE]?.let(::themeHexColor) ?: error
-      null -> kind.accent
+      ContextChipState.NORMAL -> kind.accent
         ?.let { variables[contextChipColorVariable(it)] }
         ?.let(::themeHexColor)
         ?: foreground
@@ -376,9 +350,9 @@ class MessageChipsRendererExtension(
             )
 
           is MessageChipSource.Skill -> MessageChip(
-            kind = MessageChipKind.SKILL,
+            kind = ContextChipKind.SKILL,
             label = source.label,
-            icon = MessageChipIcon.SKILL,
+            icon = ContextChipIcon.SKILL,
             tooltip = "$${source.name}",
           )
 
@@ -390,36 +364,33 @@ class MessageChipsRendererExtension(
   }
 }
 
-// `contextChipVariants`: no frame, an icon of `1em` and a `gap-[0.2em]`, the label at the
-// paragraph's size in medium; an attachment's size after it at `text-3xs` with `gap-[0.33em]`
-private const val CHIP_ICON_EM: Float = 1f
-private const val CHIP_GAP_EM: Float = 0.2f
-private const val CHIP_DETAIL_GAP_EM: Float = 0.33f
-private const val CHIP_DETAIL_SCALE: Float = 0.7f
+// Whole pixels and a little slack: the placeholder's width rounds on its way through sp, and
+// the label ellipsises on any shortfall, even a fraction of a pixel
 private const val CHIP_WIDTH_SLACK_PX: Float = 1f
 
-/** The widest a chip's label gets before it ellipsises, upstream's `max-w-72` on a name. */
-private val CHIP_LABEL_MAX_WIDTH: Dp = 288.dp
-
-/** The chip as inline text content: a placeholder the size of the chip, and the chip in it. */
+/**
+ * The chip as inline text content: a placeholder the size of the chip, and the [ContextChip] in
+ * it. The width is [ContextChip]'s own layout, measured ahead, since a placeholder can't wrap.
+ */
 @Composable
 private fun messageChipContent(chip: MessageChip): InlineTextContent {
   val density: Density = LocalDensity.current
   val base: TextStyle = JewelTheme.defaultTextStyle
   val labelStyle: TextStyle = base.copy(fontWeight = FontWeight.Medium)
-  val detailStyle: TextStyle = base.copy(fontSize = base.fontSize * CHIP_DETAIL_SCALE)
+  val detailStyle: TextStyle = base.copy(fontSize = base.fontSize * CONTEXT_CHIP_DETAIL_SCALE)
   val measurer = rememberTextMeasurer()
   val em: Float = with(density) { base.fontSize.toPx() }
   val label: IntSize = measurer.measure(chip.label, labelStyle, maxLines = 1).size
   val labelWidth: Float =
-    minOf(label.width.toFloat(), with(density) { CHIP_LABEL_MAX_WIDTH.toPx() })
+    minOf(label.width.toFloat(), with(density) { CONTEXT_CHIP_LABEL_MAX_WIDTH.toPx() })
   val detailWidth: Float = chip.detail
-    ?.let { measurer.measure(it, detailStyle, maxLines = 1).size.width + CHIP_DETAIL_GAP_EM * em }
+    ?.let { detail ->
+      val width: Int = measurer.measure(detail, detailStyle, maxLines = 1).size.width
+      width + CONTEXT_CHIP_DETAIL_GAP_EM * em
+    }
     ?: 0f
-  // Whole pixels and a little slack: the placeholder's width rounds on its way through sp, and
-  // the label ellipsises on any shortfall, even a fraction of a pixel
-  val width: Float =
-    ceil((CHIP_ICON_EM + CHIP_GAP_EM) * em + labelWidth + detailWidth) + CHIP_WIDTH_SLACK_PX
+  val chrome: Float = CONTEXT_CHIP_ICON_EM + CONTEXT_CHIP_GAP_EM
+  val width: Float = ceil(chrome * em + labelWidth + detailWidth) + CHIP_WIDTH_SLACK_PX
   // A line of the label's own text, centred on the paragraph's: the same font at the same size,
   // so the label sits on the paragraph's baseline, upstream's `self-baseline`
   val height: Float = label.height.toFloat()
@@ -430,149 +401,19 @@ private fun messageChipContent(chip: MessageChip): InlineTextContent {
       placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
     ),
   ) {
-    MessageChipView(chip, labelStyle, detailStyle, em)
-  }
-}
-
-/**
- * `ContextChip`: the icon and the label in the kind's ink, no frame. A chip that does something
- * underlines its label in the ink on hover, `ContextChipLabel`'s `decoration-transparent`.
- */
-@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip sits on Compose's TooltipArea
-@Composable
-private fun MessageChipView(
-  chip: MessageChip,
-  labelStyle: TextStyle,
-  detailStyle: TextStyle,
-  em: Float,
-) {
-  val density: Density = LocalDensity.current
-  val state: ContextChipState? = ContextChipState.UNRESOLVED.takeIf { chip.unresolved }
-  val ink: Color = currentContextChipInks().ink(chip.kind, state)
-  val actions: MessageChipActions = LocalMessageChipActions.current
-  val action: MessageChipAction? = chip.action
-  val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
-  val hovered: Boolean by interactions.collectIsHoveredAsState()
-  val frame: Modifier = Modifier
-    .fillMaxSize()
-    .then(
-      if (action == null) {
-        Modifier
-      } else {
-        Modifier
-          .pointerHoverIcon(PointerIcon.Hand)
-          .clickable(interactionSource = interactions, indication = null) {
-            when (action) {
-              is MessageChipAction.OpenFile -> actions.onOpenFile(action.path, action.line)
-              is MessageChipAction.OpenUrl -> actions.onOpenUrl(action.url)
-              is MessageChipAction.OpenThread -> actions.onOpenThread(action.threadId)
-            }
-          }
-      },
+    val actions: MessageChipActions = LocalMessageChipActions.current
+    val onClick: (() -> Unit)? = chip.action?.let { action -> { actions.perform(action) } }
+    ContextChip(
+      kind = chip.kind,
+      label = chip.label,
+      icon = chip.icon,
+      modifier = Modifier.fillMaxSize(),
+      iconPath = chip.iconPath,
+      detail = chip.detail,
+      state = chip.state,
+      tooltip = chip.tooltip,
+      textStyle = base,
+      onClick = onClick,
     )
-  val decoration: TextDecoration? = TextDecoration.Underline.takeIf { action != null && hovered }
-  Tooltip({ Text(chip.tooltip.orEmpty()) }, enabled = !chip.tooltip.isNullOrEmpty()) {
-    Box(frame, contentAlignment = Alignment.CenterStart) {
-      Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(with(density) { (CHIP_GAP_EM * em).toDp() }),
-      ) {
-        MessageChipIconView(chip, ink, with(density) { (CHIP_ICON_EM * em).toDp() })
-        // `items-baseline`: the size sits on the label's baseline
-        Row(
-          horizontalArrangement =
-            Arrangement.spacedBy(with(density) { (CHIP_DETAIL_GAP_EM * em).toDp() }),
-        ) {
-          Text(
-            text = chip.label,
-            style = labelStyle.copy(textDecoration = decoration),
-            color = ink,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = CHIP_LABEL_MAX_WIDTH).alignByBaseline(),
-          )
-          chip.detail?.let { detail ->
-            Text(
-              text = detail,
-              style = detailStyle.copy(textDecoration = decoration),
-              color = ink,
-              maxLines = 1,
-              modifier = Modifier.alignByBaseline(),
-            )
-          }
-        }
-      }
-    }
   }
-}
-
-/**
- * The chip's icon: the IDE's icon for the file's type where upstream asks the workspace
- * (`WorkspaceEntryIcon`), lucide's glyphs where upstream draws them.
- */
-@Composable
-private fun MessageChipIconView(chip: MessageChip, tint: Color, size: Dp) {
-  val glyph: String? = when (chip.icon) {
-    MessageChipIcon.SKILL -> "box" // `SKILL_CHIP_ICON_SVG`
-    MessageChipIcon.VIDEO -> "film"
-    MessageChipIcon.THREAD -> "layers"
-    MessageChipIcon.TERMINAL -> "terminal"
-    MessageChipIcon.ELEMENT -> "mouse-pointer-click"
-    MessageChipIcon.PULL_REQUEST -> "git-pull-request"
-    MessageChipIcon.PULL_REQUEST_DRAFT -> "git-pull-request-draft"
-    MessageChipIcon.PULL_REQUEST_MERGED -> "git-merge"
-    MessageChipIcon.PULL_REQUEST_CLOSED -> "git-pull-request-closed"
-    MessageChipIcon.REVIEW_COMMENT -> "message-circle"
-    MessageChipIcon.UNAVAILABLE -> "circle-dashed"
-    MessageChipIcon.FILE, MessageChipIcon.FOLDER, MessageChipIcon.IMAGE -> null
-  }
-  if (glyph != null) {
-    Glyph(glyph, tint, size)
-    return
-  }
-  val scale: Float = LocalDensity.current.density
-  val bitmap: ImageBitmap? = remember(chip.icon, chip.iconPath, scale) {
-    chip.iconPath?.takeIf { chip.icon == MessageChipIcon.FILE }?.let { fileTypeIcon(it, scale) }
-  }
-  // A document's icon is stroked in the ink, `--document-icon-stroke`; other types keep theirs
-  val filter: ColorFilter? = ColorFilter.tint(tint).takeIf { chip.kind.isDocument }
-  if (bitmap != null) {
-    Image(
-      bitmap = bitmap,
-      contentDescription = null,
-      modifier = Modifier.size(size),
-      colorFilter = filter,
-    )
-    return
-  }
-  val key: IconKey = when (chip.icon) {
-    MessageChipIcon.FOLDER -> AllIconsKeys.Nodes.Folder
-    MessageChipIcon.IMAGE -> AllIconsKeys.FileTypes.Image
-    else -> AllIconsKeys.FileTypes.Any_type
-  }
-  Icon(key = key, contentDescription = null, modifier = Modifier.size(size), colorFilter = filter)
-}
-
-/**
- * The IDE's icon for the type of the file at [path], painted to a bitmap at [scale], or null
- * when the IDE doesn't know the type. Painted rather than wrapped as an `IconKey`: on 2025.3
- * `IntelliJIconKey.fromPlatformIcon` loads the icon's resource through this plugin's
- * classloader, which can't see the Kotlin or Markdown plugin's, and logs an error per chip.
- */
-fun fileTypeIcon(path: String, scale: Float): ImageBitmap? {
-  val type: FileType = FileTypeManager.getInstance().getFileTypeByFileName(fileBasename(path))
-  if (type is UnknownFileType) return null
-  val icon: Icon = type.icon ?: return null
-  val width: Int = maxOf(1, (icon.iconWidth * scale).roundToInt())
-  val height: Int = maxOf(1, (icon.iconHeight * scale).roundToInt())
-  val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
-  val graphics: Graphics2D = image.createGraphics()
-  try {
-    graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-    graphics.scale(scale.toDouble(), scale.toDouble())
-    icon.paintIcon(null, graphics, 0, 0)
-  } finally {
-    graphics.dispose()
-  }
-  return image.toComposeImageBitmap()
 }

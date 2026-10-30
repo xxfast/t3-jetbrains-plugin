@@ -1,0 +1,112 @@
+{
+  "previewSessions": {
+    "thr_01JC4A1F0QWMIGRATE": [
+      {
+        "threadId": "thr_01JC4A1F0QWMIGRATE",
+        "tabId": "browser-1",
+        "navStatus": {
+          "_tag": "Success",
+          "url": "http://localhost:8080/",
+          "title": "KStore sample"
+        },
+        "canGoBack": false,
+        "canGoForward": false,
+        "runtime": "desktop",
+        "updatedAt": "2026-10-19T08:41:02.000Z"
+      }
+    ]
+  },
+  "deviceState": {
+    "supportsHostRetry": true,
+    "supportsToolUpdate": true,
+    "supportsToolInspection": true,
+    "supportsEasHosts": true,
+    "hostStatus": "ready",
+    "hostStatuses": {
+      "local": { "status": "ready" },
+      "mac-mini": { "status": "ready" }
+    },
+    "devices": [
+      {
+        "hostId": "local",
+        "id": "emulator-5554",
+        "platform": "android",
+        "name": "Pixel 9 API 36",
+        "version": "Android 16",
+        "booted": false,
+        "physical": false
+      },
+      {
+        "hostId": "mac-mini",
+        "id": "6F1C2B4E-0D9A-4E61-9C3B-2A7D5E8F1B20",
+        "platform": "ios",
+        "name": "iPhone 17 Pro",
+        "version": "iOS 26.0",
+        "booted": true,
+        "physical": false
+      }
+    ],
+    "sessions": [
+      {
+        "threadId": "thr_01JC4A1F0QWMIGRATE",
+        "hostId": "mac-mini",
+        "deviceId": "6F1C2B4E-0D9A-4E61-9C3B-2A7D5E8F1B20",
+        "platform": "ios",
+        "openedAt": "2026-10-19T08:39:40.000Z"
+      }
+    ],
+    "onboardingCompleted": true,
+    "agentAccessEnabled": true,
+    "hubBasePath": "/devices/hub",
+    "revision": 12,
+    "hosts": [
+      {
+        "kind": "local",
+        "id": "local",
+        "label": "This machine",
+        "platforms": [
+          { "platform": "ios", "available": false, "reason": "Xcode isn't installed." },
+          { "platform": "android", "available": true }
+        ],
+        "hubInstalled": true,
+        "agentDeviceInstalled": true
+      },
+      {
+        "kind": "ssh",
+        "id": "mac-mini",
+        "label": "Mac mini",
+        "platforms": [
+          { "platform": "ios", "available": true },
+          { "platform": "android", "available": false, "reason": "No Android SDK found." }
+        ],
+        "hubInstalled": true,
+        "agentDeviceInstalled": true
+      }
+    ]
+  },
+  "deviceDetails": [
+    {
+      "hostId": "mac-mini",
+      "deviceId": "6F1C2B4E-0D9A-4E61-9C3B-2A7D5E8F1B20",
+      "settings": {
+        "appearance": "dark",
+        "textSize": "large",
+        "reduceMotion": false,
+        "increaseContrast": false,
+        "reduceTransparency": false,
+        "showBorders": false,
+        "voiceOver": false,
+        "liquidGlass": "clear",
+        "colorFilter": "none",
+        "networkEnabled": true,
+        "location": { "latitude": -37.8136, "longitude": 144.9631 }
+      },
+      "foregroundApp": {
+        "id": "io.github.xxfast.kstore.sample",
+        "name": "KStore Sample",
+        "version": "1.0"
+      },
+      "readAt": "2026-10-19T08:42:10.000Z"
+    }
+  ]
+}

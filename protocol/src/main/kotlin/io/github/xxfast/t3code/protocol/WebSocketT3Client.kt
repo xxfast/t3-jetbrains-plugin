@@ -2,14 +2,20 @@ package io.github.xxfast.t3code.protocol
 
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
+import io.github.xxfast.t3code.protocol.generated.DeviceDetail
+import io.github.xxfast.t3code.protocol.generated.DeviceDetailInput
+import io.github.xxfast.t3code.protocol.generated.DeviceListInput
+import io.github.xxfast.t3code.protocol.generated.DeviceServiceState
 import io.github.xxfast.t3code.protocol.generated.DiscoveredLocalServerList
 import io.github.xxfast.t3code.protocol.generated.DispatchCommandResult
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
-import io.github.xxfast.t3code.protocol.generated.PlanArtifactSerializer
-import io.github.xxfast.t3code.protocol.generated.PreviewStopLocalServerInput
 import io.github.xxfast.t3code.protocol.generated.PlanArtifact as GenPlanArtifact
+import io.github.xxfast.t3code.protocol.generated.PlanArtifactSerializer
+import io.github.xxfast.t3code.protocol.generated.PreviewListInput
+import io.github.xxfast.t3code.protocol.generated.PreviewListResult
+import io.github.xxfast.t3code.protocol.generated.PreviewStopLocalServerInput
 import io.github.xxfast.t3code.protocol.generated.TurnItem as GenTurnItem
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
 import io.github.xxfast.t3code.protocol.generated.ProjectScript
@@ -18,6 +24,11 @@ import io.github.xxfast.t3code.protocol.generated.PullRequestDetail
 import io.github.xxfast.t3code.protocol.generated.PullRequestListInput
 import io.github.xxfast.t3code.protocol.generated.PullRequestListResult
 import io.github.xxfast.t3code.protocol.generated.PullRequestRef
+import io.github.xxfast.t3code.protocol.generated.ScheduledTask
+import io.github.xxfast.t3code.protocol.generated.ScheduledTaskMutationResult
+import io.github.xxfast.t3code.protocol.generated.ScheduledTaskRunNowInput
+import io.github.xxfast.t3code.protocol.generated.ScheduledTaskRunNowResult
+import io.github.xxfast.t3code.protocol.generated.ScheduledTaskSetEnabledInput
 import io.github.xxfast.t3code.protocol.generated.SecretRequestAnswerInput
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
@@ -25,6 +36,9 @@ import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
 import io.github.xxfast.t3code.protocol.generated.TerminalMetadataStreamEvent
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchInput
 import io.github.xxfast.t3code.protocol.generated.ThreadLaunchResult
+import io.github.xxfast.t3code.protocol.generated.ProjectMutation
+import io.github.xxfast.t3code.protocol.generated.SearchThreadsInput
+import io.github.xxfast.t3code.protocol.generated.SearchThreadsResult
 import io.github.xxfast.t3code.protocol.generated.VcsListRefsInput
 import io.github.xxfast.t3code.protocol.generated.VcsListRefsResult
 import io.github.xxfast.t3code.protocol.generated.VcsCreateRefInput
@@ -237,6 +251,16 @@ public class WebSocketT3Client internal constructor(
     return decode(VcsListRefsResult.serializer(), call("vcs.listRefs", payload))
   }
 
+  override suspend fun searchThreads(input: SearchThreadsInput): SearchThreadsResult {
+    val payload: JsonElement = T3JsonOut.encodeToJsonElement(SearchThreadsInput.serializer(), input)
+    return decode(SearchThreadsResult.serializer(), call("orchestration.searchThreads", payload))
+  }
+
+  override suspend fun mutateProject(mutation: ProjectMutation): ProjectRecord {
+    val payload: JsonElement = T3JsonOut.encodeToJsonElement(ProjectMutation.serializer(), mutation)
+    return decode(ProjectRecord.serializer(), call("projects.mutate", payload))
+  }
+
   override suspend fun switchRef(input: VcsSwitchRefInput): VcsSwitchRefResult {
     val payload: JsonElement = T3JsonOut.encodeToJsonElement(VcsSwitchRefInput.serializer(), input)
     return decode(VcsSwitchRefResult.serializer(), call("vcs.switchRef", payload))
@@ -245,6 +269,28 @@ public class WebSocketT3Client internal constructor(
   override suspend fun createRef(input: VcsCreateRefInput): VcsCreateRefResult {
     val payload: JsonElement = T3JsonOut.encodeToJsonElement(VcsCreateRefInput.serializer(), input)
     return decode(VcsCreateRefResult.serializer(), call("vcs.createRef", payload))
+  }
+
+  override fun scheduledTasks(): Flow<List<ScheduledTask>> = resubscribing(
+    "scheduledTasks.subscribe",
+    JsonObject(emptyMap()),
+    JsonElement.serializer(),
+  ).map { result -> decodeEach(ScheduledTask.serializer(), (result as? JsonObject)?.get("tasks")) }
+
+  override suspend fun runScheduledTask(id: String): ScheduledTask {
+    val input = ScheduledTaskRunNowInput(id)
+    val payload: JsonElement =
+      T3JsonOut.encodeToJsonElement(ScheduledTaskRunNowInput.serializer(), input)
+    val result: JsonElement = call("scheduledTasks.runNow", payload)
+    return decode(ScheduledTaskRunNowResult.serializer(), result).task
+  }
+
+  override suspend fun setScheduledTaskEnabled(id: String, enabled: Boolean): ScheduledTask {
+    val input = ScheduledTaskSetEnabledInput(id, enabled)
+    val payload: JsonElement =
+      T3JsonOut.encodeToJsonElement(ScheduledTaskSetEnabledInput.serializer(), input)
+    val result: JsonElement = call("scheduledTasks.setEnabled", payload)
+    return decode(ScheduledTaskMutationResult.serializer(), result).task
   }
 
   override fun terminal(input: TerminalAttachInput): Flow<TerminalAttachStreamEvent> {
@@ -357,6 +403,28 @@ public class WebSocketT3Client internal constructor(
       T3JsonOut.encodeToJsonElement(PersistChatAttachmentsInput.serializer(), input)
     val result: JsonElement = call("assets.persistChatAttachments", payload)
     return decode(PersistChatAttachmentsResult.serializer(), result)
+  }
+
+  override suspend fun previewSessions(threadId: String): PreviewListResult {
+    val payload: JsonElement =
+      T3JsonOut.encodeToJsonElement(PreviewListInput.serializer(), PreviewListInput(threadId))
+    return decode(PreviewListResult.serializer(), call("preview.list", payload))
+  }
+
+  override suspend fun devices(input: DeviceListInput): DeviceServiceState {
+    val payload: JsonElement = T3JsonOut.encodeToJsonElement(DeviceListInput.serializer(), input)
+    return decode(DeviceServiceState.serializer(), call("device.list", payload))
+  }
+
+  override fun deviceState(): Flow<DeviceServiceState> = resubscribing(
+    "subscribeDeviceState",
+    JsonObject(emptyMap()),
+    DeviceServiceState.serializer(),
+  )
+
+  override suspend fun deviceDetail(input: DeviceDetailInput): DeviceDetail {
+    val payload: JsonElement = T3JsonOut.encodeToJsonElement(DeviceDetailInput.serializer(), input)
+    return decode(DeviceDetail.serializer(), call("device.detail", payload))
   }
 
   override suspend fun serverInfo(): ServerInfo {

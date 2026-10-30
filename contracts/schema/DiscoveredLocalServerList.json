@@ -82,7 +82,7 @@
         "agent": {
           "anyOf": [
             {
-              "$ref": "#/$defs/WorktreeSetupCancelInput"
+              "$ref": "#/$defs/PreviewListInput"
             },
             {
               "type": "null"
@@ -100,6 +100,18 @@
       ],
       "additionalProperties": true
     },
+    "PreviewListInput": {
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "threadId"
+      ],
+      "additionalProperties": true
+    },
     "TerminalClearInput": {
       "type": "object",
       "properties": {
@@ -113,18 +125,6 @@
       "required": [
         "threadId",
         "terminalId"
-      ],
-      "additionalProperties": true
-    },
-    "WorktreeSetupCancelInput": {
-      "type": "object",
-      "properties": {
-        "threadId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "threadId"
       ],
       "additionalProperties": true
     }

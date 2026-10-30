@@ -8,6 +8,9 @@ const val THREAD_SETTLEMENT: String = "threadSettlement"
 const val THREAD_AUTO_SETTLE_OPT_OUT: String = "threadAutoSettleOptOut"
 const val THREAD_SNOOZE: String = "threadSnooze"
 const val THREAD_TITLE_REGENERATION: String = "threadTitleRegeneration"
+const val THREAD_PINNING: String = "threadPinning"
+const val THREAD_PIN_REORDER: String = "threadPinReorder"
+const val THREAD_ACTIVE_REORDER: String = "threadActiveReorder"
 
 /** `thread.stop` is a client command, sent by `interruptThreadTurn` without a run id. */
 const val THREAD_STOP: String = "threadStop"

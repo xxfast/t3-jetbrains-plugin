@@ -18,6 +18,12 @@ public typealias ServerSession = AuthSessionState
 /** `OrchestrationProjectShell`. */
 public typealias Project = ProjectShell
 
+/**
+ * Upstream's `Project` in `project.ts`, the stored record `projects.mutate` answers with. The
+ * Sidebar still reads projects from the shell, as [Project].
+ */
+public typealias ProjectRecord = io.github.xxfast.t3code.protocol.generated.Project
+
 /** `OrchestrationV2ThreadShell`, the list row. */
 public typealias Thread = ThreadShell
 

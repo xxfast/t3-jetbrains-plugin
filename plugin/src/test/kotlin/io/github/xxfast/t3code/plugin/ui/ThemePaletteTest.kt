@@ -336,15 +336,15 @@ class ThemePaletteTest {
 
   @Test
   fun `every chip kind with an accent has one in the table`() {
-    MessageChipKind.entries.forEach { kind ->
+    ContextChipKind.entries.forEach { kind ->
       kind.accent?.let { accent -> assertNotNull(CONTEXT_CHIP_ACCENTS[accent], kind.name) }
     }
-    assertNull(MessageChipKind.NEUTRAL.accent)
+    assertNull(ContextChipKind.NEUTRAL.accent)
   }
 
   @Test
   fun `an image chip takes the file blue, solved like the others`() {
-    assertEquals("image", MessageChipKind.IMAGE.accent)
+    assertEquals("image", ContextChipKind.IMAGE.accent)
     assertEquals("oklch(0.62 0.136 237)", CONTEXT_CHIP_ACCENTS["image"])
     assertEquals(CONTEXT_CHIP_ACCENTS["file"], CONTEXT_CHIP_ACCENTS["image"])
     intUi.forEach { colors ->
@@ -358,12 +358,12 @@ class ThemePaletteTest {
 
   @Test
   fun `the document kinds are solved on every theme`() {
-    val documents: List<MessageChipKind> = listOf(
-      MessageChipKind.DOC_PDF,
-      MessageChipKind.DOC_WORD,
-      MessageChipKind.DOC_SPREADSHEET,
-      MessageChipKind.DOC_SLIDES,
-      MessageChipKind.DOC_EPUB,
+    val documents: List<ContextChipKind> = listOf(
+      ContextChipKind.DOC_PDF,
+      ContextChipKind.DOC_WORD,
+      ContextChipKind.DOC_SPREADSHEET,
+      ContextChipKind.DOC_SLIDES,
+      ContextChipKind.DOC_EPUB,
     )
     intUi.forEach { colors ->
       val variables: Map<String, String> = contextChipVariables(colors)

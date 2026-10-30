@@ -1090,6 +1090,18 @@ function main(): void {
     todos += countTodos(sharedDecls);
     written.push("Common.kt");
   }
+  // Kotlin has no package-info, so the package's doc is a README the wipe above can't lose
+  writeFileSync(join(outDir, "README.md"), [
+    "# io.github.xxfast.t3code.protocol.generated",
+    "",
+    `Generated from T3 Code ${tag} (\`contracts/T3CODE_VERSION\`) by \`contracts/generate.ts\`,`,
+    "one file per upstream Effect schema plus `Common.kt` for the shared ones. Don't edit, the next",
+    "run wipes this directory. See `contracts/README.md` to regenerate.",
+    "",
+    "These are the wire shapes, decoded with `ignoreUnknownKeys`, so they track upstream and can",
+    "change shape on any bump. `Models.kt` one package up aliases the ones most callers want.",
+    "",
+  ].join("\n"));
 
   console.log(`Generated ${written.length} files into ${outDir}`);
   console.log(`${todos} TODO(contracts) fields, ${warnings} warnings`);

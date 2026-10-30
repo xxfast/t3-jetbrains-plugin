@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "DeviceDetailInput",
+  "title": "DeviceDetailInput",
+  "type": "object",
+  "properties": {
+    "hostId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "deviceId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "deviceId"
+  ],
+  "additionalProperties": true
+}

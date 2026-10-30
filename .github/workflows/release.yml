@@ -49,3 +49,39 @@ jobs:
           signed="$(ls plugin/build/distributions/*-signed.zip)"
           gh release create "$GITHUB_REF_NAME" "$signed" \
             --title "$GITHUB_REF_NAME" --generate-notes
+
+  # :protocol to Maven Central as io.github.xxfast:t3code-protocol, KStore's setup and secrets.
+  # Its own job so missing Sonatype secrets don't hold up the plugin release. The deployment
+  # waits for a manual "Publish" on central.sonatype.com.
+  protocol:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+      ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+      ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.GPG_KEY_SECRET }}
+      ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.GPG_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Without a key the build skips signing, and Central refuses unsigned artifacts. Fail here.
+      - name: Check publishing secrets
+        run: |
+          for name in mavenCentralUsername mavenCentralPassword signingInMemoryKey signingInMemoryKeyPassword; do
+            var="ORG_GRADLE_PROJECT_$name"
+            if [ -z "${!var}" ]; then
+              echo "::error::The secret behind $var is not set, can't publish :protocol."
+              exit 1
+            fi
+          done
+
+      - name: Publish to Maven Central
+        run: ./gradlew :protocol:publishToMavenCentral --no-configuration-cache --console=plain

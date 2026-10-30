@@ -154,6 +154,8 @@ class FakeRpcServer : WebSocketServer(InetSocketAddress("127.0.0.1", 0)), AutoCl
           } else conn.send(exit(id, "null"))
         }
 
+        "scheduledTasks.subscribe" -> replay(conn, id, "scheduled-tasks-chunk.json")
+
         "orchestration.dispatchCommand" -> conn.send(exit(id, """{"sequence":42}"""))
 
         "secrets.answerRequest" -> {

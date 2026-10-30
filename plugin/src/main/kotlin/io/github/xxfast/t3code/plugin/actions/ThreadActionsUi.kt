@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.actions
 
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.ActionGroup
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.AnAction
@@ -11,11 +12,22 @@ import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.ui.popup.JBPopupListener
+import com.intellij.openapi.ui.popup.LightweightWindowEvent
+import com.intellij.openapi.ui.popup.ListPopup
 import com.intellij.ui.awt.RelativePoint
+import io.github.xxfast.t3code.plugin.T3
+import io.github.xxfast.t3code.plugin.ide.notify
+import io.github.xxfast.t3code.plugin.ui.SidebarThreadDropPlan
+import io.github.xxfast.t3code.protocol.T3Client
+import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.plugin.ui.ThreadFindState
 import java.awt.Point
+import java.util.UUID
 import javax.swing.JComponent
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 /** The one place thread actions live, registered in `plugin.xml`. */
 const val THREAD_ACTIONS: String = "T3Code.ThreadActions"
@@ -49,6 +61,7 @@ class ThreadPanel(
 const val SIDEBAR_PLACE: String = "T3Code.Sidebar"
 
 const val SETTLE_ACTION: String = "T3Code.ToggleSettle"
+const val PIN_ACTION: String = "T3Code.TogglePin"
 const val RENAME_ACTION: String = "T3Code.RenameThread"
 const val SNOOZE_GROUP: String = "T3Code.Snooze"
 const val WAKE_ACTION: String = "T3Code.Wake"
@@ -86,6 +99,36 @@ fun performThreadAction(
   return true
 }
 
+/**
+ * Sends a Sidebar drop of [threadId] by [plan], one command at a time, and says which one failed
+ * the way `handleThreadDragEnd` (Sidebar.tsx) toasts it. A settle goes through [SETTLE_ACTION],
+ * so it gets the menu's undo and moves on from the open thread, as upstream's `settleThread`.
+ */
+fun dropThread(project: Project, threadId: String, plan: SidebarThreadDropPlan) {
+  if (plan == SidebarThreadDropPlan.None) return
+  if (plan == SidebarThreadDropPlan.Settle) {
+    performThreadAction(project, threadId, SETTLE_ACTION)
+    return
+  }
+  val client: T3Client = T3.get().client
+  val row: Thread = client.threads.value.find { it.id == threadId } ?: return
+  val steps: List<DropStep> = dropCommands(plan, row, client.threads.value) {
+    UUID.randomUUID().toString()
+  }
+  ThreadActionScope.getInstance(project).scope.launch {
+    for (step in steps) {
+      try {
+        client.dispatch(step.command)
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        notify(project, e.message ?: e.javaClass.simpleName, NotificationType.ERROR, step.failure)
+        return@launch
+      }
+    }
+  }
+}
+
 /** The terminal module's action, `t3code-terminal.xml`. */
 const val OPEN_TERMINAL_ACTION: String = "T3Code.OpenTerminal"
 
@@ -108,6 +151,56 @@ fun showThreadMenu(
     threadContext(project, threadId, view = view, fromSidebar = view == null)
   val actions: ActionGroup =
     group?.let { ActionManager.getInstance().getAction(it) as? ActionGroup } ?: threadActions()
+  showActionPopup(actions, context, x, y)
+}
+
+/** The bulk actions, registered in `plugin.xml`. */
+const val THREAD_BULK_ACTIONS: String = "T3Code.ThreadBulkActions"
+
+/**
+ * The bulk menu for the picked [threadIds], at [x], [y] on screen: upstream's
+ * `handleMultiSelectContextMenu`, what a right-click on a picked row opens.
+ */
+fun showThreadBulkMenu(project: Project, threadIds: List<String>, x: Int, y: Int) {
+  val context: DataContext = SimpleDataContext.builder()
+    .add(CommonDataKeys.PROJECT, project)
+    .add(T3DataKeys.THREAD_IDS, threadIds)
+    .add(T3DataKeys.FROM_SIDEBAR, true)
+    .build()
+  val actions: ActionGroup =
+    ActionManager.getInstance().getAction(THREAD_BULK_ACTIONS) as ActionGroup
+  showActionPopup(actions, context, x, y)
+}
+
+/** The project actions, registered in `plugin.xml`. */
+const val PROJECT_ACTIONS: String = "T3Code.ProjectActions"
+
+/**
+ * The menu for the T3 project [projectId] at [at]: what a right-click or Shift+F10 on a row of
+ * the Sidebar's project picker opens. [onChosen] runs once an item is picked, before it runs.
+ */
+fun showProjectMenu(project: Project, projectId: String, at: RelativePoint, onChosen: () -> Unit) {
+  val context: DataContext = SimpleDataContext.builder()
+    .add(CommonDataKeys.PROJECT, project)
+    .add(T3DataKeys.PROJECT_ID, projectId)
+    .build()
+  val actions: ActionGroup = ActionManager.getInstance().getAction(PROJECT_ACTIONS) as ActionGroup
+  val popup: ListPopup = JBPopupFactory.getInstance().createActionGroupPopup(
+    null,
+    actions,
+    context,
+    JBPopupFactory.ActionSelectionAid.SPEEDSEARCH,
+    true,
+  )
+  popup.addListener(object : JBPopupListener {
+    override fun onClosed(event: LightweightWindowEvent) {
+      if (event.isOk) onChosen()
+    }
+  })
+  popup.show(at)
+}
+
+private fun showActionPopup(actions: ActionGroup, context: DataContext, x: Int, y: Int) {
   JBPopupFactory.getInstance()
     .createActionGroupPopup(
       null,
