@@ -1534,17 +1534,22 @@ private fun EventRow(item: TurnItem, context: RowContext) {
     return
   }
   when (item.type) {
-    "run_interrupt_result" ->
-      SystemDivider("x", "Run interrupted", JewelTheme.globalColors.text.error)
+    // V2LifecycleRow.tsx: a stop is something you did, so it's muted, not an error.
+    "run_interrupt_result" -> SystemDivider(
+      icon = "circle-stop",
+      label = "Run interrupted",
+      tint = muted(),
+      detail = (item as? TurnItem.RunInterruptResult)?.message,
+    )
     "fork" -> SystemDivider("git-fork", item.title ?: "Forked from conversation", muted())
     "handoff" -> SystemDivider("arrow-right-left", item.title ?: "Handoff", muted())
     else -> EventCard(item, context)
   }
 }
 
-/** `TimelineSystemDivider`: icon and label in a pill between two hairlines. */
+/** `TimelineSystemDivider`: icon, label and an optional detail in a pill between two hairlines. */
 @Composable
-private fun SystemDivider(icon: String, label: String, tint: Color) {
+private fun SystemDivider(icon: String, label: String, tint: Color, detail: String? = null) {
   Row(
     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1558,6 +1563,16 @@ private fun SystemDivider(icon: String, label: String, tint: Color) {
     ) {
       Glyph(icon, tint, 12.dp)
       Text(label, style = small(), color = tint, fontWeight = FontWeight.Medium)
+      if (!detail.isNullOrEmpty()) {
+        Text(
+          text = "·\u00a0$detail",
+          modifier = Modifier.widthIn(max = 320.dp).alpha(0.7f),
+          style = small(),
+          color = tint,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+        )
+      }
     }
     Hairline(Modifier.weight(1f))
   }

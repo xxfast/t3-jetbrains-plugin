@@ -128,14 +128,14 @@ class FixtureClientTest {
     val scenario: Scenario = Scenario.merge(parts)
     val connected: ConnectionState.Connected = assertIs(scenario.connection)
     assertTrue(connected.session.has("orchestration:operate"), "Thread actions work in default")
-    assertEquals(45, scenario.threads.size)
+    assertEquals(46, scenario.threads.size)
     val demos: Set<String> = scenario.threads
       .filter { it.title.startsWith("Demo: ") }
       .map { it.id }
       .toSet()
     assertEquals(
       setOf(THREAD, WAITING, QUESTION, UNKNOWN, MANY, WORKTREE, QUEUED, LINEAGE,
-        BACKGROUND_WORK, "secret-demo", "tasks-demo"),
+        BACKGROUND_WORK, STOPPED, "secret-demo", "tasks-demo"),
       demos,
     )
   }
@@ -172,6 +172,16 @@ class FixtureClientTest {
       assertIs(items.map { it.item }.single { it is TurnItem.Unknown })
     assertEquals("some_future_type", unknown.type)
     assertTrue("hologram" in unknown.raw)
+  }
+
+  @Test
+  fun `stopped ends in an interrupted run with its reason`() {
+    val text: String = default.resolve("stopped.json").readText()
+    val scenario: Scenario = Scenario.decode(text)
+    val result: TurnItem.RunInterruptResult =
+      assertIs(scenario.items.values.single().last().item)
+    assertEquals("Stopped by user", result.message)
+    assertEquals("interrupted", scenario.threads.single().status)
   }
 
   @Test
@@ -921,6 +931,7 @@ class FixtureClientTest {
     const val WAITING = "thr_01JC49ZK2HWAITING"
     const val UNKNOWN = "thr_01JC4C0X1UNKNOWN"
     const val MANY = "thr_01JC5D0M4NYITEMS"
+    const val STOPPED = "thr_01JC6S7P0STOPPED"
     const val IDLE = "thr_01JC3QX81VIDLE001"
     const val WORKTREE = "thr_01JC5W0RKTREE001"
     const val QUEUED = "thr_01JC4C3Q8UQUEUED1"
