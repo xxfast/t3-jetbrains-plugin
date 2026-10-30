@@ -79,7 +79,13 @@ class ComposerWorkspaceAction : ComposerControlAction(ComposerControlKind.WORKSP
 /** `composer.branch`, mod+shift+g: the branch picker in the context strip. */
 class ComposerBranchAction : ComposerControlAction(ComposerControlKind.BRANCH)
 
-/** `thread.steerQueuedMessage`, mod+shift+enter: the first queued message as a steer. */
+/** [ComposerSteerQueuedAction]'s id, for the shortcut in Send now's tooltip. */
+const val STEER_QUEUED_ACTION_ID: String = "T3Code.Composer.SteerQueued"
+
+/**
+ * `thread.steerQueuedMessage`, mod+shift+enter: Send now on the first queued message, a turn
+ * when the thread is idle, else into the running one.
+ */
 class ComposerSteerQueuedAction : ComposerShortcutAction() {
   override fun canPerform(shortcuts: ComposerShortcuts): Boolean = shortcuts.onSteerQueued != null
 

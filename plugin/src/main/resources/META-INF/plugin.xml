@@ -345,8 +345,8 @@
     <action
       id="T3Code.Composer.SteerQueued"
       class="io.github.xxfast.t3code.plugin.actions.ComposerSteerQueuedAction"
-      text="T3 Queue: Send First Queued Message as Steer"
-      description="Steer the first queued message into the running turn">
+      text="T3 Queue: Send First Queued Message Now"
+      description="Start a turn with the first queued message, or send it into the running turn">
       <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift ENTER"/>
       <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift ENTER"/>
       <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift ENTER"/>

@@ -25,6 +25,31 @@
       "hasActionableProposedPlan": false,
       "createdAt": "2026-10-21T09:10:00.000Z",
       "updatedAt": "2026-10-21T09:14:30.000Z"
+    },
+    {
+      "id": "thr_01JC4C3Q8UQUEUED2",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Demo: stopped thread with a held queue",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC4C3Q8UQUEUED2"
+      },
+      "status": "interrupted",
+      "branch": "kotlinx-io-0.8",
+      "latestRunId": "run_01JC4C3QH2STOP",
+      "itemCount": 3,
+      "visibleItemCount": 3,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T10:00:00.000Z",
+      "updatedAt": "2026-10-21T10:04:00.000Z"
     }
   ],
   "runs": {
@@ -153,6 +178,136 @@
         "contextHandoffId": null,
         "queuePosition": 4
       }
+    ],
+    "thr_01JC4C3Q8UQUEUED2": [
+      {
+        "id": "run_01JC4C3QH1DONE",
+        "threadId": "thr_01JC4C3Q8UQUEUED2",
+        "ordinal": 1,
+        "status": "completed",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC4C3QH1",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-21T10:00:00.000Z",
+        "startedAt": "2026-10-21T10:00:01.000Z",
+        "completedAt": "2026-10-21T10:01:30.000Z",
+        "checkpointId": null,
+        "contextHandoffId": null
+      },
+      {
+        "id": "run_01JC4C3QH2STOP",
+        "threadId": "thr_01JC4C3Q8UQUEUED2",
+        "ordinal": 2,
+        "status": "interrupted",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC4C3QH2",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-21T10:02:00.000Z",
+        "startedAt": "2026-10-21T10:02:01.000Z",
+        "completedAt": "2026-10-21T10:04:00.000Z",
+        "checkpointId": null,
+        "contextHandoffId": null
+      },
+      {
+        "id": "run_01JC4C3QH3Q",
+        "threadId": "thr_01JC4C3Q8UQUEUED2",
+        "ordinal": 3,
+        "status": "queued",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC4C3QH3",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-21T10:02:20.000Z",
+        "startedAt": null,
+        "completedAt": null,
+        "checkpointId": null,
+        "contextHandoffId": null,
+        "queuePosition": 1,
+        "queueHeld": true
+      },
+      {
+        "id": "run_01JC4C3QH4Q",
+        "threadId": "thr_01JC4C3Q8UQUEUED2",
+        "ordinal": 4,
+        "status": "queued",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC4C3QH4",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-21T10:02:30.000Z",
+        "startedAt": null,
+        "completedAt": null,
+        "checkpointId": null,
+        "contextHandoffId": null,
+        "queuePosition": 2,
+        "queueHeld": true
+      },
+      {
+        "id": "run_01JC4C3QH5Q",
+        "threadId": "thr_01JC4C3Q8UQUEUED2",
+        "ordinal": 5,
+        "status": "queued",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC4C3QH5",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-21T10:03:40.000Z",
+        "startedAt": null,
+        "completedAt": null,
+        "checkpointId": null,
+        "contextHandoffId": null,
+        "queuePosition": 3,
+        "queueHeld": true
+      },
+      {
+        "id": "run_01JC4C3QH6Q",
+        "threadId": "thr_01JC4C3Q8UQUEUED2",
+        "ordinal": 6,
+        "status": "queued",
+        "providerInstanceId": "codex",
+        "modelSelection": {
+          "instanceId": "codex",
+          "model": "gpt-5"
+        },
+        "providerThreadId": null,
+        "userMessageId": "msg_01JC4C3QH6",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-21T10:03:50.000Z",
+        "startedAt": null,
+        "completedAt": null,
+        "checkpointId": null,
+        "contextHandoffId": null,
+        "queuePosition": 4,
+        "queueHeld": true
+      }
     ]
   },
   "messages": {
@@ -249,6 +404,92 @@
         "streaming": false,
         "createdAt": "2026-10-21T09:14:25.000Z",
         "updatedAt": "2026-10-21T09:14:25.000Z"
+      }
+    ],
+    "thr_01JC4C3Q8UQUEUED2": [
+      {
+        "createdBy": "user",
+        "creationSource": "web",
+        "id": "msg_01JC4C3QH1",
+        "threadId": "thr_01JC4C3Q8UQUEUED2",
+        "runId": "run_01JC4C3QH1DONE",
+        "nodeId": null,
+        "role": "user",
+        "text": "Make the KStore README's quick start use the new JSON codec.",
+        "attachments": [],
+        "streaming": false,
+        "createdAt": "2026-10-21T10:00:00.000Z",
+        "updatedAt": "2026-10-21T10:00:00.000Z"
+      },
+      {
+        "createdBy": "user",
+        "creationSource": "web",
+        "id": "msg_01JC4C3QH2",
+        "threadId": "thr_01JC4C3Q8UQUEUED2",
+        "runId": "run_01JC4C3QH2STOP",
+        "nodeId": null,
+        "role": "user",
+        "text": "Run the full :kstore check and fix whatever breaks.",
+        "attachments": [],
+        "streaming": false,
+        "createdAt": "2026-10-21T10:02:00.000Z",
+        "updatedAt": "2026-10-21T10:02:00.000Z"
+      },
+      {
+        "createdBy": "user",
+        "creationSource": "web",
+        "id": "msg_01JC4C3QH3",
+        "threadId": "thr_01JC4C3Q8UQUEUED2",
+        "runId": "run_01JC4C3QH3Q",
+        "nodeId": null,
+        "role": "user",
+        "text": "Skip the iOS simulator tests for now, just run JVM and JS.",
+        "attachments": [],
+        "streaming": false,
+        "createdAt": "2026-10-21T10:02:20.000Z",
+        "updatedAt": "2026-10-21T10:02:20.000Z"
+      },
+      {
+        "createdBy": "user",
+        "creationSource": "web",
+        "id": "msg_01JC4C3QH4",
+        "threadId": "thr_01JC4C3Q8UQUEUED2",
+        "runId": "run_01JC4C3QH4Q",
+        "nodeId": null,
+        "role": "user",
+        "text": "Then bump the version to 0.9.2 in gradle.properties.",
+        "attachments": [],
+        "streaming": false,
+        "createdAt": "2026-10-21T10:02:30.000Z",
+        "updatedAt": "2026-10-21T10:02:30.000Z"
+      },
+      {
+        "createdBy": "user",
+        "creationSource": "web",
+        "id": "msg_01JC4C3QH5",
+        "threadId": "thr_01JC4C3Q8UQUEUED2",
+        "runId": "run_01JC4C3QH5Q",
+        "nodeId": null,
+        "role": "user",
+        "text": "Draft a CHANGELOG entry for the codec and the version bump.",
+        "attachments": [],
+        "streaming": false,
+        "createdAt": "2026-10-21T10:03:40.000Z",
+        "updatedAt": "2026-10-21T10:03:40.000Z"
+      },
+      {
+        "createdBy": "user",
+        "creationSource": "web",
+        "id": "msg_01JC4C3QH6",
+        "threadId": "thr_01JC4C3Q8UQUEUED2",
+        "runId": "run_01JC4C3QH6Q",
+        "nodeId": null,
+        "role": "user",
+        "text": "Open a pull request against main when it's green.",
+        "attachments": [],
+        "streaming": false,
+        "createdAt": "2026-10-21T10:03:50.000Z",
+        "updatedAt": "2026-10-21T10:03:50.000Z"
       }
     ]
   },
@@ -355,6 +596,109 @@
         "updatedAt": "2026-10-21T09:13:01.000Z",
         "lastError": null
       }
+    ],
+    "thr_01JC4C3Q8UQUEUED2": [
+      {
+        "id": "psn_01JC4C3QHCODEX",
+        "driver": "codex",
+        "providerInstanceId": "codex",
+        "status": "ready",
+        "cwd": "/Users/xxfast/Developer/XXFAST/KMP/KStore",
+        "model": "gpt-5",
+        "capabilities": {
+          "sessions": {
+            "supportsMultipleProviderThreadsPerSession": false,
+            "supportsModelSwitchInSession": true,
+            "supportsProviderSwitchingViaHandoff": true,
+            "supportsRuntimeModeSwitchInSession": true,
+            "pendingRequestsSurviveRestart": false
+          },
+          "threads": {
+            "canCreateEmptyThread": true,
+            "canReadThreadSnapshot": true,
+            "canRollbackThread": true,
+            "canForkThread": true,
+            "canForkFromTurn": true,
+            "canForkFromSubagentThread": false,
+            "exposesNativeThreadId": true
+          },
+          "turns": {
+            "exposesNativeTurnId": true,
+            "emitsTurnStarted": true,
+            "emitsTurnCompleted": true,
+            "supportsInterrupt": true,
+            "supportsActiveSteering": true,
+            "supportsSteeringByInterruptRestart": false,
+            "supportsQueuedMessages": true,
+            "terminalStatusQuality": "exact"
+          },
+          "streaming": {
+            "streamsAssistantText": true,
+            "streamsReasoning": true,
+            "streamsToolOutput": true,
+            "streamsPlanText": true,
+            "emitsMessageCompleted": true
+          },
+          "tools": {
+            "exposesToolItemIds": true,
+            "emitsToolStarted": true,
+            "emitsToolCompleted": true,
+            "emitsToolOutput": true,
+            "supportsMcpTools": true,
+            "supportsDynamicToolCallbacks": false
+          },
+          "approvals": {
+            "supportsCommandApproval": true,
+            "supportsFileReadApproval": false,
+            "supportsFileChangeApproval": true,
+            "supportsApplyPatchApproval": true,
+            "approvalsHaveNativeRequestIds": true,
+            "approvalCallbacksAreLiveOnly": true,
+            "approvalsCanOriginateFromSubagents": false
+          },
+          "planning": {
+            "emitsPlanUpdated": true,
+            "emitsTodoList": true,
+            "emitsProposedPlan": true,
+            "supportsStructuredQuestions": true,
+            "planDeltasHaveItemIds": true
+          },
+          "subagents": {
+            "supportsSubagents": false,
+            "exposesSubagentThreadIds": false,
+            "emitsSubagentLifecycle": false,
+            "canWaitForSubagents": false,
+            "canCloseSubagents": false,
+            "canForkSubagentThread": false
+          },
+          "context": {
+            "acceptsSystemContext": true,
+            "acceptsDeveloperContext": true,
+            "acceptsSyntheticUserContext": true,
+            "canGenerateSummaries": true,
+            "canConsumeHandoffSummaries": true,
+            "supportsDeltaHandoff": false,
+            "supportsFullThreadHandoff": true,
+            "maxRecommendedHandoffChars": null
+          },
+          "checkpointing": {
+            "appCanCheckpointFilesystem": true,
+            "supportsNestedCheckpointScopes": false,
+            "providerCanRollbackConversation": true,
+            "providerRollbackReturnsSnapshot": false,
+            "providerCanReadConversationSnapshot": true
+          },
+          "identity": {
+            "nativeThreadIds": "stable",
+            "nativeTurnIds": "stable",
+            "nativeItemIds": "stable",
+            "nativeRequestIds": "stable"
+          }
+        },
+        "createdAt": "2026-10-21T10:00:00.000Z",
+        "updatedAt": "2026-10-21T10:04:00.000Z",
+        "lastError": null
+      }
     ]
   },
   "providerTurns": {
@@ -449,6 +793,56 @@
         "text": "Writing `JsonCodecTest` with a missing file case first, then a corrupt file that should fall back to the default.",
         "startedAt": "2026-10-21T09:13:05.000Z",
         "updatedAt": "2026-10-21T09:13:09.000Z"
+      }
+    ],
+    "thr_01JC4C3Q8UQUEUED2": [
+      {
+        "type": "user_message",
+        "id": "hu1",
+        "threadId": "thr_01JC4C3Q8UQUEUED2",
+        "runId": "run_01JC4C3QH1DONE",
+        "ordinal": 1,
+        "status": "completed",
+        "messageId": "msg_01JC4C3QH1",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "Make the KStore README's quick start use the new JSON codec.",
+        "startedAt": "2026-10-21T10:00:00.000Z",
+        "completedAt": "2026-10-21T10:00:00.000Z",
+        "updatedAt": "2026-10-21T10:00:00.000Z"
+      },
+      {
+        "type": "assistant_message",
+        "id": "ha1",
+        "threadId": "thr_01JC4C3Q8UQUEUED2",
+        "runId": "run_01JC4C3QH1DONE",
+        "ordinal": 2,
+        "status": "completed",
+        "messageId": "msg_01JC4C3QHA1",
+        "streaming": false,
+        "text": "The quick start now builds the store with `storeOf(file, codec = JsonCodec())`.",
+        "startedAt": "2026-10-21T10:00:05.000Z",
+        "completedAt": "2026-10-21T10:01:30.000Z",
+        "updatedAt": "2026-10-21T10:01:30.000Z"
+      },
+      {
+        "type": "user_message",
+        "id": "hu2",
+        "threadId": "thr_01JC4C3Q8UQUEUED2",
+        "runId": "run_01JC4C3QH2STOP",
+        "ordinal": 3,
+        "status": "completed",
+        "messageId": "msg_01JC4C3QH2",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "Run the full :kstore check and fix whatever breaks.",
+        "startedAt": "2026-10-21T10:02:00.000Z",
+        "completedAt": "2026-10-21T10:02:00.000Z",
+        "updatedAt": "2026-10-21T10:02:00.000Z"
       }
     ]
   }

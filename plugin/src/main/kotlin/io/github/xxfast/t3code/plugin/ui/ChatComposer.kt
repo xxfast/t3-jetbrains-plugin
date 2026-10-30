@@ -96,7 +96,6 @@ fun ChatComposer(
   onHeightChange: (Int) -> Unit = {}, // upstream's `onComposerOverlayHeightChange`
   onClearReview: () -> Unit = {},
   stashCount: Int = 0, // prompts in the stash, for its badge
-  attachedAbove: (@Composable () -> Unit)? = null, // upstream's `attachedAbove`, a drawer on top
   promptHistory: List<ComposerPromptHistoryMessage> = emptyList(),
   onSteerQueued: (() -> Boolean)? = null,
   onEditQueued: (() -> Boolean)? = null,
@@ -169,7 +168,6 @@ fun ChatComposer(
     )
     // The context strip is a drawer tucked under the box, `ComposerSurface.ContextStrip`
     val strip: WorkspaceControlState? = footer?.workspace?.takeIf { pending == null }
-    ComposerWithMenuDrawer(drawer = attachedAbove) {
     ComposerWithMenuDrawer(
       drawer = triggerMenu.menu?.let { menu ->
         { ComposerCommandMenu(menu, triggerMenu.activeItemId, triggerMenu.onHighlight) }
@@ -247,7 +245,6 @@ fun ChatComposer(
       }
     }
     if (dropActive) WorkspaceFileDropPill(Modifier.align(Alignment.Center))
-    }
     }
     }
     }

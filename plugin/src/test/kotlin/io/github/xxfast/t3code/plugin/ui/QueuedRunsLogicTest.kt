@@ -7,6 +7,8 @@ import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.ChatAttachment
 import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.ConversationMessage.DelegatedCompletion
+import io.github.xxfast.t3code.protocol.generated.MessageContext
+import io.github.xxfast.t3code.protocol.generated.GuestMessageAttribution
 import java.nio.file.Path
 import kotlin.io.path.readText
 import kotlin.test.assertEquals
@@ -24,7 +26,7 @@ class QueuedRunsLogicTest {
       Path.of(System.getProperty("t3code.scenarios")).resolve("default").resolve("queued.json")
     val scenario: Scenario = Scenario.decode(path.readText())
     ThreadView(
-      thread = scenario.threads.single(),
+      thread = scenario.threads.single { it.id == THREAD },
       runs = scenario.runs.getValue(THREAD),
       items = scenario.items.getValue(THREAD).map { it.item },
       providerSessions = scenario.providerSessions.getValue(THREAD),
@@ -40,8 +42,9 @@ class QueuedRunsLogicTest {
     assertEquals(listOf(FIRST, SECOND, AGENT, T3CODE), state.queuedRuns.map { it.run.id })
     assertTrue(state.queuedRuns.first().text.startsWith("Then run :kstore-file:check"))
     assertEquals(listOf("image"), state.queuedRuns[1].attachments.map(ChatAttachment::type))
-    assertTrue(state.canReorder)
     assertTrue(state.canPromoteToSteer)
+    assertFalse(state.canSendNow)
+    assertFalse(state.promoteSkipsCompaction)
     assertFalse(state.isHeld)
   }
 
@@ -102,22 +105,88 @@ class QueuedRunsLogicTest {
     val noTurns: ThreadQueueWorkflowState =
       deriveThreadQueueWorkflowState(view.copy(providerTurns = emptyList()))
     assertFalse(noTurns.canPromoteToSteer)
-    assertTrue(noTurns.canReorder)
+    assertFalse(canSendQueuedRun(noTurns))
 
     val noSession: ThreadQueueWorkflowState =
       deriveThreadQueueWorkflowState(view.copy(providerSessions = emptyList()))
-    assertFalse(noSession.canReorder)
     assertFalse(noSession.canPromoteToSteer)
   }
 
   @Test
-  fun `the steer and edit shortcuts follow the strip's rules`() {
-    val state: ThreadQueueWorkflowState = deriveThreadQueueWorkflowState(view)
-    assertTrue(canSteerQueuedRun(state, idle = true))
-    assertFalse(canSteerQueuedRun(state, idle = false))
-    assertFalse(canSteerQueuedRun(state.copy(activeRun = null), idle = true))
-    assertFalse(canSteerQueuedRun(state.copy(canPromoteToSteer = false), idle = true))
+  fun `a running compaction can always be skipped for a queued message`() {
+    val messages: List<ConversationMessage> = view.messages.map { message ->
+      if (message.runId == RUNNING) message.copy(text = " /Compact ") else message
+    }
+    val compacting: ThreadView = view.copy(messages = messages, providerTurns = emptyList())
+    val state: ThreadQueueWorkflowState = deriveThreadQueueWorkflowState(compacting)
+    assertTrue(state.promoteSkipsCompaction)
+    assertTrue(state.canPromoteToSteer)
+    assertEquals("Skip compaction and send this message", queuedRunSendTooltip(state, null))
 
+    val image: List<ChatAttachment> =
+      view.messages.first { it.attachments.isNotEmpty() }.attachments
+    val withImage: ConversationMessage =
+      messages.first { it.runId == RUNNING }.copy(attachments = image)
+    assertFalse(isCompactionCommandMessage(withImage))
+  }
+
+  @Test
+  fun `send now starts a turn on an idle thread`() {
+    val runs: List<Run> = view.runs.map { run ->
+      if (run.id == RUNNING) run.copy(status = "interrupted") else run
+    }
+    val idle: ThreadView = view.copy(runs = runs)
+    val state: ThreadQueueWorkflowState = deriveThreadQueueWorkflowState(idle)
+    assertTrue(state.canSendNow)
+    assertTrue(canSendQueuedRun(state))
+    assertEquals(
+      Command.QueuedRunStart(commandId = "c", threadId = THREAD, runId = SECOND),
+      sendQueuedMessageCommand(state, THREAD, SECOND, "c"),
+    )
+    assertEquals("Start a turn with this message", queuedRunSendTooltip(state, null))
+
+    val archived: ThreadView = idle.copy(thread = idle.thread.copy(archivedAt = "2026-10-21"))
+    assertFalse(deriveThreadQueueWorkflowState(archived).canSendNow)
+    val deleted: ThreadView = idle.copy(thread = idle.thread.copy(deletedAt = "2026-10-21"))
+    assertFalse(deriveThreadQueueWorkflowState(deleted).canSendNow)
+  }
+
+  @Test
+  fun `send now goes into the running turn, or nowhere when it can't`() {
+    val state: ThreadQueueWorkflowState = deriveThreadQueueWorkflowState(view)
+    assertEquals(
+      Command.QueuedMessagePromoteToSteer(
+        commandId = "c",
+        threadId = THREAD,
+        queuedRunId = FIRST,
+        targetRunId = RUNNING,
+      ),
+      sendQueuedMessageCommand(state, THREAD, FIRST, "c"),
+    )
+    assertEquals("Send into the current turn", queuedRunSendTooltip(state, null))
+    assertEquals("Send into the current turn (⇧⌘⏎)", queuedRunSendTooltip(state, "⇧⌘⏎"))
+
+    val stuck: ThreadQueueWorkflowState = state.copy(canPromoteToSteer = false)
+    assertFalse(canSendQueuedRun(stuck))
+    assertNull(sendQueuedMessageCommand(stuck, THREAD, FIRST, "c"))
+  }
+
+  @Test
+  fun `a guest's queued message shows the guest's words and can't be edited`() {
+    val guest = GuestMessageAttribution(guestMessageId = "g", name = "Sam", text = "Hi there")
+    val context = MessageContext(version = 1, guest = guest, records = emptyList())
+    val messages: List<ConversationMessage> = view.messages.map { message ->
+      if (message.runId == FIRST) message.copy(context = context) else message
+    }
+    val queued: List<QueuedThreadRun> =
+      deriveThreadQueueWorkflowState(view.copy(messages = messages)).queuedRuns
+    assertEquals("Hi there", queued.first().text)
+    assertFalse(isQueuedRunEditable(queued.first()))
+    assertTrue(isQueuedRunEditable(queued.last()))
+  }
+
+  @Test
+  fun `the edit shortcut follows the row's rule`() {
     assertTrue(canEditQueuedRun(idle = true, editingRunId = null))
     assertFalse(canEditQueuedRun(idle = false, editingRunId = null))
     assertFalse(canEditQueuedRun(idle = true, editingRunId = FIRST))
@@ -132,21 +201,18 @@ class QueuedRunsLogicTest {
   }
 
   @Test
-  fun `moves mirror the grip's arrow keys`() {
-    val queued: List<QueuedThreadRun> = deriveThreadQueueWorkflowState(view).queuedRuns
-    assertNull(queuedRunMoveUp(queued, 0))
-    assertEquals(QueuedRunMove(SECOND, FIRST), queuedRunMoveUp(queued, 1))
-    assertEquals(QueuedRunMove(FIRST, AGENT), queuedRunMoveDown(queued, 0))
-    assertEquals(QueuedRunMove(AGENT, null), queuedRunMoveDown(queued, 2))
-    assertNull(queuedRunMoveDown(queued, 3))
+  fun `a long queue folds all but two behind show all`() {
+    assertEquals(listOf(1, 2, 3), visibleQueuedRuns(listOf(1, 2, 3), showAll = false))
+    assertEquals(listOf(1, 2), visibleQueuedRuns(listOf(1, 2, 3, 4), showAll = false))
+    assertEquals(listOf(1, 2, 3, 4), visibleQueuedRuns(listOf(1, 2, 3, 4), showAll = true))
+    assertEquals("Show all 4 queued", queuedFoldLabel(4, showAll = false))
+    assertEquals("Show fewer", queuedFoldLabel(4, showAll = true))
   }
 
   @Test
   fun `labels follow upstream`() {
     assertEquals("1 queued message", queuedMessagesLabel(1))
     assertEquals("2 queued messages", queuedMessagesLabel(2))
-    assertEquals("There is no active run to steer", queuedRunSteerTooltip(null))
-    assertEquals("Send as a steer instead", queuedRunSteerTooltip(view.runs.first()))
   }
 
   @Test

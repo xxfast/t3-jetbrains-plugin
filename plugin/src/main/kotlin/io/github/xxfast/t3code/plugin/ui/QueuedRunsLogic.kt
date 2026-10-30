@@ -14,7 +14,7 @@ import io.github.xxfast.t3code.protocol.generated.TurnCapabilities
 // apps/web/src/components/chat/QueuedRunsControl.tsx, useQueuedRunEdit.ts and
 // queuedMessageEdit.ts, at the tag in contracts/T3CODE_VERSION.
 
-/** `QueuedThreadRun`, threadWorkflows.ts:23: a queued run and the message it will send. */
+/** `QueuedThreadRun`, threadWorkflows.ts:24: a queued run and the message it will send. */
 data class QueuedThreadRun(
   val run: Run,
   val text: String,
@@ -25,14 +25,16 @@ data class QueuedThreadRun(
   val message: ConversationMessage? = null,
 )
 
-/** `ThreadQueueWorkflowState`, threadWorkflows.ts:31. */
+/** `ThreadQueueWorkflowState`, threadWorkflows.ts:34. */
 data class ThreadQueueWorkflowState(
   val activeRun: Run?,
   val queuedRuns: List<QueuedThreadRun>,
   /** Some queued run is held, after an interrupt that held the queue. */
   val isHeld: Boolean,
-  val canReorder: Boolean,
   val canPromoteToSteer: Boolean,
+  /** The active run is a compaction, so promoting a queued message stops it instead of steering. */
+  val promoteSkipsCompaction: Boolean,
+  val canSendNow: Boolean,
 )
 
 /** `ACTIVE_RUN_STATUSES`, threadWorkflows.ts:14. */
@@ -78,10 +80,23 @@ fun getUserQueuedThreadRuns(runs: List<Run>, messages: List<ConversationMessage>
   }
 }
 
-/** `deriveThreadQueueWorkflowState`, threadWorkflows.ts:126. */
+/**
+ * `isCompactionCommandMessage`, packages/contracts/src/orchestrationV2.ts:529: a prompt that only
+ * asks to compact. Upstream's `IDLE_COMPACTION_TEXT` is [COMPACT_COMMAND].
+ */
+fun isCompactionCommandMessage(message: ConversationMessage): Boolean =
+  message.role == "user" &&
+    message.text.trim().lowercase() == COMPACT_COMMAND &&
+    message.attachments.isEmpty()
+
+/** `deriveThreadQueueWorkflowState`, threadWorkflows.ts:131. */
 fun deriveThreadQueueWorkflowState(view: ThreadView): ThreadQueueWorkflowState {
   val activeRun: Run? = resolveActiveThreadRun(view.runs)
   val capabilities: TurnCapabilities? = resolveThreadProviderSession(view)?.capabilities?.turns
+  val activeMessage: ConversationMessage? =
+    view.messages.find { message -> message.id == activeRun?.userMessageId }
+  val promoteSkipsCompaction: Boolean =
+    activeMessage != null && isCompactionCommandMessage(activeMessage)
   val hasSteerableProviderTurn: Boolean = activeRun?.status == "running" &&
     activeRun.activeAttemptId != null &&
     view.providerTurns.any { turn ->
@@ -93,7 +108,8 @@ fun deriveThreadQueueWorkflowState(view: ThreadView): ThreadQueueWorkflowState {
       val message: ConversationMessage? = view.messages.find { it.id == run.userMessageId }
       QueuedThreadRun(
         run = run,
-        text = message?.text ?: "Queued message",
+        // A queued guest message shows the guest's words; the agent still gets the attributed text
+        text = message?.context?.guest?.text ?: message?.text ?: "Queued message",
         attachments = message?.attachments.orEmpty(),
         messageId = run.userMessageId,
         context = message?.context,
@@ -104,52 +120,87 @@ fun deriveThreadQueueWorkflowState(view: ThreadView): ThreadQueueWorkflowState {
     activeRun = activeRun,
     queuedRuns = queuedRuns,
     isHeld = view.runs.any { run -> run.status == "queued" && run.queueHeld == true },
-    canReorder = capabilities?.supportsQueuedMessages == true,
-    canPromoteToSteer = hasSteerableProviderTurn &&
-      (capabilities?.supportsActiveSteering == true ||
-        capabilities?.supportsSteeringByInterruptRestart == true),
+    canSendNow = activeRun == null && view.thread.archivedAt == null &&
+      view.thread.deletedAt == null,
+    canPromoteToSteer = promoteSkipsCompaction ||
+      (hasSteerableProviderTurn &&
+        (capabilities?.supportsActiveSteering == true ||
+          capabilities?.supportsSteeringByInterruptRestart == true)),
+    promoteSkipsCompaction = promoteSkipsCompaction,
   )
 }
 
-/** A `queued-run.reorder`'s arguments: move [runId] in front of [beforeRunId], or last on null. */
-data class QueuedRunMove(val runId: String, val beforeRunId: String?)
+/** `canSend`, QueuedRunsControl.tsx:113: Send now starts a turn or goes into the active one. */
+fun canSendQueuedRun(workflow: ThreadQueueWorkflowState): Boolean =
+  workflow.canSendNow || workflow.canPromoteToSteer
 
 /**
- * The grip's ArrowUp, QueuedRunsControl.tsx:330: in front of the run above. Null for the first.
- * The plugin offers it as a button where upstream drags.
+ * What `sendQueuedMessage` (QueuedRunsControl.tsx:163) dispatches for [queuedRunId]: with the
+ * thread idle `resumeThreadQueue` with a run id, a `queued-run.start`; else a
+ * `queued-message.promote-to-steer` into the active run. Null when it can't send.
  */
-fun queuedRunMoveUp(queued: List<QueuedThreadRun>, index: Int): QueuedRunMove? {
-  if (index <= 0 || index >= queued.size) return null
-  return QueuedRunMove(queued[index].run.id, queued[index - 1].run.id)
+fun sendQueuedMessageCommand(
+  workflow: ThreadQueueWorkflowState,
+  threadId: String,
+  queuedRunId: String,
+  commandId: String,
+): Command? {
+  if (!canSendQueuedRun(workflow)) return null
+  if (workflow.canSendNow) {
+    return Command.QueuedRunStart(commandId = commandId, threadId = threadId, runId = queuedRunId)
+  }
+  val activeRun: Run = workflow.activeRun ?: return null
+  return Command.QueuedMessagePromoteToSteer(
+    commandId = commandId,
+    threadId = threadId,
+    queuedRunId = queuedRunId,
+    targetRunId = activeRun.id,
+  )
 }
 
-/** The grip's ArrowDown, QueuedRunsControl.tsx:334: in front of the run two below. */
-fun queuedRunMoveDown(queued: List<QueuedThreadRun>, index: Int): QueuedRunMove? {
-  if (index < 0 || index >= queued.size - 1) return null
-  return QueuedRunMove(queued[index].run.id, queued.getOrNull(index + 2)?.run?.id)
+/**
+ * Send now's tooltip, QueuedRunsControl.tsx:283, with the steer shortcut on the first row
+ * ([shortcut] only when it is).
+ */
+fun queuedRunSendTooltip(workflow: ThreadQueueWorkflowState, shortcut: String?): String {
+  val action: String = when {
+    workflow.canSendNow -> "Start a turn with this message"
+    workflow.promoteSkipsCompaction -> "Skip compaction and send this message"
+    else -> "Send into the current turn"
+  }
+  return if (shortcut.isNullOrEmpty()) action else "$action ($shortcut)"
 }
 
 /**
- * Whether Steer is live: the strip's button and `steerNext` (QueuedRunsControl.tsx:187) share it.
- * [idle] is the pairing may operate and no queue command is in flight.
+ * A row's `editable`, QueuedRunsControl.tsx:132: a guest's message keeps the guest's words, the
+ * owner can cancel it, not rewrite it.
  */
-fun canSteerQueuedRun(workflow: ThreadQueueWorkflowState, idle: Boolean): Boolean =
-  idle && workflow.canPromoteToSteer && workflow.activeRun != null
+fun isQueuedRunEditable(queued: QueuedThreadRun): Boolean = queued.context?.guest == null
 
 /**
- * Whether `editLatest` (QueuedRunsControl.tsx:195) is live: the edit button's [idle] rule, and
+ * Whether `editLatest` (QueuedRunsControl.tsx:190) is live: the edit button's [idle] rule, and
  * not while a queued message is already being edited.
  */
 fun canEditQueuedRun(idle: Boolean, editingRunId: String?): Boolean =
   idle && editingRunId == null
 
-/** The header's `aria-label`, QueuedRunsControl.tsx:226. */
+/** The section's `aria-label`, QueuedRunsControl.tsx:230. */
 fun queuedMessagesLabel(count: Int): String =
   "$count queued message${if (count == 1) "" else "s"}"
 
-/** The Steer button's tooltip, QueuedRunsControl.tsx:410. */
-fun queuedRunSteerTooltip(activeRun: Run?): String =
-  if (activeRun == null) "There is no active run to steer" else "Send as a steer instead"
+/** `QUEUE_VISIBLE_ROWS`, QueuedRunsControl.tsx:53: a longer queue folds behind "Show all". */
+const val QUEUE_VISIBLE_ROWS: Int = 3
+
+/**
+ * The rows `visibleItems` (QueuedRunsControl.tsx:226) keeps: a queue longer than
+ * [QUEUE_VISIBLE_ROWS] shows one fewer until [showAll], so the fold takes the last row's place.
+ */
+fun <T> visibleQueuedRuns(queued: List<T>, showAll: Boolean): List<T> =
+  if (queued.size > QUEUE_VISIBLE_ROWS && !showAll) queued.take(QUEUE_VISIBLE_ROWS - 1) else queued
+
+/** The fold's label, QueuedRunsControl.tsx:375. */
+fun queuedFoldLabel(count: Int, showAll: Boolean): String =
+  if (showAll) "Show fewer" else "Show all $count queued"
 
 // A context link as `collectComposerContextReferences` finds it, kind and id in the href
 private val CONTEXT_REFERENCE: Regex =

@@ -36,8 +36,8 @@ class ComposerShortcuts {
   var onToggleModelPicker: (() -> Unit)? = null
 
   /**
-   * `queuedRunsControl.steerNext`: true when it steered. Null while the ChatView has no queued
-   * messages to act on.
+   * `queuedRunsControl.steerNext`: true when it sent the first queued message. Null while the
+   * ChatView has no queued messages to act on.
    */
   var onSteerQueued: (() -> Boolean)? = null
 

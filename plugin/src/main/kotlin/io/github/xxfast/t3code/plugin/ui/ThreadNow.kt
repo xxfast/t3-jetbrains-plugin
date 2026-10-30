@@ -51,15 +51,16 @@ class ThreadNowItem(
 
 /**
  * Whether the timeline has a footer, `timelineFooter`'s rule (ChatView.tsx:3014) over the parts
- * the plugin has: `hasThreadNow` (ChatView.tsx:2990). Handoffs, the status line, guest messages
- * and queued turns aren't at the end of the plugin's timeline.
+ * the plugin has: `hasThreadNow` (ChatView.tsx:2990) and `hasQueuedTurns`. Handoffs, the status
+ * line and guest messages aren't at the end of the plugin's timeline.
  */
 fun hasTimelineFooter(
   attention: ThreadNowItem? = null,
   work: ThreadNowItem? = null,
   sync: ThreadNowItem? = null,
   goal: ThreadNowItem? = null,
-): Boolean = attention != null || work != null || sync != null || goal != null
+  queuedTurns: Boolean = false,
+): Boolean = attention != null || work != null || sync != null || goal != null || queuedTurns
 
 /**
  * `ThreadNow`: what needs you, background work, the sync status while messages load, then the

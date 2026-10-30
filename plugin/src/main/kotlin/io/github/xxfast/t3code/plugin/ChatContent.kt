@@ -22,6 +22,7 @@ import com.intellij.openapi.keymap.KeymapUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import io.github.xxfast.t3code.plugin.actions.COMPOSER_MODE_ACTION_ID
+import io.github.xxfast.t3code.plugin.actions.STEER_QUEUED_ACTION_ID
 import io.github.xxfast.t3code.plugin.actions.interruptCommand
 import io.github.xxfast.t3code.plugin.actions.RENAME_ACTION
 import io.github.xxfast.t3code.plugin.actions.performThreadAction
@@ -379,6 +380,8 @@ fun ChatContent(
           busy = queueBusy.containsKey(threadId),
           enabled = operable,
           threadTitles = threadTitles,
+          steerShortcutLabel = KeymapUtil.getFirstKeyboardShortcutText(STEER_QUEUED_ACTION_ID)
+            .takeIf { it.isNotEmpty() },
         )
       },
       // The background work banner, after the composer knows whether a run is going
@@ -403,11 +406,8 @@ fun ChatContent(
       queueActions = QueuedRunsActions(
         onEdit = { queued -> view?.let { queuedRuns.beginEdit(it, queued) } },
         onCancelEdit = { queuedRuns.cancelEdit(threadId) },
-        onSteer = { queuedRunId, targetRunId ->
-          view?.let { queuedRuns.promote(it, queuedRunId, targetRunId) }
-        },
+        onSendNow = { queuedRunId -> view?.let { queuedRuns.sendNow(it, queuedRunId) } },
         onRemove = { runId -> view?.let { queuedRuns.cancel(it, runId) } },
-        onMove = { move -> view?.let { queuedRuns.reorder(it, move) } },
         onResume = { view?.let(queuedRuns::resume) },
         onOpenThread = opener::openThread,
       ),

@@ -13,12 +13,13 @@ import io.github.xxfast.t3code.plugin.ide.launchReporting
 import io.github.xxfast.t3code.plugin.ide.notify
 import io.github.xxfast.t3code.plugin.ui.EditingQueuedRun
 import io.github.xxfast.t3code.plugin.ui.QueuedEditRecovery
-import io.github.xxfast.t3code.plugin.ui.QueuedRunMove
 import io.github.xxfast.t3code.plugin.ui.QueuedThreadRun
+import io.github.xxfast.t3code.plugin.ui.deriveThreadQueueWorkflowState
 import io.github.xxfast.t3code.plugin.ui.isQueuedEditStale
 import io.github.xxfast.t3code.plugin.ui.queuedEditRecoveryMessage
 import io.github.xxfast.t3code.plugin.ui.queuedRunEditCommand
 import io.github.xxfast.t3code.plugin.ui.recoverQueuedMessageEdit
+import io.github.xxfast.t3code.plugin.ui.sendQueuedMessageCommand
 import io.github.xxfast.t3code.protocol.OrchestrationV2Command
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.ThreadView
@@ -36,8 +37,8 @@ import kotlinx.coroutines.withContext
 
 /**
  * The queued messages strip's commands and state for this project's chat views: what
- * `QueuedRunsControl.tsx` dispatches (`reorderQueuedRun`, `promoteQueuedRun`, `cancelQueuedRun`
- * in `packages/client-runtime/src/operations/commands.ts`), `resumeThreadQueue`, and the edit
+ * `QueuedRunsControl.tsx` dispatches (`resumeThreadQueue`, `promoteQueuedRun`, `cancelQueuedRun`
+ * in `packages/client-runtime/src/operations/commands.ts`), the held queue's resume, and the edit
  * mode of `useQueuedRunEdit.ts`, which points the composer at a draft of its own.
  */
 @Service(Service.Level.PROJECT)
@@ -67,26 +68,18 @@ class QueuedRuns(private val project: Project, private val scope: CoroutineScope
   fun editDraft(threadId: String): TextFieldState =
     editDrafts.computeIfAbsent(threadId) { TextFieldState() }
 
-  /** `move`, QueuedRunsControl.tsx:148: `queued-run.reorder`. */
-  fun reorder(view: ThreadView, move: QueuedRunMove) {
-    val command = Command.QueuedRunReorder(
-      commandId = UUID.randomUUID().toString(),
-      threadId = view.thread.id,
-      runId = move.runId,
-      beforeRunId = move.beforeRunId,
-    )
-    dispatching(view.thread.id, move.runId, "Couldn't reorder the queued message", command)
-  }
-
-  /** `steer`, QueuedRunsControl.tsx:168: `queued-message.promote-to-steer` into the active run. */
-  fun promote(view: ThreadView, queuedRunId: String, targetRunId: String) {
-    val command = Command.QueuedMessagePromoteToSteer(
-      commandId = UUID.randomUUID().toString(),
+  /**
+   * `sendQueuedMessage`, QueuedRunsControl.tsx:163: Send now starts a turn with [queuedRunId]
+   * when the thread is idle, else sends it into the active run. Nothing when it can't send.
+   */
+  fun sendNow(view: ThreadView, queuedRunId: String) {
+    val command: Command = sendQueuedMessageCommand(
+      workflow = deriveThreadQueueWorkflowState(view),
       threadId = view.thread.id,
       queuedRunId = queuedRunId,
-      targetRunId = targetRunId,
-    )
-    dispatching(view.thread.id, queuedRunId, "Couldn't steer with the queued message", command)
+      commandId = UUID.randomUUID().toString(),
+    ) ?: return
+    dispatching(view.thread.id, queuedRunId, "Couldn't send the queued message", command)
   }
 
   /** `remove`, QueuedRunsControl.tsx:211: `queued-run.cancel`. */

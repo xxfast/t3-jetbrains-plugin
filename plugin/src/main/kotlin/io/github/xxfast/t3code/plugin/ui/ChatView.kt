@@ -178,7 +178,7 @@ fun ChatView(
   onOpenSetupTerminal: ((terminalId: String) -> Unit)? = null, // the setup script's terminal
   header: ChatHeaderActions = ChatHeaderActions(), // the title's menu, rename and new thread
   stashCount: Int = 0, // prompts in the composer's stash
-  queue: QueuedRunsState? = null, // the queued messages above the composer
+  queue: QueuedRunsState? = null, // the queued messages, last in the timeline's footer
   queueActions: QueuedRunsActions = QueuedRunsActions(),
   backgroundWork: BackgroundWorkState? = null, // the provider's pending work, the timeline's end
   backgroundWorkActions: BackgroundWorkActions = BackgroundWorkActions(),
@@ -287,7 +287,13 @@ fun ChatView(
               responding = responding,
               worktreeSetup = worktreeSetup,
               working = composer.running || composer.sending,
-              footer = if (hasTimelineFooter(work = work)) ({ ThreadNow(work = work) }) else null,
+              // `timelineFooter` (ChatView.tsx:3014): what it's doing now, then your queued turns
+              footer = if (hasTimelineFooter(work = work, queuedTurns = hasQueuedTurns(queue))) {
+                {
+                  ThreadNow(work = work)
+                  queue?.let { state -> QueuedRunsControl(state, queueActions) }
+                }
+              } else null,
               bottomInset = with(LocalDensity.current) { composerHeight.toDp() },
               modifier = Modifier.timelineWheel(timeline, follow),
             )
@@ -295,8 +301,7 @@ fun ChatView(
           }
         }
       }
-      // Upstream's `scrollToEndClearance + 4` above the composer. The queued drawer spans the
-      // lane, so it always sits under the pill, as `resolveScrollToEndClearance` counts it.
+      // Upstream's `scrollToEndClearance + 4` above the composer
       if (view != null && view.items.isNotEmpty()) {
         val clearance: Dp = with(LocalDensity.current) { composerHeight.toDp() } + 16.dp
         ScrollToEndButton(
@@ -328,8 +333,6 @@ fun ChatView(
           onInterrupt = onInterrupt,
           onSteerQueued = queue?.let { state -> queuedSteerShortcut(state, queueActions) },
           onEditQueued = queue?.let { state -> queuedEditShortcut(state, queueActions) },
-          // `ComposerBannerStack`: the queued drawer (`attachedAbove`) over the front banner
-          attachedAbove = queue?.let { state -> { QueuedRunsControl(state, queueActions) } },
           extras = extras,
           attachmentActions = attachmentActions,
           contextWindow = contextWindow,
@@ -1999,18 +2002,20 @@ private fun Mono(text: String, color: Color) {
   Text(text = text, style = JewelTheme.editorTextStyle, color = color)
 }
 
-// `thread.steerQueuedMessage` (ChatView.tsx:5888): the first queued message as a steer, live under
-// the strip's Steer rule. Null when it isn't, so the action is disabled.
+// `hasQueuedTurns` (ChatView.tsx:2998): the queue joins the footer only while it shows something
+private fun hasQueuedTurns(queue: QueuedRunsState?): Boolean =
+  queue?.workflow?.queuedRuns?.isNotEmpty() == true
+
+// `thread.steerQueuedMessage`, `steerNext` (QueuedRunsControl.tsx:183): Send now on the first
+// queued message, live under the row's rule. Null when it isn't, so the action is disabled.
 private fun queuedSteerShortcut(
   state: QueuedRunsState,
   actions: QueuedRunsActions,
 ): (() -> Boolean)? {
-  val workflow: ThreadQueueWorkflowState = state.workflow
-  val first: QueuedThreadRun = workflow.queuedRuns.firstOrNull() ?: return null
-  val activeRun: Run = workflow.activeRun ?: return null
-  if (!canSteerQueuedRun(workflow, state.enabled && !state.busy)) return null
+  val first: QueuedThreadRun = state.workflow.queuedRuns.firstOrNull() ?: return null
+  if (!canSendQueuedRun(state.workflow) || !state.enabled || state.busy) return null
   return {
-    actions.onSteer(first.run.id, activeRun.id)
+    actions.onSendNow(first.run.id)
     true
   }
 }
@@ -2022,6 +2027,7 @@ private fun queuedEditShortcut(
   actions: QueuedRunsActions,
 ): (() -> Boolean)? {
   val latest: QueuedThreadRun = state.workflow.queuedRuns.lastOrNull() ?: return null
+  if (!isQueuedRunEditable(latest)) return null
   if (!canEditQueuedRun(state.enabled && !state.busy, state.editingRunId)) return null
   return {
     actions.onEdit(latest)

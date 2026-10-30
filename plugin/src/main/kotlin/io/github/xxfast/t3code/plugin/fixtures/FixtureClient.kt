@@ -380,10 +380,17 @@ class FixtureClient(
       }
 
       is Command.QueueResume -> overlay.update { overlay ->
-        val resumed: Overlay = queuedOf(overlay, command.threadId).fold(overlay) { next, run ->
-          next.upsertRun(command.threadId, run.copy(queueHeld = false))
+        startNextQueued(unhold(overlay, command.threadId), command.threadId, now)
+      }
+
+      // Send now on an idle thread: that run starts, whatever its place, Orchestrator.ts:12654
+      is Command.QueuedRunStart -> overlay.update { overlay ->
+        val threadId: String = command.threadId
+        val selected: Run? = queuedOf(overlay, threadId).find { it.id == command.runId }
+        if (selected == null || runsOf(overlay, threadId).any { it.status in ACTIVE_RUN }) {
+          throw T3Exception.Rpc("OrchestratorDispatchError", QUEUED_RUN_START_REFUSED)
         }
-        startNextQueued(resumed, command.threadId, now)
+        startNextQueued(unhold(overlay, threadId), threadId, now, selected.id)
       }
 
       is Command.ProviderSessionDetach -> overlay.update { overlay ->
@@ -1117,13 +1124,26 @@ class FixtureClient(
       next.upsertRun(threadId, run.copy(queueHeld = true))
     }
 
+  /** `queue.resume` and `queued-run.start` lift the hold on every queued run first. */
+  private fun unhold(overlay: Overlay, threadId: String): Overlay =
+    queuedOf(overlay, threadId).fold(overlay) { next, run ->
+      next.upsertRun(threadId, run.copy(queueHeld = false))
+    }
+
   /**
-   * `startNextQueuedRun`: with nothing active, the first queued run starts and its message
-   * shows. The fixture doesn't play a reply for it.
+   * `startNextQueuedRun`: with nothing active, the first queued run starts, or [queuedRunId]
+   * when Send now picked one, and its message shows. The fixture doesn't play a reply for it.
    */
-  private fun startNextQueued(overlay: Overlay, threadId: String, now: String): Overlay {
+  private fun startNextQueued(
+    overlay: Overlay,
+    threadId: String,
+    now: String,
+    queuedRunId: String? = null,
+  ): Overlay {
     if (runsOf(overlay, threadId).any { it.status in ACTIVE_RUN }) return overlay
-    val run: Run = queuedOf(overlay, threadId).firstOrNull { it.queueHeld != true }
+    val queued: List<Run> = queuedOf(overlay, threadId)
+    val run: Run = queued.find { it.id == queuedRunId }
+      ?: queued.firstOrNull { it.queueHeld != true }
       ?: return overlay
     val message: ConversationMessage? =
       messagesOf(overlay, threadId).find { it.id == run.userMessageId }
@@ -1584,6 +1604,9 @@ private val IN_FLIGHT: Set<String> = setOf("pending", "running", "waiting")
 
 /** Run statuses a send queues behind, `ACTIVE_RUN_STATUSES` in threadWorkflows.ts:14. */
 private val ACTIVE_RUN: Set<String> = setOf("preparing", "starting", "running", "waiting")
+
+private const val QUEUED_RUN_START_REFUSED: String =
+  "A queued user message can only be sent now while the thread is stopped."
 
 /** [item], whatever its type, closed as cancelled at [now], through its JSON to stay generic. */
 private fun cancelled(item: TurnItem, now: String): TurnItem {
