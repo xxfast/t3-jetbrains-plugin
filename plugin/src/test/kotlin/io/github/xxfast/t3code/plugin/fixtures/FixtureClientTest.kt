@@ -142,15 +142,15 @@ class FixtureClientTest {
     val scenario: Scenario = Scenario.merge(parts)
     val connected: ConnectionState.Connected = assertIs(scenario.connection)
     assertTrue(connected.session.has("orchestration:operate"), "Thread actions work in default")
-    assertEquals(54, scenario.threads.size)
+    assertEquals(55, scenario.threads.size)
     val demos: Set<String> = scenario.threads
       .filter { it.title.startsWith("Demo: ") }
       .map { it.id }
       .toSet()
     assertEquals(
       setOf(THREAD, WAITING, QUESTION, UNKNOWN, MANY, WORKTREE, QUEUED, HELD_QUEUE, LINEAGE,
-        BACKGROUND_WORK, STOPPED, "secret-demo", "tasks-demo", "thr_01JC7C0M0COMPACT1",
-        "thr_01JC6P0RMSNOTRAITS", "thr_01JC7A1P0SUBWAIT01"),
+        BACKGROUND_WORK, BACKGROUND_SUBAGENT, STOPPED, "secret-demo", "tasks-demo",
+        "thr_01JC7C0M0COMPACT1", "thr_01JC6P0RMSNOTRAITS", "thr_01JC7A1P0SUBWAIT01"),
       demos,
     )
   }
@@ -999,6 +999,7 @@ class FixtureClientTest {
     const val HELD_QUEUE = "thr_01JC4C3Q8UQUEUED2"
     const val LINEAGE = "thr_01JC5L1N1LINEAG1"
     const val BACKGROUND_WORK = "thr_01JC6B1K0BGWORK01"
+    const val BACKGROUND_SUBAGENT = "thr_01JC6B2S0BGAGENT1"
     const val PINNED = "thr_01JC4B2W5RROUTER1"
     const val SETTLED = "thr_01JC1A2B3CSETTLE01"
     const val RUN = "run_fixture_m1"

@@ -5,6 +5,11 @@ import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.PendingBackgroundTask
+import io.github.xxfast.t3code.protocol.generated.TurnItem
+import java.time.Instant
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 // The background work banner's rules, packages/client-runtime/src/state/threadExecution.ts and
 // packages/shared/src/orchestrationV2PendingBackgroundWork.ts
@@ -14,7 +19,7 @@ data class PendingBackgroundWorkItem(
   val taskId: String,
   val kind: String,
   val label: String,
-  /** The subagent's child thread, what "Show" or its label opens. Null for the other kinds. */
+  /** The subagent task's child thread, what Open opens. Null for the other kinds. */
   val childThreadId: String?,
 )
 
@@ -22,7 +27,7 @@ data class PendingBackgroundWorkItem(
 data class PendingBackgroundWorkPresentation(
   val title: String,
   val items: List<PendingBackgroundWorkItem>,
-  /** Some task holds the thread's completion, so the dot pulses and it says "Waiting on". */
+  /** Some task holds the thread's completion, so it says "Waiting on". */
   val waiting: Boolean,
 )
 
@@ -103,6 +108,86 @@ fun presentPendingBackgroundWork(
     }
   val verb: String = if (waiting) "Waiting on" else "Running"
   return PendingBackgroundWorkPresentation("$verb ${joinWithAnd(groups)}", items, waiting)
+}
+
+/**
+ * One task of the work line with what its turn item says, the rows `backgroundWorkNowItem`
+ * (ThreadActivityBanners.tsx) builds before it picks a title.
+ */
+data class BackgroundWorkRow(
+  val task: PendingBackgroundWorkItem,
+  /** The subagent's `progress`, whitespace collapsed; null for the other kinds or without one. */
+  val activity: String?,
+  /** When the task's item started, whatever its type; the timer counts from it. */
+  val startedAtMs: Long?,
+  /** The subagent item's `updatedAt`, 0 for the other kinds: the newest activity wins. */
+  val updatedAtMs: Long,
+  /** The task's child thread, else the subagent item's. */
+  val childThreadId: String?,
+) {
+  val isCommand: Boolean get() = task.kind != "subagent"
+}
+
+/**
+ * The rows of `backgroundWorkNowItem`: each task's item is the last one whose
+ * `nativeItemRef.nativeId || id` is the task id, the same key `derivePendingBackgroundWork`
+ * gives turn-item tasks. Subagent items carry the progress.
+ */
+fun backgroundWorkRows(
+  items: List<PendingBackgroundWorkItem>,
+  turnItems: List<TurnItem>,
+): List<BackgroundWorkRow> = items.map { task ->
+  val item: TurnItem? = turnItems.lastOrNull { candidate ->
+    nativeItemId(candidate).orEmpty().ifEmpty { candidate.id } == task.taskId
+  }
+  val subagent: TurnItem.TurnItemSubagent? = item as? TurnItem.TurnItemSubagent
+  BackgroundWorkRow(
+    task = task,
+    activity = subagent?.progress?.replace(JS_WHITESPACES, " ")?.trim()?.ifEmpty { null },
+    startedAtMs = item?.startedAt?.let(::epochMillisOrNull),
+    updatedAtMs = subagent?.updatedAt?.let(::epochMillisOrNull) ?: 0,
+    childThreadId = task.childThreadId ?: subagent?.childThreadId,
+  )
+}
+
+/** JavaScript's `/\s+/gu`. */
+private val JS_WHITESPACES: Regex = Regex("[$JS_WHITESPACE]+")
+
+private fun epochMillisOrNull(iso: String): Long? =
+  runCatching { Instant.parse(iso).toEpochMilli() }.getOrNull()
+
+/**
+ * The item's `nativeItemRef?.nativeId`. Every variant has the field but the generated union
+ * doesn't, and one this build doesn't know keeps it in its raw object.
+ */
+private fun nativeItemId(item: TurnItem): String? = when (item) {
+  is TurnItem.TurnItemNotification -> item.nativeItemRef?.nativeId
+  is TurnItem.UserMessage -> item.nativeItemRef?.nativeId
+  is TurnItem.AssistantMessage -> item.nativeItemRef?.nativeId
+  is TurnItem.Reasoning -> item.nativeItemRef?.nativeId
+  is TurnItem.ProposedPlan -> item.nativeItemRef?.nativeId
+  is TurnItem.TodoList -> item.nativeItemRef?.nativeId
+  is TurnItem.UserInputRequest -> item.nativeItemRef?.nativeId
+  is TurnItem.FileChange -> item.nativeItemRef?.nativeId
+  is TurnItem.CommandExecution -> item.nativeItemRef?.nativeId
+  is TurnItem.FileSearch -> item.nativeItemRef?.nativeId
+  is TurnItem.WebSearch -> item.nativeItemRef?.nativeId
+  is TurnItem.ApprovalRequest -> item.nativeItemRef?.nativeId
+  is TurnItem.TurnItemCheckpoint -> item.nativeItemRef?.nativeId
+  is TurnItem.RunInterruptRequest -> item.nativeItemRef?.nativeId
+  is TurnItem.RunInterruptResult -> item.nativeItemRef?.nativeId
+  is TurnItem.SystemNotice -> item.nativeItemRef?.nativeId
+  is TurnItem.Error -> item.nativeItemRef?.nativeId
+  is TurnItem.Compaction -> item.nativeItemRef?.nativeId
+  is TurnItem.Handoff -> item.nativeItemRef?.nativeId
+  is TurnItem.Fork -> item.nativeItemRef?.nativeId
+  is TurnItem.ThreadCreated -> item.nativeItemRef?.nativeId
+  is TurnItem.SecretRequest -> item.nativeItemRef?.nativeId
+  is TurnItem.LinkRequest -> item.nativeItemRef?.nativeId
+  is TurnItem.TurnItemSubagent -> item.nativeItemRef?.nativeId
+  is TurnItem.DynamicTool -> item.nativeItemRef?.nativeId
+  is TurnItem.Unknown -> (item.raw["nativeItemRef"] as? JsonObject)
+    ?.get("nativeId")?.let { it as? JsonPrimitive }?.contentOrNull
 }
 
 /**

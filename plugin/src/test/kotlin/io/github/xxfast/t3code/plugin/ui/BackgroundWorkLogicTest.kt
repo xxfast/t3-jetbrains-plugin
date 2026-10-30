@@ -1,7 +1,8 @@
 package io.github.xxfast.t3code.plugin.ui
 
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontFamily
 import io.github.xxfast.t3code.plugin.fixtures.Scenario
 import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.ThreadView
@@ -11,7 +12,10 @@ import io.github.xxfast.t3code.protocol.generated.PendingBackgroundTask.Backgrou
 import io.github.xxfast.t3code.protocol.generated.PendingBackgroundTask.Monitor
 import io.github.xxfast.t3code.protocol.generated.PendingBackgroundTask.PendingBackgroundTaskCommand
 import io.github.xxfast.t3code.protocol.generated.PendingBackgroundTask.PendingBackgroundTaskSubagent as Subagent
+import io.github.xxfast.t3code.protocol.generated.ProviderRef
+import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.nio.file.Path
+import java.time.Instant
 import kotlin.io.path.readText
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -23,19 +27,24 @@ import kotlinx.serialization.json.JsonObject
 import org.junit.jupiter.api.Test
 
 class BackgroundWorkLogicTest {
-  // The harness scenario is the fixture: a settled run waiting on two commands and a subagent
-  private val view: ThreadView = run {
+  // The harness scenario is the fixture: a settled run waiting on two commands and a subagent,
+  // and another waiting on one subagent whose progress moves on
+  private val scenario: Scenario = run {
     val path: Path = Path.of(System.getProperty("t3code.scenarios"))
       .resolve("default")
       .resolve("background-work.json")
-    val scenario: Scenario = Scenario.decode(path.readText())
-    ThreadView(
-      thread = scenario.threads.single(),
-      runs = scenario.runs.getValue(THREAD),
-      items = scenario.items.getValue(THREAD).map { it.item },
-      providerSessions = scenario.providerSessions.getValue(THREAD),
-    )
+    Scenario.decode(path.readText())
   }
+
+  private val view: ThreadView = view(THREAD)
+
+  private fun view(id: String): ThreadView = ThreadView(
+    thread = scenario.threads.single { it.id == id },
+    runs = scenario.runs.getValue(id),
+    // Each item as it stands once the replay is over
+    items = scenario.items.getValue(id).map { it.item }.associateBy { it.id }.values.toList(),
+    providerSessions = scenario.providerSessions[id].orEmpty(),
+  )
 
   @Test
   fun `the scenario waits on a subagent and two commands, subagent first`() {
@@ -136,28 +145,129 @@ class BackgroundWorkLogicTest {
   }
 
   @Test
-  fun `the work line lists the items, a subagent's linked to its thread`() {
-    var opened: String? = null
-    val line: ThreadNowItem? =
-      work(activeBackgroundTasks(view, working = false), onOpenThread = { opened = it })
-    val description: AnnotatedString = assertNotNull(line?.description)
+  fun `several take the title and the newest subagent's activity`() {
+    val tasks: List<PendingBackgroundTask> = activeBackgroundTasks(view, working = false)
+    val line: ThreadNowItem = assertNotNull(work(tasks, view.items))
+    assertEquals("Waiting on 1 subagent and 2 commands", line.title.text)
     assertEquals(
-      "Code Reviewer, Wait for CI on the pushed commit to finish, " +
-        "Wait for CI on the newest commit to land",
-      description.text,
+      "Code Reviewer: Reading the retry logic in FileCodecTest.kt",
+      line.description?.text,
     )
-    val link: AnnotatedString.Range<LinkAnnotation> =
-      description.getLinkAnnotations(0, description.length).single()
-    assertEquals("Code Reviewer", description.text.substring(link.start, link.end))
-    assertIs<LinkAnnotation.Clickable>(link.item).linkInteractionListener?.onClick(link.item)
-    assertEquals("thr_01JC5L1S0RUNAPP1", opened)
+    // Not all commands, so the icon is the dashed circle
+    assertFalse(rows(tasks, view.items).all { it.isCommand })
   }
 
   @Test
-  fun `one task with no thread to open has no description`() {
-    val line: ThreadNowItem = assertNotNull(work(listOf(command("./gradlew check"))))
-    assertEquals("Running: ./gradlew check", line.title.text)
+  fun `several without activity list their labels, monospace when all commands`() {
+    val tasks: List<PendingBackgroundTask> =
+      listOf(command("./gradlew check"), command("./gradlew detekt"))
+    val line: ThreadNowItem = assertNotNull(work(tasks))
+    assertEquals("Running 2 commands", line.title.text)
+    val description: AnnotatedString = assertNotNull(line.description)
+    assertEquals("./gradlew check, ./gradlew detekt", description.text)
+    assertEquals(FontFamily.Monospace, description.spanStyles.single().item.fontFamily)
+
+    val mixed: ThreadNowItem =
+      assertNotNull(work(listOf(command("./gradlew check"), subagent("Explore"))))
+    assertEquals("Explore, ./gradlew check", mixed.description?.text)
+    assertTrue(mixed.description!!.spanStyles.isEmpty())
+  }
+
+  @Test
+  fun `several show the newest subagent with activity, not the newest item`() {
+    val tasks: List<PendingBackgroundTask> = listOf(
+      Subagent(taskId = "a", description = "Explore"),
+      Subagent(taskId = "b", description = "Review"),
+      Subagent(taskId = "c", description = "Quiet"),
+    )
+    val items: List<TurnItem> = listOf(
+      subagentItem("a", progress = "older", updatedAt = "2026-10-24T09:00:00.000Z"),
+      subagentItem("b", progress = "  newer\n  one ", updatedAt = "2026-10-24T09:01:00.000Z"),
+      subagentItem("c", progress = " ", updatedAt = "2026-10-24T09:02:00.000Z"),
+    )
+    assertEquals("Review: newer one", work(tasks, items)?.description?.text)
+  }
+
+  @Test
+  fun `one command runs by its label in monospace, timed from its command item`() {
+    val tasks: List<PendingBackgroundTask> = listOf(
+      PendingBackgroundTaskCommand(taskId = "task_01JC6B1K2CI1", description = "./gradlew check"),
+    )
+    val line: ThreadNowItem = assertNotNull(work(tasks, view.items))
+    assertEquals("Running ./gradlew check", line.title.text)
+    val mono: AnnotatedString.Range<SpanStyle> = line.title.spanStyles.single()
+    assertEquals(FontFamily.Monospace, mono.item.fontFamily)
+    assertEquals("./gradlew check", line.title.text.substring(mono.start, mono.end))
     assertNull(line.description)
+    val row: BackgroundWorkRow = rows(tasks, view.items).single()
+    assertTrue(row.isCommand)
+    assertEquals(Instant.parse("2026-10-24T08:40:12.000Z").toEpochMilli(), row.startedAtMs)
+    // Progress and updatedAt only come from a subagent item
+    assertNull(row.activity)
+    assertEquals(0, row.updatedAtMs)
+    assertNull(row.childThreadId)
+  }
+
+  @Test
+  fun `one subagent waits on its label with its progress and its item's child thread`() {
+    val single: ThreadView = view(SUBAGENT_THREAD)
+    val tasks: List<PendingBackgroundTask> = activeBackgroundTasks(single, working = false)
+    val line: ThreadNowItem = assertNotNull(work(tasks, single.items))
+    assertEquals("Waiting on Write the migration guide", line.title.text)
+    assertTrue(line.title.spanStyles.isEmpty())
+    assertEquals("Checking the snippets compile against 1.0", line.description?.text)
+    val row: BackgroundWorkRow = rows(tasks, single.items).single()
+    assertFalse(row.isCommand)
+    assertEquals(Instant.parse("2026-10-24T09:00:08.000Z").toEpochMilli(), row.startedAtMs)
+    // The task has no child thread; the subagent item does, so Open has one to open
+    assertNull((tasks.single() as Subagent).childThreadId)
+    assertEquals("thr_01JC5L1S1RUNCLD1", row.childThreadId)
+  }
+
+  @Test
+  fun `the replay's progress collapses its whitespace`() {
+    val tasks: List<PendingBackgroundTask> =
+      activeBackgroundTasks(view(SUBAGENT_THREAD), working = false)
+    val replayed: List<TurnItem> = scenario.items.getValue(SUBAGENT_THREAD).map { it.item }
+      .filter { it.id == "bs-s1" }
+    val activities: List<String?> =
+      replayed.map { item -> rows(tasks, listOf(item)).single().activity }
+    assertEquals(
+      listOf(
+        "Reading the 0.9 to 1.0 diff",
+        "Listing the breaking changes in `KStore` and `Codec`",
+        "Drafting the Codec section with before and after snippets",
+        "Checking the snippets compile against 1.0",
+      ),
+      activities,
+    )
+  }
+
+  @Test
+  fun `an empty native id matches on the item id, the last match wins`() {
+    val tasks: List<PendingBackgroundTask> = listOf(Subagent(taskId = "item-1", description = "x"))
+    val items: List<TurnItem> = listOf(
+      subagentItem(nativeId = "", progress = "first", id = "item-1"),
+      subagentItem(nativeId = "other", progress = "not this one", id = "item-2"),
+      subagentItem(nativeId = "", progress = "second", id = "item-1"),
+    )
+    assertEquals("second", rows(tasks, items).single().activity)
+    // A non-empty native id is the key, not the id
+    val native: List<TurnItem> = listOf(subagentItem("native", progress = "p", id = "item-1"))
+    assertNull(rows(tasks, native).single().activity)
+  }
+
+  @Test
+  fun `a task's own child thread wins over its item's`() {
+    val tasks: List<PendingBackgroundTask> =
+      listOf(Subagent(taskId = "a", description = "x", childThreadId = "thr_task"))
+    val items: List<TurnItem> = listOf(subagentItem("a", progress = null, child = "thr_item"))
+    assertEquals("thr_task", rows(tasks, items).single().childThreadId)
+  }
+
+  @Test
+  fun `one task without an item has no timer`() {
+    assertNull(rows(listOf(command("./gradlew check")), emptyList()).single().startedAtMs)
   }
 
   @Test
@@ -186,14 +296,53 @@ class BackgroundWorkLogicTest {
 
   private fun work(
     tasks: List<PendingBackgroundTask>,
+    turnItems: List<TurnItem> = emptyList(),
     onOpenThread: (String) -> Unit = {},
   ): ThreadNowItem? = backgroundWorkNowItem(
     threadId = THREAD,
     tasks = tasks,
+    turnItems = turnItems,
     stopDisabled = false,
     stopping = false,
     onStop = {},
     onOpenThread = onOpenThread,
+  )
+
+  private fun rows(
+    tasks: List<PendingBackgroundTask>,
+    items: List<TurnItem>,
+  ): List<BackgroundWorkRow> =
+    backgroundWorkRows(assertNotNull(presentPendingBackgroundWork(tasks)).items, items)
+
+  private fun subagentItem(
+    nativeId: String,
+    progress: String?,
+    updatedAt: String = "2026-10-24T09:00:00.000Z",
+    id: String = "item-$nativeId",
+    child: String? = null,
+  ): TurnItem = TurnItem.TurnItemSubagent(
+    id = id,
+    threadId = THREAD,
+    runId = RUN,
+    nodeId = null,
+    providerThreadId = null,
+    providerTurnId = null,
+    nativeItemRef = ProviderRef(driver = "claude", nativeId = nativeId, strength = "stable"),
+    parentItemId = null,
+    ordinal = 1,
+    status = "running",
+    title = null,
+    startedAt = "2026-10-24T08:59:00.000Z",
+    completedAt = null,
+    updatedAt = updatedAt,
+    subagentId = "node-$nativeId",
+    origin = "provider_native",
+    driver = "claude",
+    providerInstanceId = "claude",
+    childThreadId = child,
+    prompt = "",
+    progress = progress,
+    result = null,
   )
 
   private fun server(vararg capabilities: String): ServerInfo =
@@ -218,5 +367,6 @@ class BackgroundWorkLogicTest {
   private companion object {
     const val THREAD: String = "thr_01JC6B1K0BGWORK01"
     const val RUN: String = "run_01JC6B1K1DONE"
+    const val SUBAGENT_THREAD: String = "thr_01JC6B2S0BGAGENT1"
   }
 }

@@ -46,7 +46,7 @@ private val VERSION: Regex = Regex("^v?\\d+(?:\\.\\d+)*[a-z]?$", RegexOption.IGN
 private val VENDOR_PREFIX: Regex = Regex("^[A-Z][\\w.&\\- ]{0,24}: (?=[^$JS_WHITESPACE])")
 
 // JavaScript's `\s`, which takes the Unicode spaces the JVM's leaves out (no-break and friends)
-private const val JS_WHITESPACE: String =
+internal const val JS_WHITESPACE: String =
   "\\s\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF"
 
 private val PARENTHESISED: Regex = Regex("\\(.*?\\)")

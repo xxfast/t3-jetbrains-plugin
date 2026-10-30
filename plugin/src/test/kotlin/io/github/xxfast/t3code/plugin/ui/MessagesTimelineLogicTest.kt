@@ -11,6 +11,7 @@ import io.github.xxfast.t3code.protocol.generated.WorktreeSetupStage
 import java.nio.file.Path
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.Locale
 import kotlin.io.path.readText
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -262,7 +263,16 @@ class MessagesTimelineLogicTest {
   fun `durations as upstream formats them`() {
     assertEquals("500ms", formatDuration(500))
     assertEquals("2.5s", formatDuration(2_450))
+    val default: Locale = Locale.getDefault()
+    try {
+      Locale.setDefault(Locale.GERMANY)
+      assertEquals("2.5s", formatDuration(2_450))
+    } finally {
+      Locale.setDefault(default)
+    }
     assertEquals("24s", formatDuration(24_000))
+    assertEquals("59s", formatDuration(59_499))
+    assertEquals("1m", formatDuration(59_500))
     assertEquals("1m 12s", formatDuration(72_000))
     assertEquals("1h 1m", formatDuration(3_660_000))
   }

@@ -13,6 +13,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.util.Locale
 import kotlin.math.roundToLong
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -633,16 +634,18 @@ fun commandProgramName(command: String): String? = commandDisplayText(command)
   ?.substringAfterLast('/')
   ?.ifEmpty { null }
 
-/** `formatDuration`, packages/shared/src/orchestrationTiming.ts:34. */
+/** `formatDuration`, packages/shared/src/orchestrationTiming.ts:22. */
 fun formatDuration(durationMs: Long): String {
   if (durationMs < 0) return "0ms"
   if (durationMs < 1_000) return "${maxOf(1, durationMs)}ms"
   if (durationMs < 10_000) {
     val tenths: Double = (durationMs / 100.0).roundToLong() / 10.0
-    return if (tenths >= 10) "10s" else "%.1fs".format(tenths)
+    // `toFixed(1)` always writes a dot, whatever the locale
+    return if (tenths >= 10) "10s" else "%.1fs".format(Locale.ROOT, tenths)
   }
-  if (durationMs < 60_000) return "${(durationMs / 1_000.0).roundToLong()}s"
   val total: Long = (durationMs / 1_000.0).roundToLong()
+  // The unit comes after rounding, so 59.5 seconds never reads "60s"
+  if (total < 60) return "${total}s"
   val hours: Long = total / 3_600
   val minutes: Long = (total % 3_600) / 60
   val seconds: Long = total % 60

@@ -258,6 +258,7 @@ fun ChatView(
               backgroundWorkNowItem(
                 threadId = view.thread.id,
                 tasks = state.tasks,
+                turnItems = view.items,
                 stopDisabled = !state.enabled || state.stopping,
                 stopping = state.stopping,
                 onStop = backgroundWorkActions.onStop,
