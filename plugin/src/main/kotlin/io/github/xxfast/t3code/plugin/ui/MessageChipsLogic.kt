@@ -15,24 +15,28 @@ import kotlinx.serialization.json.longOrNull
 // an inline code path (`MarkdownFileLink.tsx`). The rules that pick a chip's kind, label and icon
 // live here, IDE-free; `MessageChips.kt` draws them.
 
-/** Upstream's `ContextChipKind` (`ContextChip.tsx`): the chip's accent. */
-enum class MessageChipKind(val accent: Long) {
-  NEUTRAL(0),
-  IMAGE(0xD55665),
-  VIDEO(0xD06217),
-  FILE(0x0090CD),
-  MENTION(0x0096AF),
-  TERMINAL(0x009F6E),
-  ELEMENT(0xB87501),
-  PREVIEW_ANNOTATION(0xB87501),
-  REVIEW_COMMENT(0x8A70DD),
-  PULL_REQUEST(0x7079E4),
-  PR_OPEN(0x009F6E),
-  PR_DRAFT(0x7F8793),
-  PR_MERGED(0x8A70DD),
-  PR_CLOSED(0xD55665),
-  SKILL(0xB261BE),
-  THREAD(0x009C96),
+/**
+ * Upstream's `ContextChipKind` (`ContextChip.tsx`): the chip's [accent], its key in
+ * [CONTEXT_CHIP_ACCENTS], whose ink `contextChipVariables` solves per theme. Neutral has none,
+ * upstream's `currentColor`.
+ */
+enum class MessageChipKind(val accent: String?) {
+  NEUTRAL(null),
+  IMAGE("image"),
+  VIDEO("video"),
+  FILE("file"),
+  MENTION("mention"),
+  TERMINAL("terminal"),
+  ELEMENT("element"),
+  PREVIEW_ANNOTATION("preview-annotation"),
+  REVIEW_COMMENT("review-comment"),
+  PULL_REQUEST("pull-request"),
+  PR_OPEN("pr-open"),
+  PR_DRAFT("pr-draft"),
+  PR_MERGED("pr-merged"),
+  PR_CLOSED("pr-closed"),
+  SKILL("skill"),
+  THREAD("thread"),
 }
 
 /** What a chip's leading icon shows; a file's is its type's, see [MessageChip.iconPath]. */

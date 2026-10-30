@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.Placeholder
@@ -266,6 +267,47 @@ fun ProvideMessageContextRecords(
   CompositionLocalProvider(LocalMessageContextRecords provides records, content = content)
 }
 
+/** The theme's chip inks, [contextChipVariables], from the view that hosts the markdown. */
+val LocalContextChipVariables: ProvidableCompositionLocal<Map<String, String>> =
+  staticCompositionLocalOf { emptyMap() }
+
+/**
+ * True for chips in a user bubble, which `TimelineUserMessageRow` inks in
+ * [CONTEXT_CHIP_MESSAGE_VARIABLE] when the theme sets it.
+ */
+val LocalUserMessageChips: ProvidableCompositionLocal<Boolean> =
+  staticCompositionLocalOf { false }
+
+/**
+ * [contextChipVariables] for the theme: [canvas] is the page the timeline sits on, the surfaces
+ * are the ChatView's. A theme change changes them, and so solves the inks again.
+ */
+@Composable
+fun rememberContextChipVariables(canvas: Color): Map<String, String> {
+  val colors = ThemeColors(
+    canvas = canvas.themeHex(),
+    surface = subtle(0.04f).themeHex(), // a card, `ChangedFilesCard`
+    surfaceRaised = composerGlassSurface().themeHex(),
+    messageSurface = subtle(0.06f).themeHex(), // the user bubble
+    messageForeground = JewelTheme.globalColors.text.normal.themeHex(),
+    errorForeground = JewelTheme.globalColors.text.error.themeHex(),
+  )
+  return remember(colors) { contextChipVariables(colors) }
+}
+
+/** `#rrggbbaa`, what [parseThemeColor] reads. */
+private fun Color.themeHex(): String = "#%08x".format(Integer.rotateLeft(toArgb(), 8))
+
+/** A chip variable's `#rrggbb`, or `#rrggbbaa` for the message foreground, as a colour. */
+private fun themeHexColor(value: String): Color? {
+  val digits: Long = value.removePrefix("#").toLongOrNull(16) ?: return null
+  return when (value.length) {
+    7 -> Color(0xFF000000L or digits)
+    9 -> Color(((digits and 0xFF) shl 24) or (digits ushr 8))
+    else -> null
+  }
+}
+
 /**
  * Draws the `t3-chip://` images [MessageChipsProcessorExtension] plants; any other image goes to
  * [fallback], since Jewel only asks the first image renderer it finds.
@@ -367,15 +409,20 @@ private fun MessageChipView(
   val density: Density = LocalDensity.current
   val foreground: Color = JewelTheme.globalColors.text.normal
   val borders: Color = JewelTheme.globalColors.borders.normal
-  // The compound variant's `color-mix`es: border 34% accent, text 22% accent, fill 11% accent
-  val accent: Color? =
-    chip.kind.takeIf { it != MessageChipKind.NEUTRAL }?.let { Color(0xFF000000L or it.accent) }
+  val variables: Map<String, String> = LocalContextChipVariables.current
+  // `--context-chip-accent`, the kind's ink solved for the theme; the pill's fill 11% of it and
+  // its border 34%, as the compound variant's `color-mix`es had them
+  val accent: Color? = chip.kind.accent
+    ?.let { kind -> variables[contextChipColorVariable(kind)] }
+    ?.let(::themeHexColor)
   val fill: Color = accent?.copy(alpha = 0.11f) ?: foreground.copy(alpha = 0.06f)
   val border: Color = accent?.let { lerp(borders, it, 0.34f) } ?: borders.copy(alpha = 0.7f)
-  val text: Color = when {
-    chip.unresolved || accent == null -> foreground
-    else -> lerp(foreground, accent, 0.22f)
-  }
+  // `--context-chip-ink`: the accent, `currentColor` when unresolved, and the message foreground
+  // in a user bubble when the theme sets one (`TimelineUserMessageRow.tsx`)
+  val message: Color? = variables[CONTEXT_CHIP_MESSAGE_VARIABLE]
+    ?.takeIf { LocalUserMessageChips.current }
+    ?.let(::themeHexColor)
+  val text: Color = message ?: accent?.takeUnless { chip.unresolved } ?: foreground
   val radius: Dp = with(density) { (CHIP_RADIUS_EM * em).toDp() }
   val shape = RoundedCornerShape(radius)
   val actions: MessageChipActions = LocalMessageChipActions.current

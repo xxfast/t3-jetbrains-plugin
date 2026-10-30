@@ -240,7 +240,11 @@ fun ChatView(
           val renderer: MarkdownBlockRenderer = remember(styling, tableStyling, linkFavicons) {
             chatMarkdownRenderer(styling, tableStyling, linkFavicons)
           }
-          CompositionLocalProvider(LocalMessageChipActions provides chipActions) {
+          val chipVariables: Map<String, String> = rememberContextChipVariables(editorBackground())
+          CompositionLocalProvider(
+            LocalMessageChipActions provides chipActions,
+            LocalContextChipVariables provides chipVariables,
+          ) {
           ProvideMarkdownStyling(
             markdownStyling = styling,
             markdownProcessor = processor,
@@ -1072,7 +1076,9 @@ private fun UserMessageRow(row: TimelineRow.Message, context: RowContext) {
               Modifier.heightIn(max = 176.dp).clip(RectangleClip)
             else Modifier
           ProvideMessageContextRecords(records) {
-            Box(clip) { MarkdownText(text, context.processor, fill = false) }
+            CompositionLocalProvider(LocalUserMessageChips provides true) {
+              Box(clip) { MarkdownText(text, context.processor, fill = false) }
+            }
           }
         }
         if (collapsible) {
