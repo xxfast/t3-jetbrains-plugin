@@ -1,0 +1,79 @@
+{
+  "threads": [
+    {
+      "id": "thr_01JC1A2B3CSETTLE09",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Bump Kotlin to 2.2 and fix the deprecations",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE09"
+      },
+      "status": "completed",
+      "itemCount": 4,
+      "visibleItemCount": 4,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-09-26T10:15:00.000Z",
+      "updatedAt": "2026-09-26T10:15:00.000Z",
+      "settledAt": "2026-09-26T10:15:00.000Z",
+      "settledOverride": "settled"
+    },
+    {
+      "id": "thr_01JC1A2B3CSETTLE10",
+      "projectId": "prj_01JB2K8M4R7DROUTER",
+      "title": "Sample app for the predictive back gesture",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE10"
+      },
+      "status": "completed",
+      "itemCount": 4,
+      "visibleItemCount": 4,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-09-21T16:40:00.000Z",
+      "updatedAt": "2026-09-21T16:40:00.000Z",
+      "settledAt": "2026-09-21T16:40:00.000Z",
+      "settledOverride": "settled"
+    },
+    {
+      "id": "thr_01JC1A2B3CSETTLE11",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Document the versioned store migrations",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC1A2B3CSETTLE11"
+      },
+      "status": "completed",
+      "itemCount": 4,
+      "visibleItemCount": 4,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-09-15T09:05:00.000Z",
+      "updatedAt": "2026-09-15T09:05:00.000Z",
+      "settledAt": "2026-09-15T09:05:00.000Z",
+      "settledOverride": "settled"
+    }
+  ]
+}

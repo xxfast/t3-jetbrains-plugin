@@ -292,10 +292,6 @@ fun nextCard(inbox: List<Thread>, current: String): String? {
   return (inbox.drop(index + 1) + inbox.take(index)).firstOrNull()?.id
 }
 
-/** A collapsed shelf's header counts its rows, as the section headers at Sidebar.tsx:4982 do. */
-fun shelfLabel(name: String, open: Boolean, count: Int): String =
-  if (open) name else "$name ($count)"
-
 /** How many rows "Show N more" reveals, `0` when all [total] are already [shown]. */
 fun moreCount(total: Int, shown: Int): Int = (total - shown).coerceIn(0, NEXT_PAGE)
 

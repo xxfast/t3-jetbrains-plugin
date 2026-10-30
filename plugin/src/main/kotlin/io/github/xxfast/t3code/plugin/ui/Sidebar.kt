@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -86,8 +87,6 @@ import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import org.jetbrains.jewel.bridge.toComposeColor
 import org.jetbrains.jewel.foundation.theme.JewelTheme
-import org.jetbrains.jewel.ui.Orientation
-import org.jetbrains.jewel.ui.component.Divider
 import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.IconActionButton
 import org.jetbrains.jewel.ui.component.IconButton
@@ -454,7 +453,8 @@ private fun Sections(
           add(
             MotionItem("working-header") {
               ShelfHeader(
-                label = shelfLabel("Working", shelves.working, sections.working.size),
+                label = "Working",
+                count = sections.working.size,
                 open = shelves.working,
                 onToggle = { onShelvesChange(shelves.copy(working = !shelves.working)) },
               )
@@ -486,7 +486,8 @@ private fun Sections(
           add(
             MotionItem("snoozed-header") {
               ShelfHeader(
-                label = shelfLabel("Snoozed", shelves.snoozed, sections.snoozed.size),
+                label = "Snoozed",
+                count = sections.snoozed.size,
                 open = shelves.snoozed,
                 onToggle = { onShelvesChange(shelves.copy(snoozed = !shelves.snoozed)) },
               )
@@ -498,7 +499,8 @@ private fun Sections(
         add(
           MotionItem("settled-header") {
             ShelfHeader(
-              label = shelfLabel("Settled", shelves.settled, sections.settled.size),
+              label = "Settled",
+              count = sections.settled.size,
               open = shelves.settled,
               onToggle = { onShelvesChange(shelves.copy(settled = !shelves.settled)) },
             )
@@ -756,11 +758,12 @@ private fun HoverAction(
 }
 
 /**
- * `CollapsibleSectionHeader` (ui/collapsible-section-header.tsx): label, rule, chevron. A shelf
- * that's closed says how many rows it holds.
+ * `SidebarSectionHeader` (sidebar/SidebarListMarkers.tsx) over `CollapsibleSectionHeader`
+ * (ui/collapsible-section-header.tsx): label, rule, a muted [count] in tabular figures, chevron.
+ * The count shows open or closed.
  */
 @Composable
-private fun ShelfHeader(label: String, open: Boolean, onToggle: () -> Unit) {
+private fun ShelfHeader(label: String, count: Int, open: Boolean, onToggle: () -> Unit) {
   Row(
     modifier = Modifier
       .padding(top = 12.dp) // the thin spacer between the two sections
@@ -771,15 +774,14 @@ private fun ShelfHeader(label: String, open: Boolean, onToggle: () -> Unit) {
     horizontalArrangement = Arrangement.spacedBy(8.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    Text(
-      text = label,
-      style = small(),
-      color = JewelTheme.globalColors.text.info,
-      fontWeight = FontWeight.Medium,
-    )
-    Divider(Orientation.Horizontal, Modifier.weight(1f))
-    // Upstream's ChevronDownIcon, rotated 180 degrees while collapsed
-    val rotation: Float by animateFloatAsState(if (open) 0f else 180f, Transition)
+    val color: Color = JewelTheme.globalColors.text.info
+    Text(text = label, style = small(), color = color, fontWeight = FontWeight.Medium)
+    // The rule stays, invisible: a header with a trailing count drops it so it doesn't read as a
+    // leader, and a shelf always has one
+    Spacer(Modifier.weight(1f).widthIn(min = 8.dp))
+    Text(text = "$count", style = small().copy(fontFeatureSettings = "tnum"), color = color)
+    // Upstream's ChevronDownIcon, `-rotate-90` while collapsed
+    val rotation: Float by animateFloatAsState(if (open) 0f else -90f, Transition)
     Icon(
       key = AllIconsKeys.General.ChevronDown,
       contentDescription = if (open) "Collapse" else "Expand",
@@ -792,10 +794,11 @@ private fun ShelfHeader(label: String, open: Boolean, onToggle: () -> Unit) {
 private enum class Shelf { Snoozed, Settled }
 
 /**
- * Upstream's slim row (variant "slim", Sidebar.tsx:2100 onwards): 36px, icon, title, pin,
- * badge, time. Shelved rows read as secondary until hovered or open; the icon is at 40% and
- * grey the same way. A settled row shows when it settled and Un-settle on hover, a snoozed one
- * how long until it wakes and Wake on hover (Sidebar.tsx:2151 to 2245).
+ * Upstream's slim row (`SidebarThreadRow.tsx:1192` onwards): 36px, icon, title, pin, time.
+ * No pull request badge, upstream's one-line row dropped it. Shelved rows read as secondary until
+ * hovered or open; the icon is at 40% and grey the same way. A settled row shows when it
+ * settled and Un-settle on hover, a snoozed one how long until it wakes and Wake on hover
+ * (SidebarThreadRow.tsx:1275 to 1360).
  */
 @Composable
 private fun SlimRow(
@@ -842,18 +845,26 @@ private fun SlimRow(
       )
       if (thread.pinned) Glyph("pin", subtle(0.65f), 12.dp)
       TerminalButton(thread, details, onClick)
-      thread.pullRequestBadge()?.let { PullRequestBadgeView(it) }
       val settle: ((String) -> Unit)? = actions.settle
       val wake: ((String) -> Unit)? = actions.wake
       when {
         shelf == Shelf.Snoozed && hovered && wake != null ->
           HoverAction("alarm-clock-off", null, "Wake thread now") { _, _ -> wake(thread.id) }
 
-        shelf == Shelf.Snoozed -> Text(
-          text = snoozeWakeLabel(thread.snoozedUntil.orEmpty(), now),
-          style = small(),
-          color = accent(),
-        )
+        // The clock tells a wake time from an age at a glance (SidebarThreadRow.tsx:1277)
+        shelf == Shelf.Snoozed -> Row(
+          horizontalArrangement = Arrangement.spacedBy(4.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          // Upstream's `text-info-foreground`, the accent here as on the Working status
+          val info: Color = accent()
+          Glyph("alarm-clock", info, 12.dp)
+          Text(
+            text = snoozeWakeLabel(thread.snoozedUntil.orEmpty(), now),
+            style = small().copy(fontFeatureSettings = "tnum"),
+            color = info,
+          )
+        }
 
         hovered && settle != null ->
           HoverAction("undo-2", null, "Un-settle thread") { _, _ -> settle(thread.id) }
@@ -934,7 +945,10 @@ private fun RenameField(title: String, onEnd: (typed: String?) -> Unit, modifier
   )
 }
 
-/** "Show N more" (Sidebar.tsx:5044): a slim-height row, plus glyph, muted text. */
+/**
+ * "Show N more" (Sidebar.tsx:3464): a slim-height row, chevron glyph, muted text. Plus means
+ * "add", so revealing more uses a chevron.
+ */
 @Composable
 private fun MoreRow(count: Int, onClick: () -> Unit) {
   Selectable(selected = false, onClick = onClick) { hovered ->
@@ -944,9 +958,8 @@ private fun MoreRow(count: Int, onClick: () -> Unit) {
       verticalAlignment = Alignment.CenterVertically,
     ) {
       val color: Color =
-        if (hovered) JewelTheme.globalColors.text.normal
-        else JewelTheme.globalColors.text.info.copy(alpha = 0.55f)
-      Icon(AllIconsKeys.General.Add, contentDescription = null, Modifier.size(16.dp))
+        if (hovered) JewelTheme.globalColors.text.normal else JewelTheme.globalColors.text.info
+      Glyph("chevron-down", color, 16.dp)
       Text("Show $count more", color = color)
     }
   }

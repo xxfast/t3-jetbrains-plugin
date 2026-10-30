@@ -103,12 +103,6 @@ class SidebarLogicTest {
   }
 
   @Test
-  fun `a closed shelf counts its rows`() {
-    assertEquals("Settled", shelfLabel("Settled", open = true, count = 3))
-    assertEquals("Settled (3)", shelfLabel("Settled", open = false, count = 3))
-  }
-
-  @Test
   fun `inbox is pinned by order key, then active newest first`() {
     val threads: List<Thread> = listOf(
       thread("old", createdAt = "2026-10-19T08:00:00Z"),

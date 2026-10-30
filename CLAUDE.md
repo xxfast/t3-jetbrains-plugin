@@ -69,6 +69,7 @@ How it fits together:
   a patch that omits one of three files, a truncated hunk, content without a diff; the fixture
   client strips diffs from the thread stream like the server), `stopped.json` ending in a run
   the user stopped, `unread.json`, `snoozed.json` with one sleeping and one woken,
+  `settled.json` with enough older settled threads for "Show N more",
   `compaction.json` with a user `/compact`, one T3 sent before the cache expired, a stopped one,
   a failed one and an `onReturn` one compacting over `after` delays, `background-work.json`
   with a settled run whose provider still waits on two commands and a subagent (the work line

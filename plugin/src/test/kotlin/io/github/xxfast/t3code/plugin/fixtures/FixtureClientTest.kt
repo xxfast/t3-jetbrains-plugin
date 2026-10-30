@@ -142,7 +142,7 @@ class FixtureClientTest {
     val scenario: Scenario = Scenario.merge(parts)
     val connected: ConnectionState.Connected = assertIs(scenario.connection)
     assertTrue(connected.session.has("orchestration:operate"), "Thread actions work in default")
-    assertEquals(50, scenario.threads.size)
+    assertEquals(53, scenario.threads.size)
     val demos: Set<String> = scenario.threads
       .filter { it.title.startsWith("Demo: ") }
       .map { it.id }
