@@ -239,11 +239,12 @@ data class ProjectScope(val text: String, val next: ProjectFilter)
 
 fun projectScope(row: Thread, projects: List<Project>, filter: ProjectFilter): ProjectScope? {
   val project: Project = projects.find { it.id == row.projectId } ?: return null
-  val only: ProjectFilter = ProjectFilter.Only(setOf(project.id))
-  return if (filter == only) {
+  // `case "filter-by-project"`, Sidebar.tsx: exactly this project, or none when it's in the scope
+  val active: Boolean = filter is ProjectFilter.Only && project.id in filter.ids
+  return if (active) {
     ProjectScope("Show all projects", ProjectFilter.All)
   } else {
-    ProjectScope("Filter by ${project.title}", only)
+    ProjectScope("Filter by ${project.title}", ProjectFilter.Only(setOf(project.id)))
   }
 }
 

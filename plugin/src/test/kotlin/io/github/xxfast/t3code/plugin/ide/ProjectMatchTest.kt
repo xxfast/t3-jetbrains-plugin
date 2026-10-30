@@ -64,12 +64,14 @@ class ProjectMatchTest {
     assertEquals(ProjectFilter.All, matchProjects(emptyList(), PROJECTS, open))
     val loading: ProjectFilter = matchProjects(listOf("x"), emptyList(), open)
     assertEquals(ProjectFilter.Only(setOf("x")), loading, "Kept until projects arrive")
+    val partly: ProjectFilter = matchProjects(listOf("router", "deleted", "router"), PROJECTS, open)
+    assertEquals(ProjectFilter.Only(setOf("router")), partly, "Gone and repeated ids drop")
   }
 
   @Test
-  fun `without a choice the open projects are the filter, else all`() {
+  fun `without a choice the open projects are the filter, else all, a gone choice is all`() {
     val gone: ProjectFilter = matchProjects(listOf("deleted"), PROJECTS, setOf("kstore"))
-    assertEquals(ProjectFilter.Only(setOf("kstore")), gone, "A choice all gone falls through")
+    assertEquals(ProjectFilter.All, gone, "A choice all gone is all projects")
     val open: ProjectFilter = matchProjects(null, PROJECTS, setOf("kstore"))
     assertEquals(ProjectFilter.Only(setOf("kstore")), open)
     assertEquals(ProjectFilter.All, matchProjects(null, PROJECTS, emptySet()))

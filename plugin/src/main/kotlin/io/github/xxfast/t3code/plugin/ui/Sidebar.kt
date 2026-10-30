@@ -26,9 +26,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
@@ -54,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -61,6 +64,7 @@ import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
@@ -91,6 +95,7 @@ import org.jetbrains.jewel.ui.component.VerticallyScrollableContainer
 import org.jetbrains.jewel.ui.component.separator
 import org.jetbrains.jewel.ui.icon.IconKey
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
+import org.jetbrains.jewel.ui.theme.menuStyle
 import org.jetbrains.jewel.ui.typography
 
 /**
@@ -145,7 +150,7 @@ fun Sidebar(
             actions, shelves, onShelvesChange, renaming, details,
           )
 
-        else -> Hint(emptyHint(projects.isEmpty(), query, filter))
+        else -> Hint(emptyHint(projects, query, filter))
       }
     }
     if (onOpenSettings != null) UtilityFooter(onOpenSettings)
@@ -220,10 +225,12 @@ private fun SearchField(state: TextFieldState, modifier: Modifier = Modifier) {
 }
 
 /**
- * Upstream's project scope: an icon button showing the filter glyph, or the scoped project's
- * icon, that opens the list of projects with "All projects" first. The filter itself is ours
- * (an IDE window defaults to the projects it has open), so a match of several projects is one
- * more entry, "N projects", and the glyph with their names in the tooltip.
+ * Upstream's project scope (Sidebar.tsx): an icon button showing the filter glyph, the scoped
+ * project's icon, or the first two overlapped when there are several, that opens the list of
+ * projects with "All projects" first. A click picks one project; Shift-click or Shift+Enter
+ * toggles one in the selection and keeps the list open (`toggleProjectScopeKey`). Each selected
+ * entry's icon gets a check badge in place of a highlighted row. Upstream's search field, project
+ * settings button and environment badge aren't here.
  */
 @OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip sits on Compose's TooltipArea
 @Composable
@@ -236,52 +243,79 @@ private fun ProjectScope(
 ) {
   val choices: FilterChoices =
     remember(projects, filter, open) { filterChoices(projects, filter, open) }
-  val byId: Map<String, Project> = remember(projects) { projects.associateBy { it.id } }
-  val scoped: Project? = filter.singleProject(byId)
-  val tooltip: String = when {
-    scoped != null -> "Filter threads by project: ${scoped.title}"
-    choices.names.isNotEmpty() -> choices.names.joinToString("\n")
-    else -> "Filter threads by project"
-  }
   var expanded: Boolean by remember { mutableStateOf(false) }
+  // Jewel's menu items close the menu after their click, so the Shift state is caught on the way
+  // in and a toggle refuses the dismiss that follows it
+  var shift: Boolean by remember { mutableStateOf(false) }
+  var toggled: Boolean by remember { mutableStateOf(false) }
   Box {
-    Tooltip(tooltip = { Text(tooltip) }) {
+    Tooltip(tooltip = { Text(choices.tooltip) }) {
       IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(24.dp)) {
-        if (scoped != null) {
-          ProjectIcon(scoped, favicons[scoped.id])
-        } else {
-          Icon(AllIconsKeys.General.Filter, contentDescription = "Filter threads by project")
+        val scoped: List<Project> = choices.scoped
+        when {
+          scoped.size > 1 -> Box(Modifier.size(22.dp, 14.dp)) {
+            // `scopedProjectGroups.slice(0, 2)` at size-3.5, overlapped by -space-x-1.5
+            scoped.take(2).forEachIndexed { index, project ->
+              Box(Modifier.offset(x = (index * 8).dp)) {
+                ProjectIcon(project, favicons[project.id], size = 14.dp)
+              }
+            }
+          }
+
+          scoped.isNotEmpty() -> ProjectIcon(scoped.single(), favicons[scoped.single().id])
+          else -> Icon(AllIconsKeys.General.Filter, contentDescription = FILTER_BY_PROJECT)
         }
       }
     }
     if (expanded) {
       PopupMenu(
         onDismissRequest = {
+          if (toggled) {
+            toggled = false
+            return@PopupMenu false
+          }
           expanded = false
           return@PopupMenu true
         },
         horizontalAlignment = Alignment.Start,
+        modifier = Modifier
+          .onPreviewKeyEvent { event ->
+            shift = event.isShiftPressed
+            false
+          }
+          .pointerInput(Unit) {
+            awaitPointerEventScope {
+              while (true) {
+                shift = awaitPointerEvent(PointerEventPass.Initial).keyboardModifiers
+                  .isShiftPressed
+              }
+            }
+          },
       ) {
-        choices.filters.forEachIndexed { index, choice ->
+        choices.entries.forEachIndexed { index, choice ->
           if (index == choices.divider) separator()
-          val project: Project? = choice.singleProject(byId)
+          // Upstream drops Base UI's `data-selected`: the badge marks selection, not the row
           selectableItem(
-            selected = index == choices.selected,
+            selected = false,
             onClick = {
-              expanded = false
-              if (choice != filter) onFilterChange(choice)
+              val next: ProjectFilter = if (shift) choice.toggles else choice.picks
+              toggled = shift && choice.project != null
+              if (!toggled) expanded = false
+              if (next != filter) onFilterChange(next)
             },
           ) {
             Row(
               horizontalArrangement = Arrangement.spacedBy(8.dp),
               verticalAlignment = Alignment.CenterVertically,
             ) {
-              if (project != null) {
-                ProjectIcon(project, favicons[project.id])
-              } else {
-                Icon(AllIconsKeys.Nodes.Folder, contentDescription = null)
+              ProjectScopeRowIcon(choice.selected) {
+                if (choice.project != null) {
+                  ProjectIcon(choice.project, favicons[choice.project.id])
+                } else {
+                  Icon(AllIconsKeys.Nodes.Folder, contentDescription = null)
+                }
               }
-              Text(choices.labels[index], maxLines = 1, overflow = TextOverflow.Ellipsis)
+              Text(choice.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
           }
         }
@@ -290,9 +324,35 @@ private fun ProjectScope(
   }
 }
 
-/** The one project a filter scopes to, if it's exactly one. */
-private fun ProjectFilter.singleProject(byId: Map<String, Project>): Project? =
-  (this as? ProjectFilter.Only)?.ids?.singleOrNull()?.let(byId::get)
+/**
+ * Upstream's `ProjectScopeRowIcon` (Sidebar.tsx): a selected entry's icon with a check in an
+ * accent dot at its bottom right corner, ringed in the popup's background.
+ */
+@Composable
+private fun ProjectScopeRowIcon(selected: Boolean, content: @Composable () -> Unit) {
+  Box {
+    content()
+    if (selected) {
+      Box(
+        modifier = Modifier
+          .align(Alignment.BottomEnd)
+          .offset(x = 5.dp, y = 5.dp)
+          .size(14.dp)
+          .background(JewelTheme.menuStyle.colors.background, CircleShape)
+          .padding(2.dp)
+          .background(accent(), CircleShape),
+        contentAlignment = Alignment.Center,
+      ) {
+        Icon(
+          key = AllIconsKeys.Actions.Checked,
+          contentDescription = null,
+          tint = Color.White,
+          modifier = Modifier.size(8.dp),
+        )
+      }
+    }
+  }
+}
 
 /**
  * Upstream's `SidebarUtilityMenu` (sidebar/SidebarChrome.tsx): a row of icon buttons at the

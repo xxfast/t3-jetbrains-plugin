@@ -66,7 +66,7 @@ class ThreadActionsLogicTest {
   }
 
   @Test
-  fun `filter by project narrows to the row's project, then shows all again`() {
+  fun `filter by project picks just the row's project, or clears when it's in the scope`() {
     val projects: List<Project> = listOf(project(row.projectId, "KStore"), project("p2", "Other"))
     val all: ProjectScope = assertNotNull(projectScope(row, projects, ProjectFilter.All))
     assertEquals("Filter by KStore", all.text)
@@ -74,7 +74,9 @@ class ThreadActionsLogicTest {
     val only: ProjectScope = assertNotNull(projectScope(row, projects, all.next))
     assertEquals(ProjectScope("Show all projects", ProjectFilter.All), only)
     val both = ProjectFilter.Only(setOf(row.projectId, "p2"))
-    assertEquals("Filter by KStore", projectScope(row, projects, both)?.text)
+    assertEquals(only, projectScope(row, projects, both), "In the scope, so it clears")
+    val other = ProjectFilter.Only(setOf("p2"))
+    assertEquals(all, projectScope(row, projects, other), "Exactly this project, not added")
     assertNull(projectScope(row, emptyList(), ProjectFilter.All))
   }
 

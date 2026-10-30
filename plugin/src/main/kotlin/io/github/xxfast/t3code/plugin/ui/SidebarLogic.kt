@@ -92,8 +92,8 @@ private fun Thread.activeAnchor(): Instant =
   maxOf(createdAt.toInstant(), (unsettledAt ?: createdAt).toInstant())
 
 /**
- * Which T3 projects the Sidebar lists. Upstream's sidebar has no such filter; this one is ours,
- * so an IDE window can default to the projects it has open.
+ * Which T3 projects the Sidebar lists: upstream's project scope (`projectScopeKeys`,
+ * Sidebar.tsx), one project or several. Defaulting to the projects an IDE window has open is ours.
  */
 sealed interface ProjectFilter {
   data object All : ProjectFilter
@@ -106,17 +106,57 @@ fun ProjectFilter.allows(projectId: String): Boolean = when (this) {
   is ProjectFilter.Only -> projectId in ids
 }
 
+/** Upstream's `scopedProjectGroups`: the [projects] this filter lists, in server order. */
+fun ProjectFilter.scopedProjects(projects: List<Project>): List<Project> =
+  if (this == ProjectFilter.All) emptyList() else projects.filter { allows(it.id) }
+
 /**
- * The project picker's entries: "All projects", then "N projects" while a match picked several,
- * then the projects this window has [open], then the rest, with a [divider] before the rest when
- * both are there. Ours, not upstream's: an IDE window is about its own projects. [filters] runs
- * parallel to [labels]; [selected] and [divider] index both.
+ * `resolveSidebarProjectScopeKeys` (apps/web/src/sidebarProjectGrouping.ts): the stored [keys]
+ * that still name one of [projects], duplicates collapsed. A missing one is only dropped when
+ * [canClearMissingScope], once every project has loaded; until then it's kept as it is.
+ */
+fun resolveSidebarProjectScopeKeys(
+  projects: List<Project>,
+  keys: List<String>,
+  canClearMissingScope: Boolean,
+): List<String> = keys
+  .mapNotNull { key ->
+    projects.find { it.id == key }?.id ?: if (canClearMissingScope) null else key
+  }
+  .distinct()
+
+/**
+ * `toggleProjectScopeKey` (Sidebar.tsx): a Shift-click puts [id] in the scope or takes it out.
+ * Taking out the last one is all projects again.
+ */
+fun toggleProjectScopeKey(filter: ProjectFilter, id: String): ProjectFilter {
+  val keys: Set<String> = (filter as? ProjectFilter.Only)?.ids.orEmpty()
+  val next: Set<String> = if (id in keys) keys - id else keys + id
+  return if (next.isEmpty()) ProjectFilter.All else ProjectFilter.Only(next)
+}
+
+/**
+ * One entry in the project picker. [project] is null for "All projects". A click [picks] it
+ * alone, a Shift-click [toggles] it; [selected] is upstream's check badge (`ProjectScopeRowIcon`).
+ */
+data class FilterChoice(
+  val label: String,
+  val project: Project?,
+  val selected: Boolean,
+  val picks: ProjectFilter,
+  val toggles: ProjectFilter,
+)
+
+/**
+ * The project picker: "All projects", then the projects this window has [open], then the rest,
+ * with a [divider] above the rest when both are there (ours: an IDE window is about its own
+ * projects). [scoped] is upstream's `scopedProjectGroups`, the projects the filter lists in server
+ * order, for the trigger's favicons and [tooltip].
  */
 data class FilterChoices(
-  val labels: List<String>,
-  val filters: List<ProjectFilter>,
-  val selected: Int,
-  val names: List<String>, // what the current filter lists, for the tooltip
+  val entries: List<FilterChoice>,
+  val scoped: List<Project>,
+  val tooltip: String,
   val divider: Int? = null, // the entry a separator goes above
 )
 
@@ -125,37 +165,48 @@ fun filterChoices(
   filter: ProjectFilter,
   open: Set<String> = emptySet(),
 ): FilterChoices {
-  val chosen: List<Project> = projects.filter { filter.allows(it.id) }
-  val several: Boolean = filter is ProjectFilter.Only && chosen.size > 1
+  val scoped: List<Project> = filter.scopedProjects(projects)
   val (ours: List<Project>, rest: List<Project>) = projects.partition { it.id in open }
-  val ordered: List<Project> = ours + rest
-  val labels: List<String> = buildList {
-    add(ALL_PROJECTS)
-    if (several) add("${chosen.size} projects")
-    ordered.forEach { add(it.title) }
+  val entries: List<FilterChoice> = buildList {
+    // Upstream's "all" always clears the scope, Shift or not
+    add(FilterChoice(ALL_PROJECTS, null, scoped.isEmpty(), ProjectFilter.All, ProjectFilter.All))
+    (ours + rest).forEach { project ->
+      add(
+        FilterChoice(
+          label = project.title,
+          project = project,
+          selected = project in scoped,
+          picks = ProjectFilter.Only(setOf(project.id)),
+          toggles = toggleProjectScopeKey(filter, project.id),
+        ),
+      )
+    }
   }
-  val filters: List<ProjectFilter> = buildList {
-    add(ProjectFilter.All)
-    if (several) add(filter)
-    ordered.forEach { add(ProjectFilter.Only(setOf(it.id))) }
+  val tooltip: String = when {
+    scoped.isEmpty() -> FILTER_BY_PROJECT
+    else -> "$FILTER_BY_PROJECT: ${scoped.joinToString(", ") { it.title }}"
   }
-  val selected: Int = filters.indexOf(filter).coerceAtLeast(0)
-  val names: List<String> =
-    if (filter == ProjectFilter.All) emptyList() else chosen.map { it.title }
   val divider: Int? =
-    if (ours.isNotEmpty() && rest.isNotEmpty()) labels.size - rest.size else null
-  return FilterChoices(labels, filters, selected, names, divider)
+    if (ours.isNotEmpty() && rest.isNotEmpty()) entries.size - rest.size else null
+  return FilterChoices(entries, scoped, tooltip, divider)
 }
 
 const val ALL_PROJECTS: String = "All projects"
+const val FILTER_BY_PROJECT: String = "Filter threads by project"
 
-/** What the Sidebar says with no rows to show, so a narrowing filter is visible as one. */
-fun emptyHint(noProjects: Boolean, query: String, filter: ProjectFilter): String = when {
-  noProjects -> "No projects yet. Open the T3 Code desktop app to add one."
-  query.isNotBlank() -> "No threads match"
-  filter is ProjectFilter.Only && filter.ids.size == 1 -> "No threads in this project"
-  filter is ProjectFilter.Only -> "No threads in these projects"
-  else -> "No threads"
+/**
+ * What the Sidebar says with no rows to show, so a narrowing filter is visible as one. The scoped
+ * wording is upstream's (Sidebar.tsx, the empty thread list).
+ */
+fun emptyHint(projects: List<Project>, query: String, filter: ProjectFilter): String {
+  val scoped: List<Project> = filter.scopedProjects(projects)
+  return when {
+    projects.isEmpty() -> "No projects yet. Open the T3 Code desktop app to add one."
+    query.isNotBlank() -> "No threads match"
+    scoped.size > 1 -> "No threads in these projects yet"
+    scoped.isNotEmpty() -> "No threads in ${scoped.single().title} yet"
+    else -> "No threads"
+  }
 }
 
 /**

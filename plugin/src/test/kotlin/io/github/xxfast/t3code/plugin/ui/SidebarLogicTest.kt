@@ -306,32 +306,65 @@ class SidebarLogicTest {
 
   @Test
   fun `an empty list says when the filter is why`() {
+    val projects: List<Project> = listOf(project("kstore", "KStore"), project("router", "Router"))
     val one: ProjectFilter = ProjectFilter.Only(setOf("kstore"))
     val two: ProjectFilter = ProjectFilter.Only(setOf("kstore", "router"))
-    assertEquals("No threads in this project", emptyHint(false, "", one))
-    assertEquals("No threads in these projects", emptyHint(false, "", two))
-    assertEquals("No threads", emptyHint(false, "", ProjectFilter.All))
-    assertEquals("No threads match", emptyHint(false, "x", one))
-    assertTrue(emptyHint(true, "", one).startsWith("No projects yet"))
+    assertEquals("No threads in KStore yet", emptyHint(projects, "", one))
+    assertEquals("No threads in these projects yet", emptyHint(projects, "", two))
+    assertEquals("No threads", emptyHint(projects, "", ProjectFilter.All))
+    assertEquals("No threads match", emptyHint(projects, "x", one))
+    assertTrue(emptyHint(emptyList(), "", one).startsWith("No projects yet"))
   }
 
   @Test
-  fun `the picker lists all, a several-project match, then each project`() {
+  fun `the picker badges every selected project, all projects when nothing is`() {
     val projects: List<Project> = listOf(project("kstore", "KStore"), project("router", "Router"))
+    fun badged(choices: FilterChoices): List<String> =
+      choices.entries.filter { it.selected }.map { it.label }
     val all: FilterChoices = filterChoices(projects, ProjectFilter.All)
-    assertEquals(listOf("All projects", "KStore", "Router"), all.labels)
-    assertEquals(0, all.selected)
-    assertEquals(emptyList(), all.names)
+    assertEquals(listOf("All projects", "KStore", "Router"), all.entries.map { it.label })
+    assertEquals(listOf("All projects"), badged(all))
+    assertEquals(emptyList(), all.scoped)
+    assertEquals("Filter threads by project", all.tooltip)
     val one: FilterChoices = filterChoices(projects, ProjectFilter.Only(setOf("router")))
-    assertEquals(2, one.selected)
-    assertEquals(listOf("Router"), one.names)
-    val both: ProjectFilter = ProjectFilter.Only(setOf("kstore", "router"))
+    assertEquals(listOf("Router"), badged(one))
+    assertEquals("Filter threads by project: Router", one.tooltip)
+    // Selection order doesn't matter: the trigger and tooltip follow the server's order
+    val both: ProjectFilter = ProjectFilter.Only(setOf("router", "kstore"))
     val several: FilterChoices = filterChoices(projects, both)
-    assertEquals(listOf("All projects", "2 projects", "KStore", "Router"), several.labels)
-    assertEquals(1, several.selected)
-    assertEquals(both, several.filters[several.selected])
-    assertEquals(ProjectFilter.Only(setOf("kstore")), several.filters[2])
-    assertEquals(listOf("KStore", "Router"), several.names)
+    assertEquals(listOf("All projects", "KStore", "Router"), several.entries.map { it.label })
+    assertEquals(listOf("KStore", "Router"), badged(several))
+    assertEquals(listOf("kstore", "router"), several.scoped.map { it.id })
+    assertEquals("Filter threads by project: KStore, Router", several.tooltip)
+  }
+
+  @Test
+  fun `a click picks one project, a Shift-click toggles it, all projects clears`() {
+    val projects: List<Project> = listOf(
+      project("kstore", "KStore"), project("router", "Router"), project("nuget", "NuGet"),
+    )
+    val kstore: ProjectFilter = ProjectFilter.Only(setOf("kstore"))
+    val choices: FilterChoices = filterChoices(projects, kstore)
+    val (all: FilterChoice, own: FilterChoice, router: FilterChoice) = choices.entries
+    assertEquals(ProjectFilter.All, all.picks)
+    assertEquals(ProjectFilter.All, all.toggles)
+    assertEquals(ProjectFilter.Only(setOf("router")), router.picks)
+    assertEquals(ProjectFilter.Only(setOf("kstore", "router")), router.toggles)
+    assertEquals(ProjectFilter.All, own.toggles, "Toggling the last one out is all projects")
+    val fromAll: FilterChoices = filterChoices(projects, ProjectFilter.All)
+    assertEquals(ProjectFilter.Only(setOf("nuget")), fromAll.entries[3].toggles)
+    val both: ProjectFilter = ProjectFilter.Only(setOf("kstore", "router"))
+    assertEquals(kstore, toggleProjectScopeKey(both, "router"))
+  }
+
+  @Test
+  fun `stored scope keys drop gone projects only once projects have loaded`() {
+    val projects: List<Project> = listOf(project("kstore", "KStore"), project("router", "Router"))
+    val stored: List<String> = listOf("router", "gone", "router", "kstore")
+    val loaded: List<String> = resolveSidebarProjectScopeKeys(projects, stored, true)
+    assertEquals(listOf("router", "kstore"), loaded)
+    val loading: List<String> = resolveSidebarProjectScopeKeys(projects, stored, false)
+    assertEquals(listOf("router", "gone", "kstore"), loading)
   }
 
   @Test
@@ -340,11 +373,10 @@ class SidebarLogicTest {
       project("kstore", "KStore"), project("router", "Router"), project("nuget", "NuGet"),
     )
     val open: FilterChoices = filterChoices(projects, ProjectFilter.All, setOf("nuget"))
-    assertEquals(listOf("All projects", "NuGet", "KStore", "Router"), open.labels)
-    assertEquals(ProjectFilter.Only(setOf("nuget")), open.filters[1])
+    val labels: List<String> = open.entries.map { it.label }
+    assertEquals(listOf("All projects", "NuGet", "KStore", "Router"), labels)
+    assertEquals(ProjectFilter.Only(setOf("nuget")), open.entries[1].picks)
     assertEquals(2, open.divider)
-    val router: ProjectFilter = ProjectFilter.Only(setOf("router"))
-    assertEquals(3, filterChoices(projects, router, setOf("nuget")).selected)
     assertNull(filterChoices(projects, ProjectFilter.All).divider, "Nothing open, no divider")
     val everything: Set<String> = setOf("kstore", "router", "nuget")
     assertNull(filterChoices(projects, ProjectFilter.All, everything).divider, "Nothing else")

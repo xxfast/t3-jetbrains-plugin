@@ -3,6 +3,7 @@ package io.github.xxfast.t3code.plugin.ide
 import com.intellij.openapi.project.Project as IdeProject
 import com.intellij.openapi.roots.ProjectRootManager
 import io.github.xxfast.t3code.plugin.ui.ProjectFilter
+import io.github.xxfast.t3code.plugin.ui.resolveSidebarProjectScopeKeys
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Thread
 import java.io.IOException
@@ -72,22 +73,22 @@ fun pathOf(path: String): Path? =
 /**
  * The Sidebar's filter for a window that has [open] open, from [openProjects]: a [persisted]
  * choice (`null` when the user hasn't made one, empty for an explicit "All projects"), else the
- * open projects, else all. A persisted choice whose projects are all gone falls through.
+ * open projects, else all. The choice goes through [resolveSidebarProjectScopeKeys], which drops
+ * gone projects once [projects] has loaded; one whose projects are all gone reads as all
+ * projects, as upstream's does (Sidebar.tsx). The stored ids stay as they are, so a project that
+ * comes back is picked again.
  */
 fun matchProjects(
   persisted: List<String>?,
   projects: List<Project>,
   open: Set<String>,
 ): ProjectFilter {
-  val known: Set<String> = projects.mapTo(HashSet()) { it.id }
-  when {
-    persisted == null -> Unit
-    persisted.isEmpty() -> return ProjectFilter.All
-    projects.isEmpty() -> return ProjectFilter.Only(persisted.toSet())
-    else -> persisted.filter { it in known }.takeIf { it.isNotEmpty() }
-      ?.let { return ProjectFilter.Only(it.toSet()) }
+  if (persisted == null) {
+    return if (open.isNotEmpty()) ProjectFilter.Only(open) else ProjectFilter.All
   }
-  return if (open.isNotEmpty()) ProjectFilter.Only(open) else ProjectFilter.All
+  val loaded: Boolean = projects.isNotEmpty()
+  val keys: List<String> = resolveSidebarProjectScopeKeys(projects, persisted, loaded)
+  return if (keys.isEmpty()) ProjectFilter.All else ProjectFilter.Only(keys.toSet())
 }
 
 /**
