@@ -64,8 +64,10 @@ How it fits together:
   it's what makes screenshot tests possible later.
 - A scenario is a folder in `harness/scenarios/`; the fixture client merges every `*.json` in it.
   `default/` is the thread list plus one demo thread per thread-level state (`running.json`,
-  `waiting-approval.json`, `waiting-question.json`, `unknown-items.json`, `many-items.json`,
-  `unread.json`, `snoozed.json` with one sleeping and one woken, `background-work.json` with a
+  `waiting-approval.json`, `waiting-question.json`, `unknown-items.json`, `many-items.json`
+  (its file changes 2 to 6 are the diff shapes `getTurnItem` answers: a raw add, a raw delete,
+  a patch that omits one of three files, a truncated hunk, content without a diff; the fixture
+  client strips diffs from the thread stream like the server), `unread.json`, `snoozed.json` with one sleeping and one woken, `background-work.json` with a
   settled run whose provider still waits on two commands and a subagent (the background work
   banner above the composer), `worktree-setup.json` with a
   first turn whose worktree is still being prepared, `skills.json` with provider skills and a

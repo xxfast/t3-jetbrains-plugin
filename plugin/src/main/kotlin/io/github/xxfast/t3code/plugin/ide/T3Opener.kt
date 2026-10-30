@@ -29,10 +29,13 @@ import io.github.xxfast.t3code.plugin.review.ADD_REVIEW_COMMENT
 import io.github.xxfast.t3code.plugin.review.T3DiffSource
 import io.github.xxfast.t3code.plugin.review.T3_DIFF_SOURCE
 import io.github.xxfast.t3code.plugin.ui.commentFilePath
+import io.github.xxfast.t3code.plugin.ui.turnItemDetailRevision
 import io.github.xxfast.t3code.protocol.FileContents
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.ThreadView
+import io.github.xxfast.t3code.protocol.TurnItemSource
+import io.github.xxfast.t3code.protocol.sourceOf
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.nio.file.Path
 import kotlin.coroutines.cancellation.CancellationException
@@ -81,32 +84,83 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
     }
   }
 
-  /** Before and after of one `file_change`. */
+  /**
+   * One `file_change`'s patch. The thread stream strips its diff, so the item comes whole from
+   * `orchestration.getTurnItem` first, as upstream's diff panel does for a tool call
+   * (`apps/web/src/components/DiffPanel.tsx`).
+   */
   fun showDiff(view: ThreadView, change: TurnItem.FileChange) {
     launchSafely("Couldn't show the diff for ${change.fileName}") {
-      val run: Run? = view.runs.find { it.id == change.runId }
-      val where: Where = where(view, change.fileName)
-      val local: VirtualFile? = where.local?.let(::findLocal)
-      val oldStr: String? = change.oldStr
-      val newStr: String? = change.newStr
-      val diffStr: String? = change.diffStr
+      // What resolveToolCallDiffTarget (apps/web/src/diffPanelStore.ts) resolves the row to
+      val source: TurnItemSource = view.sourceOf(change)
+      val revision: String = turnItemDetailRevision(change)
+      val detail: TurnItem.FileChange? =
+        client.turnItem(source.threadId, source.itemId, revision) as? TurnItem.FileChange
+      if (detail == null) {
+        notify("No diff for ${change.fileName}", NotificationType.INFORMATION)
+        return@launchSafely
+      }
+      val diff: ToolCallDiff = detail.toolCallDiff()
+      val patch: String? = diff.patch
+      val files: List<FilePatch> = patch?.let { parsePatch(it.trim()) }.orEmpty()
+      val run: Run? = view.runs.find { it.id == detail.runId }
+      val notes: MutableList<String> = mutableListOf()
+      if (diff.truncated) {
+        notes += "This preview exceeds the size limit. Changes shown are incomplete."
+      }
+      val recorded: Int = detail.changes?.size ?: 0
+      val omitted: Int = if (files.isNotEmpty()) maxOf(0, recorded - files.size) else 0
+      if (omitted > 0) {
+        notes +=
+          "This tool call changed $recorded files. The recorded patch omits $omitted of them."
+      }
       when {
-        oldStr != null || newStr != null -> {
-          val current: String? = local?.let { file -> text(file) }
-          val before: String? = current?.let { editBefore(it, oldStr, newStr) }
-          val sides: Sides = if (before != null) {
-            Sides(before.takeIf { oldStr != null }, current, afterIsBase = true)
-          } else {
-            Sides(oldStr, newStr, excerpt = true)
-          }
-          val request: SimpleDiffRequest =
-            request(view, change.fileName, sides, local, run, where.cwd)
-          withContext(Dispatchers.EDT) { DiffManager.getInstance().showDiff(project, request) }
+        files.isNotEmpty() -> showFiles(view, files, run)
+        diff.content.isNotEmpty() -> showContent(view, detail.fileName, diff.content, run)
+        !patch.isNullOrBlank() -> {
+          notes += "Unsupported diff format. Showing raw patch."
+          showRawPatch(detail.fileName, patch)
         }
 
-        !diffStr.isNullOrBlank() -> showPatch(view, diffStr, change.fileName, change.fileName, run)
-        else -> notify("No diff for ${change.fileName}", NotificationType.INFORMATION)
+        else -> notes += "No diff for ${detail.fileName}"
       }
+      if (notes.isNotEmpty()) notify(notes.joinToString(" "), NotificationType.INFORMATION)
+    }
+  }
+
+  /**
+   * What the provider recorded without a diff, as two sides. With the file on this disk the
+   * edit is put back into it, so the viewer shows the whole file; otherwise just the recorded
+   * text.
+   */
+  private suspend fun showContent(
+    view: ThreadView,
+    path: String,
+    content: List<RecordedContent>,
+    run: Run?,
+  ) {
+    val oldStr: String? = content.find { it.label == RECORDED_CONTENT_BEFORE }?.text
+    val newStr: String? = content.find { it.label == RECORDED_CONTENT_AFTER }?.text
+    val where: Where = where(view, path)
+    val local: VirtualFile? = where.local?.let(::findLocal)
+    val current: String? = local?.let { file -> text(file) }
+    val before: String? = current?.let { editBefore(it, oldStr, newStr) }
+    val sides: Sides = if (before != null) {
+      Sides(before.takeIf { oldStr != null }, current, afterIsBase = true)
+    } else {
+      Sides(oldStr, newStr, excerpt = true)
+    }
+    val request: SimpleDiffRequest = request(view, path, sides, local, run, where.cwd)
+    withContext(Dispatchers.EDT) { DiffManager.getInstance().showDiff(project, request) }
+  }
+
+  /** A patch the diff viewer can't read, as text in a read-only editor tab. */
+  private suspend fun showRawPatch(path: String, patch: String) {
+    withContext(Dispatchers.EDT) {
+      val name = "${fileName(path)}.diff"
+      val type: FileType = FileTypeManager.getInstance().getFileTypeByFileName(name)
+      val file: LightVirtualFile = LightVirtualFile(name, type, patch).apply { isWritable = false }
+      OpenFileDescriptor(project, file).navigate(true)
     }
   }
 
@@ -114,22 +168,17 @@ class T3Opener(private val project: Project, private val scope: CoroutineScope) 
   fun showRunDiff(view: ThreadView, run: Run) {
     launchSafely("Couldn't show the diff for run ${run.ordinal}") {
       val patch: String = client.turnDiff(view.thread.id, run.ordinal - 1, run.ordinal)
-      showPatch(view, patch, fallbackPath = null, label = "run ${run.ordinal}", run = run)
+      val files: List<FilePatch> = parsePatch(patch)
+      if (files.isEmpty()) {
+        notify("No changes in run ${run.ordinal}", NotificationType.INFORMATION)
+        return@launchSafely
+      }
+      showFiles(view, files, run)
     }
   }
 
-  private suspend fun showPatch(
-    view: ThreadView,
-    patch: String,
-    fallbackPath: String?,
-    label: String,
-    run: Run?,
-  ) {
-    val files: List<FilePatch> = parsePatch(patch, fallbackPath)
-    if (files.isEmpty()) {
-      notify("No changes in $label", NotificationType.INFORMATION)
-      return
-    }
+  /** One diff viewer step per file. */
+  private suspend fun showFiles(view: ThreadView, files: List<FilePatch>, run: Run?) {
     val requests: List<SimpleDiffRequest> = files.map { file ->
       val where: Where = where(view, file.path)
       val local: VirtualFile? = where.local?.let(::findLocal)

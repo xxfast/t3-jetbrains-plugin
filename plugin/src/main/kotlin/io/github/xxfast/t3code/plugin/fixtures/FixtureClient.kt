@@ -204,7 +204,9 @@ class FixtureClient(
     .flatMapLatest { (scenario, created) ->
       val thread: Thread? = scenario.threads.find { it.id == id } ?: created
       if (thread == null) emptyFlow()
-      else combine(replay(thread, scenario), overlay) { base, overlay -> overlay.over(base) }
+      else combine(replay(thread, scenario), overlay) { base, overlay ->
+        projectForWire(overlay.over(base))
+      }
     }
 
   private fun replay(thread: Thread, scenario: Scenario): Flow<ThreadView> = flow {
@@ -308,6 +310,10 @@ class FixtureClient(
   override suspend fun turnDiff(threadId: String, fromTurn: Long, toTurn: Long): String = PATCH
 
   override suspend fun fullThreadDiff(threadId: String, toTurn: Long): String = PATCH
+
+  /** The scenario's item whole, what [thread] strips for the wire. */
+  override suspend fun turnItem(threadId: String, itemId: String, revision: String?): TurnItem? =
+    itemsOf(overlay.value, threadId).find { it.id == itemId }
 
   override suspend fun dispatch(command: OrchestrationV2Command): Long {
     val now: String = Instant.now().toString()

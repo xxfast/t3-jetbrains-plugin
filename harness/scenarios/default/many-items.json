@@ -243,9 +243,15 @@
         "completedAt": "2026-10-19T06:05:30.000Z",
         "updatedAt": "2026-10-19T06:05:30.000Z",
         "fileName": "kstore-storage/src/commonTest/kotlin/Case2Test.kt",
-        "additions": 3,
-        "deletions": 2,
-        "diffStr": "@@ -3,2 +3,2 @@\n-  val expected = 2\n+  val expected: Int = 2\n"
+        "additions": 4,
+        "deletions": 0,
+        "diffStr": "package io.github.xxfast.kstore\n\nclass Case2Test {\n}\n",
+        "changes": [
+          {
+            "operation": "add",
+            "path": "kstore-storage/src/commonTest/kotlin/Case2Test.kt"
+          }
+        ]
       },
       {
         "type": "assistant_message",
@@ -299,9 +305,15 @@
         "completedAt": "2026-10-19T06:07:30.000Z",
         "updatedAt": "2026-10-19T06:07:30.000Z",
         "fileName": "kstore-test/src/commonTest/kotlin/Case3Test.kt",
-        "additions": 4,
-        "deletions": 0,
-        "diffStr": "@@ -4,2 +4,2 @@\n-  val expected = 3\n+  val expected: Int = 3\n"
+        "additions": 0,
+        "deletions": 3,
+        "diffStr": "// Replaced by Case3Test\nclass LegacyCase3Test {\n}\n",
+        "changes": [
+          {
+            "operation": "delete",
+            "path": "kstore-test/src/commonTest/kotlin/Case3Test.kt"
+          }
+        ]
       },
       {
         "type": "assistant_message",
@@ -354,10 +366,24 @@
         "startedAt": "2026-10-19T06:09:30.000Z",
         "completedAt": "2026-10-19T06:09:30.000Z",
         "updatedAt": "2026-10-19T06:09:30.000Z",
-        "fileName": "kstore/src/commonTest/kotlin/Case4Test.kt",
-        "additions": 5,
-        "deletions": 1,
-        "diffStr": "@@ -5,2 +5,2 @@\n-  val expected = 4\n+  val expected: Int = 4\n"
+        "fileName": "kstore/src/commonMain/kotlin/io/github/xxfast/kstore/KStore.kt",
+        "additions": 2,
+        "deletions": 2,
+        "diffStr": "diff --git a/kstore/src/commonMain/kotlin/io/github/xxfast/kstore/KStore.kt b/kstore/src/commonMain/kotlin/io/github/xxfast/kstore/KStore.kt\n--- a/kstore/src/commonMain/kotlin/io/github/xxfast/kstore/KStore.kt\n+++ b/kstore/src/commonMain/kotlin/io/github/xxfast/kstore/KStore.kt\n@@ -1,2 +1,2 @@\n-public class KStore<T>\n+public class KStore<T : Any>\n \ndiff --git a/kstore/src/commonMain/kotlin/io/github/xxfast/kstore/Codec.kt b/kstore/src/commonMain/kotlin/io/github/xxfast/kstore/Codec.kt\n--- a/kstore/src/commonMain/kotlin/io/github/xxfast/kstore/Codec.kt\n+++ b/kstore/src/commonMain/kotlin/io/github/xxfast/kstore/Codec.kt\n@@ -1,2 +1,2 @@\n-public interface Codec<T>\n+public interface Codec<T : Any>\n \n",
+        "changes": [
+          {
+            "operation": "update",
+            "path": "kstore/src/commonMain/kotlin/io/github/xxfast/kstore/KStore.kt"
+          },
+          {
+            "operation": "update",
+            "path": "kstore/src/commonMain/kotlin/io/github/xxfast/kstore/Codec.kt"
+          },
+          {
+            "operation": "update",
+            "path": "kstore/src/commonMain/kotlin/io/github/xxfast/kstore/Extensions.kt"
+          }
+        ]
       },
       {
         "type": "assistant_message",
@@ -413,7 +439,7 @@
         "fileName": "kstore-file/src/commonTest/kotlin/Case5Test.kt",
         "additions": 1,
         "deletions": 2,
-        "diffStr": "@@ -6,2 +6,2 @@\n-  val expected = 5\n+  val expected: Int = 5\n"
+        "diffStr": "@@ -6,2 +6,2 @@\n-  val expected = 5\n+  val expected: Int = 5\n… output truncated for transport"
       },
       {
         "type": "assistant_message",
@@ -469,7 +495,14 @@
         "fileName": "kstore-storage/src/commonTest/kotlin/Case6Test.kt",
         "additions": 2,
         "deletions": 0,
-        "diffStr": "@@ -7,2 +7,2 @@\n-  val expected = 6\n+  val expected: Int = 6\n"
+        "oldStr": "  val expected = 6\n",
+        "newStr": "  val expected: Int = 6\n",
+        "changes": [
+          {
+            "operation": "update",
+            "path": "kstore-storage/src/commonTest/kotlin/Case6Test.kt"
+          }
+        ]
       },
       {
         "type": "assistant_message",

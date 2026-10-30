@@ -893,6 +893,23 @@ class FixtureClientTest {
       .jsonObject.getValue("items").jsonObject.getValue(THREAD).jsonArray
       .map { JsonObject(it.jsonObject - "after") }
 
+  @Test
+  fun `the thread stream strips file change diffs, getTurnItem answers them whole`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+
+    val view: ThreadView = client.thread(MANY).first()
+    val streamed: TurnItem.FileChange =
+      assertIs(view.items.first { it is TurnItem.FileChange })
+    assertEquals(null, streamed.diffStr)
+    assertEquals(null, streamed.oldStr)
+    assertEquals(null, streamed.newStr)
+
+    val whole: TurnItem.FileChange =
+      assertIs(client.turnItem(MANY, streamed.id, revision = null))
+    assertTrue(!whole.diffStr.isNullOrBlank(), "getTurnItem keeps the diff")
+    assertEquals(null, client.turnItem(MANY, "missing", revision = null))
+  }
+
   private fun retitled(thread: JsonObject, title: String): JsonObject =
     JsonObject(thread + ("title" to JsonPrimitive(title)))
 

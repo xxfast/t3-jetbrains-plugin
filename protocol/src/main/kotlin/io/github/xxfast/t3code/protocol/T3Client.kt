@@ -107,6 +107,13 @@ public interface T3Client {
   /** `orchestration.getFullThreadDiff`: everything up to run [toTurn] as a unified patch. */
   public suspend fun fullThreadDiff(threadId: String, toTurn: Long): String
 
+  /**
+   * `orchestration.getTurnItem` (`orchestration:read`): one item whole, with what the thread
+   * stream strips (a file change's `diffStr`, `oldStr` and `newStr`). [revision] is upstream's
+   * `turnItemDetailRevision`. Null when the server has no such item.
+   */
+  public suspend fun turnItem(threadId: String, itemId: String, revision: String?): TurnItem?
+
   /** `orchestration.dispatchCommand`. Returns the server's sequence. */
   public suspend fun dispatch(command: OrchestrationV2Command): Long
 

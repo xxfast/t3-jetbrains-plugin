@@ -27,6 +27,11 @@ data class Sides(
 private val HUNK_HEADER: Regex = Regex("""^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@.*""")
 private val GIT_HEADER: Regex = Regex("""^diff --git a/(.+) b/(.+)$""")
 
+// Git C-quotes a path with special characters, and upstream's `toolCallPatch` JSON-quotes every
+// path it writes: `diff --git "a/file with spaces.ts" "b/file with spaces.ts"`
+private val QUOTED_GIT_HEADER: Regex =
+  Regex("""^diff --git ("(?:[^"\\]|\\.)*"|\S+) ("(?:[^"\\]|\\.)*"|\S+)$""")
+
 /**
  * Parses a unified patch: a full `git diff` with any number of files, or bare hunks for one file,
  * in which case [fallbackPath] names it. Not a general patch tool, just enough to show a diff.
@@ -48,13 +53,13 @@ fun parsePatch(text: String, fallbackPath: String? = null): List<FilePatch> {
   var i = 0
   while (i < lines.size) {
     val line: String = lines[i]
-    val git: MatchResult? = GIT_HEADER.matchEntire(line)
+    val git: Pair<String?, String?>? = gitHeader(line)
     val header: MatchResult? = HUNK_HEADER.matchEntire(line)
     when {
       git != null -> {
         flush()
-        oldPath = git.groupValues[1]
-        newPath = git.groupValues[2]
+        oldPath = git.first
+        newPath = git.second
         started = true
       }
 
@@ -104,13 +109,82 @@ fun parsePatch(text: String, fallbackPath: String? = null): List<FilePatch> {
   return patches
 }
 
+/** A `diff --git` line's old and new path, or null when [line] isn't one. */
+private fun gitHeader(line: String): Pair<String?, String?>? {
+  val quoted: MatchResult? = QUOTED_GIT_HEADER.matchEntire(line)
+  if (quoted != null && quoted.groupValues.drop(1).any { path -> path.startsWith('"') }) {
+    return patchPath(quoted.groupValues[1]) to patchPath(quoted.groupValues[2])
+  }
+  val plain: MatchResult = GIT_HEADER.matchEntire(line) ?: return null
+  return plain.groupValues[1] to plain.groupValues[2]
+}
+
 private fun patchPath(raw: String): String? {
-  val path: String = raw.substringBefore('\t').trim()
+  val trimmed: String = raw.trim()
+  val path: String =
+    if (trimmed.startsWith('"')) unquote(trimmed) else trimmed.substringBefore('\t').trim()
   return when {
     path == "/dev/null" -> null
     path.startsWith("a/") || path.startsWith("b/") -> path.substring(2)
     else -> path
   }
+}
+
+/**
+ * A quoted patch path without its quotes: the quoted part of [raw], with Git's C escapes
+ * (`\\`, `\"`, `\t`, octal bytes) and JSON's (`\uXXXX`) undone.
+ */
+private fun unquote(raw: String): String {
+  val bytes = java.io.ByteArrayOutputStream()
+  // Characters wait here until an octal byte or the end, so a surrogate pair encodes as one
+  val pending = StringBuilder()
+  fun text(value: String) {
+    pending.append(value)
+  }
+  fun flush() {
+    bytes.write(pending.toString().toByteArray(Charsets.UTF_8))
+    pending.clear()
+  }
+  var i = 1
+  while (i < raw.length) {
+    val c: Char = raw[i]
+    when {
+      c == '"' -> break
+      c != '\\' || i + 1 >= raw.length -> text(c.toString())
+      else -> {
+        val next: Char = raw[++i]
+        when {
+          next in '0'..'7' -> {
+            val octal: String = raw.substring(i).takeWhile { it in '0'..'7' }.take(3)
+            flush()
+            bytes.write(octal.toInt(8))
+            i += octal.length - 1
+          }
+
+          next == 'u' && i + 4 < raw.length -> {
+            text(raw.substring(i + 1, i + 5).toInt(16).toChar().toString())
+            i += 4
+          }
+
+          else -> text(
+            when (next) {
+              'n' -> "\n"
+              't' -> "\t"
+              'r' -> "\r"
+              'b' -> "\b"
+              'f' -> "\u000C"
+              'a' -> "\u0007"
+              'v' -> "\u000B"
+              else -> next.toString()
+            },
+          )
+        }
+      }
+    }
+    i++
+  }
+  flush()
+  return bytes.toString(Charsets.UTF_8)
 }
 
 /** [base] with every hunk applied, or `null` when a hunk's old side isn't found in it. */

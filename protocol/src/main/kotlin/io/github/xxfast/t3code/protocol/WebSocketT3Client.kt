@@ -451,6 +451,19 @@ public class WebSocketT3Client internal constructor(
     return diffOf(call("orchestration.getFullThreadDiff", payload))
   }
 
+  override suspend fun turnItem(threadId: String, itemId: String, revision: String?): TurnItem? {
+    val payload: JsonObject = buildJsonObject {
+      put("threadId", threadId)
+      put("itemId", itemId)
+      if (revision != null) put("revision", revision)
+    }
+    // `{ item: NullOr(OrchestrationV2TurnItem) }`
+    val result: JsonObject = call("orchestration.getTurnItem", payload) as? JsonObject
+      ?: throw T3Exception.Transport("No answer from orchestration.getTurnItem")
+    val item: JsonElement? = result["item"]
+    return if (item == null || item is JsonNull) null else decode(TurnItem.serializer(), item)
+  }
+
   private suspend fun run() {
     var attempt = 0
     while (true) {
@@ -545,6 +558,14 @@ public class WebSocketT3Client internal constructor(
           val itemId: String = (row["item"] as? JsonObject)?.string("id")
             ?: return@mapNotNull null
           itemId to (row.string("visibility") ?: "unknown")
+        }.toMap(),
+        itemSources = visible.mapNotNull { entry ->
+          val row: JsonObject = entry as? JsonObject ?: return@mapNotNull null
+          val itemId: String = (row["item"] as? JsonObject)?.string("id")
+            ?: return@mapNotNull null
+          val sourceThreadId: String = row.string("sourceThreadId") ?: return@mapNotNull null
+          val sourceItemId: String = row.string("sourceItemId") ?: return@mapNotNull null
+          itemId to TurnItemSource(sourceThreadId, sourceItemId)
         }.toMap(),
         runtimeRequests = decodeEach(RuntimeRequest.serializer(), projection["runtimeRequests"]),
         providerSessions =

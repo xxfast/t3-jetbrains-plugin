@@ -110,7 +110,20 @@ public data class ThreadView(
   val sequence: Long = 0,
   /** Projected row visibility, so inherited resources can't be answered from a fork. */
   val itemVisibility: Map<String, String> = emptyMap(),
+  /** Each projected row's `sourceThreadId` and `sourceItemId`, by item id. */
+  val itemSources: Map<String, TurnItemSource> = emptyMap(),
 )
+
+/** Where a projected row's item lives: what `orchestration.getTurnItem` is asked for. */
+public data class TurnItemSource(val threadId: String, val itemId: String)
+
+/**
+ * [item]'s row source. A row the snapshot didn't carry came from a `turn-item.updated` event,
+ * which only carries this thread's own items; the server projects those as the item's
+ * `threadId` and `id` (`activeLocalTurnItems` in `apps/server/.../ProjectionStore.ts`).
+ */
+public fun ThreadView.sourceOf(item: TurnItem): TurnItemSource =
+  itemSources[item.id] ?: TurnItemSource(item.threadId, item.id)
 
 /** `server.getConfig`, the parts the plugin uses. */
 public data class ServerInfo(
