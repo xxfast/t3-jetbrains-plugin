@@ -319,16 +319,3 @@ private fun KbdGroup(keys: List<String>, label: String) {
     Text(label, style = small(), color = JewelTheme.globalColors.text.info)
   }
 }
-
-@Composable
-private fun Kbd(key: String) {
-  Box(
-    modifier = Modifier
-      .clip(RoundedCornerShape(4.dp))
-      .background(subtle(0.08f))
-      .padding(horizontal = 5.dp, vertical = 1.dp),
-    contentAlignment = Alignment.Center,
-  ) {
-    Text(key, style = small(), color = JewelTheme.globalColors.text.info)
-  }
-}

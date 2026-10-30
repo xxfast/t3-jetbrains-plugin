@@ -4,16 +4,21 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldLineLimits
@@ -32,8 +37,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
@@ -42,12 +50,22 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.xxfast.t3code.protocol.generated.ProviderApprovalOption
 import io.github.xxfast.t3code.protocol.generated.UserInputQuestion
 import kotlinx.coroutines.delay
 import org.jetbrains.jewel.foundation.theme.JewelTheme
+import org.jetbrains.jewel.ui.component.CheckboxState
 import org.jetbrains.jewel.ui.component.CircularProgressIndicator
 import org.jetbrains.jewel.ui.component.DefaultButton
 import org.jetbrains.jewel.ui.component.Icon
@@ -55,10 +73,18 @@ import org.jetbrains.jewel.ui.component.IconActionButton
 import org.jetbrains.jewel.ui.component.Link
 import org.jetbrains.jewel.ui.component.OutlinedButton
 import org.jetbrains.jewel.ui.component.PopupMenu
+import org.jetbrains.jewel.ui.component.RadioButtonState
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.TextArea
 import org.jetbrains.jewel.ui.component.Tooltip
+import org.jetbrains.jewel.ui.component.styling.CheckboxStyle
+import org.jetbrains.jewel.ui.component.styling.RadioButtonStyle
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
+import org.jetbrains.jewel.ui.painter.hints.Selected
+import org.jetbrains.jewel.ui.painter.hints.Stateful
+import org.jetbrains.jewel.ui.painter.rememberResourcePainterProvider
+import org.jetbrains.jewel.ui.theme.checkboxStyle
+import org.jetbrains.jewel.ui.theme.radioButtonStyle
 
 /** What the pending panels can do. The host wires these to the controller. */
 class PendingActions(
@@ -305,16 +331,14 @@ fun ComposerPendingUserInputPanel(
     }
     if (question != null) {
       Text(question.question)
-      if (question.multiSelect == true) {
-        val hint = "Select one or more options."
-        Text(hint, style = small(), color = JewelTheme.globalColors.text.info)
-      }
       // A typed answer wins, so no option shows as picked while there is one
       val custom: Boolean = draft?.customAnswer?.isNotBlank() == true
-      Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+      // Rows bleed left so the marks align with the question text, as upstream's `-ms-1.5`
+      Column(Modifier.bleedStart(OPTION_INSET)) {
         question.options.forEachIndexed { index, option ->
           OptionRow(
             option = option,
+            multiSelect = question.multiSelect == true,
             selected = !custom && option.answerValue in draft?.selected.orEmpty(),
             shortcut = (index + 1).takeIf { it <= 9 },
             enabled = answerable,
@@ -352,37 +376,105 @@ fun ComposerPendingUserInputPanel(
   }
 }
 
+/** How far an option's hover fill reaches past its mark, upstream's `ps-1.5`. */
+private val OPTION_INSET = 6.dp
+
+/**
+ * One option of upstream's `ComposerPendingUserInputCard`: a radio (a checkbox for multi-select)
+ * on the label's first line, the label dim until picked, and the digit as a key cap in a column
+ * of its own. The row is the click target; the marks only show state.
+ */
 @Composable
 private fun OptionRow(
   option: UserInputQuestion.Option,
+  multiSelect: Boolean,
   selected: Boolean,
   shortcut: Int?,
   enabled: Boolean,
   onClick: () -> Unit,
 ) {
-  val fill: Color = if (selected) subtle(0.07f) else Color.Transparent
+  val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
+  val hovered: Boolean by interactions.collectIsHoveredAsState()
+  val fill: Color = if (!selected && enabled && hovered) subtle(0.05f) else Color.Transparent
+  val label: Color = if (selected) JewelTheme.globalColors.text.normal else subtle(0.7f)
+  // Upstream's `h-5` slots: one label line tall, so the mark and key stay on its first line
+  val measurer: TextMeasurer = rememberTextMeasurer()
+  val style: TextStyle = JewelTheme.defaultTextStyle
+  val density: Density = LocalDensity.current
+  val line: Dp = remember(measurer, style, density) {
+    with(density) { measurer.measure("0", style).size.height.toDp() }
+  }
   Row(
     modifier = Modifier
       .fillMaxWidth()
+      .alpha(if (enabled) 1f else 0.5f)
       .clip(RoundedCornerShape(6.dp))
       .background(fill)
-      .clickable(enabled = enabled, onClick = onClick)
-      .padding(horizontal = 10.dp, vertical = 6.dp),
-    horizontalArrangement = Arrangement.spacedBy(8.dp),
-    verticalAlignment = Alignment.CenterVertically,
+      .hoverable(interactions)
+      .clickable(
+        interactionSource = interactions,
+        indication = null,
+        enabled = enabled,
+        onClick = onClick,
+      )
+      .padding(start = OPTION_INSET, top = 6.dp, bottom = 6.dp),
+    horizontalArrangement = Arrangement.spacedBy(10.dp),
   ) {
+    Box(Modifier.height(line), contentAlignment = Alignment.Center) {
+      if (multiSelect) CheckboxMark(checked = selected) else OptionRadio(checked = selected)
+    }
     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-      Text(option.label)
+      Text(option.label, color = label)
       if (option.description.isNotEmpty() && option.description != option.label) {
         Text(option.description, style = small(), color = JewelTheme.globalColors.text.info)
       }
     }
-    if (selected) {
-      Icon(AllIconsKeys.Actions.Checked, contentDescription = "Selected")
-    } else if (shortcut != null) {
-      Text("$shortcut", style = small(), color = JewelTheme.globalColors.text.info)
+    if (shortcut != null) {
+      Box(Modifier.width(28.dp).heightIn(min = line), contentAlignment = Alignment.Center) {
+        Kbd("$shortcut")
+      }
     }
   }
+}
+
+/**
+ * Jewel's radio, painted without its click handling. Upstream's `OptionRadio` draws the look of
+ * `ui/radio-group` for the same reason: a real radio group's arrow keys would pick options and
+ * trip the single-select auto-advance.
+ */
+@Composable
+private fun OptionRadio(checked: Boolean) {
+  val style: RadioButtonStyle = JewelTheme.radioButtonStyle
+  val state: RadioButtonState = RadioButtonState.of(selected = checked)
+  val painter: Painter by rememberResourcePainterProvider(style.icons.radioButton)
+    .getPainter(Selected(state), Stateful(state))
+  Box(Modifier.size(style.metrics.radioButtonSize).paint(painter, alignment = Alignment.TopStart))
+}
+
+/** Jewel's checkbox, painted without its click handling, as upstream's `CheckboxMark`. */
+@Composable
+private fun CheckboxMark(checked: Boolean) {
+  val style: CheckboxStyle = JewelTheme.checkboxStyle
+  val state: CheckboxState = CheckboxState.of(ToggleableState(checked))
+  val painter: Painter by rememberResourcePainterProvider(style.icons.checkbox)
+    .getPainter(Selected(checked), Stateful(state))
+  Box(Modifier.size(style.metrics.checkboxSize).paint(painter, alignment = Alignment.TopStart))
+}
+
+/** Widens to the left by [start], like a negative `margin-inline-start`. */
+private fun Modifier.bleedStart(start: Dp): Modifier = layout { measurable, constraints ->
+  val bleed: Int = start.roundToPx()
+  if (!constraints.hasBoundedWidth) {
+    val placeable: Placeable = measurable.measure(constraints)
+    return@layout layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+  }
+  val placeable: Placeable = measurable.measure(
+    constraints.copy(
+      minWidth = constraints.minWidth + bleed,
+      maxWidth = constraints.maxWidth + bleed,
+    ),
+  )
+  layout(placeable.width - bleed, placeable.height) { placeable.place(-bleed, 0) }
 }
 
 /** The free-text answer. Enter moves on when Next would, Shift+Enter is a newline. */

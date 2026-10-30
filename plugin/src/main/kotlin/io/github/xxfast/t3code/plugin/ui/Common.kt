@@ -1,13 +1,16 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -50,3 +53,17 @@ fun accent(): Color = JewelTheme.globalColors.outlines.focused
 /** Int UI's small text, for captions and secondary lines. */
 @Composable
 fun small(): TextStyle = JewelTheme.typography.small
+
+/** Upstream's `Kbd` (`ui/kbd.tsx`): a muted key cap on a faint fill. */
+@Composable
+fun Kbd(key: String) {
+  Box(
+    modifier = Modifier
+      .clip(RoundedCornerShape(4.dp))
+      .background(subtle(0.08f))
+      .padding(horizontal = 5.dp, vertical = 1.dp),
+    contentAlignment = Alignment.Center,
+  ) {
+    Text(key, style = small(), color = JewelTheme.globalColors.text.info)
+  }
+}
