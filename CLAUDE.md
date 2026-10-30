@@ -69,9 +69,11 @@ How it fits together:
   a patch that omits one of three files, a truncated hunk, content without a diff; the fixture
   client strips diffs from the thread stream like the server), `stopped.json` ending in a run
   the user stopped, `unread.json`, `snoozed.json` with one sleeping and one woken,
-  `background-work.json` with a settled run whose provider still waits on two commands and a
-  subagent (the work line at the end of the timeline), `tasks.json` with `todo_list` updates
-  that land as Tasks rows over `after` delays, `worktree-setup.json` with a
+  `compaction.json` with a user `/compact`, one T3 sent before the cache expired, a stopped one,
+  a failed one and an `onReturn` one compacting over `after` delays, `background-work.json`
+  with a settled run whose provider still waits on two commands and a subagent (the work line
+  at the end of the timeline), `tasks.json` with `todo_list` updates that land as Tasks rows
+  over `after` delays, `worktree-setup.json` with a
   first turn whose worktree is still being prepared, `skills.json` with provider skills and a
   workspace snapshot for the `$` menu, `files.json` with the files and folders `@` searches,
   `lineage.json` with a fork that has a parent, a fork of its own, running, finished and failed

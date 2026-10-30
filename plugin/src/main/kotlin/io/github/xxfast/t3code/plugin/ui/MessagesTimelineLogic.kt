@@ -4,6 +4,7 @@ import io.github.xxfast.t3code.protocol.PlanStep
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.generated.CheckpointFileSummary
 import io.github.xxfast.t3code.protocol.generated.TurnItem
+import io.github.xxfast.t3code.protocol.generated.UserInputAttachmentAnswerPayload
 import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
 import java.time.Duration
 import java.time.Instant
@@ -13,6 +14,7 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import kotlin.math.roundToLong
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -239,16 +241,95 @@ const val CONTEXT_COMPACTION: String = "context-compaction"
 private const val WARNING: String = "runtime.warning"
 private const val RUNTIME_ERROR: String = "runtime.error"
 
-/** `contextCompactionLabel`, presentation.ts:51. */
+/** `contextCompactionTokenCounts`'s answer, formatted. */
+data class CompactionTokenCounts(val before: String, val after: String)
+
+/** `contextCompactionTokenCounts`, presentation.ts:58. */
+fun contextCompactionTokenCounts(item: TurnItem.Compaction): CompactionTokenCounts? {
+  if (item.status == "running") return null
+  val before: Long = item.beforeTokenCount ?: return null
+  val after: Long = item.afterTokenCount ?: return null
+  return CompactionTokenCounts(formatTokens(before), formatTokens(after))
+}
+
+/** `contextCompactionLabel`, presentation.ts:71. */
 fun contextCompactionLabel(item: TurnItem.Compaction): String {
-  val before: Long? = item.beforeTokenCount
-  val after: Long? = item.afterTokenCount
-  return when {
-    item.status == "running" -> "Compacting context"
-    before != null && after != null ->
-      "Context compacted ${formatTokens(before)} → ${formatTokens(after)} tokens"
-    else -> "Context compacted"
+  if (item.status == "failed") return "Context compaction failed"
+  if (item.status == "cancelled" || item.status == "interrupted") {
+    return "Context compaction stopped"
   }
+  if (isOrchestrationV2WorkActive(item.status)) return "Compacting context"
+  val tokens: CompactionTokenCounts = contextCompactionTokenCounts(item)
+    ?: return "Context compacted"
+  return "Context compacted ${tokens.before} → ${tokens.after} tokens"
+}
+
+/** `IDLE_COMPACTION_TEXT`, packages/contracts/src/orchestrationV2.ts:517. */
+const val IDLE_COMPACTION_TEXT: String = "/compact"
+
+/**
+ * `isCompactionCommandMessage`, orchestrationV2.ts:529: a prompt that only asks the provider
+ * to compact, so its turn is the compaction itself.
+ */
+fun isCompactionCommandMessage(item: TurnItem): Boolean = item is TurnItem.UserMessage &&
+  item.text.trim().lowercase() == IDLE_COMPACTION_TEXT && item.attachments.isEmpty()
+
+/**
+ * `idleCompactionOf`, orchestrationV2.ts:569: why T3 Code sent this `/compact` on its own
+ * (`beforeCacheExpires` or `onReturn`), or null for one someone asked for.
+ */
+fun idleCompactionOf(item: TurnItem): String? {
+  if (!isCompactionCommandMessage(item)) return null
+  item as TurnItem.UserMessage
+  if (item.idleCompaction != null) return item.idleCompaction
+  // Servers before `idleCompaction` marked their own as agent-created
+  return if (item.createdBy == "agent" && item.creationSource == "server") {
+    "beforeCacheExpires"
+  } else null
+}
+
+/** `IDLE_COMPACTING_LABELS`, packages/client-runtime/src/userMessage.ts:10. */
+val IDLE_COMPACTING_LABELS: Map<String, String> = mapOf(
+  "beforeCacheExpires" to "Compacting before the cache expires…",
+  "onReturn" to "Compacting…",
+)
+
+/**
+ * `IDLE_COMPACTION_TITLES`, userMessage.ts:16: leads the finished compaction's token counts, in
+ * place of "Context compacted".
+ */
+val IDLE_COMPACTION_TITLES: Map<String, String> = mapOf(
+  "beforeCacheExpires" to "Context automatically compacted before cache expiry",
+  "onReturn" to "Context compacted before sending",
+)
+
+/** `CLAUDE_RESUME_COMPACTION_COMPACT_ANSWER`, packages/shared/src/claudeCompaction.ts:3. */
+const val CLAUDE_RESUME_COMPACTION_COMPACT_ANSWER: String = "Compact and continue"
+
+/** `CLAUDE_RESUME_COMPACTION_QUESTION_PATTERN`, claudeCompaction.ts:16. */
+private val CLAUDE_RESUME_COMPACTION_QUESTION_PATTERN: Regex = Regex(
+  "^This session is (\\d+h \\d+m|\\d+m) old and uses \\d{1,3}(?:,\\d{3})* tokens\\. " +
+    "Compact it before continuing\\?$",
+)
+
+/**
+ * `claudeResumeCompactionAge`, claudeCompaction.ts:27: the session age from an answered resume
+ * question whose answer was to compact, or null. Answers are keyed by question id, and the id
+ * may itself be the question text.
+ */
+fun claudeResumeCompactionAge(questionAnswer: UserInputAttachmentAnswerPayload): String? {
+  for ((id, answer) in questionAnswer.answers) {
+    val question: String = questionAnswer.questionTextById?.get(id) ?: id
+    val age: String? =
+      CLAUDE_RESUME_COMPACTION_QUESTION_PATTERN.find(question)?.groupValues?.get(1)
+    val chosen: List<String?> = when (answer) {
+      is JsonArray -> answer.map { (it as? JsonPrimitive)?.contentOrNull }
+      is JsonPrimitive -> listOf(answer.contentOrNull)
+      else -> emptyList()
+    }
+    if (age != null && CLAUDE_RESUME_COMPACTION_COMPACT_ANSWER in chosen) return age
+  }
+  return null
 }
 
 private fun formatTokens(count: Long): String = when {
@@ -582,8 +663,11 @@ fun formatWorkingTimer(start: Instant, now: Instant): String {
 sealed interface TimelineRow {
   val id: String
 
-  /** "Working for 12s", right after the prompt the running turn answers. */
-  data class Working(val startedAt: String?) : TimelineRow {
+  /**
+   * "Working for 12s", right after the prompt the running turn answers. [compacting]: a running
+   * compaction owns the working row, so its divider appears only once it ends.
+   */
+  data class Working(val startedAt: String?, val compacting: Boolean = false) : TimelineRow {
     override val id: String = "working-indicator-row"
   }
 
@@ -629,10 +713,18 @@ sealed interface TimelineRow {
     override val id: String = "thinking-row"
   }
 
+  /**
+   * [title] replaces "Context compacted" when T3 Code compacted without being asked;
+   * [failure] is the provider's reason, when a failed compaction gave one.
+   */
   data class ContextCompaction(
     override val id: String,
     val label: String,
+    val tokenCounts: CompactionTokenCounts?,
     val active: Boolean,
+    val title: String? = null,
+    val failed: Boolean = false,
+    val failure: String? = null,
   ) : TimelineRow
 
   data class Message(
@@ -798,8 +890,11 @@ private fun deriveTurnFolds(
       val foldableTrailing: Boolean = entry is TimelineEntry.Work &&
         entry.entry.status != ToolStatus.InProgress && !entry.entry.indicatesFailure()
       if (!compaction && index > terminalIndex && !foldableTrailing) return@forEachIndexed
-      if (entry.isPersistentResourceCard()) return@forEachIndexed
+      if (compaction || entry.isPersistentResourceCard()) return@forEachIndexed
       if (entry is TimelineEntry.Work && entry.entry.itemType == "notification") {
+        return@forEachIndexed
+      }
+      if (entry is TimelineEntry.Work && entry.entry.questionAnswer() != null) {
         return@forEachIndexed
       }
       hidden += entry.id
@@ -941,19 +1036,84 @@ fun deriveMessagesTimelineRows(
     if (activeWorkRows.isNotEmpty() || latestFailed) activeTools.map { it.id }.toSet()
     else emptySet()
 
+  // A bare `/compact` turn is the compaction itself: one compaction row stands in for its prompt
+  // and working indicator, from the moment the turn starts. Likewise an answered "compact before
+  // continuing?" question folds into the compaction it asked for.
+  val compactionRuns: MutableMap<String, String?> = mutableMapOf()
+  val compactedRunIds: MutableSet<String> = mutableSetOf()
+  val pendingResumeCompactionAgeByRunId: MutableMap<String, String> = mutableMapOf()
+  val resumeCompactionAgeByEntryId: MutableMap<String, String> = mutableMapOf()
+  for (entry in entries) {
+    val runId: String = entry.runId ?: continue
+    if (entry is TimelineEntry.Message && isCompactionCommandMessage(entry.item)) {
+      compactionRuns[runId] = idleCompactionOf(entry.item)
+    } else if (entry is TimelineEntry.Work) {
+      if (entry.isCompaction()) {
+        compactedRunIds += runId
+        pendingResumeCompactionAgeByRunId.remove(runId)?.let { age ->
+          resumeCompactionAgeByEntryId[entry.id] = age
+        }
+      }
+      val age: String? = entry.entry.questionAnswer()?.let(::claudeResumeCompactionAge)
+      if (age != null) pendingResumeCompactionAgeByRunId[runId] = age
+    }
+  }
+  fun compactionTitle(runId: String?, entryId: String): String? {
+    if (runId == null) return null
+    compactionRuns[runId]?.let { reason -> return IDLE_COMPACTION_TITLES[reason] }
+    val age: String = resumeCompactionAgeByEntryId[entryId] ?: return null
+    return "Context compacted after $age idle"
+  }
+  val activeCompactionEntry: TimelineEntry.Work? = entries.filterIsInstance<TimelineEntry.Work>()
+    .firstOrNull { it.isCompaction() && it.entry.inActiveRun() }
+  val activeRunIsCompaction: Boolean =
+    isWorking && unsettled != null && unsettled in compactionRuns
+  // The item can finish before its run settles; only other work should keep activity visible.
+  val compactionRunFinished: Boolean = activeRunIsCompaction &&
+    unsettled in compactedRunIds && activeCompactionEntry == null
+  val compactionOnlyRunFinished: Boolean = compactionRunFinished && entries.none { entry ->
+    entry.timelineEntryRunId() == unsettled && !entry.isCompaction() &&
+      !(entry is TimelineEntry.Message && isCompactionCommandMessage(entry.item))
+  }
+  val runningCompactionRunId: String? =
+    if (activeRunIsCompaction && !compactionRunFinished) unsettled else null
+  // Compacting on return holds back the message the user just sent, so the working row says why
+  // it is waiting. Any other compaction shows only its live divider, never both.
+  val compactsOnReturn: Boolean = runningCompactionRunId != null &&
+    compactionRuns[runningCompactionRunId] == "onReturn"
+  // The question is answered mid-turn, so the row times this compaction, not the turn.
+  val resumeCompactionEntry: TimelineEntry.Work? = activeCompactionEntry
+    ?.takeIf { it.runId != null && it.id in resumeCompactionAgeByEntryId }
+  val activeCompactionRunId: String? =
+    if (compactsOnReturn) runningCompactionRunId else resumeCompactionEntry?.runId
+
   val rows: MutableList<TimelineRow> = mutableListOf()
+  fun appendWorkingRow() {
+    if (compactionOnlyRunFinished) return
+    if (runningCompactionRunId != null && activeCompactionRunId == null) return
+    rows += TimelineRow.Working(
+      startedAt = (if (compactsOnReturn) null else resumeCompactionEntry?.createdAt)
+        ?: runningRun?.workStart(),
+      compacting = activeCompactionRunId != null,
+    )
+  }
   var hasActivityRow = false
-  var hasActiveCompaction = false
+  val hasActiveCompaction: Boolean =
+    activeCompactionEntry != null || (activeRunIsCompaction && !compactionRunFinished)
   var index = 0
   while (index < entries.size) {
     val entry: TimelineEntry = entries[index]
-    if (isWorking && index == headerIndex) rows += TimelineRow.Working(runningRun?.workStart())
+    if (isWorking && index == headerIndex) appendWorkingRow()
     if (entry.id == latestVisible?.id && activeWorkRows.isNotEmpty()) {
       rows += activeWorkRows
       hasActivityRow = hasActivityRow || keepsLive
     }
     index += 1
-    if (entry is TimelineEntry.Event && entry.item.type == "run_interrupt_request") continue
+    // A stopped compaction's own divider already says it stopped.
+    if (entry is TimelineEntry.Event && (entry.item.type == "run_interrupt_request" ||
+        (entry.item.type == "run_interrupt_result" && entry.runId != null &&
+          entry.runId in compactionRuns && entry.runId in compactedRunIds))
+    ) continue
     folds[entry.id]?.let { fold ->
       rows += TimelineRow.TurnFold(fold.runId, fold.label, fold.runId in expansion.runIds)
     }
@@ -964,10 +1124,26 @@ fun deriveMessagesTimelineRows(
         val work: WorkLogEntry = entry.entry
         if (work.sourceActivityKind == CONTEXT_COMPACTION) {
           val active: Boolean = work.inActiveRun()
-          hasActiveCompaction = hasActiveCompaction || active
-          rows += TimelineRow.ContextCompaction(entry.id, work.label, active)
+          if (active && activeCompactionRunId != null && work.runId == activeCompactionRunId) {
+            continue
+          }
+          val compaction: TurnItem.Compaction? = work.item as? TurnItem.Compaction
+          val reason: String? = work.runId?.let(compactionRuns::get)
+          val failed: Boolean = compaction?.status == "failed"
+          rows += TimelineRow.ContextCompaction(
+            id = entry.id,
+            label = reason?.takeIf { active }?.let(IDLE_COMPACTING_LABELS::get) ?: work.label,
+            tokenCounts = compaction?.let(::contextCompactionTokenCounts),
+            active = active,
+            title = compactionTitle(work.runId, entry.id),
+            failed = failed,
+            failure = if (failed) compaction?.summary?.trim()?.ifEmpty { null } else null,
+          )
           continue
         }
+        if (work.runId != null && work.runId in compactedRunIds &&
+          work.questionAnswer()?.let(::claudeResumeCompactionAge) != null
+        ) continue
         if ((work.runId != null && work.runId in failedRunIds) ||
           (work.itemType == "error" && work.status == ToolStatus.Failed) ||
           work.standalone()
@@ -1033,6 +1209,23 @@ fun deriveMessagesTimelineRows(
       }
 
       is TimelineEntry.Message -> {
+        val compactionRunId: String? = entry.runId
+        if (compactionRunId != null && isCompactionCommandMessage(entry.item)) {
+          if (compactionRunId !in compactedRunIds && compactionRunId != activeCompactionRunId) {
+            val pending: Boolean = compactionRunId == runningCompactionRunId
+            val reason: String? = compactionRuns[compactionRunId]
+            rows += TimelineRow.ContextCompaction(
+              id = "compaction:$compactionRunId",
+              label = when {
+                pending -> reason?.let(IDLE_COMPACTING_LABELS::get) ?: "Compacting context"
+                else -> "Context compaction"
+              },
+              tokenCounts = null,
+              active = pending,
+            )
+          }
+          continue
+        }
         val run: Run? = entry.runId?.let(runsById::get)
         val active: Boolean = entry.runId in activeRunIds
         val terminal: Boolean = !entry.user && entry.id in terminalIds
@@ -1052,8 +1245,10 @@ fun deriveMessagesTimelineRows(
       is TimelineEntry.Event -> rows += TimelineRow.Event(entry.item)
     }
   }
-  if (isWorking && headerIndex >= entries.size) rows += TimelineRow.Working(runningRun?.workStart())
-  if (isWorking && !hasActivityRow && !hasActiveCompaction) rows += TimelineRow.Thinking
+  if (isWorking && headerIndex >= entries.size) appendWorkingRow()
+  if (isWorking && !hasActivityRow && !hasActiveCompaction && !compactionOnlyRunFinished) {
+    rows += TimelineRow.Thinking
+  }
   placeWorktreeSetup(rows, worktreeSetup, latestRun)
   return attachTrailingToolGroupsToAssistant(rows)
 }
@@ -1097,6 +1292,21 @@ private fun expandedWorkGroupRow(groupId: String, entries: List<WorkLogEntry>): 
 
 /** Upstream's live work start: `startedAt ?? requestedAt`. */
 private fun Run.workStart(): String = startedAt ?: requestedAt
+
+/** `timelineEntryIsCompaction`. */
+private fun TimelineEntry.isCompaction(): Boolean =
+  this is TimelineEntry.Work && entry.sourceActivityKind == CONTEXT_COMPACTION
+
+/** `timelineEntryRunId`: a reply's, a plan's or work's run; prompts and events have none. */
+private fun TimelineEntry.timelineEntryRunId(): String? = when (this) {
+  is TimelineEntry.Message -> if (user) null else runId
+  is TimelineEntry.Plan, is TimelineEntry.Work -> runId
+  is TimelineEntry.Event -> null
+}
+
+/** The work entry's `questionAnswer`: an answered user input request's. */
+private fun WorkLogEntry.questionAnswer(): UserInputAttachmentAnswerPayload? =
+  (item as? TurnItem.UserInputRequest)?.questionAnswer
 
 /** Entries that never group: failures, notices and notifications. */
 private fun WorkLogEntry.standalone(): Boolean = tone == WorkTone.Error ||

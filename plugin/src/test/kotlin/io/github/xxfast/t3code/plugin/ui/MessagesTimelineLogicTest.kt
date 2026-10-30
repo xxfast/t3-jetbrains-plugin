@@ -1,12 +1,17 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import io.github.xxfast.t3code.plugin.fixtures.FixtureItem
+import io.github.xxfast.t3code.plugin.fixtures.Scenario
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.generated.TurnItem
+import io.github.xxfast.t3code.protocol.generated.UserInputAttachmentAnswerPayload
 import io.github.xxfast.t3code.protocol.generated.WorktreeSetupSnapshot
 import io.github.xxfast.t3code.protocol.generated.WorktreeSetupStage
+import java.nio.file.Path
 import java.time.Instant
 import java.time.ZoneOffset
+import kotlin.io.path.readText
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -173,6 +178,288 @@ class MessagesTimelineLogicTest {
     assertTrue(format("2025-01-02T09:30:00Z").startsWith("1/2/2025"))
   }
 
+  @Test
+  fun `a compaction command is a bare compact without attachments`() {
+    assertTrue(isCompactionCommandMessage(compact("u", "r1", "10:00", text = " /COMPACT ")))
+    assertFalse(isCompactionCommandMessage(compact("u", "r1", "10:00", text = "/compact now")))
+    assertFalse(isCompactionCommandMessage(user("u", "r1", "10:00")))
+    val attached: TurnItem = item(
+      """
+        {
+          "type": "user_message", "text": "/compact", "messageId": "m", "createdBy": "user",
+          "creationSource": "web", "inputIntent": "turn_start",
+          "attachments": [
+            {"type": "file", "id": "f", "name": "a.txt", "mimeType": "text/plain", "sizeBytes": 1}
+          ]
+        }
+      """,
+      "u", "r1", "10:00",
+    )
+    assertFalse(isCompactionCommandMessage(attached))
+  }
+
+  @Test
+  fun `idle compactions say why, older servers by who sent them`() {
+    assertEquals("onReturn", idleCompactionOf(compact("u", "r1", "10:00", idle = "onReturn")))
+    assertEquals(
+      "beforeCacheExpires",
+      idleCompactionOf(compact("u", "r1", "10:00", createdBy = "agent", source = "server")),
+    )
+    val agentFromWeb: TurnItem = compact("u", "r1", "10:00", createdBy = "agent", source = "web")
+    assertEquals(null, idleCompactionOf(agentFromWeb))
+    assertEquals(null, idleCompactionOf(compact("u", "r1", "10:00")))
+  }
+
+  @Test
+  fun `compaction labels`() {
+    fun label(status: String, before: Long? = 120_000, after: Long? = 40_000): String =
+      contextCompactionLabel(compaction("c", "r1", "10:00", status, before, after))
+    assertEquals("Context compacted 120k → 40k tokens", label("completed"))
+    assertEquals("Context compacted", label("completed", before = null))
+    assertEquals("Compacting context", label("running"))
+    assertEquals("Context compaction failed", label("failed"))
+    assertEquals("Context compaction stopped", label("interrupted"))
+    assertEquals("Context compaction stopped", label("cancelled"))
+    assertEquals(
+      CompactionTokenCounts("120k", "40k"),
+      contextCompactionTokenCounts(compaction("c", "r1", "10:00", "completed")),
+    )
+    assertEquals(null, contextCompactionTokenCounts(compaction("c", "r1", "10:00", "running")))
+  }
+
+  @Test
+  fun `a settled compact turn is only its divider`() {
+    val rows: List<TimelineRow> = rows(
+      items = listOf(compact("u", "r1", "10:00"), compaction("c", "r1", "10:00:05")),
+      runs = listOf(run("r1", 1, started = "10:00", completed = "10:00:20")),
+    )
+    assertEquals(listOf("c"), rows.map { it.id })
+    val divider: TimelineRow.ContextCompaction = assertIs(rows.single())
+    assertEquals("Context compacted 120k → 40k tokens", divider.label)
+    assertEquals(CompactionTokenCounts("120k", "40k"), divider.tokenCounts)
+    assertEquals(null, divider.title)
+    assertFalse(divider.active)
+  }
+
+  @Test
+  fun `a compaction T3 started on its own leads with why`() {
+    val rows: List<TimelineRow> = rows(
+      items = listOf(
+        compact("u", "r1", "10:00", idle = "beforeCacheExpires", createdBy = "agent"),
+        compaction("c", "r1", "10:00:05"),
+      ),
+      runs = listOf(run("r1", 1, started = "10:00", completed = "10:00:20")),
+    )
+    val divider: TimelineRow.ContextCompaction = assertIs(rows.single())
+    assertEquals("Context automatically compacted before cache expiry", divider.title)
+  }
+
+  @Test
+  fun `a compact turn without its item yet is one pending divider`() {
+    val running: Run = run("r1", 1, started = "10:00", completed = null, status = "running")
+    val rows: List<TimelineRow> = rows(
+      items = listOf(compact("u", "r1", "10:00")),
+      runs = listOf(running),
+      runningRun = running,
+    )
+    assertEquals(listOf("compaction:r1"), rows.map { it.id })
+    val divider: TimelineRow.ContextCompaction = assertIs(rows.single())
+    assertEquals("Compacting context", divider.label)
+    assertTrue(divider.active)
+  }
+
+  @Test
+  fun `a running idle compaction's divider says compacting, with no working row`() {
+    val running: Run = run("r1", 1, started = "10:00", completed = null, status = "running")
+    val rows: List<TimelineRow> = rows(
+      items = listOf(
+        compact("u", "r1", "10:00", idle = "beforeCacheExpires"),
+        compaction("c", "r1", "10:00:05", status = "running"),
+      ),
+      runs = listOf(running),
+      runningRun = running,
+    )
+    assertEquals(listOf("c"), rows.map { it.id })
+    val divider: TimelineRow.ContextCompaction = assertIs(rows.single())
+    assertEquals("Compacting before the cache expires…", divider.label)
+    assertTrue(divider.active)
+  }
+
+  @Test
+  fun `compacting on return owns the working row, then leaves only its divider`() {
+    val running: Run = run("r1", 1, started = "10:00", completed = null, status = "running")
+    val prompt: TurnItem = compact("u", "r1", "10:00", idle = "onReturn", createdBy = "agent")
+    val waiting: List<TimelineRow> =
+      rows(items = listOf(prompt), runs = listOf(running), runningRun = running)
+    assertEquals(
+      listOf(TimelineRow.Working(startedAt = at("10:00"), compacting = true)),
+      waiting,
+    )
+    val compacting: List<TimelineRow> = rows(
+      items = listOf(prompt, compaction("c", "r1", "10:00:05", status = "running")),
+      runs = listOf(running),
+      runningRun = running,
+    )
+    assertEquals(
+      listOf(TimelineRow.Working(startedAt = at("10:00"), compacting = true)),
+      compacting,
+    )
+    // The item finishes before its run settles
+    val finished: List<TimelineRow> = rows(
+      items = listOf(prompt, compaction("c", "r1", "10:00:12")),
+      runs = listOf(running),
+      runningRun = running,
+    )
+    assertEquals(listOf("c"), finished.map { it.id })
+    val divider: TimelineRow.ContextCompaction = assertIs(finished.single())
+    assertEquals("Context compacted before sending", divider.title)
+  }
+
+  @Test
+  fun `a failed compaction carries its reason`() {
+    val rows: List<TimelineRow> = rows(
+      items = listOf(
+        compact("u", "r1", "10:00"),
+        compaction(
+          "c", "r1", "10:00:05", status = "failed", before = null, after = null,
+          summary = "  Conversation too long to summarise  ",
+        ),
+      ),
+      runs = listOf(run("r1", 1, started = "10:00", completed = "10:00:10", status = "failed")),
+    )
+    val divider: TimelineRow.ContextCompaction = assertIs(rows.single())
+    assertEquals("Context compaction failed", divider.label)
+    assertTrue(divider.failed)
+    assertEquals("Conversation too long to summarise", divider.failure)
+  }
+
+  @Test
+  fun `a stopped compaction's divider says so, without the interrupt divider`() {
+    val rows: List<TimelineRow> = rows(
+      items = listOf(
+        compact("u", "r1", "10:00"),
+        compaction("c", "r1", "10:00:05", status = "interrupted"),
+        item("""{"type":"run_interrupt_result","message":"Stopped"}""", "i", "r1", "10:00:08"),
+      ),
+      runs = listOf(run("r1", 1, started = "10:00", completed = "10:00:08", "interrupted")),
+    )
+    assertEquals(listOf("c"), rows.map { it.id })
+    val divider: TimelineRow.ContextCompaction = assertIs(rows[0])
+    assertEquals("Context compaction stopped", divider.label)
+  }
+
+  @Test
+  fun `an answered resume question folds into the compaction it asked for`() {
+    val running: Run = run("r1", 1, started = "10:00", completed = null, status = "running")
+    val question: String =
+      "This session is 2h 5m old and uses 412,000 tokens. Compact it before continuing?"
+    val answered: TurnItem = item(
+      """
+        {
+          "type": "user_input_request", "requestId": "q", "questions": [],
+          "questionAnswer": {
+            "requestId": "q", "answers": {"resume": ["Compact and continue"]},
+            "questionTextById": {"resume": "$question"}, "attachmentsByQuestionId": {}
+          }
+        }
+      """,
+      "q", "r1", "10:00:02",
+    )
+    val compacting: List<TimelineRow> = rows(
+      items = listOf(
+        user("u", "r1", "10:00"),
+        answered,
+        compaction("c", "r1", "10:00:05", status = "running"),
+      ),
+      runs = listOf(running),
+      runningRun = running,
+    )
+    assertEquals(
+      listOf("u", "working-indicator-row"),
+      compacting.map { it.id },
+    )
+    assertEquals(
+      TimelineRow.Working(startedAt = at("10:00:05"), compacting = true),
+      compacting[1],
+    )
+    val settled: List<TimelineRow> = rows(
+      items = listOf(user("u", "r1", "10:00"), answered, compaction("c", "r1", "10:00:05")),
+      runs = listOf(run("r1", 1, started = "10:00", completed = "10:00:20")),
+    )
+    assertEquals(listOf("u", "c"), settled.map { it.id })
+    assertEquals(
+      "Context compacted after 2h 5m idle",
+      assertIs<TimelineRow.ContextCompaction>(settled[1]).title,
+    )
+  }
+
+  @Test
+  fun `the resume age needs the compact answer`() {
+    fun answer(answers: String, texts: String? = null): UserInputAttachmentAnswerPayload =
+      T3Json.decodeFromString(
+        UserInputAttachmentAnswerPayload.serializer(),
+        """
+          {
+            "requestId": "q", "answers": $answers, "attachmentsByQuestionId": {}
+            ${texts?.let { ", \"questionTextById\": $it" }.orEmpty()}
+          }
+        """,
+      )
+    val question = "This session is 45m old and uses 1,200 tokens. Compact it before continuing?"
+    val direct: UserInputAttachmentAnswerPayload =
+      answer("""{"$question":"Compact and continue"}""")
+    assertEquals("45m", claudeResumeCompactionAge(direct))
+    assertEquals(
+      "45m",
+      claudeResumeCompactionAge(
+        answer("""{"q1":["Compact and continue"]}""", """{"q1":"$question"}"""),
+      ),
+    )
+    assertEquals(null, claudeResumeCompactionAge(answer("""{"$question":"Don't ask again"}""")))
+    assertEquals(null, claudeResumeCompactionAge(answer("""{"other":"Compact and continue"}""")))
+  }
+
+  @Test
+  fun `the compaction scenario reads as one row per compaction`() {
+    val path: Path = Path.of(System.getProperty("t3code.scenarios"))
+      .resolve("default")
+      .resolve("compaction.json")
+    val scenario: Scenario = Scenario.decode(path.readText())
+    val thread: String = scenario.threads.single().id
+    val runs: List<Run> = scenario.runs.getValue(thread)
+    val running: Run = runs.single { it.status == "running" }
+    val entries: List<FixtureItem> = scenario.items.getValue(thread)
+    fun rowsAfter(replayed: List<FixtureItem>): List<TimelineRow> {
+      val items: LinkedHashMap<String, TurnItem> = LinkedHashMap()
+      replayed.forEach { items[it.item.id] = it.item }
+      return deriveMessagesTimelineRows(
+        deriveTimelineEntries(items.values.toList()), runs, running,
+      )
+    }
+    val settled: List<String> =
+      listOf("cp-u1", "cp-a1", "cp-c2", "cp-u3", "cp-a3", "cp-c4", "cp-c5", "cp-c6")
+    val waiting: List<TimelineRow> = rowsAfter(entries.takeWhile { it.after == 0L })
+    assertEquals(settled + "working-indicator-row", waiting.map { it.id })
+    assertTrue(assertIs<TimelineRow.Working>(waiting.last()).compacting)
+    val labels: List<String> = waiting.filterIsInstance<TimelineRow.ContextCompaction>()
+      .map { it.title ?: it.label }
+    assertEquals(
+      listOf(
+        "Context compacted 182.4k → 31.2k tokens",
+        "Context automatically compacted before cache expiry",
+        "Context compaction stopped",
+        "Context compaction failed",
+      ),
+      labels,
+    )
+    val done: List<TimelineRow> = rowsAfter(entries)
+    assertEquals(settled + "cp-c7", done.map { it.id })
+    assertEquals(
+      "Context compacted before sending",
+      assertIs<TimelineRow.ContextCompaction>(done.last()).title,
+    )
+  }
+
   private fun rows(
     items: List<TurnItem>,
     runs: List<Run>,
@@ -225,6 +512,45 @@ class MessagesTimelineLogicTest {
         "steps": [${steps.mapIndexed { index, (status, text) ->
           """{"id":"s$index","text":"$text","status":"$status"}"""
         }.joinToString(",")}]
+      }
+    """,
+    id, runId, time,
+  )
+
+  private fun compact(
+    id: String,
+    runId: String,
+    time: String,
+    text: String = "/compact",
+    idle: String? = null,
+    createdBy: String = "user",
+    source: String = if (createdBy == "agent") "server" else "web",
+  ): TurnItem = item(
+    """
+      {
+        "type": "user_message", "text": "$text", "messageId": "m-$id", "createdBy": "$createdBy",
+        "creationSource": "$source", "inputIntent": "turn_start", "attachments": []
+        ${idle?.let { ", \"idleCompaction\": \"$it\"" }.orEmpty()}
+      }
+    """,
+    id, runId, time,
+  )
+
+  private fun compaction(
+    id: String,
+    runId: String,
+    time: String,
+    status: String = "completed",
+    before: Long? = 120_000,
+    after: Long? = 40_000,
+    summary: String? = null,
+  ): TurnItem.Compaction = item(
+    """
+      {
+        "type": "compaction", "driver": "claude", "status": "$status"
+        ${before?.let { ", \"beforeTokenCount\": $it" }.orEmpty()}
+        ${after?.let { ", \"afterTokenCount\": $it" }.orEmpty()}
+        ${summary?.let { ", \"summary\": \"$it\"" }.orEmpty()}
       }
     """,
     id, runId, time,

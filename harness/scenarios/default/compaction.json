@@ -1,0 +1,568 @@
+{
+  "threads": [
+    {
+      "id": "thr_01JC7C0M0COMPACT1",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Demo: compaction",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "claude",
+      "modelSelection": {
+        "instanceId": "claude",
+        "model": "claude-fable-5-1"
+      },
+      "providerInstanceHistory": [
+        "claude"
+      ],
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC7C0M0COMPACT1"
+      },
+      "status": "running",
+      "branch": "kotlinx-io-0.8",
+      "latestRunId": "run_01JC7C0M7RETURN",
+      "activeRunId": "run_01JC7C0M7RETURN",
+      "activeProviderThreadId": "pth_01JC7C0M0CLAUDE",
+      "itemCount": 15,
+      "visibleItemCount": 15,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-25T09:00:00.000Z",
+      "updatedAt": "2026-10-25T14:30:00.000Z"
+    }
+  ],
+  "runs": {
+    "thr_01JC7C0M0COMPACT1": [
+      {
+        "id": "run_01JC7C0M1WORK",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "ordinal": 1,
+        "status": "completed",
+        "providerInstanceId": "claude",
+        "modelSelection": {
+          "instanceId": "claude",
+          "model": "claude-fable-5-1"
+        },
+        "providerThreadId": "pth_01JC7C0M0CLAUDE",
+        "userMessageId": "msg_01JC7C0MU1",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-25T09:00:00.000Z",
+        "startedAt": "2026-10-25T09:00:01.000Z",
+        "completedAt": "2026-10-25T09:06:40.000Z",
+        "checkpointId": null,
+        "contextHandoffId": null
+      },
+      {
+        "id": "run_01JC7C0M2USER",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "ordinal": 2,
+        "status": "completed",
+        "providerInstanceId": "claude",
+        "modelSelection": {
+          "instanceId": "claude",
+          "model": "claude-fable-5-1"
+        },
+        "providerThreadId": "pth_01JC7C0M0CLAUDE",
+        "userMessageId": "msg_01JC7C0MU2",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-25T09:08:00.000Z",
+        "startedAt": "2026-10-25T09:08:01.000Z",
+        "completedAt": "2026-10-25T09:08:19.000Z",
+        "checkpointId": null,
+        "contextHandoffId": null
+      },
+      {
+        "id": "run_01JC7C0M3WORK",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "ordinal": 3,
+        "status": "completed",
+        "providerInstanceId": "claude",
+        "modelSelection": {
+          "instanceId": "claude",
+          "model": "claude-fable-5-1"
+        },
+        "providerThreadId": "pth_01JC7C0M0CLAUDE",
+        "userMessageId": "msg_01JC7C0MU3",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-25T09:10:00.000Z",
+        "startedAt": "2026-10-25T09:10:01.000Z",
+        "completedAt": "2026-10-25T09:13:05.000Z",
+        "checkpointId": null,
+        "contextHandoffId": null
+      },
+      {
+        "id": "run_01JC7C0M4IDLE",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "ordinal": 4,
+        "status": "completed",
+        "providerInstanceId": "claude",
+        "modelSelection": {
+          "instanceId": "claude",
+          "model": "claude-fable-5-1"
+        },
+        "providerThreadId": "pth_01JC7C0M0CLAUDE",
+        "userMessageId": "msg_01JC7C0MU4",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-25T10:12:00.000Z",
+        "startedAt": "2026-10-25T10:12:01.000Z",
+        "completedAt": "2026-10-25T10:12:24.000Z",
+        "checkpointId": null,
+        "contextHandoffId": null
+      },
+      {
+        "id": "run_01JC7C0M5STOP",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "ordinal": 5,
+        "status": "interrupted",
+        "providerInstanceId": "claude",
+        "modelSelection": {
+          "instanceId": "claude",
+          "model": "claude-fable-5-1"
+        },
+        "providerThreadId": "pth_01JC7C0M0CLAUDE",
+        "userMessageId": "msg_01JC7C0MU5",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-25T11:40:00.000Z",
+        "startedAt": "2026-10-25T11:40:01.000Z",
+        "completedAt": "2026-10-25T11:40:09.000Z",
+        "checkpointId": null,
+        "contextHandoffId": null
+      },
+      {
+        "id": "run_01JC7C0M6FAIL",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "ordinal": 6,
+        "status": "failed",
+        "providerInstanceId": "claude",
+        "modelSelection": {
+          "instanceId": "claude",
+          "model": "claude-fable-5-1"
+        },
+        "providerThreadId": "pth_01JC7C0M0CLAUDE",
+        "userMessageId": "msg_01JC7C0MU6",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-25T11:42:00.000Z",
+        "startedAt": "2026-10-25T11:42:01.000Z",
+        "completedAt": "2026-10-25T11:42:30.000Z",
+        "checkpointId": null,
+        "contextHandoffId": null
+      },
+      {
+        "id": "run_01JC7C0M7RETURN",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "ordinal": 7,
+        "status": "running",
+        "providerInstanceId": "claude",
+        "modelSelection": {
+          "instanceId": "claude",
+          "model": "claude-fable-5-1"
+        },
+        "providerThreadId": "pth_01JC7C0M0CLAUDE",
+        "userMessageId": "msg_01JC7C0MU7",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-25T14:30:00.000Z",
+        "startedAt": "2026-10-25T14:30:01.000Z",
+        "completedAt": null,
+        "checkpointId": null,
+        "contextHandoffId": null
+      },
+      {
+        "id": "run_01JC7C0M8QUEUED",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "ordinal": 8,
+        "status": "queued",
+        "providerInstanceId": "claude",
+        "modelSelection": {
+          "instanceId": "claude",
+          "model": "claude-fable-5-1"
+        },
+        "providerThreadId": "pth_01JC7C0M0CLAUDE",
+        "userMessageId": "msg_01JC7C0MU8",
+        "rootNodeId": null,
+        "activeAttemptId": null,
+        "requestedAt": "2026-10-25T14:30:00.000Z",
+        "startedAt": null,
+        "completedAt": null,
+        "checkpointId": null,
+        "contextHandoffId": null,
+        "queuePosition": 1
+      }
+    ]
+  },
+  "messages": {
+    "thr_01JC7C0M0COMPACT1": [
+      {
+        "createdBy": "user",
+        "creationSource": "web",
+        "id": "msg_01JC7C0MU8",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "runId": "run_01JC7C0M8QUEUED",
+        "nodeId": null,
+        "role": "user",
+        "text": "Morning. Bump the Ktor sample to 3.3 while you're in there.",
+        "attachments": [],
+        "streaming": false,
+        "createdAt": "2026-10-25T14:30:00.000Z",
+        "updatedAt": "2026-10-25T14:30:00.000Z"
+      }
+    ]
+  },
+  "providerSessions": {
+    "thr_01JC7C0M0COMPACT1": [
+      {
+        "id": "psn_01JC7C0M0CLAUDE",
+        "driver": "claude",
+        "providerInstanceId": "claude",
+        "status": "ready",
+        "cwd": "/Users/xxfast/Developer/XXFAST/KMP/KStore",
+        "model": "claude-fable-5-1",
+        "capabilities": {
+          "sessions": {
+            "supportsMultipleProviderThreadsPerSession": false,
+            "supportsModelSwitchInSession": true,
+            "supportsProviderSwitchingViaHandoff": true,
+            "supportsRuntimeModeSwitchInSession": true,
+            "pendingRequestsSurviveRestart": false
+          },
+          "threads": {
+            "canCreateEmptyThread": true,
+            "canReadThreadSnapshot": true,
+            "canRollbackThread": true,
+            "canForkThread": true,
+            "canForkFromTurn": true,
+            "canForkFromSubagentThread": false,
+            "exposesNativeThreadId": true
+          },
+          "turns": {
+            "exposesNativeTurnId": true,
+            "emitsTurnStarted": true,
+            "emitsTurnCompleted": true,
+            "supportsInterrupt": true,
+            "supportsActiveSteering": true,
+            "supportsSteeringByInterruptRestart": false,
+            "supportsQueuedMessages": true,
+            "terminalStatusQuality": "exact"
+          },
+          "streaming": {
+            "streamsAssistantText": true,
+            "streamsReasoning": true,
+            "streamsToolOutput": true,
+            "streamsPlanText": true,
+            "emitsMessageCompleted": true
+          },
+          "tools": {
+            "exposesToolItemIds": true,
+            "emitsToolStarted": true,
+            "emitsToolCompleted": true,
+            "emitsToolOutput": true,
+            "supportsMcpTools": true,
+            "supportsDynamicToolCallbacks": false
+          },
+          "approvals": {
+            "supportsCommandApproval": true,
+            "supportsFileReadApproval": false,
+            "supportsFileChangeApproval": true,
+            "supportsApplyPatchApproval": true,
+            "approvalsHaveNativeRequestIds": true,
+            "approvalCallbacksAreLiveOnly": true,
+            "approvalsCanOriginateFromSubagents": false
+          },
+          "planning": {
+            "emitsPlanUpdated": true,
+            "emitsTodoList": true,
+            "emitsProposedPlan": true,
+            "supportsStructuredQuestions": true,
+            "planDeltasHaveItemIds": true
+          },
+          "subagents": {
+            "supportsSubagents": false,
+            "exposesSubagentThreadIds": false,
+            "emitsSubagentLifecycle": false,
+            "canWaitForSubagents": false,
+            "canCloseSubagents": false,
+            "canForkSubagentThread": false
+          },
+          "context": {
+            "acceptsSystemContext": true,
+            "acceptsDeveloperContext": true,
+            "acceptsSyntheticUserContext": true,
+            "canGenerateSummaries": true,
+            "canConsumeHandoffSummaries": true,
+            "supportsDeltaHandoff": false,
+            "supportsFullThreadHandoff": true,
+            "maxRecommendedHandoffChars": null
+          },
+          "checkpointing": {
+            "appCanCheckpointFilesystem": true,
+            "supportsNestedCheckpointScopes": false,
+            "providerCanRollbackConversation": true,
+            "providerRollbackReturnsSnapshot": false,
+            "providerCanReadConversationSnapshot": true
+          },
+          "identity": {
+            "nativeThreadIds": "stable",
+            "nativeTurnIds": "stable",
+            "nativeItemIds": "stable",
+            "nativeRequestIds": "stable"
+          }
+        },
+        "createdAt": "2026-10-24T08:40:01.000Z",
+        "updatedAt": "2026-10-24T08:52:10.000Z",
+        "lastError": null
+      }
+    ]
+  },
+  "items": {
+    "thr_01JC7C0M0COMPACT1": [
+      {
+        "type": "user_message",
+        "id": "cp-u1",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "runId": "run_01JC7C0M1WORK",
+        "ordinal": 1,
+        "status": "completed",
+        "startedAt": "2026-10-25T09:00:00.000Z",
+        "completedAt": "2026-10-25T09:00:00.000Z",
+        "updatedAt": "2026-10-25T09:00:00.000Z",
+        "messageId": "msg_01JC7C0MU1",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "Port KStore's file codec to kotlinx-io 0.8 and keep the old API as deprecated shims."
+      },
+      {
+        "type": "assistant_message",
+        "id": "cp-a1",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "runId": "run_01JC7C0M1WORK",
+        "ordinal": 2,
+        "status": "completed",
+        "startedAt": "2026-10-25T09:06:40.000Z",
+        "completedAt": "2026-10-25T09:06:40.000Z",
+        "updatedAt": "2026-10-25T09:06:40.000Z",
+        "messageId": "msg_01JC7C0MA1",
+        "text": "Ported `FileCodec` to `kotlinx.io.files`. The old `okio` entry points are now `@Deprecated` shims that forward to the new ones.",
+        "streaming": false
+      },
+      {
+        "type": "user_message",
+        "id": "cp-u2",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "runId": "run_01JC7C0M2USER",
+        "ordinal": 3,
+        "status": "completed",
+        "startedAt": "2026-10-25T09:08:00.000Z",
+        "completedAt": "2026-10-25T09:08:00.000Z",
+        "updatedAt": "2026-10-25T09:08:00.000Z",
+        "messageId": "msg_01JC7C0MU2",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "/compact"
+      },
+      {
+        "type": "compaction",
+        "id": "cp-c2",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "runId": "run_01JC7C0M2USER",
+        "ordinal": 4,
+        "status": "completed",
+        "startedAt": "2026-10-25T09:08:02.000Z",
+        "completedAt": "2026-10-25T09:08:19.000Z",
+        "updatedAt": "2026-10-25T09:08:19.000Z",
+        "driver": "claude",
+        "beforeTokenCount": 182400,
+        "afterTokenCount": 31200
+      },
+      {
+        "type": "user_message",
+        "id": "cp-u3",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "runId": "run_01JC7C0M3WORK",
+        "ordinal": 5,
+        "status": "completed",
+        "startedAt": "2026-10-25T09:10:00.000Z",
+        "completedAt": "2026-10-25T09:10:00.000Z",
+        "updatedAt": "2026-10-25T09:10:00.000Z",
+        "messageId": "msg_01JC7C0MU3",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "Now run the JVM and iOS tests."
+      },
+      {
+        "type": "assistant_message",
+        "id": "cp-a3",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "runId": "run_01JC7C0M3WORK",
+        "ordinal": 6,
+        "status": "completed",
+        "startedAt": "2026-10-25T09:13:05.000Z",
+        "completedAt": "2026-10-25T09:13:05.000Z",
+        "updatedAt": "2026-10-25T09:13:05.000Z",
+        "messageId": "msg_01JC7C0MA3",
+        "text": "Both pass: 148 JVM tests and 131 on `iosSimulatorArm64`.",
+        "streaming": false
+      },
+      {
+        "type": "user_message",
+        "id": "cp-u4",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "runId": "run_01JC7C0M4IDLE",
+        "ordinal": 7,
+        "status": "completed",
+        "startedAt": "2026-10-25T10:12:00.000Z",
+        "completedAt": "2026-10-25T10:12:00.000Z",
+        "updatedAt": "2026-10-25T10:12:00.000Z",
+        "messageId": "msg_01JC7C0MU4",
+        "createdBy": "agent",
+        "creationSource": "server",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "/compact",
+        "idleCompaction": "beforeCacheExpires"
+      },
+      {
+        "type": "compaction",
+        "id": "cp-c4",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "runId": "run_01JC7C0M4IDLE",
+        "ordinal": 8,
+        "status": "completed",
+        "startedAt": "2026-10-25T10:12:02.000Z",
+        "completedAt": "2026-10-25T10:12:24.000Z",
+        "updatedAt": "2026-10-25T10:12:24.000Z",
+        "driver": "claude",
+        "beforeTokenCount": 164800,
+        "afterTokenCount": 28900
+      },
+      {
+        "type": "user_message",
+        "id": "cp-u5",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "runId": "run_01JC7C0M5STOP",
+        "ordinal": 9,
+        "status": "completed",
+        "startedAt": "2026-10-25T11:40:00.000Z",
+        "completedAt": "2026-10-25T11:40:00.000Z",
+        "updatedAt": "2026-10-25T11:40:00.000Z",
+        "messageId": "msg_01JC7C0MU5",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "/compact"
+      },
+      {
+        "type": "compaction",
+        "id": "cp-c5",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "runId": "run_01JC7C0M5STOP",
+        "ordinal": 10,
+        "status": "interrupted",
+        "startedAt": "2026-10-25T11:40:02.000Z",
+        "completedAt": "2026-10-25T11:40:09.000Z",
+        "updatedAt": "2026-10-25T11:40:09.000Z",
+        "driver": "claude"
+      },
+      {
+        "type": "run_interrupt_result",
+        "id": "cp-i5",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "runId": "run_01JC7C0M5STOP",
+        "ordinal": 11,
+        "status": "completed",
+        "startedAt": "2026-10-25T11:40:09.000Z",
+        "completedAt": "2026-10-25T11:40:09.000Z",
+        "updatedAt": "2026-10-25T11:40:09.000Z",
+        "message": "Run interrupted"
+      },
+      {
+        "type": "user_message",
+        "id": "cp-u6",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "runId": "run_01JC7C0M6FAIL",
+        "ordinal": 12,
+        "status": "completed",
+        "startedAt": "2026-10-25T11:42:00.000Z",
+        "completedAt": "2026-10-25T11:42:00.000Z",
+        "updatedAt": "2026-10-25T11:42:00.000Z",
+        "messageId": "msg_01JC7C0MU6",
+        "createdBy": "user",
+        "creationSource": "web",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "/compact"
+      },
+      {
+        "type": "compaction",
+        "id": "cp-c6",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "runId": "run_01JC7C0M6FAIL",
+        "ordinal": 13,
+        "status": "failed",
+        "startedAt": "2026-10-25T11:42:02.000Z",
+        "completedAt": "2026-10-25T11:42:30.000Z",
+        "updatedAt": "2026-10-25T11:42:30.000Z",
+        "driver": "claude",
+        "summary": "The provider timed out while summarising the conversation."
+      },
+      {
+        "type": "user_message",
+        "id": "cp-u7",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "runId": "run_01JC7C0M7RETURN",
+        "ordinal": 14,
+        "status": "completed",
+        "startedAt": "2026-10-25T14:30:00.000Z",
+        "completedAt": "2026-10-25T14:30:00.000Z",
+        "updatedAt": "2026-10-25T14:30:00.000Z",
+        "messageId": "msg_01JC7C0MU7",
+        "createdBy": "agent",
+        "creationSource": "server",
+        "inputIntent": "turn_start",
+        "attachments": [],
+        "text": "/compact",
+        "idleCompaction": "onReturn"
+      },
+      {
+        "type": "compaction",
+        "id": "cp-c7",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "runId": "run_01JC7C0M7RETURN",
+        "ordinal": 15,
+        "status": "running",
+        "startedAt": "2026-10-25T14:30:03.000Z",
+        "completedAt": null,
+        "updatedAt": "2026-10-25T14:30:03.000Z",
+        "driver": "claude",
+        "after": 1500
+      },
+      {
+        "type": "compaction",
+        "id": "cp-c7",
+        "threadId": "thr_01JC7C0M0COMPACT1",
+        "runId": "run_01JC7C0M7RETURN",
+        "ordinal": 15,
+        "status": "completed",
+        "startedAt": "2026-10-25T14:30:03.000Z",
+        "completedAt": "2026-10-25T14:30:21.000Z",
+        "updatedAt": "2026-10-25T14:30:21.000Z",
+        "driver": "claude",
+        "beforeTokenCount": 171300,
+        "afterTokenCount": 30400,
+        "after": 8000
+      }
+    ]
+  }
+}

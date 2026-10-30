@@ -976,7 +976,7 @@ private fun TimelineRowContent(row: TimelineRow, context: RowContext) {
     )
     TimelineRow.Thinking ->
       WorkLogLine(icon = "brain", label = "Thinking", shimmer = Shimmer.ActivityFocus)
-    is TimelineRow.ContextCompaction -> ContextCompactionRow(row.label, row.active)
+    is TimelineRow.ContextCompaction -> ContextCompactionRow(row)
     is TimelineRow.Event -> EventRow(row.item, context)
     is TimelineRow.Plan -> PlanCard(row.item, context.processor)
     is TimelineRow.WorktreeSetup -> WorktreeSetupCard(
@@ -989,11 +989,29 @@ private fun TimelineRowContent(row: TimelineRow, context: RowContext) {
   }
 }
 
-/** `WorkingTimelineRow`, MessagesTimeline.tsx:3540: "Working for 12s" over a hairline. */
+/**
+ * `WorkingTimelineRow`, TimelineWorkGroupRows.tsx:276: "Working for 12s" over a hairline, or
+ * upstream's `CompactingLabel` with a shimmer while a compaction owns the row.
+ */
 @Composable
 private fun WorkingRow(row: TimelineRow.Working, now: Instant) {
   val start: Instant? = row.startedAt?.let { runCatching { Instant.parse(it) }.getOrNull() }
   Box(Modifier.fillMaxWidth().bottomHairline().padding(top = 4.dp, bottom = 8.dp)) {
+    if (row.compacting) {
+      Row(
+        modifier = Modifier.height(24.dp).padding(horizontal = 4.dp)
+          .activityShimmer(true, Shimmer.ActivityFocus),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Glyph("minimize-2", muted(), 12.dp)
+        Text(
+          text = start?.let { "Compacting for ${formatWorkingTimer(it, now)}" } ?: "Compacting…",
+          color = muted(),
+        )
+      }
+      return@Box
+    }
     Text(
       text = start?.let { "Working for ${formatWorkingTimer(it, now)}" } ?: "Working...",
       color = muted(),
@@ -1513,26 +1531,54 @@ private fun groupIcon(kind: Pair<ToolGroupKind, ToolAction?>): String = when (ki
   ToolGroupKind.Other -> "wrench"
 }
 
-/** The context compaction row, MessagesTimeline.tsx:1999: a label between two hairlines. */
+/**
+ * `ContextCompactionTimelineRow`, MessagesTimeline.tsx:1522: a label between two hairlines. A
+ * title (T3 Code compacted on its own) leads in place of "Context compacted"; a failed one is
+ * in the error colour with its reason after it.
+ */
 @Composable
-private fun ContextCompactionRow(label: String, active: Boolean) {
+private fun ContextCompactionRow(row: TimelineRow.ContextCompaction) {
+  val label: String = row.title?.takeIf { row.label.startsWith(CONTEXT_COMPACTED) }
+    ?.let { title -> title + row.label.removePrefix(CONTEXT_COMPACTED) }
+    ?: row.label
+  val tint: Color = if (row.failed) JewelTheme.globalColors.text.error else muted()
+  val line: Color? = if (row.failed) JewelTheme.globalColors.text.error.copy(alpha = 0.3f) else null
   Row(
     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     horizontalArrangement = Arrangement.spacedBy(12.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    Hairline(Modifier.weight(1f))
+    Hairline(Modifier.weight(1f), line)
     Row(
-      modifier = Modifier.activityShimmer(active, Shimmer.ActivityFocus),
+      modifier = Modifier.activityShimmer(row.active, Shimmer.ActivityFocus),
       horizontalArrangement = Arrangement.spacedBy(6.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      Glyph("minimize-2", muted(), 12.dp)
-      Text(label, style = small(), color = muted())
+      Glyph(if (row.failed) "circle-alert" else "minimize-2", tint, 12.dp)
+      val tokens: CompactionTokenCounts? = row.tokenCounts
+      Text(
+        text = if (tokens != null) {
+          "${row.title ?: CONTEXT_COMPACTED} ${tokens.before} → ${tokens.after} tokens"
+        } else label,
+        style = small(),
+        color = tint,
+      )
+      row.failure?.let { failure ->
+        Text(
+          text = "· $failure",
+          style = small(),
+          color = tint.copy(alpha = 0.8f),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          modifier = Modifier.weight(1f, fill = false),
+        )
+      }
     }
-    Hairline(Modifier.weight(1f))
+    Hairline(Modifier.weight(1f), line)
   }
 }
+
+private const val CONTEXT_COMPACTED: String = "Context compacted"
 
 /** `V2EventTimelineRow`: lifecycle events as dividers, the rest as a card. */
 @Composable
@@ -1691,8 +1737,11 @@ private fun CopyAction(text: String) {
 }
 
 @Composable
-private fun Hairline(modifier: Modifier = Modifier) {
-  Box(modifier.height(1.dp).background(JewelTheme.globalColors.borders.normal.copy(alpha = 0.7f)))
+private fun Hairline(modifier: Modifier = Modifier, color: Color? = null) {
+  Box(
+    modifier.height(1.dp)
+      .background(color ?: JewelTheme.globalColors.borders.normal.copy(alpha = 0.7f)),
+  )
 }
 
 /** `border-b border-border/60`. */
