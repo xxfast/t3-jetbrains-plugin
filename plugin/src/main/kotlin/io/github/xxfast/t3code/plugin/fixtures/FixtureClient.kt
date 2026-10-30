@@ -7,6 +7,7 @@ import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SNOOZE
 import io.github.xxfast.t3code.plugin.ui.THREAD_TITLE_REGENERATION
 import io.github.xxfast.t3code.plugin.ui.instance
+import io.github.xxfast.t3code.plugin.ui.serverKey
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.ConversationMessage
 import io.github.xxfast.t3code.protocol.DEFAULT_SNOOZE_PRESETS
@@ -24,6 +25,9 @@ import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.ServerSession
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.T3Exception
+import io.github.xxfast.t3code.protocol.previewStopLocalServerErrorMessage
+import io.github.xxfast.t3code.protocol.generated.DiscoveredLocalServerList
+import io.github.xxfast.t3code.protocol.generated.PreviewStopLocalServerInput
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
@@ -174,6 +178,9 @@ class FixtureClient(
 
   /** The refs the fixture checkout has, grown by `vcs.createRef`. */
   private val refs: MutableStateFlow<List<VcsRef>> = MutableStateFlow(FIXTURE_REFS)
+
+  /** The scenario's `discoveredServers` that `preview.stopLocalServer` stopped, by `serverKey`. */
+  private val stoppedServers: MutableStateFlow<Set<String>> = MutableStateFlow(emptySet())
 
   override val connection: StateFlow<ConnectionState> = combine(loaded, online) { scenario, on ->
     if (!on) ConnectionState.Disconnected else scenario?.connection ?: ConnectionState.Connecting
@@ -1262,6 +1269,29 @@ class FixtureClient(
     VcsStatusStreamEvent.Snapshot(local = local, remote = remote) as VcsStatusStreamEvent
   }
 
+  /** The scenario's `discoveredServers` less the stopped ones, scanned again on every change. */
+  override fun discoveredLocalServers(): Flow<DiscoveredLocalServerList> =
+    combine(loaded.filterNotNull(), stoppedServers) { scenario, stopped ->
+      DiscoveredLocalServerList(
+        servers = scenario.discoveredServers.filter { serverKey(it) !in stopped },
+        scannedAt = Instant.now().toString(),
+      )
+    }
+
+  /** After a moment so the button spins; a server that's gone is upstream's `not-found`. */
+  override suspend fun stopLocalServer(input: PreviewStopLocalServerInput) {
+    delay(STOP_SERVER_MILLIS)
+    val running: Boolean = loaded.value?.discoveredServers.orEmpty().any { server ->
+      server.pid == input.pid && server.port == input.port &&
+        serverKey(server) !in stoppedServers.value
+    }
+    if (!running) {
+      val message: String = previewStopLocalServerErrorMessage("not-found").orEmpty()
+      throw T3Exception.Rpc("PreviewStopLocalServerError", message)
+    }
+    stoppedServers.update { stopped -> stopped + "${input.pid}:${input.port}" }
+  }
+
   override suspend fun createUploadUrl(
     input: AttachmentCreateUploadUrlInput,
   ): AttachmentCreateUploadUrlResult {
@@ -1400,7 +1430,7 @@ class FixtureClient(
       THREAD_SNOOZE,
       THREAD_TITLE_REGENERATION,
       PULL_REQUESTS,
-    ),
+    ) + loaded.value?.capabilities.orEmpty(),
     environmentLabel = "Fixture MacBook",
     environmentId = FIXTURE_ENVIRONMENT_ID,
     machine = "laptop",
@@ -1502,6 +1532,7 @@ class FixtureClient(
     // The sequence only moves forward, or a sent message waiting on it would never retire
     overlay.value = Overlay(sequence = sequence.get())
     refreshedSnapshots.clear()
+    stoppedServers.value = emptySet()
     loaded.value = load(files)
   }
 
@@ -1525,6 +1556,9 @@ private const val PROVIDER_SCAN_MILLIS: Long = 400
 
 /** How long the fake `pullRequests.list` and `pullRequests.detail` take. */
 private const val PULL_REQUEST_LOOKUP_MILLIS: Long = 250
+
+/** How long the fake `preview.stopLocalServer` takes. */
+private const val STOP_SERVER_MILLIS: Long = 800
 
 /** How long the fake `projects.searchEntries` takes. */
 private const val SEARCH_ENTRIES_MILLIS: Long = 150

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "PreviewStopLocalServerInput",
+  "title": "PreviewStopLocalServerInput",
+  "type": "object",
+  "properties": {
+    "pid": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "port": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "exclusiveMaximum": 65536
+    }
+  },
+  "required": [
+    "pid",
+    "port"
+  ],
+  "additionalProperties": true
+}

@@ -83,10 +83,13 @@ How it fits together:
   its `#` says pull requests aren't available; KStore has three scripts in `list.json`, one a
   worktree hook, so T3 Thread Details shows "Run tests", while Decompose-Router inherits the
   fixture server's `defaultProjectScripts` ("Lint") the way `resolveProjectScripts` has it),
-  and its `connection.json` grants the
+  `servers.json` with two web servers for the running thread, one a terminal started and one
+  the agent did, for T3 Thread Details' Servers (a stop removes the row until the next
+  reload), and its `connection.json` grants the
   operate, terminal and `source-control:write` scopes so every action is live, the branch
-  pickers included, and sets the server's `settings.snoozePresets` (tomorrow 08:00, 2 h,
-  20 min, out of order) so the snooze menu shows them soonest first. `disconnected/`, `pairing/`, `auth-error/`, `read-only/` (no operate) and
+  pickers included, advertises `localServerStop` for the servers' stop buttons, and sets the
+  server's `settings.snoozePresets` (tomorrow 08:00, 2 h, 20 min, out of order) so the snooze
+  menu shows them soonest first. `disconnected/`, `pairing/`, `auth-error/`, `read-only/` (no operate) and
   `empty-server/` cover connection-level states; the ones with threads carry a byte-for-byte copy
   of `default/list.json`. Shapes are the same `:protocol` types the real client decodes, so
   scenarios double as test fixtures.

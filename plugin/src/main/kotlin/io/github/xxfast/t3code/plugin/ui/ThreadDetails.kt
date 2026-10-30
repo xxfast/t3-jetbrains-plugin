@@ -78,12 +78,12 @@ class ThreadLineageActions(
 /**
  * "T3 Thread Details", upstream's `ThreadDetailsPanel` (apps/web/src/components/chat/
  * ThreadDetailsPanel.tsx): the Workspace section, the Version Control section when the thread
- * has a `gitCwd`, then the Lineage, upstream's `ThreadRelationshipsPanel`
- * (ThreadRelationshipsControl.tsx). Automations aren't ported: upstream hides the section without
- * scheduled tasks, and the plugin has none. Upstream hides the Lineage when there's nothing
- * related; so does this. [visible] is what the user chose to show, see [THREAD_DETAILS_ITEMS];
- * a right click on the card, or the "Choose what to show" row of a card left empty, calls
- * [onItemsMenu] with where the menu opens. [enabled] is false without the operate scope, which
+ * has a `gitCwd`, the [servers] its terminals and agent started (`ThreadServersPanel`), then the
+ * Lineage, upstream's `ThreadRelationshipsPanel` (ThreadRelationshipsControl.tsx). Automations
+ * aren't ported: upstream hides the section without scheduled tasks, and the plugin has none.
+ * Upstream hides the Lineage when there's nothing related; so does this. [visible] is what the
+ * user chose to show, see [THREAD_DETAILS_ITEMS]; a right click on the card, or the "Choose
+ * what to show" row of a card left empty, calls [onItemsMenu] with where the menu opens. [enabled] is false without the operate scope, which
  * leaves opening rows but no actions. [stoppingId] is the row being stopped. Upstream's card
  * drops to a compact density when short of height; a tool window scrolls instead.
  */
@@ -92,6 +92,8 @@ fun ThreadDetails(
   threadId: String,
   panel: ThreadDetailsPanelState?,
   panelActions: ThreadDetailsPanelActions,
+  servers: ThreadServersState,
+  serverActions: ThreadServersActions,
   lineage: ThreadLineage?,
   busyAction: LineageBusyAction?,
   stoppingId: String?,
@@ -107,6 +109,7 @@ fun ThreadDetails(
   }
   val workspace: Boolean = show?.workspace == true
   val versionControl: Boolean = panel?.gitCwd != null && show?.versionControl == true
+  val serversShown: Boolean = visible[ThreadDetailsItem.Servers] && servers.servers.isNotEmpty()
   val related: Boolean = lineage != null && visible[ThreadDetailsItem.Lineage]
   VerticallyScrollableContainer(
     scrollState = rememberScrollState(),
@@ -119,9 +122,12 @@ fun ThreadDetails(
           VersionControlSection(panel, panelActions, show, visible, separated = workspace)
         }
       }
+      if (serversShown) {
+        ThreadServersPanel(servers, serverActions, separated = workspace || versionControl)
+      }
       if (lineage != null && related) {
         ThreadDetailsSection(
-          separated = workspace || versionControl,
+          separated = workspace || versionControl || serversShown,
           title = lineage.title,
           actions = { LineageActions(lineage, busyAction, enabled, actions.onDetach) },
         ) {
@@ -136,7 +142,9 @@ fun ThreadDetails(
         }
       }
       // Shown only when no section above has content, so an emptied card can be refilled
-      if (!workspace && !versionControl && !related) ChooseWhatToShowRow(onItemsMenu)
+      if (!workspace && !versionControl && !serversShown && !related) {
+        ChooseWhatToShowRow(onItemsMenu)
+      }
     }
   }
 }

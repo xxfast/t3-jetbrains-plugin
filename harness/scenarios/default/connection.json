@@ -12,7 +12,8 @@
       "permissions": ["orchestration:read", "orchestration:operate", "terminal:read", "terminal:operate", "filesystem:read", "source-control:write"],
       "scopes": ["orchestration:read", "orchestration:operate", "terminal:read", "terminal:operate", "filesystem:read", "source-control:write"],
       "sessionMethod": "bearer-access-token"
-    }
+    },
+    "capabilities": ["localServerStop"]
   },
   "settings": {
     "snoozePresets": [

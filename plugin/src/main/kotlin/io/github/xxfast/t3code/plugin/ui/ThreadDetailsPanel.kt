@@ -519,7 +519,7 @@ private val DIFF_DELETION: Color = Color(0xFFEF4444)
 /** `THREAD_DETAILS_PANEL_ICON_CLASS`: 16dp, muted, with an optional tooltip. */
 @OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip sits on Compose's TooltipArea
 @Composable
-private fun PanelIcon(glyph: String, tooltip: String? = null) {
+internal fun PanelIcon(glyph: String, tooltip: String? = null) {
   if (tooltip == null) return Glyph(glyph, muted(), 16.dp)
   Tooltip(tooltip = { Text(tooltip) }) { Glyph(glyph, muted(), 16.dp) }
 }
@@ -542,14 +542,14 @@ private fun MenuItemRow(glyph: String, label: String, hint: String? = null) {
 
 /** `THREAD_DETAILS_PANEL_HOVER_SURFACE_CLASS`: black at 3.5% on light, white at 8% on dark. */
 @Composable
-private fun hoverFill(): Color =
+internal fun hoverFill(): Color =
   if (JewelTheme.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.035f)
 
 /** `text-foreground/80`, the rows' text. */
 @Composable
 private fun rowText(): Color = JewelTheme.globalColors.text.normal.copy(alpha = 0.8f)
 
-private val ROW_SHAPE: Shape = RoundedCornerShape(8.dp)
+internal val ROW_SHAPE: Shape = RoundedCornerShape(8.dp)
 private val ROW_START_SHAPE: Shape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp)
 private val ROW_END_SHAPE: Shape = RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp)
 

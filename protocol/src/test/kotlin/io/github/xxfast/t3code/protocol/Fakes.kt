@@ -141,6 +141,19 @@ class FakeRpcServer : WebSocketServer(InetSocketAddress("127.0.0.1", 0)), AutoCl
 
         "subscribeVcsStatus" -> replay(conn, id, "vcs-status-snapshot-chunk.json")
 
+        "subscribeDiscoveredLocalServers" ->
+          replay(conn, id, "discovered-local-servers-chunk.json")
+
+        "preview.stopLocalServer" -> {
+          if (payload?.long("pid") == 404L) {
+            conn.send(
+              """{"_tag":"Exit","requestId":"$id","exit":{"_tag":"Failure","cause":""" +
+                """[{"_tag":"Fail","error":{"_tag":"PreviewStopLocalServerError",""" +
+                """"reason":"shared-group"}}]}}""",
+            )
+          } else conn.send(exit(id, "null"))
+        }
+
         "orchestration.dispatchCommand" -> conn.send(exit(id, """{"sequence":42}"""))
 
         "secrets.answerRequest" -> {

@@ -1,0 +1,28 @@
+{
+  "_tag": "Chunk",
+  "requestId": "0",
+  "values": [
+    {
+      "servers": [
+        {
+          "host": "127.0.0.1",
+          "port": 5173,
+          "url": "http://localhost:5173/",
+          "processName": "node",
+          "pid": 4242,
+          "terminal": { "threadId": "thread-1", "terminalId": "default" },
+          "agent": null
+        },
+        {
+          "host": "::1",
+          "port": 8080,
+          "url": "http://localhost:8080/",
+          "processName": null,
+          "pid": null,
+          "terminal": null
+        }
+      ],
+      "scannedAt": "2026-10-30T05:00:00.000Z"
+    }
+  ]
+}

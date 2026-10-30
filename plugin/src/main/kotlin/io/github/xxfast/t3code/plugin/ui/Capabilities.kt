@@ -19,3 +19,6 @@ const val THREAD_STOP: String = "threadStop"
  */
 fun ServerInfo?.supports(capability: String, unknown: Boolean = false): Boolean =
   this?.capabilities?.contains(capability) ?: unknown
+
+/** `preview.stopLocalServer` exists, so T3 Thread Details' Servers rows get a stop button. */
+const val LOCAL_SERVER_STOP: String = "localServerStop"

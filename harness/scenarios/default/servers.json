@@ -1,0 +1,27 @@
+{
+  "discoveredServers": [
+    {
+      "host": "127.0.0.1",
+      "port": 5173,
+      "url": "http://localhost:5173/",
+      "processName": "node",
+      "pid": 48251,
+      "terminal": {
+        "threadId": "thr_01JC4A1F0QWMIGRATE",
+        "terminalId": "terminal-2"
+      },
+      "agent": null
+    },
+    {
+      "host": "127.0.0.1",
+      "port": 8000,
+      "url": "http://localhost:8000/",
+      "processName": "python3",
+      "pid": 48302,
+      "terminal": null,
+      "agent": {
+        "threadId": "thr_01JC4A1F0QWMIGRATE"
+      }
+    }
+  ]
+}

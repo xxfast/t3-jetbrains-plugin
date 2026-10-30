@@ -318,6 +318,10 @@ internal fun JsonObject.toT3Exception(fallback: String): T3Exception? {
       requiredPermission = string("requiredPermission"),
     )
 
+    // Upstream's message is a getter, so the wire has only the `reason`
+    "PreviewStopLocalServerError" ->
+      T3Exception.Rpc(tag, previewStopLocalServerErrorMessage(string("reason")) ?: message)
+
     else -> T3Exception.Rpc(tag, message)
   }
 }

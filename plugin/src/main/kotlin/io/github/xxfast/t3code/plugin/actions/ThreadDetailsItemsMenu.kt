@@ -20,8 +20,8 @@ import io.github.xxfast.t3code.plugin.ui.resolveThreadDetailsVisibility
 import io.github.xxfast.t3code.plugin.ui.setThreadDetailsItem
 
 /**
- * The items T3 Thread Details draws, in `THREAD_DETAILS_ITEMS` order. Servers, Automations and
- * Usage join once the plugin renders them.
+ * The items T3 Thread Details draws, in `THREAD_DETAILS_ITEMS` order. Automations and Usage
+ * join once the plugin renders them.
  */
 private val DRAWN_ITEMS: List<ThreadDetailsItem> = listOf(
   ThreadDetailsItem.Environment,
@@ -30,6 +30,7 @@ private val DRAWN_ITEMS: List<ThreadDetailsItem> = listOf(
   ThreadDetailsItem.Branch,
   ThreadDetailsItem.GitActions,
   ThreadDetailsItem.Changes,
+  ThreadDetailsItem.Servers,
   ThreadDetailsItem.Lineage,
 )
 

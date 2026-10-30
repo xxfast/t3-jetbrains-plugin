@@ -2,8 +2,10 @@ package io.github.xxfast.t3code.protocol
 
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
+import io.github.xxfast.t3code.protocol.generated.DiscoveredLocalServerList
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
+import io.github.xxfast.t3code.protocol.generated.PreviewStopLocalServerInput
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesResult
 import io.github.xxfast.t3code.protocol.generated.PullRequestDetail
@@ -186,6 +188,19 @@ public interface T3Client {
   public fun vcsStatus(cwd: String): Flow<VcsStatusStreamEvent>
 
   /**
+   * `subscribeDiscoveredLocalServers` (`orchestration:read`): the web servers listening on the
+   * server's machine, the whole list again after every scan.
+   */
+  public fun discoveredLocalServers(): Flow<DiscoveredLocalServerList>
+
+  /**
+   * `preview.stopLocalServer` (`terminal:operate`): kills the server listening on `port` as
+   * `pid`. A refusal is a [T3Exception.Rpc] tagged `PreviewStopLocalServerError` whose message
+   * is upstream's, [previewStopLocalServerErrorMessage].
+   */
+  public suspend fun stopLocalServer(input: PreviewStopLocalServerInput)
+
+  /**
    * `attachments.createUploadUrl`. Then [upload] the bytes to the signed `relativeUrl`, then
    * [persistAttachments]. Three calls so the UI can show progress and failures per step.
    */
@@ -232,6 +247,19 @@ public interface T3Client {
   public fun connect()
 
   public fun disconnect()
+}
+
+/**
+ * `PreviewStopLocalServerError.message` (packages/contracts/src/preview.ts:336) for its
+ * `reason`, which is all the wire carries. Null for a reason this doesn't know.
+ */
+public fun previewStopLocalServerErrorMessage(reason: String?): String? = when (reason) {
+  "not-found" -> "This server is no longer running."
+  "shared-group" -> "This server shares a process group with T3 Code, an agent, or a terminal " +
+    "shell, so it can't be stopped on its own."
+  "unsupported" -> "Stopping servers is not supported on this environment's platform."
+  "signal-failed" -> "The server's processes could not be signaled."
+  else -> null
 }
 
 /** Failures the client surfaces to callers of the suspend functions. */

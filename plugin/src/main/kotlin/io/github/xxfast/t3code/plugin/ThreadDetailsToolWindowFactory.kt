@@ -43,6 +43,7 @@ import io.github.xxfast.t3code.plugin.terminal.TERMINAL_OPERATE
 import io.github.xxfast.t3code.plugin.terminal.ThreadTerminals
 import io.github.xxfast.t3code.plugin.ui.BranchSelectionTarget
 import io.github.xxfast.t3code.plugin.ui.EnvMode
+import io.github.xxfast.t3code.plugin.ui.LOCAL_SERVER_STOP
 import io.github.xxfast.t3code.plugin.ui.Hint
 import io.github.xxfast.t3code.plugin.ui.LineageBusyAction
 import io.github.xxfast.t3code.plugin.ui.LineageSubagent
@@ -57,6 +58,8 @@ import io.github.xxfast.t3code.plugin.ui.ThreadDetailsPanelState
 import io.github.xxfast.t3code.plugin.ui.ThreadDetailsVisibility
 import io.github.xxfast.t3code.plugin.ui.ThreadLineage
 import io.github.xxfast.t3code.plugin.ui.ThreadLineageActions
+import io.github.xxfast.t3code.plugin.ui.ThreadServersActions
+import io.github.xxfast.t3code.plugin.ui.ThreadServersState
 import io.github.xxfast.t3code.plugin.ui.VcsStatus
 import io.github.xxfast.t3code.plugin.ui.WorkspaceControlState
 import io.github.xxfast.t3code.plugin.ui.buildMenuItems
@@ -70,8 +73,10 @@ import io.github.xxfast.t3code.plugin.ui.resolveBranchSelectionTarget
 import io.github.xxfast.t3code.plugin.ui.resolvePrimaryRunItem
 import io.github.xxfast.t3code.plugin.ui.resolveQuickAction
 import io.github.xxfast.t3code.plugin.ui.resolveThreadDetailsVisibility
+import io.github.xxfast.t3code.plugin.ui.serverKey
 import io.github.xxfast.t3code.plugin.ui.subagentStopCommand
 import io.github.xxfast.t3code.plugin.ui.supports
+import io.github.xxfast.t3code.plugin.ui.useThreadDiscoveredPorts
 import io.github.xxfast.t3code.plugin.ui.workspaceControlState
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.OrchestrationV2Command
@@ -82,6 +87,9 @@ import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.DiscoveredLocalServer
+import io.github.xxfast.t3code.protocol.generated.DiscoveredLocalServerList
+import io.github.xxfast.t3code.protocol.generated.PreviewStopLocalServerInput
 import io.github.xxfast.t3code.protocol.generated.ProjectScript
 import io.github.xxfast.t3code.protocol.generated.VcsRef
 import io.github.xxfast.t3code.protocol.has
@@ -93,7 +101,9 @@ import javax.swing.JComponent
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import org.jetbrains.jewel.bridge.JewelComposePanel
 
@@ -152,11 +162,15 @@ private fun ThreadDetailsContent(project: Project, threadId: String, view: Threa
   val visible: ThreadDetailsVisibility = remember(items) { resolveThreadDetailsVisibility(items) }
   val (panel: ThreadDetailsPanelState?, panelActions: ThreadDetailsPanelActions) =
     rememberThreadDetailsPanel(project, threadId, view, connection, catalog, projects, threads)
+  val (servers: ThreadServersState, serverActions: ThreadServersActions) =
+    rememberThreadServers(project, threadId, connection, catalog)
 
   ThreadDetails(
     threadId = threadId,
     panel = panel,
     panelActions = panelActions,
+    servers = servers,
+    serverActions = serverActions,
     lineage = lineage,
     busyAction = busyAction,
     stoppingId = stoppingId,
@@ -206,6 +220,64 @@ private fun ThreadDetailsContent(project: Project, threadId: String, view: Threa
       },
     ),
   )
+}
+
+/**
+ * The Servers section for [threadId], as `ThreadServersPanel` resolves it: the machine's
+ * `subscribeDiscoveredLocalServers` list through [useThreadDiscoveredPorts], opening a row in
+ * the system browser and stopping one with `preview.stopLocalServer`, one at a time. A loopback
+ * URL from a server on another machine doesn't reach this one (upstream's
+ * `resolveDiscoveredServerUrl` tunnels it, the plugin doesn't), so those rows stay disabled.
+ */
+@Composable
+private fun rememberThreadServers(
+  project: Project,
+  threadId: String,
+  connection: ConnectionState,
+  catalog: ServerInfo?,
+): Pair<ThreadServersState, ThreadServersActions> {
+  val client: T3Client = T3.get().client
+  val session: ServerSession? = (connection as? ConnectionState.Connected)?.session
+  val connected: Boolean = session != null
+  // Subscribed per connection: a failed stream ends, and the next connection starts it over.
+  // Pairing with another server reconnects too, which is when locality can change.
+  val discovered: DiscoveredLocalServerList? by remember(client, connected) {
+    if (!connected) return@remember flowOf(null)
+    client.discoveredLocalServers()
+      .catch<DiscoveredLocalServerList?> { e ->
+        LOG.info("subscribeDiscoveredLocalServers failed", e)
+        emit(null)
+      }
+  }.collectAsState(initial = null)
+  var stoppingKey: String? by remember(threadId) { mutableStateOf(null) }
+  val scope: CoroutineScope = rememberCoroutineScope()
+  val serverIsLocal: Boolean = remember(connected) { T3.serverIsLocal() }
+  // Stale once the socket drops, and the next scan answers soon after it's back
+  val ports: List<DiscoveredLocalServer> = if (connected) discovered?.servers.orEmpty() else
+    emptyList()
+  val state = ThreadServersState(
+    servers = useThreadDiscoveredPorts(ports, threadId),
+    openReason = if (serverIsLocal) null else
+      "The server is on another machine, so its localhost doesn't reach this one",
+    canStop = session?.has(TERMINAL_OPERATE) == true,
+    supportsStop = catalog.supports(LOCAL_SERVER_STOP),
+    stoppingKey = stoppingKey,
+  )
+  val actions = ThreadServersActions(
+    onOpen = { server -> if (serverIsLocal) BrowserUtil.browse(server.url) },
+    onStop = onStop@{ server ->
+      val pid: Long = server.pid ?: return@onStop
+      if (stoppingKey != null) return@onStop
+      stoppingKey = serverKey(server)
+      scope.launch {
+        reporting(project, "Could not stop server") {
+          client.stopLocalServer(PreviewStopLocalServerInput(pid = pid, port = server.port))
+        }
+        stoppingKey = null
+      }
+    },
+  )
+  return state to actions
 }
 
 /**

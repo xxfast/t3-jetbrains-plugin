@@ -2,11 +2,13 @@ package io.github.xxfast.t3code.protocol
 
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlResult
+import io.github.xxfast.t3code.protocol.generated.DiscoveredLocalServerList
 import io.github.xxfast.t3code.protocol.generated.DispatchCommandResult
 import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsInput
 import io.github.xxfast.t3code.protocol.generated.PersistChatAttachmentsResult
 import io.github.xxfast.t3code.protocol.generated.PlanArtifactSerializer
+import io.github.xxfast.t3code.protocol.generated.PreviewStopLocalServerInput
 import io.github.xxfast.t3code.protocol.generated.PlanArtifact as GenPlanArtifact
 import io.github.xxfast.t3code.protocol.generated.TurnItem as GenTurnItem
 import io.github.xxfast.t3code.protocol.generated.ProjectSearchEntriesInput
@@ -308,6 +310,18 @@ public class WebSocketT3Client internal constructor(
       put("includeRemote", true)
     }
     return resubscribing("subscribeVcsStatus", payload, VcsStatusStreamEvent.serializer())
+  }
+
+  override fun discoveredLocalServers(): Flow<DiscoveredLocalServerList> = resubscribing(
+    "subscribeDiscoveredLocalServers",
+    JsonObject(emptyMap()),
+    DiscoveredLocalServerList.serializer(),
+  )
+
+  override suspend fun stopLocalServer(input: PreviewStopLocalServerInput) {
+    val payload: JsonElement =
+      T3JsonOut.encodeToJsonElement(PreviewStopLocalServerInput.serializer(), input)
+    call("preview.stopLocalServer", payload)
   }
 
   override suspend fun createUploadUrl(

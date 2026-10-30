@@ -1,6 +1,8 @@
 package io.github.xxfast.t3code.protocol
 
 import io.github.xxfast.t3code.protocol.generated.Command
+import io.github.xxfast.t3code.protocol.generated.DiscoveredLocalServerList
+import io.github.xxfast.t3code.protocol.generated.PreviewStopLocalServerInput
 import io.github.xxfast.t3code.protocol.generated.SecretRequestAnswerInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachInput
 import io.github.xxfast.t3code.protocol.generated.TerminalAttachStreamEvent
@@ -307,6 +309,42 @@ class WebSocketT3ClientTest {
     assertEquals("thread-1", payload.string("threadId"))
     assertEquals("term-1", payload.string("terminalId"))
     assertEquals("true", payload.string("deleteHistory"))
+  }
+
+  @Test
+  fun discoveredLocalServersDecodeWithAndWithoutAnAgent() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+
+    val list: DiscoveredLocalServerList = client.discoveredLocalServers().first()
+
+    assertEquals(listOf(5173L, 8080L), list.servers.map { it.port })
+    assertEquals("thread-1", list.servers[0].terminal?.threadId)
+    assertNull(list.servers[1].agent, "Older servers omit `agent`")
+    assertNull(list.servers[1].pid)
+    assertEquals("2026-10-30T05:00:00.000Z", list.scannedAt)
+    val payload: JsonObject =
+      rpc.requests("subscribeDiscoveredLocalServers").single().getValue("payload").jsonObject
+    assertTrue(payload.isEmpty())
+  }
+
+  @Test
+  fun stopLocalServerSendsPidAndPortAndSaysWhyItFailed() = realTimeTest {
+    val client: WebSocketT3Client = client()
+    client.connect()
+    client.connection.first { it is ConnectionState.Connected }
+
+    client.stopLocalServer(PreviewStopLocalServerInput(pid = 4242, port = 5173))
+    val payload: JsonObject =
+      rpc.requests("preview.stopLocalServer").single().getValue("payload").jsonObject
+    assertEquals(4242L, payload.long("pid"))
+    assertEquals(5173L, payload.long("port"))
+
+    val error: T3Exception.Rpc = assertFailsWith {
+      client.stopLocalServer(PreviewStopLocalServerInput(pid = 404, port = 5173))
+    }
+    assertEquals("PreviewStopLocalServerError", error.tag)
+    assertEquals(previewStopLocalServerErrorMessage("shared-group"), error.message)
   }
 
   @Test

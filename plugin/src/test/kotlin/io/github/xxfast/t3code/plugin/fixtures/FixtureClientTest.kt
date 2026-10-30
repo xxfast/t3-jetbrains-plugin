@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.fixtures
 
+import io.github.xxfast.t3code.plugin.ui.LOCAL_SERVER_STOP
 import io.github.xxfast.t3code.plugin.ui.PendingUserInputDraftAnswer
 import io.github.xxfast.t3code.plugin.ui.SnoozePreset
 import io.github.xxfast.t3code.plugin.ui.resolveSnoozePresets
@@ -23,6 +24,9 @@ import io.github.xxfast.t3code.plugin.ui.setThreadRuntimeMode
 import io.github.xxfast.t3code.plugin.ui.updateThreadModelSelection
 import io.github.xxfast.t3code.plugin.ui.seedUserInputDraftAnswers
 import io.github.xxfast.t3code.plugin.ui.slug
+import io.github.xxfast.t3code.plugin.ui.serverDetail
+import io.github.xxfast.t3code.plugin.ui.supports
+import io.github.xxfast.t3code.plugin.ui.useThreadDiscoveredPorts
 import io.github.xxfast.t3code.plugin.ui.buildPendingUserInputAnswers
 import io.github.xxfast.t3code.plugin.review.checkpointForRun
 import io.github.xxfast.t3code.protocol.Checkpoint
@@ -41,6 +45,9 @@ import io.github.xxfast.t3code.plugin.ui.messageContext
 import io.github.xxfast.t3code.plugin.ui.reviewCommentReference
 import io.github.xxfast.t3code.plugin.ui.toRecord
 import io.github.xxfast.t3code.protocol.T3Exception
+import io.github.xxfast.t3code.protocol.previewStopLocalServerErrorMessage
+import io.github.xxfast.t3code.protocol.generated.DiscoveredLocalServer
+import io.github.xxfast.t3code.protocol.generated.PreviewStopLocalServerInput
 import io.github.xxfast.t3code.protocol.generated.AttachmentCreateUploadUrlInput
 import io.github.xxfast.t3code.protocol.generated.ChatAttachment
 import io.github.xxfast.t3code.protocol.generated.ChatFileAttachment
@@ -73,6 +80,7 @@ import kotlin.io.path.setLastModifiedTime
 import kotlin.io.path.writeText
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
@@ -903,6 +911,25 @@ class FixtureClientTest {
     val view: ThreadView = client.thread("thr_created").first()
     assertTrue(view.items.isEmpty())
     assertEquals(listOf("main", "develop"), client.listRefs(VcsListRefsInput(cwd = "/x")).refs.take(2).map { it.name })
+  }
+
+  @Test
+  fun `the running thread has two servers and a stop takes one away`() = runTest {
+    val client = FixtureClient(default, backgroundScope)
+    val servers: List<DiscoveredLocalServer> = client.discoveredLocalServers()
+      .first { it.servers.isNotEmpty() }.servers
+    val mine: List<DiscoveredLocalServer> = useThreadDiscoveredPorts(servers, THREAD)
+    assertEquals(listOf("Terminal · node", "Agent · python3"), mine.map(::serverDetail))
+    assertTrue(client.serverInfo().supports(LOCAL_SERVER_STOP))
+
+    val agent: DiscoveredLocalServer = mine.single { it.terminal == null }
+    val stop = PreviewStopLocalServerInput(pid = assertNotNull(agent.pid), port = agent.port)
+    client.stopLocalServer(stop)
+
+    val left: List<DiscoveredLocalServer> = client.discoveredLocalServers().first().servers
+    assertEquals(listOf(5173L), useThreadDiscoveredPorts(left, THREAD).map { it.port })
+    val gone: T3Exception.Rpc = assertFailsWith { client.stopLocalServer(stop) }
+    assertEquals(previewStopLocalServerErrorMessage("not-found"), gone.message)
   }
 
   private fun message(threadId: String, messageId: String, text: String) =

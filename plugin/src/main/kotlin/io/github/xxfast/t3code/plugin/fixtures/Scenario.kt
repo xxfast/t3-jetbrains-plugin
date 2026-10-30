@@ -17,6 +17,7 @@ import io.github.xxfast.t3code.protocol.Subagent
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.decodeSnoozePresets
+import io.github.xxfast.t3code.protocol.generated.DiscoveredLocalServer
 import io.github.xxfast.t3code.protocol.generated.ProjectEntry
 import io.github.xxfast.t3code.protocol.generated.PullRequestListEntry
 import io.github.xxfast.t3code.protocol.generated.ServerAuthDescriptor
@@ -72,6 +73,8 @@ class ScenarioFile(
   val pullRequests: List<PullRequestListEntry> = emptyList(),
   /** Pull requests only `pullRequests.detail` finds, past what the list shows. */
   val olderPullRequests: List<PullRequestListEntry> = emptyList(),
+  /** Web servers `subscribeDiscoveredLocalServers` lists, across every thread. */
+  val discoveredServers: List<DiscoveredLocalServer> = emptyList(),
 )
 
 @Serializable
@@ -79,6 +82,8 @@ class ScenarioConnection(
   val state: String = "connected",
   val message: String? = null,
   val session: ServerSession? = null,
+  /** `environment.capabilities` the fixture server has on top of its own, `localServerStop`. */
+  val capabilities: Set<String> = emptySet(),
 )
 
 /** A turn item and how long to wait before it shows up, in milliseconds. */
@@ -114,6 +119,9 @@ class Scenario(
   val projectEntries: List<ProjectEntry> = emptyList(),
   val pullRequests: List<PullRequestListEntry> = emptyList(),
   val olderPullRequests: List<PullRequestListEntry> = emptyList(),
+  val discoveredServers: List<DiscoveredLocalServer> = emptyList(),
+  /** The connection's extra `environment.capabilities`, from every file that sets some. */
+  val capabilities: Set<String> = emptySet(),
 ) {
   companion object {
     fun decode(text: String): Scenario {
@@ -142,14 +150,16 @@ class Scenario(
         projectEntries = file.projectEntries,
         pullRequests = file.pullRequests,
         olderPullRequests = file.olderPullRequests,
+        discoveredServers = file.discoveredServers,
+        capabilities = file.connection?.capabilities.orEmpty(),
       )
     }
 
     /**
      * One scenario out of a directory's files, in order. Projects, threads and terminals dedupe
-     * by id, first wins. Runs, items, requests, sessions, checkpoints and provider threads append
-     * per thread. The
-     * last file that sets a connection wins, and a directory that sets none is connected. So do
+     * by id, first wins, discovered servers by pid and port. Runs, items, requests, sessions,
+     * checkpoints and provider threads append per thread. The last file that sets a connection
+     * wins, and a directory that sets none is connected; capabilities add up across files. So do
      * snooze presets, and a directory that sets none has upstream's defaults.
      */
     fun merge(parts: List<Scenario>): Scenario = Scenario(
@@ -180,6 +190,8 @@ class Scenario(
       projectEntries = parts.flatMap { it.projectEntries }.distinctBy { it.path },
       pullRequests = parts.flatMap { it.pullRequests }.distinctBy { it.url },
       olderPullRequests = parts.flatMap { it.olderPullRequests }.distinctBy { it.url },
+      discoveredServers = parts.flatMap { it.discoveredServers }.distinctBy { it.pid to it.port },
+      capabilities = parts.flatMap { it.capabilities }.toSet(),
     )
 
     fun failed(name: String, message: String): Scenario = Scenario(

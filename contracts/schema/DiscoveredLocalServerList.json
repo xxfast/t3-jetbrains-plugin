@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "DiscoveredLocalServerList",
+  "title": "DiscoveredLocalServerList",
+  "type": "object",
+  "properties": {
+    "servers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DiscoveredLocalServer"
+      }
+    },
+    "scannedAt": {
+      "type": "string"
+    },
+    "configuredUrlProbing": {
+      "anyOf": [
+        {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "servers",
+    "scannedAt"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "DiscoveredLocalServer": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 65536
+        },
+        "url": {
+          "type": "string"
+        },
+        "processName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pid": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "terminal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TerminalClearInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "agent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorktreeSetupCancelInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "host",
+        "port",
+        "url",
+        "processName",
+        "pid",
+        "terminal"
+      ],
+      "additionalProperties": true
+    },
+    "TerminalClearInput": {
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string"
+        },
+        "terminalId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "threadId",
+        "terminalId"
+      ],
+      "additionalProperties": true
+    },
+    "WorktreeSetupCancelInput": {
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "threadId"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

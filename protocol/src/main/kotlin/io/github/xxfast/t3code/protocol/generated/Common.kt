@@ -152,6 +152,17 @@ public data class ChatUnknownAttachment(
 )
 
 @Serializable
+public data class DiscoveredLocalServer(
+  val host: String,
+  val port: Long,
+  val url: String,
+  val processName: String?,
+  val pid: Long?,
+  val terminal: TerminalClearInput?,
+  val agent: WorktreeSetupCancelInput? = null,
+)
+
+@Serializable
 public data class GuestMessageAttribution(
   val guestMessageId: String,
   val name: String,
@@ -2320,6 +2331,12 @@ public object UnknownStoredProjectIconSerializer : KSerializer<StoredProjectIcon
     (encoder as JsonEncoder).encodeJsonElement(value.raw)
   }
 }
+
+@Serializable
+public data class TerminalClearInput(
+  val threadId: String,
+  val terminalId: String,
+)
 
 @Serializable
 public data class TerminalSummary(
