@@ -1,0 +1,25 @@
+{
+  "connection": {
+    "state": "connected",
+    "session": {
+      "authenticated": true,
+      "auth": {
+        "policy": "desktop-managed-local",
+        "bootstrapMethods": ["desktop-bootstrap"],
+        "sessionMethods": ["bearer-access-token"],
+        "sessionCookieName": "t3_session_3773"
+      },
+      "permissions": ["orchestration:read", "orchestration:operate", "terminal:read", "terminal:operate", "filesystem:read", "source-control:write"],
+      "scopes": ["orchestration:read", "orchestration:operate", "terminal:read", "terminal:operate", "filesystem:read", "source-control:write"],
+      "sessionMethod": "bearer-access-token"
+    },
+    "capabilities": ["localServerStop"]
+  },
+  "settings": {
+    "snoozePresets": [
+      { "kind": "at", "day": "tomorrow", "time": "08:00" },
+      { "kind": "after", "minutes": 120 },
+      { "kind": "after", "minutes": 20 }
+    ]
+  }
+}

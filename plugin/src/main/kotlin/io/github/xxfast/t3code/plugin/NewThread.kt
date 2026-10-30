@@ -8,8 +8,10 @@ import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ide.launchReporting
 import io.github.xxfast.t3code.plugin.ide.notify
 import io.github.xxfast.t3code.plugin.settings.ComposerDrafts
+import io.github.xxfast.t3code.plugin.settings.T3Settings
 import io.github.xxfast.t3code.plugin.ui.DraftThread
 import io.github.xxfast.t3code.plugin.ui.newDraftThread
+import io.github.xxfast.t3code.plugin.ui.resolveThreadActionProjectRef
 import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.resolveProjectDefaultModelSelection
 import io.github.xxfast.t3code.protocol.T3Client
@@ -27,9 +29,33 @@ import io.github.xxfast.t3code.protocol.Project as T3Project
 class NewThread(private val project: Project, private val scope: CoroutineScope) {
   private val client: T3Client get() = T3.get().client
 
-  /** Opens the "New thread in..." picker; a pick opens the draft. */
+  /**
+   * Opens the "New thread in..." picker; a pick opens the draft. The boring sidebar's folders
+   * already show the context, so there it starts in the current project instead, as upstream's
+   * `handleNewThreadClick` (Sidebar.tsx:2870) and `chat.new` (chatRouteCommands.ts:119) do.
+   */
   fun open() {
+    if (T3Settings.get().boringSidebarEnabled) {
+      startFromContext()
+      return
+    }
     showNewThreadIn(project) { projectId -> if (projectId != null) start(projectId) }
+  }
+
+  /**
+   * `startNewThreadFromContext`, apps/web/src/lib/chatThreadActions.ts:85: a draft in the
+   * project of the thread or draft this window has open, else the first project. False when
+   * there's no project to start in.
+   */
+  fun startFromContext(): Boolean {
+    val selected: String? = ThreadSelection.getInstance(project).selected.value
+    val projectId: String = resolveThreadActionProjectRef(
+      activeThread = selected?.let { id -> client.threads.value.find { it.id == id } },
+      activeDraftThread = selected?.let { id -> DraftThreads.get().drafts.value[id] },
+      defaultProjectId = client.projects.value.firstOrNull()?.id,
+    ) ?: return false
+    start(projectId)
+    return true
   }
 
   /**

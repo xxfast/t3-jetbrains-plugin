@@ -7,6 +7,7 @@ import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.util.SystemInfo
+import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.dsl.builder.Cell
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
@@ -14,6 +15,7 @@ import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.COLUMNS_LARGE
 import com.intellij.ui.dsl.builder.panel
+import com.intellij.ui.dsl.builder.selected
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import io.github.xxfast.t3code.plugin.T3
 import io.github.xxfast.t3code.plugin.ui.EffortDisplay
@@ -116,6 +118,27 @@ class T3Configurable : BoundConfigurable("T3 Code") {
         button("Forget credential") { T3.get().forget() }
       }
       row { comment = comment("Checking...") }
+      group("Beta") {
+        // Upstream's Labs > Beta rows, LabsSettingsPanel.tsx:31 and :52, off by default
+        lateinit var boring: Cell<JBCheckBox>
+        row {
+          boring = checkBox("Boring sidebar (group by project)")
+            .bindSelected(T3Settings.get()::boringSidebarEnabled)
+            .comment(
+              "Group sidebar threads into project folders. Pinned threads stay on top, " +
+                "and Snoozed and Settled stay below the folders.",
+            )
+        }
+        row {
+          checkBox("Two-line folder rows")
+            .bindSelected(T3Settings.get()::boringSidebarMultilineRows)
+            .comment(
+              "In the boring sidebar, show folder threads on two lines: the title, " +
+                "then the branch, pull request, and agent.",
+            )
+            .enabledIf(boring.selected)
+        }
+      }
     }
     status = T3.get().watch { connection ->
       val url: String = T3Settings.get().serverUrl

@@ -15,6 +15,7 @@ import com.intellij.openapi.ui.MessageDialogBuilder
 import com.intellij.openapi.ui.Messages
 import io.github.xxfast.t3code.plugin.ChatController
 import io.github.xxfast.t3code.plugin.NewThread
+import io.github.xxfast.t3code.plugin.SidebarFolders
 import io.github.xxfast.t3code.plugin.SidebarRename
 import io.github.xxfast.t3code.plugin.T3
 import io.github.xxfast.t3code.plugin.ThreadSelection
@@ -30,12 +31,16 @@ import io.github.xxfast.t3code.plugin.ui.THREAD_AUTO_SETTLE_OPT_OUT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SETTLEMENT
 import io.github.xxfast.t3code.plugin.ui.THREAD_SNOOZE
 import io.github.xxfast.t3code.plugin.ui.THREAD_TITLE_REGENERATION
+import io.github.xxfast.t3code.plugin.ui.ThreadSections
+import io.github.xxfast.t3code.plugin.ui.cards
+import io.github.xxfast.t3code.plugin.ui.keepEmptyFolders
 import io.github.xxfast.t3code.plugin.ui.nextCard
 import io.github.xxfast.t3code.plugin.ui.runtimeStatus
 import io.github.xxfast.t3code.plugin.ui.sections
 import io.github.xxfast.t3code.plugin.ui.pickSnoozePreset
 import io.github.xxfast.t3code.plugin.ui.resolveSnoozePresets
 import io.github.xxfast.t3code.plugin.ui.settled
+import io.github.xxfast.t3code.plugin.ui.sidebarFolderGroups
 import io.github.xxfast.t3code.plugin.ui.snoozed
 import io.github.xxfast.t3code.protocol.DEFAULT_SNOOZE_PRESETS
 import io.github.xxfast.t3code.protocol.Project as T3Project
@@ -276,7 +281,14 @@ class SettleThreadAction : ThreadAction(ThreadActionKind.Settle, THREAD_SETTLEME
 private suspend fun ThreadTarget.park(command: Command) {
   val next: String? = if (ThreadSelection.getInstance(project).selected.value == row.id) {
     val filter: ProjectFilter = ProjectAwareness.getInstance(project).filter.value
-    nextCard(sections(client.threads.value, query = "", filter).inbox, row.id)
+    val projects: List<T3Project> = client.projects.value
+    val boring: Boolean = T3Settings.get().boringSidebarEnabled
+    val sections: ThreadSections = sections(
+      client.threads.value, query = "", filter,
+      folderGroups = sidebarFolderGroups(projects, filter, boring),
+      keepEmptyFolders = keepEmptyFolders(projects, filter, query = ""),
+    )
+    nextCard(sections.cards(SidebarFolders.get().projectExpandedById.value, row.id), row.id)
   } else {
     null
   }

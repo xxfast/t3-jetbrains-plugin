@@ -142,6 +142,8 @@ fun Sidebar(
   renaming: String? = null, // the row being renamed in place
   details: RowDetails = RowDetails(), // terminals, machine and checkout, for the rows' extras
   workingShelf: Boolean = true, // upstream's `sidebarWorkingShelfEnabled`
+  boring: BoringSidebar? = null, // upstream's `boringSidebarEnabled`, null while it's off
+  folderActions: FolderActions = FolderActions(), // the boring sidebar's folder headers
 ) {
   val search: TextFieldState = rememberTextFieldState()
   val query: String = search.text.toString()
@@ -151,13 +153,20 @@ fun Sidebar(
   val returns: Int by inboxReturns.version.collectAsState()
   val requests: Map<String, PendingSubagentRequest> =
     remember(threads) { pendingSubagentRequestsByThread(threads) }
-  val sections: ThreadSections =
-    remember(threads, query, filter, settlement, snooze, minute, workingShelf, returns) {
-      val observation: InboxObservation =
-        inboxReturns.observe(if (workingShelf) threads else null, requests)
-      val working: InboxObservation? = if (workingShelf) observation else null
-      sections(threads, query, filter, settlement, snooze, minute, working, requests)
-    }
+  val folding: Boolean = boring != null
+  val sections: ThreadSections = remember(
+    threads, projects, query, filter, settlement, snooze, minute, workingShelf, folding, returns,
+  ) {
+    // Folders already separate the work, so boring mode has no Working shelf
+    val shelf: Boolean = workingShelf && !folding
+    val observation: InboxObservation = inboxReturns.observe(if (shelf) threads else null, requests)
+    val working: InboxObservation? = if (shelf) observation else null
+    sections(
+      threads, query, filter, settlement, snooze, minute, working, requests,
+      folderGroups = sidebarFolderGroups(projects, filter, folding),
+      keepEmptyFolders = keepEmptyFolders(projects, filter, query),
+    )
+  }
   Column(Modifier.fillMaxSize()) {
     header()
     ThreadHeader(
@@ -166,10 +175,11 @@ fun Sidebar(
     Box(Modifier.weight(1f)) {
       when {
         sections.inbox.isNotEmpty() || sections.working.isNotEmpty() ||
-          sections.snoozed.isNotEmpty() || sections.settled.isNotEmpty() ->
+          sections.snoozed.isNotEmpty() || sections.settled.isNotEmpty() ||
+          !sections.folders.isNullOrEmpty() ->
           Sections(
             projects, favicons, providers, sections, selectedThreadId, onOpenThread, onContextMenu,
-            actions, shelves, onShelvesChange, renaming, details,
+            actions, shelves, onShelvesChange, renaming, details, boring, folderActions, requests,
           )
 
         else -> Hint(emptyHint(projects, query, filter))
@@ -411,6 +421,9 @@ private fun Sections(
   onShelvesChange: (Shelves) -> Unit,
   renaming: String?,
   details: RowDetails,
+  boring: BoringSidebar?,
+  folderActions: FolderActions,
+  requests: Map<String, PendingSubagentRequest>,
 ) {
   val byId: Map<String, Project> = remember(projects) { projects.associateBy { it.id } }
   // Only the Working and Waiting clocks need seconds; everything else is happy with minutes
@@ -443,7 +456,48 @@ private fun Sections(
             details = details,
           )
         }
-        sections.inbox.forEach { add(card(it, "inbox")) }
+        val folders: List<FolderView>? = sections.folders?.let { folders ->
+          projectFolders(folders, boring?.projectExpandedById.orEmpty(), selectedThreadId)
+        }
+        if (folders == null) {
+          sections.inbox.forEach { add(card(it, "inbox")) }
+        } else {
+          // Pinned stays above the folders; the folders draw the active rows in their place
+          val pinned: List<Thread> = sections.inbox.filter { it.pinned }
+          pinned.forEach { add(card(it, "inbox")) }
+          folders.forEachIndexed { index, folder ->
+            add(
+              MotionItem("folder-header:${folder.project.id}") {
+                SidebarProjectFolderHeader(
+                  folder = folder,
+                  favicon = favicons[folder.project.id],
+                  first = index == 0 && pinned.isEmpty(),
+                  actions = folderActions,
+                  requests = requests,
+                )
+              },
+            )
+            folder.threads.forEach { thread ->
+              add(
+                MotionItem("folder:${thread.id}") {
+                  FolderRow(
+                    thread = thread,
+                    multiline = boring?.multilineRows == true,
+                    request = requests[thread.id],
+                    providers = providers,
+                    now = now,
+                    selected = thread.id == selectedThreadId,
+                    onClick = { onOpenThread(thread.id) },
+                    onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
+                    actions = actions,
+                    renaming = thread.id == renaming,
+                    details = details,
+                  )
+                },
+              )
+            }
+          }
+        }
         if (sections.working.isNotEmpty() || sections.snoozed.isNotEmpty() ||
           sections.settled.isNotEmpty()
         ) {
@@ -640,6 +694,195 @@ private fun InboxCard(
 private val CARD_HEIGHT: Dp = 78.dp
 
 /**
+ * `SidebarProjectFolderHeader` (sidebar/SidebarProjectFolderHeader.tsx): a project folder in
+ * the boring sidebar. It reads like a shelf header, the favicon and name, then a status dot and
+ * the hidden count only while it's closed, so a closed folder still says when a hidden thread
+ * needs you, then the chevron. On hover a pen over the count starts a thread in the project.
+ */
+@Composable
+private fun SidebarProjectFolderHeader(
+  folder: FolderView,
+  favicon: ImageBitmap?,
+  first: Boolean,
+  actions: FolderActions,
+  requests: Map<String, PendingSubagentRequest>,
+) {
+  val project: Project = folder.project
+  val dot: FolderDot? =
+    if (folder.collapsed) resolveSidebarFolderDot(folder.hiddenThreads, requests) else null
+  val newThread: ((String) -> Unit)? = actions.newThread
+  Selectable(
+    selected = false,
+    onClick = { actions.toggle(project.id) },
+    onContextMenu = { x, y -> actions.contextMenu(project.id, x, y) },
+    modifier = Modifier.padding(top = if (first) 0.dp else 8.dp), // `mt-2 first:mt-0`
+  ) { hovered ->
+    Row(
+      modifier = Modifier.height(32.dp).fillMaxWidth().padding(horizontal = 10.dp),
+      horizontalArrangement = Arrangement.spacedBy(10.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      ProjectIcon(project, favicon)
+      Text(
+        text = project.title,
+        color = JewelTheme.globalColors.text.normal.copy(alpha = 0.9f),
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier.weight(1f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+      if (dot != null) Box(Modifier.size(6.dp).background(folderDotColor(dot), CircleShape))
+      Box(contentAlignment = Alignment.CenterEnd) {
+        val hidden: Int = folder.hiddenThreads.size
+        if (folder.collapsed && hidden > 0) {
+          Text(
+            text = hidden.toString(),
+            style = small(),
+            color = JewelTheme.globalColors.text.info,
+            modifier = Modifier.alpha(if (hovered) 0f else 1f), // `invisible`, keeps its width
+          )
+        }
+        if (hovered && newThread != null) {
+          HoverAction("square-pen", null, "New thread in ${project.title}") { _, _ ->
+            newThread(project.id)
+          }
+        }
+      }
+      // Upstream's ChevronDownIcon, turned to point right while closed
+      val rotation: Float by animateFloatAsState(if (folder.collapsed) -90f else 0f, Transition)
+      Icon(
+        key = AllIconsKeys.General.ChevronDown,
+        contentDescription = if (folder.collapsed) "Expand" else "Collapse",
+        modifier = Modifier.size(12.dp).rotate(rotation),
+      )
+    }
+  }
+}
+
+/** `FOLDER_DOT_CLASS_NAME`, SidebarProjectFolderHeader.tsx:13. */
+@Composable
+private fun folderDotColor(dot: FolderDot): Color = when (dot) {
+  FolderDot.Attention -> JewelTheme.globalColors.text.warning
+  FolderDot.Failed -> JewelTheme.globalColors.text.error
+  FolderDot.Unread -> success()
+  FolderDot.Working -> accent()
+}
+
+/**
+ * Upstream's folder rows (`SidebarThreadRow`, variants "folder" and "folder-multiline",
+ * sidebar/SidebarThreadRow.tsx:1192 onwards): a 36px row with no project icon, its title lined
+ * up with the folder's name. Folder rows have no status line, so the status takes the time
+ * slot; on hover the slot gives way to Settle, next to "Woke", which stays to be dismissed.
+ * Two-line rows add the card's branch, pull request and agent line under the title, and put
+ * the agent on the title line when that line would be empty.
+ */
+@Composable
+private fun FolderRow(
+  thread: Thread,
+  multiline: Boolean,
+  request: PendingSubagentRequest?, // a subagent's request flagged on this thread
+  providers: Map<String, ServerProvider>,
+  now: Instant,
+  selected: Boolean,
+  onClick: () -> Unit,
+  onContextMenu: (x: Int, y: Int) -> Unit,
+  actions: RowActions,
+  renaming: Boolean,
+  details: RowDetails,
+) {
+  val status: ThreadStatus = thread.sidebarStatus(request)
+  val woke: Boolean = thread.woke(now)
+  val top: TopStatus? = thread.topStatus(woke, request)
+  val recede: Boolean = thread.recedes(selected, woke, request)
+  val normal: Color = JewelTheme.globalColors.text.normal
+  val titleColor: Color = when {
+    recede -> JewelTheme.globalColors.text.info
+    thread.unread || woke || status == ThreadStatus.Input -> normal
+    status == ThreadStatus.Failed -> normal.copy(alpha = 0.95f)
+    else -> normal.copy(alpha = 0.9f)
+  }
+  // `metaLineEmpty`: only the provider icon would remain, so the row drops the line
+  val terminals: Boolean = details.terminals[thread.id].orEmpty().isNotEmpty()
+  val metaLine: Boolean =
+    multiline && (thread.branch != null || thread.pullRequestBadge() != null || terminals)
+  Selectable(
+    selected = selected,
+    onClick = onClick,
+    onContextMenu = onContextMenu,
+    onDoubleClick = actions.rename?.let { rename -> { rename(thread.id) } },
+    // A receding working row sits at 70% until hovered
+    restAlpha = if (recede && status == ThreadStatus.Working) 0.7f else 1f,
+  ) { hovered ->
+    Column(
+      modifier = Modifier
+        .then(if (multiline) Modifier.padding(vertical = 6.dp) else Modifier.height(36.dp))
+        .fillMaxWidth()
+        .padding(start = 36.dp, end = 10.dp), // `ps-9`, past the folder's chevron and icon
+      verticalArrangement = Arrangement.Center,
+    ) {
+      Row(
+        modifier = Modifier.height(if (multiline) 24.dp else 36.dp).fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        RowTitle(
+          thread = thread,
+          renaming = renaming,
+          actions = actions,
+          weight = if (recede) null else FontWeight.Medium,
+          color = titleColor,
+          modifier = Modifier.weight(1f),
+        )
+        if (multiline && !metaLine) ProviderStack(thread, providers)
+        if (thread.pinned) Glyph("pin", subtle(0.65f), 12.dp)
+        if (!multiline) TerminalButton(thread, details, onClick)
+        val settle: ((String) -> Unit)? = actions.settle
+        if (top == TopStatus.Woke) {
+          val dismiss: ((String, String) -> Unit)? = actions.dismissWoke
+          val at: String? = thread.wokeAt(now)
+          val onDismiss: (() -> Unit)? =
+            if (dismiss != null && at != null) { { dismiss(thread.id, at) } } else null
+          TopStatusLabel(thread, top, now, onClick = onDismiss, compact = true)
+        }
+        when {
+          hovered && settle != null ->
+            HoverAction("check", null, "Settle thread") { _, _ -> settle(thread.id) }
+
+          top == TopStatus.Woke -> Unit
+          top != null -> TopStatusLabel(thread, top, now, compact = true)
+          else -> Text(compactTime(thread.inboxAt(), now), style = small(), color = subtle(0.55f))
+        }
+      }
+      if (metaLine) {
+        Row(
+          modifier = Modifier.padding(top = 2.dp).fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          val branch: String? = thread.branch
+          if (branch != null) {
+            if (!thread.worktreePath.isNullOrBlank()) Glyph("folder-git-2", subtle(0.4f), 12.dp)
+            Text(
+              text = branch,
+              style = small(),
+              color = subtle(0.4f),
+              modifier = Modifier.weight(1f),
+              maxLines = 1,
+              overflow = TextOverflow.MiddleEllipsis, // upstream's `MiddleTruncate`
+            )
+          } else {
+            Spacer(Modifier.weight(1f))
+          }
+          TerminalButton(thread, details, onClick)
+          thread.pullRequestBadge()?.let { PullRequestBadgeView(it) }
+          ProviderStack(thread, providers)
+        }
+      }
+    }
+  }
+}
+
+/**
  * The card's status slot (Sidebar.tsx:2345 to 2385): the status glyph, its label and, while
  * working or waiting, the clock, all in the status colour. With [onClick] it's a button, which
  * is how "Woke" gets dismissed.
@@ -651,6 +894,7 @@ private fun TopStatusLabel(
   top: TopStatus,
   now: Instant,
   onClick: (() -> Unit)? = null,
+  compact: Boolean = false, // a folder row's: a smaller glyph and no clock
 ) {
   val (glyph: String, color: Color) = when (top) {
     TopStatus.Working -> "circle-dashed" to accent()
@@ -662,9 +906,10 @@ private fun TopStatusLabel(
     TopStatus.Woke -> "alarm-clock" to JewelTheme.globalColors.text.warning
     TopStatus.Done -> "circle-check" to success()
   }
-  val since: Instant? = when (top) {
-    TopStatus.Working -> thread.workingStartedAt()
-    TopStatus.Waiting -> thread.waitingSince()
+  val since: Instant? = when {
+    compact -> null
+    top == TopStatus.Working -> thread.workingStartedAt()
+    top == TopStatus.Waiting -> thread.waitingSince()
     else -> null
   }
   val label: @Composable () -> Unit = {
@@ -673,7 +918,7 @@ private fun TopStatusLabel(
       horizontalArrangement = Arrangement.spacedBy(4.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      Glyph(glyph, color, 16.dp)
+      Glyph(glyph, color, if (compact) 12.dp else 16.dp)
       val name: String = thread.topStatusLabel(top)
       Text(name, style = small(), color = color, fontWeight = FontWeight.Medium)
       if (since != null) {

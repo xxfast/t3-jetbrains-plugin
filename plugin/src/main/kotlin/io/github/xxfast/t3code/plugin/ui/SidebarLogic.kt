@@ -58,14 +58,161 @@ class RowDetails(
 
 /**
  * The sections of the threads panel: the inbox (pinned first), then the working, snoozed and
- * settled shelves.
+ * settled shelves. In boring mode [folders] holds the inbox's active rows by project, and the
+ * inbox is the pinned rows then the folders' rows in folder order.
  */
 data class ThreadSections(
   val inbox: List<Thread>,
   val settled: List<Thread>,
   val snoozed: List<Thread> = emptyList(),
   val working: List<Thread> = emptyList(),
+  val folders: List<ProjectFolder>? = null,
 )
+
+/**
+ * Upstream's boring sidebar (Labs, "Boring sidebar (group by project)"): active threads in one
+ * folder per project. [multilineRows] is `boringSidebarMultilineRows`, [projectExpandedById]
+ * the folders' stored open state, upstream's `projectExpandedById`, by project id.
+ */
+data class BoringSidebar(
+  val multilineRows: Boolean = false,
+  val projectExpandedById: Map<String, Boolean> = emptyMap(),
+)
+
+/** What a folder header's buttons do, by project id. A null [newThread] hides its pen. */
+class FolderActions(
+  val toggle: (projectId: String) -> Unit = {},
+  val newThread: ((projectId: String) -> Unit)? = null,
+  /** The folder was right-clicked at x, y on screen. */
+  val contextMenu: (projectId: String, x: Int, y: Int) -> Unit = { _, _, _ -> },
+)
+
+/** One boring sidebar folder, as `groupSidebarThreadsByProject` makes them. */
+data class ProjectFolder(val project: Project, val threads: List<Thread>)
+
+/**
+ * `groupSidebarThreadsByProject`, apps/web/src/components/Sidebar.logic.ts:925. Folders follow
+ * [groups] order and threads keep their input order. A project with no threads gets a folder
+ * only with [keepEmpty]. A thread whose project is in no group has no folder and is left out.
+ * Upstream's groups are logical projects with member refs across environments; with one server
+ * a group is one project.
+ */
+fun groupSidebarThreadsByProject(
+  groups: List<Project>,
+  threads: List<Thread>,
+  keepEmpty: Boolean,
+): List<ProjectFolder> {
+  val byProject: Map<String, List<Thread>> = threads.groupBy { it.projectId }
+  val folders: List<ProjectFolder> =
+    groups.map { group -> ProjectFolder(group, byProject[group.id].orEmpty()) }
+  return if (keepEmpty) folders else folders.filter { it.threads.isNotEmpty() }
+}
+
+/**
+ * `resolveProjectExpanded`, apps/web/src/uiStateStore.ts:354: the first of [preferenceKeys]
+ * with a stored state, else open. Upstream's legacy default key isn't ported, the plugin never
+ * had the old per-project sidebar.
+ */
+fun resolveProjectExpanded(
+  projectExpandedById: Map<String, Boolean>,
+  preferenceKeys: List<String>,
+): Boolean {
+  for (key in preferenceKeys) projectExpandedById[key]?.let { return it }
+  return true
+}
+
+/**
+ * Upstream's `folderGroups` (Sidebar.tsx:1284): in boring mode the projects [filter] scopes,
+ * or every project with no scope. Null while it's off.
+ */
+fun sidebarFolderGroups(
+  projects: List<Project>,
+  filter: ProjectFilter,
+  enabled: Boolean,
+): List<Project>? = if (enabled) filter.scopedProjects(projects).ifEmpty { projects } else null
+
+/**
+ * Upstream's `keepEmptyFolders: scopedProjectGroups.length > 0`: a scope keeps its empty
+ * folders, so a project the user filtered to can start a thread. Not while searching, where
+ * upstream shows its search results instead of the folders.
+ */
+fun keepEmptyFolders(projects: List<Project>, filter: ProjectFilter, query: String): Boolean =
+  query.isBlank() && filter.scopedProjects(projects).isNotEmpty()
+
+/**
+ * The rows forward navigation walks, upstream's `orderedThreadKeys` (Sidebar.tsx:523) minus the
+ * shelves: the inbox, or in boring mode the pinned rows then each folder's visible rows.
+ */
+fun ThreadSections.cards(
+  projectExpandedById: Map<String, Boolean>,
+  routeThreadId: String?,
+): List<Thread> {
+  val folders: List<ProjectFolder> = folders ?: return inbox
+  val visible: List<Thread> =
+    projectFolders(folders, projectExpandedById, routeThreadId).flatMap { it.threads }
+  return inbox.filter { it.pinned } + visible
+}
+
+/** A folder as the Sidebar draws it: what it shows, and what a closed one hides. */
+data class FolderView(
+  val project: Project,
+  val collapsed: Boolean,
+  val threads: List<Thread>,
+  val hiddenThreads: List<Thread>,
+)
+
+/**
+ * The `projectFolders` of `useSidebarThreads` (Sidebar.tsx:504). A closed folder still shows
+ * the open thread, and hints at the rest. Keyed by plain project id where upstream reads
+ * `sidebarFolderExpansionKeys`, the old sidebar's keys.
+ */
+fun projectFolders(
+  folders: List<ProjectFolder>,
+  projectExpandedById: Map<String, Boolean>,
+  routeThreadId: String?,
+): List<FolderView> = folders.map { folder ->
+  val collapsed: Boolean = !resolveProjectExpanded(projectExpandedById, listOf(folder.project.id))
+  FolderView(
+    project = folder.project,
+    collapsed = collapsed,
+    threads = if (collapsed) routeThreadOnly(folder.threads, routeThreadId) else folder.threads,
+    hiddenThreads = if (collapsed) {
+      folder.threads.filter { it.id != routeThreadId }
+    } else {
+      emptyList()
+    },
+  )
+}
+
+/** The dot on a closed folder, upstream's `"attention" | "failed" | "unread" | "working"`. */
+enum class FolderDot { Attention, Failed, Unread, Working }
+
+/**
+ * `resolveSidebarFolderDot`, Sidebar.logic.ts:879: the most urgent state among a closed
+ * folder's hidden threads, with [pendingSubagentRequests] by thread id. Waiting threads stay
+ * quiet, like their rows. Upstream's "request" (a guest waiting on the owner) counts as
+ * attention too; [sidebarStatus] doesn't have it yet.
+ */
+fun resolveSidebarFolderDot(
+  threads: List<Thread>,
+  pendingSubagentRequests: Map<String, PendingSubagentRequest> = emptyMap(),
+): FolderDot? {
+  fun status(thread: Thread): ThreadStatus =
+    thread.sidebarStatus(pendingSubagentRequests[thread.id])
+  val statuses: Set<ThreadStatus> = threads.map(::status).toSet()
+  if (ThreadStatus.Input in statuses ||
+    ThreadStatus.Approval in statuses ||
+    ThreadStatus.Limited in statuses
+  ) {
+    return FolderDot.Attention
+  }
+  if (ThreadStatus.Failed in statuses) return FolderDot.Failed
+  // Rows show Done only for ready threads, so the dot follows the same rule
+  val unread: Boolean = threads.any { status(it) == ThreadStatus.Ready && it.unread }
+  if (unread) return FolderDot.Unread
+  if (ThreadStatus.Working in statuses) return FolderDot.Working
+  return null
+}
 
 val Thread.active: Boolean get() = activeRunId != null || status in RUNNING
 
@@ -224,6 +371,9 @@ fun emptyHint(projects: List<Project>, query: String, filter: ProjectFilter): St
  * newest settled first, each only on a server that does [snooze] or [settlement]; a snooze
  * outranks settled, which outranks a pin (`resolveSidebarThreadSection`, Sidebar.logic.ts:123).
  * Archived and under-parent rows are dropped, and so are rows from projects outside [filter].
+ * With [folderGroups] (boring mode, upstream's `folderGroups`) active rows sort by
+ * `sortWorkingThreadsBySend` (`sortActiveBySend`) and fold into one folder per group, empty
+ * ones kept with [keepEmptyFolders]. The caller turns the Working shelf off for that.
  */
 fun sections(
   threads: List<Thread>,
@@ -235,6 +385,8 @@ fun sections(
   working: InboxObservation? = null,
   pendingSubagentRequests: Map<String, PendingSubagentRequest> =
     pendingSubagentRequestsByThread(threads),
+  folderGroups: List<Project>? = null,
+  keepEmptyFolders: Boolean = false,
 ): ThreadSections {
   val needle: String = query.trim()
   val visible: List<Thread> = threads.filter {
@@ -263,15 +415,20 @@ fun sections(
     .thenBy { it.id }
   val snoozedOrder: Comparator<Thread> = compareBy<Thread> { it.snoozedUntil?.toInstantOrNull() }
     .thenBy { it.id }
-  val sortedActive: List<Thread> = when (working) {
-    null -> active.sortedWith(activeOrder)
+  val sortedActive: List<Thread> = when {
+    folderGroups != null -> sortWorkingThreadsBySend(active)
+    working == null -> active.sortedWith(activeOrder)
     else -> sortInboxThreadsByReturn(active, working.returnedAt)
   }
+  val folders: List<ProjectFolder>? = folderGroups?.let { groups ->
+    groupSidebarThreadsByProject(groups, sortedActive, keepEmptyFolders)
+  }
   return ThreadSections(
-    inbox = pinned.sortedWith(pinnedOrder) + sortedActive,
+    inbox = pinned.sortedWith(pinnedOrder) + (folders?.flatMap { it.threads } ?: sortedActive),
     settled = settled.sortedWith(settledOrder),
     snoozed = snoozed.sortedWith(snoozedOrder),
     working = sortWorkingThreadsBySend(shelved),
+    folders = folders,
   )
 }
 
@@ -318,15 +475,23 @@ fun Thread.runtimeStatus(): String? {
 enum class ThreadStatus { Approval, Input, Working, Waiting, Failed, Limited, Ready }
 
 /**
- * `resolveSidebarThreadStatus`, Sidebar.logic.ts:912, with `hasPendingApprovals` and
+ * `resolveSidebarThreadStatus`, Sidebar.logic.ts:846, with `hasPendingApprovals` and
  * `hasPendingUserInput` as `presentThreadShell` derives them from the pending request's kind.
- * Requests on subagent rows are flagged on their parent upstream; the plugin hides those rows.
+ * [pendingSubagentRequest] is a subagent's request flagged on this parent
+ * ([pendingSubagentRequestsByThread]). Upstream's "request", a guest waiting on the owner,
+ * isn't ported yet; it has no status of its own here.
  */
-fun Thread.sidebarStatus(): ThreadStatus {
+fun Thread.sidebarStatus(pendingSubagentRequest: PendingSubagentRequest? = null): ThreadStatus {
   val kind: String? = pendingRuntimeRequest?.kind
-  if (kind != null && kind != "user_input" && kind != "auth_refresh") return ThreadStatus.Approval
-  if (kind == "user_input") return ThreadStatus.Input
+  val approval: Boolean = kind != null && kind != "user_input" && kind != "auth_refresh"
+  if (approval || pendingSubagentRequest == PendingSubagentRequest.Approval) {
+    return ThreadStatus.Approval
+  }
+  if (kind == "user_input" || pendingSubagentRequest == PendingSubagentRequest.UserInput) {
+    return ThreadStatus.Input
+  }
   val runtime: String? = runtimeStatus()
+  if (runtime == "running" && blockedOnThreadWait == true) return ThreadStatus.Waiting
   return when {
     runtime in WORKING -> ThreadStatus.Working
     runtime == "idle" -> ThreadStatus.Waiting
@@ -339,7 +504,10 @@ fun Thread.sidebarStatus(): ThreadStatus {
 /** A card's top-right status, Sidebar.tsx:1676 to 1724. [woke] is [Thread.woke]. */
 enum class TopStatus { Working, Waiting, Approval, Input, Limited, Failed, Woke, Done }
 
-fun Thread.topStatus(woke: Boolean = false): TopStatus? = when (sidebarStatus()) {
+fun Thread.topStatus(
+  woke: Boolean = false,
+  pendingSubagentRequest: PendingSubagentRequest? = null,
+): TopStatus? = when (sidebarStatus(pendingSubagentRequest)) {
   ThreadStatus.Working -> TopStatus.Working
   ThreadStatus.Waiting -> TopStatus.Waiting
   ThreadStatus.Approval -> TopStatus.Approval
@@ -363,8 +531,12 @@ fun Thread.topStatusLabel(top: TopStatus): String = when (top) {
  * `shouldRecedeSidebarThread`, Sidebar.logic.ts:892. [open] is upstream's `isActive`, the thread
  * the ChatView shows. Multi-select isn't ported.
  */
-fun Thread.recedes(open: Boolean, woke: Boolean = false): Boolean {
-  val status: ThreadStatus = sidebarStatus()
+fun Thread.recedes(
+  open: Boolean,
+  woke: Boolean = false,
+  pendingSubagentRequest: PendingSubagentRequest? = null,
+): Boolean {
+  val status: ThreadStatus = sidebarStatus(pendingSubagentRequest)
   return when {
     open || status == ThreadStatus.Input -> false
     status == ThreadStatus.Working || status == ThreadStatus.Waiting -> true

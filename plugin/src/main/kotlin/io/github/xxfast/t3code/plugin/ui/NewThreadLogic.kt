@@ -63,6 +63,17 @@ fun newDraftThread(
 }
 
 /**
+ * `resolveThreadActionProjectRef`, apps/web/src/lib/chatThreadActions.ts:70: the project a new
+ * thread starts in from where you are, the open thread's, else the open draft's, else
+ * [defaultProjectId] (upstream's `resolveDefaultProjectRef`, the first project in the Sidebar).
+ */
+fun resolveThreadActionProjectRef(
+  activeThread: Thread?,
+  activeDraftThread: DraftThread?,
+  defaultProjectId: String?,
+): String? = activeThread?.projectId ?: activeDraftThread?.projectId ?: defaultProjectId
+
+/**
  * `buildLocalDraftThread`, apps/web/src/components/ChatView.logic.ts:527: the row the ChatView
  * shows for [draft] until the server has one.
  */

@@ -24,6 +24,15 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
   /** [sidebarWorkingShelfEnabled] as it changes, so an open Sidebar folds or unfolds at once. */
   val sidebarWorkingShelf: StateFlow<Boolean> = workingShelf.asStateFlow()
 
+  private val boring: MutableStateFlow<Boolean> = MutableStateFlow(false)
+  private val boringMultiline: MutableStateFlow<Boolean> = MutableStateFlow(false)
+
+  /** [boringSidebarEnabled] as it changes, so an open Sidebar regroups at once. */
+  val boringSidebar: StateFlow<Boolean> = boring.asStateFlow()
+
+  /** [boringSidebarMultilineRows] as it changes. */
+  val boringSidebarMultiline: StateFlow<Boolean> = boringMultiline.asStateFlow()
+
   class State : BaseState() {
     var serverUrl: String? by string(DEFAULT_SERVER_URL)
 
@@ -36,6 +45,8 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
     var planModeEnabled: Boolean by property(false)
     var effortDisplay: String? by string(EffortDisplay.LABEL.value)
     var sidebarWorkingShelfEnabled: Boolean by property(true)
+    var boringSidebarEnabled: Boolean by property(false)
+    var boringSidebarMultilineRows: Boolean by property(false)
 
     // Upstream's `favorites` (`ModelFavorites`, settings.ts:277), as `instanceId:slug` keys
     var modelFavorites: MutableList<String> by list()
@@ -55,6 +66,8 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
     super.loadState(state)
     _threadDetailsItems.value = state.threadDetailsItems.toMap()
     workingShelf.value = state.sidebarWorkingShelfEnabled
+    boring.value = state.boringSidebarEnabled
+    boringMultiline.value = state.boringSidebarMultilineRows
   }
 
   var serverUrl: String
@@ -114,6 +127,22 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
     set(value) {
       state.sidebarWorkingShelfEnabled = value
       workingShelf.value = value
+    }
+
+  /** Upstream's Labs "Boring sidebar (group by project)": active threads in project folders. */
+  var boringSidebarEnabled: Boolean
+    get() = state.boringSidebarEnabled
+    set(value) {
+      state.boringSidebarEnabled = value
+      boring.value = value
+    }
+
+  /** Upstream's Labs "Two-line folder rows": folder rows add the card's branch line. */
+  var boringSidebarMultilineRows: Boolean
+    get() = state.boringSidebarMultilineRows
+    set(value) {
+      state.boringSidebarMultilineRows = value
+      boringMultiline.value = value
     }
 
   /** The favourite models in the picker, keyed by `providerModelKey`. */

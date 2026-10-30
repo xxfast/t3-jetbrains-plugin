@@ -5,10 +5,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.actionSystem.impl.SimpleDataContext
+import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.DumbAware
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
+import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
 import io.github.xxfast.t3code.plugin.actions.OPEN_TERMINAL_ACTION
@@ -23,7 +29,9 @@ import io.github.xxfast.t3code.plugin.ide.RunningTerminals
 import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ide.ThreadVisits
 import io.github.xxfast.t3code.plugin.settings.T3Settings
+import io.github.xxfast.t3code.plugin.ui.BoringSidebar
 import io.github.xxfast.t3code.plugin.ui.ConnectionBanner
+import io.github.xxfast.t3code.plugin.ui.FolderActions
 import io.github.xxfast.t3code.plugin.ui.ProjectFilter
 import io.github.xxfast.t3code.plugin.ui.RowActions
 import io.github.xxfast.t3code.plugin.ui.RowDetails
@@ -36,8 +44,11 @@ import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.T3Client
+import java.awt.Point
+import java.awt.datatransfer.StringSelection
 import javax.swing.JComponent
 import org.jetbrains.jewel.bridge.JewelComposePanel
+import io.github.xxfast.t3code.protocol.Project as T3Project
 
 /** "T3 Sidebar": T3's sidebar. Opening a thread is [T3Opener.openThread]'s business. */
 class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
@@ -120,6 +131,23 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
       val renaming: String? by renamer.renaming.collectAsState()
       val shelves: Shelves by SidebarShelves.get().shelves.collectAsState()
       val workingShelf: Boolean by T3Settings.get().sidebarWorkingShelf.collectAsState()
+      val boringSidebar: Boolean by T3Settings.get().boringSidebar.collectAsState()
+      val multiline: Boolean by T3Settings.get().boringSidebarMultiline.collectAsState()
+      val expanded: Map<String, Boolean> by
+        SidebarFolders.get().projectExpandedById.collectAsState()
+      val boring: BoringSidebar? = if (boringSidebar) BoringSidebar(multiline, expanded) else null
+      val folderActions: FolderActions = remember(operable) {
+        val newThread: ((String) -> Unit)? =
+          if (operable) NewThread.getInstance(project)::start else null
+        FolderActions(
+          toggle = SidebarFolders.get()::toggle,
+          newThread = newThread,
+          contextMenu = { projectId, x, y ->
+            val target: T3Project? = client.projects.value.find { it.id == projectId }
+            if (target != null) showFolderMenu(project, target, newThread, x, y)
+          },
+        )
+      }
       Sidebar(
         projects = projects,
         threads = threads,
@@ -142,9 +170,40 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         renaming = renaming,
         details = details,
         workingShelf = workingShelf,
+        boring = boring,
+        folderActions = folderActions,
       )
     }
     val content: Content = ContentFactory.getInstance().createContent(panel, null, false)
     toolWindow.contentManager.addContent(content)
   }
+}
+
+/**
+ * A folder header's context menu, upstream's `handleProjectFolderContextMenu` (Sidebar.tsx:1209):
+ * New thread and Copy path. Project settings isn't there, the plugin has none to open.
+ */
+private fun showFolderMenu(
+  project: Project,
+  target: T3Project,
+  newThread: ((String) -> Unit)?,
+  x: Int,
+  y: Int,
+) {
+  val group = DefaultActionGroup()
+  if (newThread != null) group.add(DumbAwareAction.create("New thread") { newThread(target.id) })
+  group.add(
+    DumbAwareAction.create("Copy path") {
+      CopyPasteManager.getInstance().setContents(StringSelection(target.workspaceRoot))
+    },
+  )
+  JBPopupFactory.getInstance()
+    .createActionGroupPopup(
+      null,
+      group,
+      SimpleDataContext.getProjectContext(project),
+      JBPopupFactory.ActionSelectionAid.SPEEDSEARCH,
+      true,
+    )
+    .show(RelativePoint.fromScreen(Point(x, y)))
 }

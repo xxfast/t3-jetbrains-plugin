@@ -97,7 +97,9 @@ How it fits together:
   server's `settings.snoozePresets` (tomorrow 08:00, 2 h, 20 min, out of order) so the snooze
   menu shows them soonest first. `disconnected/`, `pairing/`, `auth-error/`, `read-only/` (no operate) and
   `empty-server/` cover connection-level states; the ones with threads carry a byte-for-byte copy
-  of `default/list.json`. Shapes are the same `:protocol` types the real client decodes, so
+  of `default/list.json`. `boring/` is that copy plus default's `connection.json` and
+  `waiting-approval.json`, for the boring sidebar: turn it on by hand in Settings > Tools >
+  T3 Code > Beta, then close KStore's folder for its attention dot. Shapes are the same `:protocol` types the real client decodes, so
   scenarios double as test fixtures.
 - Items may carry an `after` delay in milliseconds. The fixture client replays them in order so a
   "running" thread visibly grows, which is the only way to design streaming.

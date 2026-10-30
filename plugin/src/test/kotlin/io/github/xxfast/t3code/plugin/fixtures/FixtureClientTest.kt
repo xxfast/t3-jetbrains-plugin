@@ -117,7 +117,9 @@ class FixtureClientTest {
   fun `every file in every scenario decodes`() {
     val folders: List<Path> = list(scenarios).filter { it.isDirectory() }
     assertEquals(
-      listOf("auth-error", "default", "disconnected", "empty-server", "pairing", "read-only"),
+      listOf(
+        "auth-error", "boring", "default", "disconnected", "empty-server", "pairing", "read-only",
+      ),
       folders.map { it.name },
     )
     folders.forEach { folder ->
@@ -181,7 +183,7 @@ class FixtureClientTest {
   @Test
   fun `connection scenarios list the same threads as default, byte for byte`() {
     val expected: ByteArray = default.resolve("list.json").readBytes()
-    listOf("disconnected", "pairing", "auth-error", "read-only").forEach { name ->
+    listOf("disconnected", "pairing", "auth-error", "read-only", "boring").forEach { name ->
       val copy: ByteArray = scenarios.resolve(name).resolve("list.json").readBytes()
       assertContentEquals(expected, copy, "$name/list.json drifted from default/list.json")
     }
