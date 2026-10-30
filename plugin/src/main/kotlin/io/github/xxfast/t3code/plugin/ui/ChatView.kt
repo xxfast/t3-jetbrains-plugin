@@ -190,33 +190,13 @@ fun ChatView(
 ) {
   val threadId: String? = view?.thread?.id
   val timeline: LazyListState = remember(threadId) { LazyListState(memory.index, memory.offset) }
-  val scrollCollapse: ComposerScrollCollapse = remember(threadId) { ComposerScrollCollapse() }
   val follow: TimelineFollow = remember(threadId) { TimelineFollow(followEnd = memory.atEnd) }
   var isTasksExpanded: Boolean by remember(threadId) { mutableStateOf(false) }
   if (tasks == null || pending != null) isTasksExpanded = false
-  // `canScrollCollapseComposer`'s and `composerHasExpandedChrome`'s parts the plugin has: a
-  // multi-line prompt, a request, chips or a note on the draft, or an error keep it open
-  val hasMultilinePrompt: Boolean = draft.text.contains('\n')
-  val hasExpandedChrome: Boolean = pending != null ||
-    composer.error != null ||
-    composer.reviewComments > 0 ||
-    extras.attachments.isNotEmpty() ||
-    extras.comments.isNotEmpty() ||
-    extras.selection != null ||
-    extras.notice != null ||
-    extras.blockReason != null ||
-    isTasksExpanded
-  val collapseEligible: Boolean = !hasMultilinePrompt && !hasExpandedChrome
-  // How much of the timeline's bottom the composer covers, in pixels
-  var inset: Int by remember(threadId) { mutableIntStateOf(0) }
-  var composerHeight: Int by remember(threadId) { mutableIntStateOf(0) } // its padding left out
+  // How much of the timeline's bottom the composer covers, in pixels, its padding left out.
+  // Upstream's `publishComposerOverlayHeight` sets the inset to the overlay's height as is.
+  var composerHeight: Int by remember(threadId) { mutableIntStateOf(0) }
   val scope: CoroutineScope = rememberCoroutineScope()
-  val resting: Boolean = shouldUseRestingComposerLayout(
-    isScrollCollapsed = scrollCollapse.collapsed,
-    timelineOverflows = timeline.canScrollBackward || timeline.canScrollForward,
-    hasMultilinePrompt = hasMultilinePrompt,
-    hasExpandedChrome = hasExpandedChrome,
-  )
 
   // Upstream's `bg-background` is the page, so the editor's background rather than the panel's
   // Escape bubbles up from wherever focus is in the chat, after the composer's menus had a go
@@ -230,8 +210,8 @@ fun ChatView(
     ThreadFindBar(memory.find)
     // A stream that fails after rendering keeps the thread and says so on top
     if (error != null && view != null) ErrorLine(error, onRetry)
-    // The composer floats over the timeline's bottom, as upstream's overlay does, so its fold
-    // and unfold never resize the timeline. The whole pane takes a file drop, as upstream's
+    // The composer floats over the timeline's bottom, as upstream's overlay does, and the
+    // timeline keeps its height clear at the end. The whole pane takes a file drop, as upstream's
     // `ThreadFindCanvas` does; the composer shows it, see `ChatComposer`'s `dropActive`.
     var dropActive: Boolean by remember { mutableStateOf(false) }
     Box(
@@ -284,8 +264,8 @@ fun ChatView(
               ),
               worktreeSetup = worktreeSetup,
               working = composer.running || composer.sending,
-              bottomInset = with(LocalDensity.current) { inset.toDp() },
-              modifier = Modifier.timelineWheel(timeline, scrollCollapse, follow, collapseEligible),
+              bottomInset = with(LocalDensity.current) { composerHeight.toDp() },
+              modifier = Modifier.timelineWheel(timeline, follow),
             )
           }
           }
@@ -298,7 +278,6 @@ fun ChatView(
         ScrollToEndButton(
           visible = follow.awayFromEnd,
           onScrollToEnd = {
-            scrollCollapse.restore()
             follow.scrollToEnd()
             val end: Int = (timeline.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
             scope.launch { timeline.animateScrollToItem(end) }
@@ -307,9 +286,6 @@ fun ChatView(
         )
       }
       if (view != null) {
-        val expansionMin: Int = with(LocalDensity.current) {
-          COMPOSER_RESTING_EXPANSION_MIN_DP.dp.roundToPx()
-        }
         ChatComposer(
           state = composer,
           draft = draft,
@@ -356,12 +332,7 @@ fun ChatView(
           contextWindow = contextWindow,
           stashCount = stashCount,
           dropActive = dropActive,
-          resting = resting,
-          onPromptFocus = { scrollCollapse.expandForEditor(System.currentTimeMillis()) },
-          onSettledHeight = { height ->
-            composerHeight = height
-            inset = resolveComposerTimelineInset(inset, height, resting, expansionMin)
-          },
+          onHeightChange = { height -> composerHeight = height },
           modifier = Modifier
             .align(Alignment.BottomCenter)
             .widthIn(max = MAX_CONTENT_WIDTH)
@@ -840,32 +811,20 @@ private fun MessagesTimeline(
 }
 
 /**
- * `handleTimelineWheel`, ChatComposer.tsx:5046: wheel steps over the timeline fold the composer,
- * read before the list scrolls ([PointerEventPass.Initial]) and never consumed. A wheel step is
- * a line, `DOM_DELTA_LINE`'s 16px.
+ * The wheel half of `handleNavigation` (useTimelineFollow.ts:361): a step up over the timeline
+ * breaks the follow, read before the list scrolls ([PointerEventPass.Initial]) and never
+ * consumed.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 private fun Modifier.timelineWheel(
   state: LazyListState,
-  collapse: ComposerScrollCollapse,
   follow: TimelineFollow,
-  eligible: Boolean,
 ): Modifier = onPointerEvent(PointerEventType.Scroll, PointerEventPass.Initial) { event ->
   if (event.keyboardModifiers.isCtrlPressed) return@onPointerEvent
   val deltaY: Float = event.changes.firstOrNull()?.scrollDelta?.y ?: return@onPointerEvent
-  if (deltaY == 0f) return@onPointerEvent
-  // A step up breaks the follow only when there's somewhere to go, ChatView.tsx:4382
+  // A step up breaks the follow only when there's somewhere to go
   if (deltaY < 0 && state.canScrollBackward) follow.cancelForUserNavigation()
-  collapse.onWheel(
-    now = System.currentTimeMillis(),
-    deltaY = deltaY * WHEEL_LINE_PX,
-    canScrollBackward = state.canScrollBackward,
-    canScrollForward = state.canScrollForward,
-    eligible = eligible,
-  )
 }
-
-private const val WHEEL_LINE_PX: Float = 16f
 
 private fun <T> Set<T>.toggle(value: T): Set<T> = if (value in this) this - value else this + value
 

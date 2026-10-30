@@ -65,10 +65,7 @@ class ComposerShortcuts {
   }
 }
 
-/**
- * The [ComposerShortcuts] controls register with, or null where they shouldn't: the resting
- * strip's controls while the footer's are on screen, and the other way round.
- */
+/** The [ComposerShortcuts] controls register with, or null where they shouldn't. */
 val LocalComposerShortcuts: ProvidableCompositionLocal<ComposerShortcuts?> =
   compositionLocalOf { null }
 

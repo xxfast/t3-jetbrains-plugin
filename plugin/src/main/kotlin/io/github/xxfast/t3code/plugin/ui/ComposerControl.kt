@@ -126,8 +126,8 @@ private fun Color.compositeOver(background: Color): Color {
 }
 
 /**
- * `ComposerControlSize` in `ComposerControl.tsx`: `sm` in the footer, `xs` in the resting
- * composer's strip. Controls read it from [LocalComposerControlSize].
+ * `ComposerControlSize` in `ComposerControl.tsx`: `sm` in the footer, `xs` in the context strip.
+ * Controls read it from [LocalComposerControlSize].
  */
 enum class ComposerControlSize { SM, XS }
 

@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.input.TextFieldLineLimits
@@ -23,16 +22,13 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.key.Key
@@ -45,9 +41,6 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.onSizeChanged
@@ -61,16 +54,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
 import io.github.xxfast.t3code.protocol.generated.ServerProviderSkill
-import kotlin.math.roundToInt
-import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.filterNotNull
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Link
 import org.jetbrains.jewel.ui.component.Text
@@ -86,10 +74,8 @@ import org.jetbrains.jewel.ui.typography
  * [pending] takes the body over: an approval hides the prompt and the footer, a question shows
  * its own.
  *
- * [resting] is upstream's resting layout: the prompt shrinks to one 32dp line with the actions
- * beside it, and the controls drop to an `xs` strip underneath. The change animates its height
- * with upstream's easing while the strip and the footer cross-fade. [onPromptFocus] is the
- * prompt taking focus, which unfolds it.
+ * There's no resting layout: upstream dropped the scroll fold on desktop (#25869) and only
+ * collapses on `isComposerCollapsedMobile`, which the plugin has no use for.
  */
 @Composable
 fun ChatComposer(
@@ -105,9 +91,7 @@ fun ChatComposer(
   extras: DraftExtras = DraftExtras(),
   attachmentActions: AttachmentActions = AttachmentActions(),
   contextWindow: ComposerContextWindow = ComposerContextWindow(usage = null),
-  resting: Boolean = false,
-  onPromptFocus: () -> Unit = {},
-  onSettledHeight: (Int) -> Unit = {},
+  onHeightChange: (Int) -> Unit = {}, // upstream's `onComposerOverlayHeightChange`
   onClearReview: () -> Unit = {},
   stashCount: Int = 0, // prompts in the stash, for its badge
   attachedAbove: (@Composable () -> Unit)? = null, // upstream's `attachedAbove`, a drawer on top
@@ -137,21 +121,6 @@ fun ChatComposer(
     onSend(text.trim(), resolveComposerDispatchMode(state.running, alternate, state.queue))
   }
 
-  // `useComposerRestingTransition`: one clock per change moves the height, the prompt, the
-  // actions and the controls together
-  val folded: Boolean = resting && pending == null
-  val motion: ComposerRestingMotion = remember { ComposerRestingMotion(folded) }
-  LaunchedEffect(folded) { motion.moveTo(folded) }
-  // Observed rather than read in a layout callback: a fold or unfold ends after its last layout,
-  // so the settled height only lands once the clock stops
-  var height: Int by remember { mutableIntStateOf(0) }
-  val currentOnSettledHeight: (Int) -> Unit by rememberUpdatedState(onSettledHeight)
-  LaunchedEffect(motion) {
-    snapshotFlow { if (motion.settled) height else null }
-      .filterNotNull()
-      .collect { settled -> currentOnSettledHeight(settled) }
-  }
-
   // What the `T3Code.Composer.*` actions reach while the prompt has focus
   val shortcuts: ComposerShortcuts = remember { ComposerShortcuts() }
   SideEffect {
@@ -172,8 +141,7 @@ fun ChatComposer(
   }
 
   Column(
-    // The timeline keeps room for the settled composer only, see [resolveComposerTimelineInset]
-    modifier = modifier.onSizeChanged { size -> height = size.height },
+    modifier = modifier.onSizeChanged { size -> onHeightChange(size.height) },
     verticalArrangement = Arrangement.spacedBy(4.dp),
   ) {
     if (state.reviewComments > 0) ReviewBanner(state.reviewComments, onClearReview)
@@ -221,17 +189,14 @@ fun ChatComposer(
     ComposerSurface(modifier = Modifier.fillMaxWidth(), highlight = dropActive) {
       when (pending) {
         null -> ComposerBody(
-          motion = motion,
           chips = { ComposerChips(extras, state.enabled, attachmentActions) },
           prompt = {
             ComposerPromptEditor(
               state = state,
               draft = draft,
-              progress = { motion.expansion },
               attachmentActions = attachmentActions,
               shortcuts = shortcuts,
               onSend = ::send,
-              onFocus = onPromptFocus,
               skills = footer?.provider
                 ?.let { resolveProviderSkillsForCwd(it, footer?.cwd) }
                 .orEmpty(),
@@ -256,22 +221,9 @@ fun ChatComposer(
             )
           },
           actions = actions,
-          // Both sets stay composed; only the one on screen answers the shortcuts
           controls = {
             Row(Modifier.horizontalScroll(rememberScrollState())) {
-              CompositionLocalProvider(
-                LocalComposerShortcuts provides shortcuts.takeIf { !folded },
-              ) {
-                footer?.let { ComposerControls(it, state.enabled, footerActions, draft) }
-              }
-            }
-          },
-          restingControls = {
-            Row(Modifier.horizontalScroll(rememberScrollState())) {
-              CompositionLocalProvider(
-                LocalComposerControlSize provides ComposerControlSize.XS,
-                LocalComposerShortcuts provides shortcuts.takeIf { folded },
-              ) {
+              CompositionLocalProvider(LocalComposerShortcuts provides shortcuts) {
                 footer?.let { ComposerControls(it, state.enabled, footerActions, draft) }
               }
             }
@@ -336,24 +288,20 @@ private fun ComposerWithDrawer(
 
 /**
  * The prompt, upstream's `ComposerPromptEditor`: borderless and `leading-relaxed`, as tall as
- * [ComposerBody] makes it. Resting, its one line sits centred in the 32dp row (`leading-8`), so
- * the text eases down by [RESTING_TEXT_INSET] as [progress] falls to 0.
+ * [ComposerBody] makes it.
  *
  * Skills, mentions and context links in the draft draw as chips, the Tiptap editor's atom
  * nodes: [skills] says which `$name`s are skills, [extras] what the links point at. With
  * [richText] on, the markdown formats as you type, upstream's rich extensions. Both go through
  * one [ComposerPromptDecorations]; the draft itself stays the markdown that gets sent.
  */
-@OptIn(ExperimentalComposeUiApi::class) // onPointerEvent
 @Composable
 private fun ComposerPromptEditor(
   state: ComposerState,
   draft: TextFieldState,
-  progress: () -> Float,
   attachmentActions: AttachmentActions,
   shortcuts: ComposerShortcuts,
   onSend: (alternate: Boolean) -> Unit,
-  onFocus: () -> Unit,
   skills: List<ServerProviderSkill>,
   extras: DraftExtras,
   richText: Boolean,
@@ -398,22 +346,14 @@ private fun ComposerPromptEditor(
   val painters: Map<ComposerPromptChipIcon, Painter> = rememberComposerPromptChipPainters()
   val scroll: ScrollState = rememberScrollState()
   val contentPadding: PaddingValues = JewelTheme.textAreaStyle.metrics.contentPadding
-  // `onVisibleSelectionChange`: typing or moving the caret unfolds, and so does a click
-  LaunchedEffect(draft) {
-    snapshotFlow { draft.text.toString() to draft.selection }.drop(1).collect { onFocus() }
-  }
   Box(
-    modifier = modifier
-      .fillMaxWidth()
-      .offset { IntOffset(0, (RESTING_TEXT_INSET.toPx() * (1 - progress())).roundToInt()) },
+    modifier = modifier.fillMaxWidth(),
     propagateMinConstraints = true,
   ) {
     TextArea(
       state = draft,
       modifier = Modifier
         .fillMaxWidth()
-        .onPointerEvent(PointerEventType.Press, PointerEventPass.Initial) { onFocus() }
-        .onFocusChanged { if (it.isFocused) onFocus() }
         .attachmentTarget(state.enabled, attachmentActions)
         .composerShortcutTarget(state.enabled, shortcuts)
         // Upstream's `handleKeyDown` takes Tab and Enter in a code block, and Enter on a
@@ -883,104 +823,54 @@ private fun hasNonPromptContent(state: ComposerState, extras: DraftExtras): Bool
   extras.attachments.isNotEmpty() || extras.comments.isNotEmpty() || extras.selection != null ||
     state.reviewComments > 0
 
-/** How far a resting prompt's one line sits from the row's top to look centred in 32dp. */
-private val RESTING_TEXT_INSET: Dp = 6.dp
-
 /**
- * The composer without a request, laid out for [motion]'s expansion between resting (0) and
- * expanded (1) so one clock moves everything, as `useComposerRestingTransition` animates the
- * surface and pins the footer to its edge:
+ * The composer without a request, upstream's body over its footer (`data-chat-composer-body`,
+ * `data-chat-composer-footer`):
  *
- * - the prompt grows from one 32dp line beside the actions to at least 78dp (`min-h-19.5`, at most
- *   208dp, `max-h-52`) across the full width;
- * - the [actions] slide from the prompt's row (`data-chat-composer-transition-actions`) down to
- *   the footer's, riding the bottom edge;
- * - the footer's [controls] (`sm`, the model picker's `-ms-2.5` pulling them to 6dp) and the
- *   resting strip's [restingControls] (`xs`, `absolute bottom-2 inset-x-4`) swap in place, the
- *   departing set gone at once and the arriving one fading in as [ComposerRestingMotion] says.
+ * - the prompt across the full width, at least 78dp (`min-h-19.5`) and at most 208dp (`max-h-52`);
+ * - the footer's 32dp row and its `pb-4` under it, the [controls] on the left (`sm`, the model
+ *   picker's `-ms-2.5` pulling them to 6dp) and the [actions] on the right.
  */
 @Composable
 private fun ComposerBody(
-  motion: ComposerRestingMotion,
   chips: @Composable () -> Unit,
   prompt: @Composable () -> Unit,
   actions: @Composable () -> Unit,
   controls: @Composable () -> Unit,
-  restingControls: @Composable () -> Unit,
 ) {
   Layout(
-    contents = listOf(chips, prompt, actions, controls, restingControls),
+    contents = listOf(chips, prompt, actions, controls),
     modifier = Modifier.fillMaxWidth(),
-  ) { (chip, editor, action, control, rest), constraints ->
-    val t: Float = motion.expansion
+  ) { (chip, editor, action, control), constraints ->
     val width: Int = constraints.maxWidth
     val side: Int = 16.dp.roundToPx()
     val gap: Int = 8.dp.roundToPx()
-    val loose = Constraints(maxWidth = (width - 2 * side).coerceAtLeast(0))
+    val top: Int = 16.dp.roundToPx()
+    val editorWidth: Int = (width - 2 * side).coerceAtLeast(0)
 
-    val chipsPlaceable: Placeable? = chip.firstOrNull()?.measure(loose)
+    val chipsPlaceable: Placeable? =
+      chip.firstOrNull()?.measure(Constraints(maxWidth = editorWidth))
     val actionsPlaceable: Placeable = action.first().measure(Constraints())
     val actionsWidth: Int = actionsPlaceable.width
-
-    // One line beside the actions, or the full width at 78dp and up
-    val restingWidth: Int = (width - 2 * side - actionsWidth - gap).coerceAtLeast(0)
-    val editorWidth: Int = lerp(restingWidth, width - 2 * side, t)
-    val restingHeight: Int = 32.dp.roundToPx()
-    val minHeight: Int = 78.dp.roundToPx()
-    val editorConstraints: Constraints = if (t >= 1f) {
-      Constraints(editorWidth, editorWidth, minHeight, 208.dp.roundToPx())
-    } else {
-      Constraints.fixed(editorWidth, lerp(restingHeight, minHeight, t))
-    }
-    val editorPlaceable: Placeable = editor.first().measure(editorConstraints)
-
+    val editorPlaceable: Placeable = editor.first()
+      .measure(Constraints(editorWidth, editorWidth, 78.dp.roundToPx(), 208.dp.roundToPx()))
     val controlsWidth: Int = (width - 6.dp.roundToPx() - side - actionsWidth - gap).coerceAtLeast(0)
     val controlsPlaceable: Placeable? =
       control.firstOrNull()?.measure(Constraints(maxWidth = controlsWidth))
-    val restPlaceable: Placeable? = rest.firstOrNull()?.measure(loose)
 
-    val chipsHeight: Int = chipsPlaceable?.height ?: 0
-    val editorTop: Int = lerp(8.dp.roundToPx(), 16.dp.roundToPx(), t) + chipsHeight
-    val bodyBottom: Int = editorTop + editorPlaceable.height + gap
-    // The resting strip's `h-8`, or the footer's 32dp row and its `pb-4`
-    val height: Int = bodyBottom + lerp(32.dp.roundToPx(), 48.dp.roundToPx(), t)
+    val editorTop: Int = top + (chipsPlaceable?.height ?: 0)
+    val height: Int = editorTop + editorPlaceable.height + gap + 48.dp.roundToPx()
 
     layout(width, height) {
-      chipsPlaceable?.place(side, lerp(8.dp.roundToPx(), 16.dp.roundToPx(), t))
+      chipsPlaceable?.place(side, top)
       editorPlaceable.place(side, editorTop)
-
       val footerCentre: Int = height - 32.dp.roundToPx()
-      val restingCentre: Int = editorTop + restingHeight / 2
-      val actionsY: Int = lerp(restingCentre, footerCentre, t) - actionsPlaceable.height / 2
+      val actionsY: Int = footerCentre - actionsPlaceable.height / 2
       actionsPlaceable.place(width - side - actionsWidth, actionsY)
-
-      val drift: Float = 4.dp.toPx()
-      val arriving: Float = motion.footerAlpha
-      controlsPlaceable?.let { placeable ->
-        if (arriving > 0f) {
-          val y: Int = footerCentre - placeable.height / 2
-          placeable.placeWithLayer(6.dp.roundToPx(), y) {
-            alpha = arriving
-            translationY = drift * (1 - arriving)
-          }
-        }
-      }
-      val resting: Float = motion.stripAlpha
-      restPlaceable?.let { placeable ->
-        if (resting > 0f) {
-          val y: Int = height - gap - placeable.height
-          placeable.placeWithLayer(side, y) {
-            alpha = resting
-            translationY = -drift * (1 - resting)
-          }
-        }
-      }
+      controlsPlaceable?.place(6.dp.roundToPx(), footerCentre - controlsPlaceable.height / 2)
     }
   }
 }
-
-private fun lerp(start: Int, stop: Int, fraction: Float): Int =
-  (start + (stop - start) * fraction).roundToInt()
 
 /** `data-chat-composer-actions`: the paperclip, the meter and [ComposerPrimaryActions]. */
 @Composable
