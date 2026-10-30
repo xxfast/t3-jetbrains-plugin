@@ -47,10 +47,13 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -314,10 +317,6 @@ private fun ComposerPromptEditor(
   // they redraw on a new layout
   val layout: MutableState<(() -> TextLayoutResult?)?> = remember { mutableStateOf(null) }
   val decorations: ComposerPromptDecorations = remember(draft) { ComposerPromptDecorations() }
-  val chipStyle = ComposerPromptChipStyle(
-    fill = JewelTheme.globalColors.text.normal.copy(alpha = 0.06f),
-    outline = JewelTheme.globalColors.borders.normal,
-  )
   val blockStyle = ComposerPromptBlockStyle(
     quoteBar = JewelTheme.globalColors.borders.normal,
     rule = JewelTheme.globalColors.borders.normal,
@@ -328,8 +327,21 @@ private fun ComposerPromptEditor(
     codeOutline = JewelTheme.globalColors.borders.normal.copy(alpha = 0.6f),
   )
   val density: Density = LocalDensity.current
-  val iconRoom: TextUnit = with(density) { composerPromptChipIconRoom(chipStyle).toSp() }
-  val detailColor: Color = JewelTheme.globalColors.text.info
+  // A chip's leading and closing no-break spaces hold its icon and gap and nothing else, so each
+  // gives back its own width
+  val textStyle: TextStyle = JewelTheme.defaultTextStyle.copy(fontWeight = FontWeight.Medium)
+  val measurer: TextMeasurer = rememberTextMeasurer()
+  val space: Float = remember(textStyle, density) {
+    // Between two letters, as a lone or trailing space may measure as nothing
+    fun width(text: String): Int = measurer.measure(text, textStyle).size.width
+    (width("x\u00A0x") - width("xx")).toFloat()
+  }
+  val em: Float = with(density) { textStyle.fontSize.toPx() }
+  val iconRoom: TextUnit = with(density) {
+    ((COMPOSER_CHIP_ICON_EM + COMPOSER_CHIP_GAP_EM) * em - space).toSp()
+  }
+  val closingRoom: TextUnit = with(density) { (-space).toSp() }
+  val chipInks: ContextChipInks = currentContextChipInks()
   val textStyles: Map<ComposerPromptStyleKind, SpanStyle> = composerPromptTextStyles(blockStyle)
   val records: Map<String, ComposerDraftContextRecord> =
     remember(extras) { composerContextRecordsFromDraft(extras) }
@@ -338,7 +350,8 @@ private fun ComposerPromptEditor(
     decorations.skills = skills
     decorations.records = records
     decorations.iconRoom = iconRoom
-    decorations.detailColor = detailColor
+    decorations.closingRoom = closingRoom
+    decorations.chipInks = chipInks
     decorations.richText = richText
     decorations.textStyles = textStyles
     decorations.highlighter = highlighter
@@ -382,7 +395,6 @@ private fun ComposerPromptEditor(
           scroll = scroll,
           contentPadding = contentPadding,
           painters = painters,
-          chipStyle = chipStyle,
           blockStyle = blockStyle,
         ),
       enabled = state.enabled,

@@ -921,6 +921,9 @@ enum class ComposerPromptStyleKind {
   CHIP_ICON,
   CHIP_DETAIL,
 
+  /** A chip's closing space. */
+  CHIP_CLOSING,
+
   /** The slot a quote's bar is drawn in. */
   QUOTE_SLOT,
 
@@ -1047,6 +1050,11 @@ fun composerPromptPresentation(
       display.detail?.let {
         ComposerPromptStyle(ComposerPromptStyleKind.CHIP_DETAIL, it.first, it.last + 1)
       },
+      ComposerPromptStyle(
+        ComposerPromptStyleKind.CHIP_CLOSING,
+        display.text.length - 1,
+        display.text.length,
+      ),
     )
     replacements += ComposerPromptReplacement(chip.start, chip.end, display.text, chipStyles)
     decorations += chip

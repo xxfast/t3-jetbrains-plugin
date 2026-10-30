@@ -20,6 +20,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -29,9 +30,11 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.isSpecified
 import io.github.xxfast.t3code.protocol.generated.ServerProviderSkill
 import org.jetbrains.jewel.ui.icon.IconKey
@@ -65,11 +68,14 @@ class ComposerPromptDecorations {
   /** What the draft's context links point at, [composerContextRecordsFromDraft]. */
   var records: Map<String, ComposerDraftContextRecord> by mutableStateOf(emptyMap())
 
-  /** Extra advance on a chip's leading space: the room its icon takes. */
+  /** Extra advance on a chip's leading space: the room its icon and gap take. */
   var iconRoom: TextUnit by mutableStateOf(TextUnit.Unspecified)
 
-  /** The colour of an attachment chip's size. */
-  var detailColor: Color by mutableStateOf(Color.Unspecified)
+  /** Extra advance on a chip's closing space, taking it back: upstream's chip has no padding. */
+  var closingRoom: TextUnit by mutableStateOf(TextUnit.Unspecified)
+
+  /** The theme's chip inks, which the chips' labels draw in. */
+  var chipInks: ContextChipInks by mutableStateOf(ContextChipInks())
 
   /** Upstream's `composerRichTextEnabled`. Off, only chips. */
   var richText: Boolean by mutableStateOf(true)
@@ -151,8 +157,11 @@ class ComposerPromptDecorations {
     ComposerPromptStyleKind.CHIP_ICON -> iconRoom.takeIf { it.isSpecified }
       ?.let { SpanStyle(letterSpacing = it) }
 
-    ComposerPromptStyleKind.CHIP_DETAIL -> detailColor.takeIf { it != Color.Unspecified }
-      ?.let { SpanStyle(color = it) }
+    ComposerPromptStyleKind.CHIP_CLOSING -> closingRoom.takeIf { it.isSpecified }
+      ?.let { SpanStyle(letterSpacing = it) }
+
+    // `text-3xs`, the size after the name
+    ComposerPromptStyleKind.CHIP_DETAIL -> SpanStyle(fontSize = COMPOSER_CHIP_DETAIL_SCALE.em)
 
     else -> textStyles[kind]
   }
@@ -181,6 +190,14 @@ class ComposerPromptDecorations {
         val from: Int = presentation.displayOffset(style.start)
         val to: Int = presentation.displayOffset(style.end)
         if (to > from) addStyle(span, from, to)
+      }
+      // `ContextChip`'s `font-medium`, in the kind's ink
+      for (chip in presentation.chips) {
+        val ink: Color = chipInks.ink(chip.accent, chip.state)
+        if (ink == Color.Unspecified) continue
+        val at: Int = presentation.displayOffset(chip.start)
+        val span = SpanStyle(color = ink, fontWeight = FontWeight.Medium)
+        addStyle(span, at, at + composerChipDisplay(chip).text.length)
       }
       val highlighter: ComposerCodeHighlighter = highlighter ?: return
       for (decoration in presentation.decorations) {
@@ -309,14 +326,6 @@ fun rememberComposerPromptChipPainters(): Map<ComposerPromptChipIcon, Painter> =
     rememberResourcePainterProvider(key, key.iconClass).getPainter().value
   }
 
-/** How a chip looks behind its label. */
-class ComposerPromptChipStyle(
-  val fill: Color,
-  val outline: Color,
-  val iconSize: Dp = 14.dp,
-  val cornerRadius: Dp = 4.dp,
-)
-
 /**
  * How the blocks look: the quote's bar (`border-left: 2px`), the rule, the task checkbox
  * (`0.95rem`), the code block's frame.
@@ -336,8 +345,8 @@ class ComposerPromptBlockStyle(
 
 /**
  * Draws [decorations]' pieces behind the prompt's text, from the [layout] of the transformed
- * text: chips' backgrounds and icons, then the blocks. The text sits [contentPadding] into the
- * field and scrolls by [scroll], as Jewel's undecorated `TextArea` lays it out.
+ * text: chips' icons, then the blocks. The text sits [contentPadding] into the field and
+ * scrolls by [scroll], as Jewel's undecorated `TextArea` lays it out.
  */
 fun Modifier.composerPromptDecorationBackgrounds(
   decorations: ComposerPromptDecorations,
@@ -346,7 +355,6 @@ fun Modifier.composerPromptDecorationBackgrounds(
   scroll: ScrollState,
   contentPadding: PaddingValues,
   painters: Map<ComposerPromptChipIcon, Painter>,
-  chipStyle: ComposerPromptChipStyle,
   blockStyle: ComposerPromptBlockStyle,
 ): Modifier = drawBehind {
   val text: String = draft.text.toString()
@@ -373,7 +381,7 @@ fun Modifier.composerPromptDecorationBackgrounds(
           else -> Unit
         }
       }
-      drawChips(presentation, result, painters, chipStyle)
+      drawChipIcons(presentation, result, painters, decorations.chipInks)
       for (decoration in presentation.decorations) {
         when (decoration) {
           is ComposerQuoteDecoration -> drawQuoteBar(decoration, presentation, result, blockStyle)
@@ -386,51 +394,39 @@ fun Modifier.composerPromptDecorationBackgrounds(
   }
 }
 
-private fun DrawScope.drawChips(
+// `ContextChip` has no frame: only the icon, `size-[1em]` and centred on the line, in the kind's
+// ink. A file's, a folder's and an image's are the IDE's own icons and keep their colours,
+// but for a document's.
+private fun DrawScope.drawChipIcons(
   presentation: ComposerPromptPresentation,
   result: TextLayoutResult,
   painters: Map<ComposerPromptChipIcon, Painter>,
-  style: ComposerPromptChipStyle,
+  inks: ContextChipInks,
 ) {
-  val fontHeight: Float? = result.layoutInput.style.fontSize
-    .takeIf { it.isSpecified }
-    ?.toPx()
-    ?.times(CHIP_HEIGHT_PER_FONT_SIZE)
-  val radius = CornerRadius(style.cornerRadius.toPx())
-  val stroke = Stroke(1.dp.toPx())
+  val fontSize: TextUnit = result.layoutInput.style.fontSize
+  val icon: Float =
+    if (fontSize.isSpecified) fontSize.toPx() * COMPOSER_CHIP_ICON_EM else 14.dp.toPx()
   for (chip in presentation.chips) {
-    val start: Int = presentation.displayOffset(chip.start)
-    val end: Int = start + composerChipDisplay(chip).text.length
-    val firstLine: Int = result.getLineForOffset(start)
-    val lastLine: Int = result.getLineForOffset(end - 1)
-    // One piece per line, should a chip ever be wider than the field
-    for (line in firstLine..lastLine) {
-      val from: Int = maxOf(start, result.getLineStart(line))
-      val to: Int = minOf(end, result.getLineEnd(line))
-      if (from >= to) continue
-      val lineTop: Float = result.getLineTop(line)
-      val lineBottom: Float = result.getLineBottom(line)
-      val height: Float = minOf(fontHeight ?: Float.MAX_VALUE, lineBottom - lineTop)
-      val box = Rect(
-        left = result.getBoundingBox(from).left,
-        top = (lineTop + lineBottom - height) / 2,
-        right = result.getBoundingBox(to - 1).right,
-        bottom = (lineTop + lineBottom + height) / 2,
-      )
-      drawRoundRect(style.fill, box.topLeft, box.size, radius)
-      drawRoundRect(style.outline, box.topLeft, box.size, radius, style = stroke)
-    }
     val painter: Painter = painters[chip.icon] ?: continue
+    val start: Int = presentation.displayOffset(chip.start)
     val slot: Rect = result.getBoundingBox(start)
     val line: Int = result.getLineForOffset(start)
     val centreY: Float = (result.getLineTop(line) + result.getLineBottom(line)) / 2
-    val icon: Float = style.iconSize.toPx()
-    val inset: Float = CHIP_ICON_INSET.toPx()
-    translate(slot.left + inset, centreY - icon / 2) {
-      with(painter) { draw(Size(icon, icon)) }
+    val ink: Color = inks.ink(chip.accent, chip.state)
+    // A document's icon is stroked in the ink too, `--document-icon-stroke`
+    val tinted: Boolean = chip.icon !in UNTINTED_CHIP_ICONS || chip.accent.isDocument
+    val tint: ColorFilter? = ColorFilter.tint(ink).takeIf { ink != Color.Unspecified && tinted }
+    translate(slot.left, centreY - icon / 2) {
+      with(painter) { draw(Size(icon, icon), colorFilter = tint) }
     }
   }
 }
+
+private val UNTINTED_CHIP_ICONS: Set<ComposerPromptChipIcon> = setOf(
+  ComposerPromptChipIcon.FILE,
+  ComposerPromptChipIcon.FOLDER,
+  ComposerPromptChipIcon.IMAGE,
+)
 
 // The source line [start] to [end]'s visual lines
 private fun visualLines(
@@ -524,12 +520,9 @@ private fun DrawScope.drawCodeBlock(
   drawRoundRect(style.codeOutline, box.topLeft, box.size, radius, style = Stroke(1.dp.toPx()))
 }
 
-/** A chip's height for the prompt's font size, upstream's `h-5` on 13px text. */
-private const val CHIP_HEIGHT_PER_FONT_SIZE: Float = 1.5f
+/** A chip's icon and the gap after it, in the prompt's font size: `size-[1em]`, `gap-[0.2em]`. */
+const val COMPOSER_CHIP_ICON_EM: Float = 1f
+const val COMPOSER_CHIP_GAP_EM: Float = 0.2f
 
-/** The space between a chip's left edge and its icon. */
-val CHIP_ICON_INSET: Dp = 4.dp
-
-/** The room a chip's leading space makes: the inset, the icon, and a gap before the label. */
-fun composerPromptChipIconRoom(style: ComposerPromptChipStyle): Dp =
-  CHIP_ICON_INSET + style.iconSize + 2.dp
+/** An attachment chip's size against its name, `text-3xs`. */
+const val COMPOSER_CHIP_DETAIL_SCALE: Float = 0.7f

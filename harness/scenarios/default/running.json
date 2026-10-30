@@ -414,7 +414,7 @@
         "status": "completed",
         "messageId": "msg_01JC4A1G2B77",
         "streaming": false,
-        "text": "`readString` moved out of `Source` in 0.8. Swapped it for `readByteArray().decodeToString()`; rerunning the JVM tests next.",
+        "text": "`readString` moved out of `Source` in 0.8. Swapped it for `readByteArray().decodeToString()`; rerunning the JVM tests next. The read numbers before the bump are in `docs/benchmarks.xlsx`.",
         "completedAt": "2026-10-19T08:41:02.000Z",
         "updatedAt": "2026-10-19T08:41:02.000Z"
       },
@@ -431,7 +431,7 @@
         "ordinal": 6,
         "status": "completed",
         "after": 1500,
-        "text": "Don't decode by hand. Is there a proper replacement for readString?",
+        "text": "Don't decode by hand. Is there a proper replacement for readString? The notes in `docs/migration-guide.docx` say so, and `docs/kstore-spec.pdf` too.",
         "startedAt": "2026-10-19T08:42:00.000Z",
         "completedAt": "2026-10-19T08:42:00.000Z",
         "updatedAt": "2026-10-19T08:42:00.000Z"

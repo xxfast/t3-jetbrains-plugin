@@ -195,8 +195,11 @@ fun ChatView(
   var composerHeight: Int by remember(threadId) { mutableIntStateOf(0) }
   val scope: CoroutineScope = rememberCoroutineScope()
 
+  // The chips' inks, solved for the theme, for the timeline and the composer alike
+  val chipVariables: Map<String, String> = rememberContextChipVariables(editorBackground())
   // Upstream's `bg-background` is the page, so the editor's background rather than the panel's
   // Escape bubbles up from wherever focus is in the chat, after the composer's menus had a go
+  CompositionLocalProvider(LocalContextChipVariables provides chipVariables) {
   Column(Modifier.fillMaxSize().background(editorBackground()).onKeyEvent { event ->
     if (memory.find.isOpen && event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
       memory.find.close()
@@ -237,11 +240,7 @@ fun ChatView(
           val renderer: MarkdownBlockRenderer = remember(styling, tableStyling, linkFavicons) {
             chatMarkdownRenderer(styling, tableStyling, linkFavicons)
           }
-          val chipVariables: Map<String, String> = rememberContextChipVariables(editorBackground())
-          CompositionLocalProvider(
-            LocalMessageChipActions provides chipActions,
-            LocalContextChipVariables provides chipVariables,
-          ) {
+          CompositionLocalProvider(LocalMessageChipActions provides chipActions) {
           ProvideMarkdownStyling(
             markdownStyling = styling,
             markdownProcessor = processor,
@@ -333,6 +332,7 @@ fun ChatView(
         )
       }
     }
+  }
   }
 }
 

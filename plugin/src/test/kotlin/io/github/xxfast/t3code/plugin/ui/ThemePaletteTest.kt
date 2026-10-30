@@ -341,4 +341,37 @@ class ThemePaletteTest {
     }
     assertNull(MessageChipKind.NEUTRAL.accent)
   }
+
+  @Test
+  fun `an image chip takes the file blue, solved like the others`() {
+    assertEquals("image", MessageChipKind.IMAGE.accent)
+    assertEquals("oklch(0.62 0.136 237)", CONTEXT_CHIP_ACCENTS["image"])
+    assertEquals(CONTEXT_CHIP_ACCENTS["file"], CONTEXT_CHIP_ACCENTS["image"])
+    intUi.forEach { colors ->
+      val variables: Map<String, String> = contextChipVariables(colors)
+      assertEquals(
+        variables[contextChipColorVariable("file")],
+        variables[contextChipColorVariable("image")],
+      )
+    }
+  }
+
+  @Test
+  fun `the document kinds are solved on every theme`() {
+    val documents: List<MessageChipKind> = listOf(
+      MessageChipKind.DOC_PDF,
+      MessageChipKind.DOC_WORD,
+      MessageChipKind.DOC_SPREADSHEET,
+      MessageChipKind.DOC_SLIDES,
+      MessageChipKind.DOC_EPUB,
+    )
+    intUi.forEach { colors ->
+      val variables: Map<String, String> = contextChipVariables(colors)
+      documents.forEach { kind ->
+        val accent: String = assertNotNull(kind.accent)
+        val ink: String = assertNotNull(variables[contextChipColorVariable(accent)], kind.name)
+        assertTrue(contrastRatio(ink, colors.canvas) >= 5, "${kind.name} $ink")
+      }
+    }
+  }
 }

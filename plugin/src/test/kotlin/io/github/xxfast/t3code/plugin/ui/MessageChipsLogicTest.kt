@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import androidx.compose.ui.graphics.Color
 import io.github.xxfast.t3code.protocol.generated.ServerProviderSkill
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -281,5 +282,76 @@ class MessageChipsLogicTest {
     )
     assertEquals(setOf("a", "b"), messageContextRecords(context).keys)
     assertEquals(listOf("B"), uncitedContextLabels(context, "see [A](t3-context://v1/mention/a)"))
+  }
+
+  @Test
+  fun `a document file takes its family's chip kind in any case`() {
+    listOf(
+      "pdf" to MessageChipKind.DOC_PDF,
+      "doc" to MessageChipKind.DOC_WORD,
+      "docx" to MessageChipKind.DOC_WORD,
+      "odt" to MessageChipKind.DOC_WORD,
+      "rtf" to MessageChipKind.DOC_WORD,
+      "xls" to MessageChipKind.DOC_SPREADSHEET,
+      "xlsx" to MessageChipKind.DOC_SPREADSHEET,
+      "ods" to MessageChipKind.DOC_SPREADSHEET,
+      "csv" to MessageChipKind.DOC_SPREADSHEET,
+      "tsv" to MessageChipKind.DOC_SPREADSHEET,
+      "ppt" to MessageChipKind.DOC_SLIDES,
+      "pptx" to MessageChipKind.DOC_SLIDES,
+      "odp" to MessageChipKind.DOC_SLIDES,
+      "epub" to MessageChipKind.DOC_EPUB,
+    ).forEach { (extension, kind) ->
+      listOf("report.$extension", "folder/REPORT.${extension.uppercase()}").forEach { path ->
+        assertEquals(kind, documentChipKindForFileName(path), path)
+      }
+    }
+    listOf("App.kt", "README", "pdf", "docs/", "archive.pdf.zip").forEach { path ->
+      assertNull(documentChipKindForFileName(path), path)
+    }
+    assertTrue(MessageChipKind.DOC_EPUB.isDocument)
+    assertFalse(MessageChipKind.FILE.isDocument)
+  }
+
+  @Test
+  fun `document chips take their family's kind, others keep theirs`() {
+    assertEquals(MessageChipKind.DOC_PDF, fileLinkChip(FilePathPosition("docs/spec.pdf")).kind)
+    assertEquals(MessageChipKind.MENTION, fileLinkChip(FilePathPosition("src/App.kt")).kind)
+    val mention: MessageChip = messageContextChip(
+      "mention",
+      "m",
+      "deck.pptx",
+      record("""{"kind":"mention","contextId":"m","label":"deck.pptx","path":"talks/deck.pptx"}"""),
+    )
+    assertEquals(MessageChipKind.DOC_SLIDES, mention.kind)
+    val file: MessageChip = messageContextChip(
+      "file",
+      "f",
+      "sales.csv",
+      record(
+        """{"kind":"file","contextId":"f","name":"sales.csv","mimeType":"text/csv",
+          |"sizeBytes":10}""".trimMargin(),
+      ),
+    )
+    assertEquals(MessageChipKind.DOC_SPREADSHEET, file.kind)
+  }
+
+  @Test
+  fun `a chip's ink follows its state, and a bubble's ink wins`() {
+    val inks = ContextChipInks(
+      variables = mapOf(
+        contextChipColorVariable("file") to "#0077cc",
+        CONTEXT_CHIP_INVALID_VARIABLE to "#cc0000",
+      ),
+      foreground = Color.Black,
+      error = Color.Red,
+    )
+    assertEquals(Color(0xFF0077CC), inks.ink(MessageChipKind.FILE))
+    assertEquals(Color.Black, inks.ink(MessageChipKind.FILE, ContextChipState.UNRESOLVED))
+    assertEquals(Color(0xFFCC0000), inks.ink(MessageChipKind.FILE, ContextChipState.INVALID))
+    assertEquals(Color.Black, inks.ink(MessageChipKind.NEUTRAL))
+    val unsolved = ContextChipInks(error = Color.Red)
+    assertEquals(Color.Red, unsolved.ink(MessageChipKind.FILE, ContextChipState.INVALID))
+    assertEquals(Color.White, inks.copy(message = Color.White).ink(MessageChipKind.FILE))
   }
 }

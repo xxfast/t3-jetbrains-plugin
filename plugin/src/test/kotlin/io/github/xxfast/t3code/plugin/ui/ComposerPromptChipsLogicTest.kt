@@ -188,7 +188,16 @@ class ComposerPromptChipsLogicTest {
     val review: ServerProviderSkill = skill("review", displayName = "Code Review")
     val text = "Run ${skillReplacement(review)}now"
     assertEquals(
-      listOf(ComposerPromptChip(4, 11, "skill", "Code Review", ComposerPromptChipIcon.SKILL)),
+      listOf(
+        ComposerPromptChip(
+          start = 4,
+          end = 11,
+          kind = "skill",
+          label = "Code Review",
+          icon = ComposerPromptChipIcon.SKILL,
+          accent = MessageChipKind.SKILL,
+        ),
+      ),
       chips(text, listOf(review)),
     )
   }
@@ -212,6 +221,7 @@ class ComposerPromptChipsLogicTest {
           kind = "mention",
           label = "my file.kt",
           icon = ComposerPromptChipIcon.FILE,
+          accent = MessageChipKind.MENTION,
         ),
       ),
       chips(text),
@@ -231,6 +241,7 @@ class ComposerPromptChipsLogicTest {
           kind = "thread",
           label = "Fix the build",
           icon = ComposerPromptChipIcon.THREAD,
+          accent = MessageChipKind.THREAD,
         ),
       ),
       chips(text, extras = DraftExtras().withThread(record)),
@@ -258,6 +269,7 @@ class ComposerPromptChipsLogicTest {
           kind = "review-comment",
           label = "#42",
           icon = ComposerPromptChipIcon.PULL_REQUEST_MERGED,
+          accent = MessageChipKind.PR_MERGED,
         ),
       ),
       chips(text, extras = DraftExtras().withComment(comment)),
@@ -301,6 +313,30 @@ class ComposerPromptChipsLogicTest {
       listOf(ComposerPromptChipIcon.IMAGE, ComposerPromptChipIcon.FILE),
       chips(text, extras = extras).map { it.icon },
     )
+    assertEquals(
+      listOf(MessageChipKind.IMAGE, MessageChipKind.FILE),
+      chips(text, extras = extras).map { it.accent },
+    )
+  }
+
+  @Test
+  fun `a document takes its family's kind, and a failed upload is invalid`() {
+    val report = DraftAttachment(
+      id = "a1",
+      name = "Q3 Report.PDF",
+      kind = AttachmentKind.FILE,
+      mimeType = "application/pdf",
+      sizeBytes = 1500,
+      upload = Upload.Failed("Too large"),
+    )
+    val reference: String =
+      contextReference("file", toKindScopedComposerContextId("file", "a1"), "Q3 Report.PDF")
+    val chip: ComposerPromptChip =
+      chips("$reference ", extras = DraftExtras(attachments = listOf(report))).single()
+    assertEquals(MessageChipKind.DOC_PDF, chip.accent)
+    assertEquals(ContextChipState.INVALID, chip.state)
+    val sheet: String = serializeComposerFileLink("data/sales.xlsx")
+    assertEquals(MessageChipKind.DOC_SPREADSHEET, chips("$sheet ").single().accent)
   }
 
   @Test
@@ -314,6 +350,7 @@ class ComposerPromptChipsLogicTest {
           kind = "image",
           label = "gone.png",
           icon = ComposerPromptChipIcon.UNAVAILABLE,
+          state = ContextChipState.UNRESOLVED,
         ),
       ),
       chips(text),

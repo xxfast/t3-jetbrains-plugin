@@ -7,6 +7,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -34,10 +36,17 @@ import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.intellij.openapi.ide.CopyPasteManager
@@ -122,6 +131,7 @@ fun ComposerChips(extras: DraftExtras, enabled: Boolean, actions: AttachmentActi
       horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
       if (selection != null) Chip(
+        kind = MessageChipKind.REVIEW_COMMENT,
         label = selection.label,
         detail = "selected",
         enabled = enabled,
@@ -129,6 +139,7 @@ fun ComposerChips(extras: DraftExtras, enabled: Boolean, actions: AttachmentActi
       )
       extras.comments.forEach { comment ->
         Chip(
+          kind = MessageChipKind.REVIEW_COMMENT,
           label = comment.label,
           detail = null,
           enabled = enabled,
@@ -139,6 +150,12 @@ fun ComposerChips(extras: DraftExtras, enabled: Boolean, actions: AttachmentActi
         val failed: Upload.Failed? = attachment.upload as? Upload.Failed
         val uploading: Upload.Uploading? = attachment.upload as? Upload.Uploading
         Chip(
+          // `FileChip`: a document's own kind, else a file's. An SVG with its drawing is
+          // `SvgFileChip`, which is an `ImageChipButton`
+          kind = when {
+            attachment.preview != null -> MessageChipKind.IMAGE
+            else -> documentChipKindForFileName(attachment.name) ?: MessageChipKind.FILE
+          },
           label = attachment.name,
           // `ChatComposer.tsx:7052`: the percentage while it uploads, else the size
           detail = failed?.reason
@@ -284,8 +301,14 @@ private fun AttachmentTile(
   }
 }
 
+/**
+ * A composer chip as upstream's `ContextChip` draws one: no frame, a `1em` icon (the file type's,
+ * a review comment's glyph, or an SVG's own drawing) and the label in the [kind]'s ink, the error
+ * ink when its upload [failed] (`invalid`). One that does something underlines its label on hover.
+ */
 @Composable
 private fun Chip(
+  kind: MessageChipKind,
   label: String,
   detail: String?,
   enabled: Boolean,
@@ -294,44 +317,88 @@ private fun Chip(
   onClick: (() -> Unit)? = null,
   thumbnail: ImageBitmap? = null,
 ) {
-  val outline: Color = if (failed) {
-    JewelTheme.globalColors.text.error
-  } else {
-    JewelTheme.globalColors.borders.normal
-  }
-  val clickable: Modifier =
-    if (onClick != null && enabled) Modifier.clickable(onClick = onClick) else Modifier
+  val style: TextStyle = JewelTheme.typography.small
+  val density: Density = LocalDensity.current
+  val ink: Color =
+    currentContextChipInks().ink(kind, ContextChipState.INVALID.takeIf { failed })
+  val interactions: MutableInteractionSource = remember { MutableInteractionSource() }
+  val hovered: Boolean by interactions.collectIsHoveredAsState()
+  val click: (() -> Unit)? = onClick?.takeIf { enabled }
+  val decoration: TextDecoration? = TextDecoration.Underline.takeIf { click != null && hovered }
   Row(
-    modifier = Modifier
-      .border(1.dp, outline, RoundedCornerShape(8.dp))
-      .then(clickable)
-      .padding(start = 8.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
-    horizontalArrangement = Arrangement.spacedBy(6.dp),
+    modifier = if (click == null) {
+      Modifier
+    } else {
+      Modifier
+        .pointerHoverIcon(PointerIcon.Hand)
+        .clickable(interactionSource = interactions, indication = null, onClick = click)
+    },
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    if (thumbnail != null) {
-      // `ImageChipButton`'s `size-[1em] rounded-sm object-cover`, an em of the chip's text
-      val side: Dp = with(LocalDensity.current) { JewelTheme.typography.small.fontSize.toDp() }
-      Image(
-        bitmap = thumbnail,
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        modifier = Modifier.size(side).clip(RoundedCornerShape(2.dp)),
-      )
+    // `size-[1em]`, an em of the chip's text, and `gap-[0.2em]` before the label
+    val em: Dp = with(density) { style.fontSize.toDp() }
+    Box(Modifier.padding(end = em * COMPOSER_CHIP_GAP_EM)) {
+      if (thumbnail != null) {
+        // `ImageChipButton`'s `rounded-sm object-cover`
+        Image(
+          bitmap = thumbnail,
+          contentDescription = null,
+          contentScale = ContentScale.Crop,
+          modifier = Modifier.size(em).clip(RoundedCornerShape(2.dp)),
+        )
+      } else {
+        ChipIcon(kind, label, ink, em)
+      }
     }
     Text(
       text = label,
-      style = JewelTheme.typography.small,
-      color = if (failed) JewelTheme.globalColors.text.error else Color.Unspecified,
+      style = style.copy(fontWeight = FontWeight.Medium, textDecoration = decoration),
+      color = ink,
+      maxLines = 1,
     )
     if (detail != null) {
-      Text(detail, style = JewelTheme.typography.small, color = JewelTheme.globalColors.text.info)
+      // `gap-[0.33em]`, then the size in the ink too
+      Text(
+        text = detail,
+        style = style.copy(textDecoration = decoration),
+        color = ink,
+        maxLines = 1,
+        modifier = Modifier.padding(start = em * 0.33f),
+      )
     }
     IconActionButton(
       key = AllIconsKeys.General.Close,
       contentDescription = "Remove",
       onClick = onRemove,
       enabled = enabled,
+    )
+  }
+}
+
+/** A composer chip's icon: a review comment's glyph, or the IDE's icon for the file's type. */
+@Composable
+private fun ChipIcon(kind: MessageChipKind, name: String, ink: Color, size: Dp) {
+  if (kind == MessageChipKind.REVIEW_COMMENT) {
+    Glyph("message-circle", ink, size)
+    return
+  }
+  val scale: Float = LocalDensity.current.density
+  val bitmap: ImageBitmap? = remember(name, scale) { fileTypeIcon(name, scale) }
+  // A document's icon is stroked in the ink, `--document-icon-stroke`; other types keep theirs
+  val filter: ColorFilter? = ColorFilter.tint(ink).takeIf { kind.isDocument }
+  if (bitmap != null) {
+    Image(
+      bitmap = bitmap,
+      contentDescription = null,
+      modifier = Modifier.size(size),
+      colorFilter = filter,
+    )
+  } else {
+    Icon(
+      key = AllIconsKeys.FileTypes.Any_type,
+      contentDescription = null,
+      modifier = Modifier.size(size),
+      colorFilter = filter,
     )
   }
 }

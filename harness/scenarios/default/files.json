@@ -125,6 +125,26 @@
       "kind": "file"
     },
     {
+      "path": "docs/kstore-spec.pdf",
+      "kind": "file"
+    },
+    {
+      "path": "docs/migration-guide.docx",
+      "kind": "file"
+    },
+    {
+      "path": "docs/benchmarks.xlsx",
+      "kind": "file"
+    },
+    {
+      "path": "docs/kotlinconf-talk.pptx",
+      "kind": "file"
+    },
+    {
+      "path": "docs/kstore-handbook.epub",
+      "kind": "file"
+    },
+    {
       "path": "samples/My Notes (draft)/notes #1.md",
       "kind": "file"
     },
