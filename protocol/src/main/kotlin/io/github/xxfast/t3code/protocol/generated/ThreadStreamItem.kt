@@ -1,4 +1,4 @@
-// Generated from v0.1.2 by contracts/generate.ts, do not edit.
+// Generated from v0.1.5 by contracts/generate.ts, do not edit.
 
 @file:OptIn(ExperimentalSerializationApi::class)
 
@@ -36,8 +36,8 @@ public sealed interface ThreadStreamItem {
     val historyCursor: String? = null,
     val hasMoreHistory: Boolean? = null,
     val latestLocalTurnOrdinal: Long? = null,
-    val payloadBudgetExceeded: Boolean? = null,
     val turnItemsOmitLocalVisible: Boolean? = null,
+    val idTable: Boolean? = null,
   ) : ThreadStreamItem
 
   @Serializable

@@ -642,21 +642,18 @@ private fun rememberComposerFooter(
 
   fun commandId(): String = UUID.randomUUID().toString()
 
-  fun blockReason(current: ThreadView, nextInstance: String, nextModel: String): ModelChangeBlock? =
+  fun blockReason(current: ThreadView, nextInstance: String): ModelChangeBlock? =
     getStartedThreadModelChangeBlockReason(
-      providers = info?.providers.orEmpty(),
       hasStartedSession = current.runs.isNotEmpty(),
       supportsProviderSwitchingViaHandoff = threadSupportsProviderHandoff(current),
       currentInstance = current.thread.providerInstanceId,
-      currentModel = current.thread.modelSelection.slug,
       nextInstance = nextInstance,
-      nextModel = nextModel,
     )
 
   fun pickModel(pickedInstance: String, model: String) {
     val current: ThreadView = view ?: return
     val row: Thread = current.thread
-    val block: ModelChangeBlock? = blockReason(current, pickedInstance, model)
+    val block: ModelChangeBlock? = blockReason(current, pickedInstance)
     val next: ModelSelection = nextModelSelection(selection, pickedInstance, model)
     when {
       block != null -> controller.blocked(row.id, block.toString())
@@ -703,8 +700,8 @@ private fun rememberComposerFooter(
         activeInstanceId = state.provider?.instanceId,
         activeModel = state.selection?.slug,
         favorites = favorites,
-        disabledReason = { pickedInstance, model ->
-          modelDisabledReason(blockReason(current, pickedInstance, model))
+        disabledReason = { pickedInstance, _ ->
+          modelDisabledReason(blockReason(current, pickedInstance))
         },
         onToggleFavorite = { pickedInstance, model ->
           val key: String = providerModelKey(pickedInstance, model)

@@ -364,6 +364,19 @@
               "type": "null"
             }
           ]
+        },
+        "awaited": {
+          "anyOf": [
+            {
+              "type": "boolean",
+              "enum": [
+                true
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [

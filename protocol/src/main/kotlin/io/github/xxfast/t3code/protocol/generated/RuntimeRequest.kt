@@ -1,4 +1,4 @@
-// Generated from v0.1.2 by contracts/generate.ts, do not edit.
+// Generated from v0.1.5 by contracts/generate.ts, do not edit.
 
 @file:OptIn(ExperimentalSerializationApi::class)
 
@@ -31,6 +31,7 @@ public data class RuntimeRequest(
   val createdAt: String,
   val resolvedAt: String?,
   val decision: String? = null,
+  val feedback: String? = null,
   // TODO(contracts): object with no declared properties
   val answers: JsonObject? = null,
 ) {
@@ -42,6 +43,7 @@ public data class RuntimeRequest(
     public data class Live(
       @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "live",
       val providerSessionId: String,
+      val supportsFeedback: Boolean? = null,
     ) : RuntimeRequest.ResponseCapability
 
     @Serializable

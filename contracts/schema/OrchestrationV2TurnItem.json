@@ -6,6 +6,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -225,6 +249,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -433,6 +481,20 @@
             }
           ]
         },
+        "idleCompaction": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "beforeCacheExpires",
+                "onReturn"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "workflowScript": {
           "anyOf": [
             {
@@ -454,6 +516,12 @@
         },
         "text": {
           "type": "string"
+        },
+        "textOmitted": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
         },
         "context": {
           "anyOf": [
@@ -500,6 +568,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -673,6 +765,12 @@
         "text": {
           "type": "string"
         },
+        "textOmitted": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
         "attachments": {
           "anyOf": [
             {
@@ -715,6 +813,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -913,6 +1035,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -1115,6 +1261,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -1326,6 +1496,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -1550,6 +1744,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -1811,6 +2029,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -2022,6 +2264,16 @@
               "type": "null"
             }
           ]
+        },
+        "monitor": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -2047,6 +2299,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -2260,6 +2536,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -2476,6 +2776,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -2738,6 +3062,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -2916,6 +3264,12 @@
           "items": {
             "$ref": "#/$defs/OrchestrationV2CheckpointFileSummary"
           }
+        },
+        "filesOmitted": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
         }
       },
       "required": [
@@ -2943,6 +3297,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -3137,6 +3515,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -3331,6 +3733,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -3525,6 +3951,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -3729,6 +4179,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -3964,6 +4438,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -4224,6 +4722,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -4493,6 +5015,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -4706,6 +5252,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -4889,6 +5459,19 @@
             }
           ]
         },
+        "delivery": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "file"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "secretStatus": {
           "type": "string",
           "enum": [
@@ -4924,6 +5507,363 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
+        "toolNonExecutionKind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "toolSurface": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "browser",
+                "computer"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "toolIcon": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolActivityIcon"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "toolSource": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolActivitySource"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "runId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nodeId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "providerThreadId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "providerTurnId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nativeItemRef": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrchestrationV2ProviderRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parentItemId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "idle",
+            "pending",
+            "running",
+            "waiting",
+            "completed",
+            "failed",
+            "cancelled",
+            "interrupted"
+          ]
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "startedAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "completedAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "link_request"
+          ]
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "environmentId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requestedAccess": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "read-only",
+                "approval-required",
+                "auto-accept-edits",
+                "auto",
+                "full-access"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "linkStatus": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "linked",
+            "declined",
+            "cancelled",
+            "failed"
+          ]
+        },
+        "linkedEnvironmentId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "linkedLabel": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "linkedAccess": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "read-only",
+                "approval-required",
+                "auto-accept-edits",
+                "auto",
+                "full-access"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "threadId",
+        "runId",
+        "nodeId",
+        "providerThreadId",
+        "providerTurnId",
+        "nativeItemRef",
+        "parentItemId",
+        "ordinal",
+        "status",
+        "title",
+        "startedAt",
+        "completedAt",
+        "updatedAt",
+        "type",
+        "reason",
+        "linkStatus"
+      ],
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -5117,6 +6057,16 @@
             }
           ]
         },
+        "remoteChild": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrchestrationV2RemoteTaskChild"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "prompt": {
           "type": "string"
         },
@@ -5138,6 +6088,18 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "promptOmitted": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "resultOmitted": {
+          "type": "boolean",
+          "enum": [
+            true
           ]
         }
       },
@@ -5170,6 +6132,30 @@
     {
       "type": "object",
       "properties": {
+        "deferredWork": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "lastOrdinal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cursor",
+            "itemCount",
+            "lastOrdinal"
+          ],
+          "additionalProperties": true
+        },
         "toolNonExecutionKind": {
           "anyOf": [
             {
@@ -5549,6 +6535,37 @@
       ],
       "additionalProperties": true
     },
+    "GuestMessageAttribution": {
+      "type": "object",
+      "properties": {
+        "guestMessageId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "shareId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "guestMessageId",
+        "name",
+        "text"
+      ],
+      "additionalProperties": true
+    },
     "ModelSelection": {
       "type": "object",
       "properties": {
@@ -5590,6 +6607,16 @@
           "type": "number",
           "enum": [
             1
+          ]
+        },
+        "guest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuestMessageAttribution"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "records": {
@@ -6108,6 +7135,58 @@
         "attempt",
         "maxAttempts",
         "retryDelayMs"
+      ],
+      "additionalProperties": true
+    },
+    "OrchestrationV2RemoteTaskChild": {
+      "type": "object",
+      "properties": {
+        "environmentId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "runId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stoppedThere": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stopCount": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "environmentId",
+        "threadId",
+        "label"
       ],
       "additionalProperties": true
     },

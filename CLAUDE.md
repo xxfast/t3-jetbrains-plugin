@@ -170,7 +170,7 @@ Hard-won, so recorded here rather than rediscovered.
 - Upstream preview tags aren't a linear history. `v0.1.1-preview.20261021.3449` isn't a
   descendant of `.20261019.3339`, and it dropped remote delegation (`delegatedFrom`, `linkOrigin`,
   the `link_request` item). Bumping can remove fields as well as add them; diff the schema first.
-- Contracts pin upstream's stable releases (`vX.Y.Z`, `v0.1.2` since 2026-10-24), not previews
+- Contracts pin upstream's stable releases (`vX.Y.Z`, `v0.1.5` since 2026-10-30), not previews
   or nightlies. The desktop's default update channel is stable, so that's what users run;
   nightlies ship several times a day and their schemas churn. The drift job tracks the newest
   stable tag too. Nightly users still work through `ignoreUnknownKeys` and the generic renderer.

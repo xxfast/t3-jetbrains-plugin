@@ -1,4 +1,4 @@
-// Generated from v0.1.2 by contracts/generate.ts, do not edit.
+// Generated from v0.1.5 by contracts/generate.ts, do not edit.
 
 @file:OptIn(ExperimentalSerializationApi::class)
 

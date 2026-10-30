@@ -18,7 +18,16 @@
     "acceptBoundedSnapshot": {
       "type": "boolean"
     },
+    "acceptDeferredWork": {
+      "type": "boolean"
+    },
     "acceptCompactTurnItems": {
+      "type": "boolean"
+    },
+    "acceptDedupedBodies": {
+      "type": "boolean"
+    },
+    "acceptCompactIds": {
       "type": "boolean"
     }
   },

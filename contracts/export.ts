@@ -208,6 +208,10 @@ interface Document {
   readonly definitions: Record<string, Json>;
 }
 
+function isEmptySchema(node: Json): boolean {
+  return isObject(node) && Object.keys(node).every((key) => IGNORED_KEYS.has(key));
+}
+
 function isBareRef(node: Json): boolean {
   return isObject(node) && typeof node.$ref === "string" && Object.keys(node).length === 1;
 }
@@ -225,10 +229,23 @@ async function main(): Promise<void> {
   prepareUpstream(upstream, tag);
   resolveEffectFromContracts();
 
-  const { Schema } = await import("effect");
+  const { Schema, SchemaAST } = await import("effect");
   const src: string = join(upstream, "packages", "contracts", "src");
   const toDocument = (value: unknown): Document =>
-    Schema.toJsonSchemaDocument(value as never) as unknown as Document;
+    Schema.toJsonSchemaDocument(withoutParsedJson(value) as never) as unknown as Document;
+
+  // Upstream's `withRecordIdTable` (orchestrationV2IdTable.ts) decodes its codec from an opaque
+  // parsed-JSON declaration, which exports as an empty schema. The ids table is opt-in
+  // (`acceptCompactIds`); without it the wire form is the inner codec, so drop that last link.
+  function withoutParsedJson(value: unknown): unknown {
+    const ast = (value as { ast: SchemaAST.AST }).ast;
+    const link = ast.encoding?.at(-1);
+    if (link === undefined || link.to._tag !== "Declaration") return value;
+    const document = Schema.toJsonSchemaDocument(value as never) as unknown as Document;
+    if (!isEmptySchema(document.schema)) return value;
+    const encoding = ast.encoding!.length > 1 ? ast.encoding!.slice(0, -1) : undefined;
+    return Schema.make(SchemaAST.replaceEncoding(ast, encoding as never));
+  }
 
   // Every exported schema upstream, in a stable order.
   const modules: Record<string, Record<string, unknown>> = {};

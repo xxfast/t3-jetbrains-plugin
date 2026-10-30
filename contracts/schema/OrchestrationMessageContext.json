@@ -10,6 +10,16 @@
         1
       ]
     },
+    "guest": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GuestMessageAttribution"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "records": {
       "type": "array",
       "maxItems": 200
@@ -19,5 +29,38 @@
     "version",
     "records"
   ],
-  "additionalProperties": true
+  "additionalProperties": true,
+  "$defs": {
+    "GuestMessageAttribution": {
+      "type": "object",
+      "properties": {
+        "guestMessageId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "shareId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "guestMessageId",
+        "name",
+        "text"
+      ],
+      "additionalProperties": true
+    }
+  }
 }

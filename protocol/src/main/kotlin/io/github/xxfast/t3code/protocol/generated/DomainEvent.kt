@@ -1,4 +1,4 @@
-// Generated from v0.1.2 by contracts/generate.ts, do not edit.
+// Generated from v0.1.5 by contracts/generate.ts, do not edit.
 
 @file:OptIn(ExperimentalSerializationApi::class)
 
@@ -415,7 +415,8 @@ public object DomainEventSerializer : KSerializer<DomainEvent> {
       "thread.runtime-mode-updated",
       "thread.interaction-mode-updated",
       "thread.model-selection-updated",
-      "thread.provider-switched" ->
+      "thread.provider-switched",
+      "thread.guest-share-updated" ->
         DomainEvent.Thread.serializer()
       "thread.pull-request-link-updated" -> DomainEvent.ThreadPullRequestLinkUpdated.serializer()
       "run.created" -> DomainEvent.RunCreated.serializer()

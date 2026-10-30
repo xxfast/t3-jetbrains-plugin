@@ -1,4 +1,4 @@
-// Generated from v0.1.2 by contracts/generate.ts, do not edit.
+// Generated from v0.1.5 by contracts/generate.ts, do not edit.
 
 @file:OptIn(ExperimentalSerializationApi::class)
 
@@ -90,6 +90,8 @@ public sealed interface TerminalAttachStreamEvent {
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "activity",
     val hasRunningSubprocess: Boolean,
     val label: String,
+    val cols: Long? = null,
+    val rows: Long? = null,
   ) : TerminalAttachStreamEvent
 
   /** A variant this build doesn't know. [raw] is the whole object as received. */

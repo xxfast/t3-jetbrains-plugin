@@ -246,6 +246,16 @@
           "type": "null"
         }
       ]
+    },
+    "maintainerCanModify": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [
@@ -483,6 +493,16 @@
               "type": "null"
             }
           ]
+        },
+        "checksAlwaysReport": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -561,6 +581,16 @@
         },
         "comment": {
           "type": "boolean"
+        },
+        "maintainerEdits": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -617,6 +647,16 @@
       "properties": {
         "inlineComment": {
           "type": "boolean"
+        },
+        "rangeComment": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "reply": {
           "type": "boolean"
@@ -768,6 +808,16 @@
           ]
         },
         "editChangeRequest": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maintainerEdits": {
           "anyOf": [
             {
               "type": "boolean"

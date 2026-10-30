@@ -27,6 +27,16 @@
               "type": "null"
             }
           ]
+        },
+        "stopDelegatedTasks": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -108,6 +118,26 @@
           "anyOf": [
             {
               "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "linkOrigin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrchestrationV2LinkOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "delegatedFrom": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrchestrationV2DelegatedFrom"
             },
             {
               "type": "null"
@@ -200,6 +230,56 @@
         "type",
         "commandId",
         "threadId"
+      ],
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "thread.guest-share.close"
+          ]
+        },
+        "commandId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "commandId",
+        "threadId"
+      ],
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "thread.guest-message.dismiss"
+          ]
+        },
+        "commandId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "guestMessageId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "commandId",
+        "threadId",
+        "guestMessageId"
       ],
       "additionalProperties": true
     },
@@ -560,6 +640,27 @@
         },
         "visitedAt": {
           "type": "string"
+        },
+        "opened": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "searchQuery": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1275,6 +1376,16 @@
             }
           ]
         },
+        "guestMessageId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "createdBy": {
           "type": "string",
           "enum": [
@@ -1307,6 +1418,20 @@
           "anyOf": [
             {
               "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "idleCompaction": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "beforeCacheExpires",
+                "onReturn"
+              ]
             },
             {
               "type": "null"
@@ -2042,6 +2167,16 @@
             }
           ]
         },
+        "feedback": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "answers": {
           "anyOf": [
             {
@@ -2730,6 +2865,37 @@
       ],
       "additionalProperties": true
     },
+    "GuestMessageAttribution": {
+      "type": "object",
+      "properties": {
+        "guestMessageId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "shareId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "guestMessageId",
+        "name",
+        "text"
+      ],
+      "additionalProperties": true
+    },
     "ModelSelection": {
       "type": "object",
       "properties": {
@@ -2773,6 +2939,16 @@
             1
           ]
         },
+        "guest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuestMessageAttribution"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "records": {
           "type": "array",
           "maxItems": 200
@@ -2781,6 +2957,26 @@
       "required": [
         "version",
         "records"
+      ],
+      "additionalProperties": true
+    },
+    "OrchestrationV2DelegatedFrom": {
+      "type": "object",
+      "properties": {
+        "environmentId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "environmentId",
+        "threadId",
+        "title"
       ],
       "additionalProperties": true
     },
@@ -2817,6 +3013,39 @@
       "required": [
         "runId",
         "resetAt"
+      ],
+      "additionalProperties": true
+    },
+    "OrchestrationV2LinkOrigin": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "access": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "read-only",
+                "approval-required",
+                "auto-accept-edits",
+                "auto",
+                "full-access"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "sessionId",
+        "label"
       ],
       "additionalProperties": true
     },
@@ -3168,6 +3397,33 @@
           "anyOf": [
             {
               "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "claudeAttachmentBudget": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "bytesUsed": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "pagesUsed": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "bytesUsed",
+                "pagesUsed"
+              ],
+              "additionalProperties": true
             },
             {
               "type": "null"

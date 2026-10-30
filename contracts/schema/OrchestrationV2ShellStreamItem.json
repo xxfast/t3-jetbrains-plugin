@@ -361,6 +361,26 @@
       ],
       "additionalProperties": true
     },
+    "OrchestrationV2DelegatedFrom": {
+      "type": "object",
+      "properties": {
+        "environmentId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "environmentId",
+        "threadId",
+        "title"
+      ],
+      "additionalProperties": true
+    },
     "OrchestrationV2LatestVisibleMessageSummary": {
       "type": "object",
       "properties": {
@@ -430,6 +450,82 @@
       ],
       "additionalProperties": true
     },
+    "OrchestrationV2LinkOrigin": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "access": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "read-only",
+                "approval-required",
+                "auto-accept-edits",
+                "auto",
+                "full-access"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "sessionId",
+        "label"
+      ],
+      "additionalProperties": true
+    },
+    "OrchestrationV2OlderSettledCount": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "projectId",
+        "count"
+      ],
+      "additionalProperties": true
+    },
+    "OrchestrationV2OlderSettledThreads": {
+      "type": "object",
+      "properties": {
+        "before": {
+          "type": "string"
+        },
+        "asOfSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "counts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/OrchestrationV2OlderSettledCount"
+          }
+        }
+      },
+      "required": [
+        "before",
+        "asOfSequence",
+        "counts"
+      ],
+      "additionalProperties": true
+    },
     "OrchestrationV2PendingBackgroundTask": {
       "anyOf": [
         {
@@ -452,6 +548,19 @@
               "anyOf": [
                 {
                   "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "awaited": {
+              "anyOf": [
+                {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
                 },
                 {
                   "type": "null"
@@ -517,6 +626,19 @@
                 }
               ]
             },
+            "awaited": {
+              "anyOf": [
+                {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "kind": {
               "type": "string",
               "enum": [
@@ -550,6 +672,19 @@
               "anyOf": [
                 {
                   "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "awaited": {
+              "anyOf": [
+                {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
                 },
                 {
                   "type": "null"
@@ -595,6 +730,19 @@
                 }
               ]
             },
+            "awaited": {
+              "anyOf": [
+                {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "kind": {
               "type": "string",
               "enum": [
@@ -628,6 +776,19 @@
               "anyOf": [
                 {
                   "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "awaited": {
+              "anyOf": [
+                {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
                 },
                 {
                   "type": "null"
@@ -811,6 +972,9 @@
           "items": {
             "$ref": "#/$defs/OrchestrationProjectShell"
           }
+        },
+        "olderSettled": {
+          "$ref": "#/$defs/OrchestrationV2OlderSettledThreads"
         }
       },
       "required": [
@@ -819,6 +983,45 @@
         "threads",
         "archivedThreads",
         "projects"
+      ],
+      "additionalProperties": true
+    },
+    "OrchestrationV2ThreadOpens": {
+      "type": "object",
+      "properties": {
+        "openedAt": {
+          "type": "number"
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0
+        },
+        "picks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "maxLength": 32
+              },
+              "at": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "query",
+              "at"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 3
+        }
+      },
+      "required": [
+        "openedAt",
+        "score",
+        "picks"
       ],
       "additionalProperties": true
     },
@@ -1057,6 +1260,26 @@
             }
           ]
         },
+        "linkOrigin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrchestrationV2LinkOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "delegatedFrom": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrchestrationV2DelegatedFrom"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "latestRunId": {
           "anyOf": [
             {
@@ -1284,6 +1507,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/OrchestrationV2PendingRuntimeRequestSummary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pendingGuestMessageCount": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             {
               "type": "null"
@@ -1579,6 +1814,23 @@
               "anyOf": [
                 {
                   "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "opens": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/OrchestrationV2ThreadOpens"
                 },
                 {
                   "type": "null"
@@ -2396,6 +2648,19 @@
             }
           ]
         },
+        "owedChecks": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "remarksThrough": {
           "type": "string"
         },
@@ -2412,6 +2677,23 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
+        },
+        "checksAwaitedSince": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [

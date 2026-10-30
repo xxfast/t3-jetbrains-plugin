@@ -11,6 +11,12 @@
     },
     "requestCompletionMarker": {
       "type": "boolean"
+    },
+    "omitIdleSubagents": {
+      "type": "boolean"
+    },
+    "omitOlderSettled": {
+      "type": "boolean"
     }
   },
   "additionalProperties": true

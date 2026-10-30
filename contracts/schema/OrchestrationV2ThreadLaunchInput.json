@@ -289,6 +289,37 @@
       ],
       "additionalProperties": true
     },
+    "GuestMessageAttribution": {
+      "type": "object",
+      "properties": {
+        "guestMessageId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "shareId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "guestMessageId",
+        "name",
+        "text"
+      ],
+      "additionalProperties": true
+    },
     "ModelSelection": {
       "type": "object",
       "properties": {
@@ -330,6 +361,16 @@
           "type": "number",
           "enum": [
             1
+          ]
+        },
+        "guest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuestMessageAttribution"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "records": {

@@ -188,36 +188,25 @@ class ModelPickerLogicTest {
   }
 
   @Test
-  fun `a started thread blocks a model change its provider can't take`() {
-    val strict: List<ServerProvider> = listOf(
-      provider("codex", requiresNewThreadForModelChange = true),
-      provider("claude", "claudeAgent"),
-    )
+  fun `a started thread blocks a switch of provider without handoff`() {
     fun block(
       started: Boolean = true,
       handoff: Boolean = false,
-      instance: String = "codex",
-      model: String = "b",
-      providers: List<ServerProvider> = strict,
+      instance: String = "claude",
     ): ModelChangeBlock? = getStartedThreadModelChangeBlockReason(
-      providers = providers,
       hasStartedSession = started,
       supportsProviderSwitchingViaHandoff = handoff,
       currentInstance = "codex",
-      currentModel = "a",
       nextInstance = instance,
-      nextModel = model,
     )
 
     assertNull(block(started = false))
-    assertNull(block(model = "a"), "Same model")
-    assertEquals("Start a new chat to change models", block()?.title)
-    assertNull(block(providers = listOf(provider("codex"))), "This provider takes it")
-    assertEquals("Start a new chat to switch providers", block(instance = "claude")?.title)
-    assertNull(block(instance = "claude", handoff = true))
+    assertNull(block(instance = "codex"), "Any model of the same instance")
+    assertEquals("Start a new chat to switch providers", block()?.title)
+    assertNull(block(handoff = true))
     assertEquals(
-      "Start a new chat to change models. This provider does not allow switching models " +
-        "after a conversation has started.",
+      "Start a new chat to switch providers. This thread does not support switching " +
+        "providers after it has started.",
       block().toString(),
     )
   }
@@ -336,7 +325,6 @@ private fun provider(
   displayName: String? = null,
   toggle: Boolean? = null,
   supportedRuntimeModes: List<String?>? = null,
-  requiresNewThreadForModelChange: Boolean? = null,
   enabled: Boolean = true,
   status: String = "ready",
   models: List<ServerProviderModel> = emptyList(),
@@ -346,7 +334,6 @@ private fun provider(
   displayName = displayName,
   showInteractionModeToggle = toggle,
   supportedRuntimeModes = supportedRuntimeModes,
-  requiresNewThreadForModelChange = requiresNewThreadForModelChange,
   enabled = enabled,
   installed = true,
   version = null,

@@ -104,6 +104,7 @@ class BackgroundWorkLogicTest {
       taskId = "t",
       description = null,
       parentTaskId = null,
+      awaited = null,
       kind = "scheduled",
       raw = JsonObject(emptyMap()),
     )

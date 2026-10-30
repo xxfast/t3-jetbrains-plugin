@@ -1,4 +1,4 @@
-// Generated from v0.1.2 by contracts/generate.ts, do not edit.
+// Generated from v0.1.5 by contracts/generate.ts, do not edit.
 
 @file:OptIn(ExperimentalSerializationApi::class)
 
@@ -31,6 +31,7 @@ public sealed interface Command {
     override val commandId: String,
     val threadId: String,
     val reason: String? = null,
+    val stopDelegatedTasks: Boolean? = null,
   ) : Command
 
   @Serializable
@@ -47,6 +48,8 @@ public sealed interface Command {
     val interactionMode: String,
     val branch: String?,
     val worktreePath: String?,
+    val linkOrigin: LinkOrigin? = null,
+    val delegatedFrom: DelegatedFrom? = null,
     val importedNativeThread: Command.ThreadCreate.ImportedNativeThread? = null,
   ) : Command {
     @Serializable
@@ -68,6 +71,23 @@ public sealed interface Command {
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "thread.archive",
     override val commandId: String,
     val threadId: String,
+  ) : Command
+
+  @Serializable
+  public data class ThreadGuestShareClose(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    override val type: String = "thread.guest-share.close",
+    override val commandId: String,
+    val threadId: String,
+  ) : Command
+
+  @Serializable
+  public data class ThreadGuestMessageDismiss(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    override val type: String = "thread.guest-message.dismiss",
+    override val commandId: String,
+    val threadId: String,
+    val guestMessageId: String,
   ) : Command
 
   @Serializable
@@ -170,6 +190,8 @@ public sealed interface Command {
     override val commandId: String,
     val threadId: String,
     val visitedAt: String,
+    val opened: Boolean? = null,
+    val searchQuery: String? = null,
   ) : Command
 
   @Serializable
@@ -324,10 +346,12 @@ public sealed interface Command {
   public data class MessageDispatch(
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "message.dispatch",
     val notification: Notification? = null,
+    val guestMessageId: String? = null,
     val createdBy: String,
     val creationSource: String,
     val scheduledTaskId: String? = null,
     val senderThreadId: String? = null,
+    val idleCompaction: String? = null,
     override val commandId: String,
     val threadId: String,
     val messageId: String,
@@ -578,6 +602,7 @@ public sealed interface Command {
     val threadId: String,
     val requestId: String,
     val decision: String? = null,
+    val feedback: String? = null,
     // TODO(contracts): object with no declared properties
     val answers: JsonObject? = null,
     val attachmentsByQuestionId:
@@ -793,6 +818,8 @@ public object CommandSerializer : KSerializer<Command> {
       "thread.stop" -> Command.ThreadStop.serializer()
       "thread.create" -> Command.ThreadCreate.serializer()
       "thread.archive" -> Command.ThreadArchive.serializer()
+      "thread.guest-share.close" -> Command.ThreadGuestShareClose.serializer()
+      "thread.guest-message.dismiss" -> Command.ThreadGuestMessageDismiss.serializer()
       "thread.unarchive" -> Command.ThreadUnarchive.serializer()
       "thread.delete" -> Command.ThreadDelete.serializer()
       "thread.settle" -> Command.ThreadSettle.serializer()
@@ -863,6 +890,10 @@ public object CommandSerializer : KSerializer<Command> {
       is Command.ThreadStop -> Command.ThreadStop.serializer().serialize(encoder, value)
       is Command.ThreadCreate -> Command.ThreadCreate.serializer().serialize(encoder, value)
       is Command.ThreadArchive -> Command.ThreadArchive.serializer().serialize(encoder, value)
+      is Command.ThreadGuestShareClose ->
+        Command.ThreadGuestShareClose.serializer().serialize(encoder, value)
+      is Command.ThreadGuestMessageDismiss ->
+        Command.ThreadGuestMessageDismiss.serializer().serialize(encoder, value)
       is Command.ThreadUnarchive -> Command.ThreadUnarchive.serializer().serialize(encoder, value)
       is Command.ThreadDelete -> Command.ThreadDelete.serializer().serialize(encoder, value)
       is Command.ThreadSettle -> Command.ThreadSettle.serializer().serialize(encoder, value)

@@ -41,6 +41,11 @@ exporter puts the names back: every upstream export that's an object or a union 
 fingerprinted, and any matching subtree becomes a `$ref` into `$defs`. Output is deterministic,
 so CI can diff it.
 
+Since `v0.1.5` upstream wraps snapshot-shaped schemas (`OrchestrationV2ThreadStreamItem`) in
+`withRecordIdTable`, which decodes from an opaque parsed-JSON declaration and so exports as an
+empty schema. Its ids table is opt-in (`acceptCompactIds`), so the exporter drops that last link
+and exports the codec inside, the wire form the plugin gets without opting in.
+
 If a curated schema fails to export, it writes `<name>.error.txt` next to the others, warns, and
 keeps going.
 

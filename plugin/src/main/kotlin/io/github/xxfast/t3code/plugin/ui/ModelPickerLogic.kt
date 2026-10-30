@@ -241,38 +241,22 @@ data class ModelChangeBlock(val title: String, val description: String) {
 }
 
 /**
- * `getStartedThreadModelChangeBlockReason`, `apps/web/src/components/ChatView.logic.ts:1001`.
- * Once a thread has started, a provider that needs a new thread for a model change, or a switch
- * of instance without handoff, means starting a new chat. [currentInstance] is the thread row's
- * own provider instance, [currentModel] its model.
+ * `getStartedThreadModelChangeBlockReason`, `apps/web/src/components/ChatView.logic.ts:917`.
+ * Once a thread has started, a switch of instance without handoff means starting a new chat.
+ * Any model within the thread's own instance is fine. [currentInstance] is the thread row's own
+ * provider instance.
  */
 fun getStartedThreadModelChangeBlockReason(
-  providers: List<ServerProvider>,
   hasStartedSession: Boolean,
   supportsProviderSwitchingViaHandoff: Boolean,
   currentInstance: String?,
-  currentModel: String?,
   nextInstance: String,
-  nextModel: String,
 ): ModelChangeBlock? {
   if (!hasStartedSession) return null
-  if (currentInstance == nextInstance && currentModel == nextModel) return null
-  if (currentInstance != nextInstance) {
-    if (supportsProviderSwitchingViaHandoff) return null
-    return ModelChangeBlock(
-      title = "Start a new chat to switch providers",
-      description = "This thread does not support switching providers after it has started.",
-    )
-  }
-
-  val current: ServerProvider? = selectedProvider(providers, currentInstance)
-  val next: ServerProvider? = selectedProvider(providers, nextInstance)
-  val blocked: Boolean = current?.requiresNewThreadForModelChange == true ||
-    next?.requiresNewThreadForModelChange == true
-  if (!blocked) return null
+  if (currentInstance == nextInstance || supportsProviderSwitchingViaHandoff) return null
   return ModelChangeBlock(
-    title = "Start a new chat to change models",
-    description = "This provider does not allow switching models after a conversation has started.",
+    title = "Start a new chat to switch providers",
+    description = "This thread does not support switching providers after it has started.",
   )
 }
 

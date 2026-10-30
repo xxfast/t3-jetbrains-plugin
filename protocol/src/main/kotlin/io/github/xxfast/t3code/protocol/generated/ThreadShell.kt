@@ -1,4 +1,4 @@
-// Generated from v0.1.2 by contracts/generate.ts, do not edit.
+// Generated from v0.1.5 by contracts/generate.ts, do not edit.
 
 @file:OptIn(ExperimentalSerializationApi::class)
 
@@ -39,6 +39,8 @@ public data class ThreadShell(
   val forkedFrom: ThreadShell.ForkedFrom?,
   val activeProviderThreadId: String?,
   val historyOrigin: String? = null,
+  val linkOrigin: LinkOrigin? = null,
+  val delegatedFrom: DelegatedFrom? = null,
   val latestRunId: String?,
   val latestRunRequestedAt: String? = null,
   val latestRunStartedAt: String? = null,
@@ -54,6 +56,7 @@ public data class ThreadShell(
   val lastErrorCode: String? = null,
   val usageLimitResetAt: String? = null,
   val pendingRuntimeRequest: PendingRuntimeRequestSummary?,
+  val pendingGuestMessageCount: Long? = null,
   val latestVisibleMessage: LatestVisibleMessageSummary?,
   val latestUserMessageAt: String?,
   val latestUserAuthoredMessageAt: String? = null,
@@ -77,6 +80,7 @@ public data class ThreadShell(
   val pinOrderKey: String? = null,
   val activeOrderKey: String? = null,
   val lastVisitedAt: String? = null,
+  val opens: ThreadOpens? = null,
   val titleRegeneration: ThreadTitleRegeneration? = null,
   val deletedAt: String?,
 ) {

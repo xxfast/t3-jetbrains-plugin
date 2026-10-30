@@ -1,4 +1,4 @@
-// Generated from v0.1.2 by contracts/generate.ts, do not edit.
+// Generated from v0.1.5 by contracts/generate.ts, do not edit.
 
 @file:OptIn(ExperimentalSerializationApi::class)
 
@@ -42,6 +42,7 @@ public sealed interface TurnItem {
 
   @Serializable
   public data class TurnItemNotification(
+    val deferredWork: TurnItem.TurnItemNotification.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -65,10 +66,18 @@ public sealed interface TurnItem {
     val outcome: String,
     val summary: String,
     val detail: String? = null,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class UserMessage(
+    val deferredWork: TurnItem.UserMessage.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -93,15 +102,25 @@ public sealed interface TurnItem {
     val messageId: String,
     val scheduledTaskId: String? = null,
     val senderThreadId: String? = null,
+    val idleCompaction: String? = null,
     val workflowScript: Boolean? = null,
     val inputIntent: String,
     val text: String,
+    val textOmitted: Boolean? = null,
     val context: MessageContext? = null,
     val attachments: List<ChatAttachment>,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class AssistantMessage(
+    val deferredWork: TurnItem.AssistantMessage.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -123,12 +142,21 @@ public sealed interface TurnItem {
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "assistant_message",
     val messageId: String,
     val text: String,
+    val textOmitted: Boolean? = null,
     val attachments: List<ChatAttachment>? = null,
     val streaming: Boolean,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class Reasoning(
+    val deferredWork: TurnItem.Reasoning.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -150,10 +178,18 @@ public sealed interface TurnItem {
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "reasoning",
     val text: String,
     val streaming: Boolean,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class ProposedPlan(
+    val deferredWork: TurnItem.ProposedPlan.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -176,10 +212,18 @@ public sealed interface TurnItem {
     val planId: String,
     val markdown: String,
     val streaming: Boolean,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class TodoList(
+    val deferredWork: TurnItem.TodoList.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -202,10 +246,18 @@ public sealed interface TurnItem {
     val planId: String,
     val steps: List<PlanStep>,
     val explanation: String? = null,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class UserInputRequest(
+    val deferredWork: TurnItem.UserInputRequest.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -229,10 +281,18 @@ public sealed interface TurnItem {
     val questions: List<UserInputQuestion>,
     val questionAnswer: UserInputAttachmentAnswerPayload? = null,
     val responseMode: String? = null,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class FileChange(
+    val deferredWork: TurnItem.FileChange.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -259,10 +319,18 @@ public sealed interface TurnItem {
     val oldStr: String? = null,
     val newStr: String? = null,
     val changes: List<FileChangeDetail>? = null,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class CommandExecution(
+    val deferredWork: TurnItem.CommandExecution.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -287,10 +355,19 @@ public sealed interface TurnItem {
     val outputOmitted: Boolean? = null,
     val outputIndicatesFailure: Boolean? = null,
     val exitCode: Long? = null,
-  ) : TurnItem
+    val monitor: Boolean? = null,
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class FileSearch(
+    val deferredWork: TurnItem.FileSearch.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -312,10 +389,18 @@ public sealed interface TurnItem {
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "file_search",
     val pattern: String? = null,
     val results: List<FileSearchResult>? = null,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class WebSearch(
+    val deferredWork: TurnItem.WebSearch.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -337,10 +422,18 @@ public sealed interface TurnItem {
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "web_search",
     val patterns: List<String>? = null,
     val results: List<WebSearchResult>? = null,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class ApprovalRequest(
+    val deferredWork: TurnItem.ApprovalRequest.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -367,10 +460,18 @@ public sealed interface TurnItem {
     val fullAccessOverride: String? = null,
     val appName: String? = null,
     val options: List<ProviderApprovalOption>? = null,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class TurnItemCheckpoint(
+    val deferredWork: TurnItem.TurnItemCheckpoint.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -393,10 +494,19 @@ public sealed interface TurnItem {
     val checkpointId: String,
     val scopeId: String,
     val files: List<CheckpointFileSummary>,
-  ) : TurnItem
+    val filesOmitted: Boolean? = null,
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class RunInterruptRequest(
+    val deferredWork: TurnItem.RunInterruptRequest.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -417,10 +527,18 @@ public sealed interface TurnItem {
     override val updatedAt: String,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "run_interrupt_request",
     val message: String,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class RunInterruptResult(
+    val deferredWork: TurnItem.RunInterruptResult.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -441,10 +559,18 @@ public sealed interface TurnItem {
     override val updatedAt: String,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "run_interrupt_result",
     val message: String,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class SystemNotice(
+    val deferredWork: TurnItem.SystemNotice.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -465,10 +591,18 @@ public sealed interface TurnItem {
     override val updatedAt: String,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "system_notice",
     val message: String,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class Error(
+    val deferredWork: TurnItem.Error.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -490,10 +624,18 @@ public sealed interface TurnItem {
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "error",
     val failure: ProviderFailure,
     val retry: ProviderRetry? = null,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class Compaction(
+    val deferredWork: TurnItem.Compaction.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -517,10 +659,18 @@ public sealed interface TurnItem {
     val summary: String? = null,
     val beforeTokenCount: Long? = null,
     val afterTokenCount: Long? = null,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class Handoff(
+    val deferredWork: TurnItem.Handoff.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -549,10 +699,18 @@ public sealed interface TurnItem {
     val toModel: String? = null,
     val strategy: String,
     val summary: String? = null,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class Fork(
+    val deferredWork: TurnItem.Fork.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -575,6 +733,13 @@ public sealed interface TurnItem {
     val source: TurnItem.Fork.Source,
     val targetThreadId: String,
   ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+
     @Serializable(with = Source.SourceSerializer::class)
     public sealed interface Source {
       public val type: String
@@ -659,6 +824,7 @@ public sealed interface TurnItem {
 
   @Serializable
   public data class ThreadCreated(
+    val deferredWork: TurnItem.ThreadCreated.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -682,10 +848,18 @@ public sealed interface TurnItem {
     val targetRunId: String?,
     val targetProviderInstanceId: String,
     val targetModel: String,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class SecretRequest(
+    val deferredWork: TurnItem.SecretRequest.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -708,11 +882,62 @@ public sealed interface TurnItem {
     val label: String,
     val reason: String,
     val placeholder: String? = null,
+    val delivery: String? = null,
     val secretStatus: String,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
+
+  @Serializable
+  public data class LinkRequest(
+    val deferredWork: TurnItem.LinkRequest.DeferredWork? = null,
+    override val toolNonExecutionKind: String? = null,
+    override val toolSurface: String? = null,
+    val toolIcon: ToolActivityIcon? = null,
+    val toolSource: ToolActivitySource? = null,
+    override val id: String,
+    override val threadId: String,
+    override val runId: String?,
+    override val nodeId: String?,
+    override val providerThreadId: String?,
+    override val providerTurnId: String?,
+    val nativeItemRef: ProviderRef?,
+    override val parentItemId: String?,
+    override val ordinal: Long,
+    override val status: String,
+    override val title: String?,
+    override val startedAt: String?,
+    override val completedAt: String?,
+    override val updatedAt: String,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val type: String = "link_request",
+    val url: String? = null,
+    val reason: String,
+    val environmentId: String? = null,
+    val label: String? = null,
+    val hint: String? = null,
+    val requestedAccess: String? = null,
+    val linkStatus: String,
+    val linkedEnvironmentId: String? = null,
+    val linkedLabel: String? = null,
+    val linkedAccess: String? = null,
+    val failure: String? = null,
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class TurnItemSubagent(
+    val deferredWork: TurnItem.TurnItemSubagent.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -737,13 +962,24 @@ public sealed interface TurnItem {
     val driver: String,
     val providerInstanceId: String,
     val childThreadId: String?,
+    val remoteChild: RemoteTaskChild? = null,
     val prompt: String,
     val progress: String? = null,
     val result: String?,
-  ) : TurnItem
+    val promptOmitted: Boolean? = null,
+    val resultOmitted: Boolean? = null,
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   @Serializable
   public data class DynamicTool(
+    val deferredWork: TurnItem.DynamicTool.DeferredWork? = null,
     override val toolNonExecutionKind: String? = null,
     override val toolSurface: String? = null,
     val toolIcon: ToolActivityIcon? = null,
@@ -770,7 +1006,14 @@ public sealed interface TurnItem {
     // TODO(contracts): unconstrained upstream (Schema.Unknown or an opaque type)
     val output: JsonElement? = null,
     val outputOmitted: Boolean? = null,
-  ) : TurnItem
+  ) : TurnItem {
+    @Serializable
+    public data class DeferredWork(
+      val cursor: String,
+      val itemCount: Long,
+      val lastOrdinal: Long,
+    )
+  }
 
   /** A variant this build doesn't know. [raw] is the whole object as received. */
   @Serializable(with = UnknownTurnItemSerializer::class)
@@ -822,6 +1065,7 @@ public object TurnItemSerializer : KSerializer<TurnItem> {
       "fork" -> TurnItem.Fork.serializer()
       "thread_created" -> TurnItem.ThreadCreated.serializer()
       "secret_request" -> TurnItem.SecretRequest.serializer()
+      "link_request" -> TurnItem.LinkRequest.serializer()
       "subagent" -> TurnItem.TurnItemSubagent.serializer()
       "dynamic_tool" -> TurnItem.DynamicTool.serializer()
       else -> TurnItem.Unknown.serializer()
@@ -868,6 +1112,7 @@ public object TurnItemSerializer : KSerializer<TurnItem> {
       is TurnItem.Fork -> TurnItem.Fork.serializer().serialize(encoder, value)
       is TurnItem.ThreadCreated -> TurnItem.ThreadCreated.serializer().serialize(encoder, value)
       is TurnItem.SecretRequest -> TurnItem.SecretRequest.serializer().serialize(encoder, value)
+      is TurnItem.LinkRequest -> TurnItem.LinkRequest.serializer().serialize(encoder, value)
       is TurnItem.TurnItemSubagent ->
         TurnItem.TurnItemSubagent.serializer().serialize(encoder, value)
       is TurnItem.DynamicTool -> TurnItem.DynamicTool.serializer().serialize(encoder, value)

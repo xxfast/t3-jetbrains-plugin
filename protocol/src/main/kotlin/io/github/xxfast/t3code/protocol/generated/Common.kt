@@ -1,4 +1,4 @@
-// Generated from v0.1.2 by contracts/generate.ts, do not edit.
+// Generated from v0.1.5 by contracts/generate.ts, do not edit.
 
 @file:OptIn(ExperimentalSerializationApi::class)
 
@@ -152,6 +152,14 @@ public data class ChatUnknownAttachment(
 )
 
 @Serializable
+public data class GuestMessageAttribution(
+  val guestMessageId: String,
+  val name: String,
+  val text: String,
+  val shareId: String? = null,
+)
+
+@Serializable
 public data class ModelCapabilities(
   val optionDescriptors: List<ProviderOptionDescriptor>? = null,
 )
@@ -186,6 +194,8 @@ public data class AppThread(
   val branchPullRequest: ThreadLinkedPullRequest? = null,
   val activeProviderThreadId: String?,
   val historyOrigin: String? = null,
+  val linkOrigin: LinkOrigin? = null,
+  val delegatedFrom: DelegatedFrom? = null,
   val lineage: AppThreadLineage,
   val forkedFrom: AppThread.ForkedFrom?,
   val createdAt: String,
@@ -198,11 +208,13 @@ public data class AppThread(
   val snoozedAt: String? = null,
   val lastSnoozeWakeAt: String? = null,
   val limitRecovery: LimitRecovery? = null,
+  val guestShare: ThreadGuestShare? = null,
   val pinnedAt: String? = null,
   val autoSettleDisabledAt: String? = null,
   val pinOrderKey: String? = null,
   val activeOrderKey: String? = null,
   val lastVisitedAt: String? = null,
+  val opens: ThreadOpens? = null,
   val titleRegeneration: ThreadTitleRegeneration? = null,
   val rollbackRequestId: String? = null,
   val rollbackFailure: AppThread.RollbackFailure? = null,
@@ -564,6 +576,7 @@ public data class ConversationMessage(
   val creationSource: String,
   val scheduledTaskId: String? = null,
   val senderThreadId: String? = null,
+  val idleCompaction: String? = null,
   val workflowScript: Boolean? = null,
   val id: String,
   val threadId: String,
@@ -604,6 +617,13 @@ public data class DelegatedCompletionDelivery(
 public data class DelegatedCompletionTaskDelivery(
   val state: String,
   val observedByRunId: String?,
+)
+
+@Serializable
+public data class DelegatedFrom(
+  val environmentId: String,
+  val threadId: String,
+  val title: String,
 )
 
 @Serializable
@@ -686,6 +706,13 @@ public data class LimitRecoveryUpdate(
   val resetAt: String,
   val autoResume: Boolean? = null,
   val snooze: Boolean? = null,
+)
+
+@Serializable
+public data class LinkOrigin(
+  val sessionId: String,
+  val label: String,
+  val access: String? = null,
 )
 
 @Serializable
@@ -812,11 +839,25 @@ public object UnknownNotificationSourceSerializer : KSerializer<NotificationSour
   }
 }
 
+@Serializable
+public data class OlderSettledCount(
+  val projectId: String,
+  val count: Long,
+)
+
+@Serializable
+public data class OlderSettledThreads(
+  val before: String,
+  val asOfSequence: Long,
+  val counts: List<OlderSettledCount>,
+)
+
 @Serializable(with = PendingBackgroundTaskSerializer::class)
 public sealed interface PendingBackgroundTask {
   public val taskId: String
   public val description: String?
   public val parentTaskId: String?
+  public val awaited: Boolean?
   public val kind: String
 
   @Serializable
@@ -824,6 +865,7 @@ public sealed interface PendingBackgroundTask {
     override val taskId: String,
     override val description: String? = null,
     override val parentTaskId: String? = null,
+    override val awaited: Boolean? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "subagent",
     val providerInstanceId: String? = null,
     val childThreadId: String? = null,
@@ -834,6 +876,7 @@ public sealed interface PendingBackgroundTask {
     override val taskId: String,
     override val description: String? = null,
     override val parentTaskId: String? = null,
+    override val awaited: Boolean? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "command",
   ) : PendingBackgroundTask
 
@@ -842,6 +885,7 @@ public sealed interface PendingBackgroundTask {
     override val taskId: String,
     override val description: String? = null,
     override val parentTaskId: String? = null,
+    override val awaited: Boolean? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "monitor",
   ) : PendingBackgroundTask
 
@@ -850,6 +894,7 @@ public sealed interface PendingBackgroundTask {
     override val taskId: String,
     override val description: String? = null,
     override val parentTaskId: String? = null,
+    override val awaited: Boolean? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) override val kind: String = "background_task",
   ) : PendingBackgroundTask
 
@@ -859,6 +904,7 @@ public sealed interface PendingBackgroundTask {
     override val taskId: String,
     override val description: String?,
     override val parentTaskId: String?,
+    override val awaited: Boolean?,
     override val kind: String,
     val raw: JsonObject,
   ) : PendingBackgroundTask
@@ -908,10 +954,12 @@ public object UnknownPendingBackgroundTaskSerializer : KSerializer<PendingBackgr
   override fun deserialize(decoder: Decoder): PendingBackgroundTask.Unknown {
     val raw: JsonObject = (decoder as JsonDecoder).decodeJsonElement().jsonObject
     fun string(key: String): String? = raw[key]?.jsonPrimitive?.contentOrNull
+    fun boolean(key: String): Boolean? = raw[key]?.jsonPrimitive?.booleanOrNull
     return PendingBackgroundTask.Unknown(
       taskId = string("taskId") ?: "",
       description = string("description"),
       parentTaskId = string("parentTaskId"),
+      awaited = boolean("awaited"),
       kind = string("kind") ?: "unknown",
       raw = raw,
     )
@@ -1161,7 +1209,14 @@ public data class ProviderThreadNativeMetadata(
   val updatedAt: String? = null,
   val itemIdentityVersion: Long? = null,
   val forkHeadMessageId: String? = null,
-)
+  val claudeAttachmentBudget: ProviderThreadNativeMetadata.ClaudeAttachmentBudget? = null,
+) {
+  @Serializable
+  public data class ClaudeAttachmentBudget(
+    val bytesUsed: Long,
+    val pagesUsed: Long,
+  )
+}
 
 @Serializable
 public data class ProviderTurn(
@@ -1193,10 +1248,21 @@ public data class ProviderTurnTokenUsage(
 )
 
 @Serializable
+public data class RemoteTaskChild(
+  val environmentId: String,
+  val threadId: String,
+  val label: String,
+  val runId: String? = null,
+  val stoppedThere: Boolean? = null,
+  val stopCount: Long? = null,
+)
+
+@Serializable
 public data class RestartCancelledBackgroundWork(
   val kind: String,
   val label: String,
   val id: String? = null,
+  val awaited: Boolean? = null,
 )
 
 @Serializable
@@ -1242,6 +1308,7 @@ public data class ShellSnapshot(
   val threads: List<ThreadShell>,
   val archivedThreads: List<ThreadShell>,
   val projects: List<ProjectShell>,
+  val olderSettled: OlderSettledThreads? = null,
 )
 
 @Serializable
@@ -1265,6 +1332,7 @@ public data class Subagent(
   val providerInstanceId: String,
   val providerThreadId: String?,
   val childThreadId: String?,
+  val remoteChild: RemoteTaskChild? = null,
   val nativeTaskRef: ProviderRef?,
   val prompt: String,
   val title: String?,
@@ -1279,6 +1347,8 @@ public data class Subagent(
   val startedAt: String?,
   val completedAt: String?,
   val updatedAt: String,
+  val promptOmitted: Boolean? = null,
+  val resultOmitted: Boolean? = null,
 )
 
 @Serializable
@@ -1295,7 +1365,7 @@ public data class SubagentCapabilities(
 public data class SubagentWorkflow(
   val name: String? = null,
   val runHandles: WorkflowRunHandles? = null,
-  val phases: List<TaskWorkflowPhase>,
+  val phases: List<WorkflowPhase>,
   val agents: List<WorkflowAgent>,
   val totalTokens: Long? = null,
   val toolCalls: Long? = null,
@@ -1484,6 +1554,19 @@ public object UnknownThreadLaunchWorkspaceStrategySerializer :
 }
 
 @Serializable
+public data class ThreadOpens(
+  val openedAt: Double,
+  val score: Double,
+  val picks: List<ThreadOpens.Pick>,
+) {
+  @Serializable
+  public data class Pick(
+    val query: String,
+    val at: Double,
+  )
+}
+
+@Serializable
 public data class ToolCapabilities(
   val exposesToolItemIds: Boolean,
   val emitsToolStarted: Boolean,
@@ -1543,6 +1626,8 @@ public data class WorkflowAgent(
   val phaseIndex: Long? = null,
   val phaseTitle: String? = null,
   val model: String? = null,
+  val effort: String? = null,
+  val speed: String? = null,
   val attempt: Long? = null,
   val totalTokens: Long? = null,
   val toolCalls: Long? = null,
@@ -1552,6 +1637,12 @@ public data class WorkflowAgent(
   val completedAt: Long? = null,
   val prompt: String? = null,
   val result: String? = null,
+)
+
+@Serializable
+public data class WorkflowPhase(
+  val index: Long,
+  val title: String,
 )
 
 @Serializable
@@ -1697,6 +1788,7 @@ public data class PullRequestCapabilities(
   val stacks: Boolean? = null,
   val stackActions: Boolean? = null,
   val labels: Boolean? = null,
+  val checksAlwaysReport: Boolean? = null,
 )
 
 @Serializable
@@ -1712,6 +1804,7 @@ public data class PullRequestCheck(
 public data class PullRequestEditCapabilities(
   val changeRequest: Boolean,
   val comment: Boolean,
+  val maintainerEdits: Boolean? = null,
 )
 
 @Serializable
@@ -1786,6 +1879,7 @@ public data class PullRequestProviderSummary(
 @Serializable
 public data class PullRequestReviewCapabilities(
   val inlineComment: Boolean,
+  val rangeComment: Boolean? = null,
   val reply: Boolean,
   val resolve: Boolean,
   val verdicts: List<String?>,
@@ -1816,6 +1910,7 @@ public data class PullRequestViewerPermissions(
   val updateMethods: List<String?>? = null,
   val labels: Boolean? = null,
   val editChangeRequest: Boolean? = null,
+  val maintainerEdits: Boolean? = null,
 )
 
 @Serializable
@@ -2227,12 +2322,6 @@ public object UnknownStoredProjectIconSerializer : KSerializer<StoredProjectIcon
 }
 
 @Serializable
-public data class TaskWorkflowPhase(
-  val index: Long,
-  val title: String,
-)
-
-@Serializable
 public data class TerminalSummary(
   val threadId: String,
   val terminalId: String,
@@ -2245,6 +2334,25 @@ public data class TerminalSummary(
   val hasRunningSubprocess: Boolean,
   val label: String,
   val updatedAt: String,
+)
+
+@Serializable
+public data class ThreadGuestMessage(
+  val id: String,
+  val text: String,
+  val status: String,
+  val submittedAt: String,
+  val attachments: List<ChatAttachment>? = null,
+)
+
+@Serializable
+public data class ThreadGuestShare(
+  val id: String,
+  val host: String,
+  val createdAt: String,
+  val expiresAt: String,
+  val guestName: String?,
+  val messages: List<ThreadGuestMessage>,
 )
 
 @Serializable
@@ -2314,10 +2422,12 @@ public data class ThreadPullRequestWatch(
   val failedChecks: List<String>,
   val passed: Boolean,
   val passedChecks: List<String>? = null,
+  val owedChecks: List<String>? = null,
   val remarksThrough: String,
   val remarkIds: List<String>,
   val conflicting: Boolean,
   val wakes: Long,
+  val checksAwaitedSince: String? = null,
 )
 
 @Serializable

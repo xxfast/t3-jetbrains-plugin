@@ -1,4 +1,4 @@
-// Generated from v0.1.2 by contracts/generate.ts, do not edit.
+// Generated from v0.1.5 by contracts/generate.ts, do not edit.
 
 package io.github.xxfast.t3code.protocol.generated
 
@@ -16,7 +16,6 @@ public data class ServerProvider(
   val showInteractionModeToggle: Boolean? = null,
   val reportsContextWindow: Boolean? = null,
   val supportedRuntimeModes: List<String?>? = null,
-  val requiresNewThreadForModelChange: Boolean? = null,
   val supportsConversationRollback: Boolean? = null,
   val supportsTextGeneration: Boolean? = null,
   val setup: ServerProvider.Setup? = null,

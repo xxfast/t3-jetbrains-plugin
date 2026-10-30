@@ -106,16 +106,6 @@
         }
       ]
     },
-    "requiresNewThreadForModelChange": {
-      "anyOf": [
-        {
-          "type": "boolean"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
     "supportsConversationRollback": {
       "anyOf": [
         {
