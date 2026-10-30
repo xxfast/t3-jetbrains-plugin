@@ -23,7 +23,7 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
     var confirmThreadDelete: Boolean by property(true)
     var showSkillsInSlashMenu: Boolean by property(true)
     var composerRichTextEnabled: Boolean by property(true)
-    var followUpBehavior: String? by string(FOLLOW_UP_QUEUE)
+    var followUpBehavior: String? by string(FOLLOW_UP_STEER)
     var planModeEnabled: Boolean by property(false)
 
     // Upstream's `favorites` (`ModelFavorites`, settings.ts:277), as `instanceId:slug` keys
@@ -60,9 +60,9 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
       state.composerRichTextEnabled = value
     }
 
-  /** Upstream's `followUpBehavior`: [FOLLOW_UP_QUEUE] or [FOLLOW_UP_STEER]. */
+  /** Upstream's `followUpBehavior`: [FOLLOW_UP_STEER] unless [FOLLOW_UP_QUEUE] was picked. */
   var followUpBehavior: String
-    get() = state.followUpBehavior.takeIf { it == FOLLOW_UP_STEER } ?: FOLLOW_UP_QUEUE
+    get() = state.followUpBehavior.takeIf { it == FOLLOW_UP_QUEUE } ?: FOLLOW_UP_STEER
     set(value) {
       state.followUpBehavior = value
     }

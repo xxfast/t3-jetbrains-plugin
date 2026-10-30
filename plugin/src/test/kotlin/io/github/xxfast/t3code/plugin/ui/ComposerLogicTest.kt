@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import io.github.xxfast.t3code.plugin.settings.T3Settings
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.ConversationMessage
 import io.github.xxfast.t3code.protocol.ProviderSession
@@ -89,6 +90,16 @@ class ComposerLogicTest {
     assertTrue(followUpQueues("queue", approvals = emptyList()))
     assertFalse(followUpQueues("steer", approvals = emptyList()))
     assertFalse(followUpQueues("queue", approvals = listOf(approval)))
+  }
+
+  @Test
+  fun `follow-ups steer on fresh settings, Cmd or Ctrl + Enter queues`() {
+    val fresh: String = T3Settings().followUpBehavior
+    val queue: Boolean = followUpQueues(fresh, approvals = emptyList())
+
+    assertFalse(queue)
+    assertEquals(ComposerDispatchMode.STEER, resolveComposerDispatchMode(true, false, queue))
+    assertEquals(ComposerDispatchMode.QUEUE, resolveComposerDispatchMode(true, true, queue))
   }
 
   @Test

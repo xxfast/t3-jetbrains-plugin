@@ -130,10 +130,11 @@ fun resolveComposerDispatchMode(
 }
 
 /**
- * Whether a follow-up queues, `followUpBehavior` in `ChatComposer.tsx` lines 1236 to 1242: the
- * [setting] (upstream's `followUpBehavior`, `queue` or `steer`), except a send while an approval
- * is pending steers, since it declines the approval to redirect the agent. Upstream skips
- * approvals its typing guard holds; the plugin has no such guard, so every pending one counts.
+ * Whether a follow-up queues, `followUpBehavior` in `ChatComposer.tsx` lines 1154 to 1158: the
+ * [setting] (upstream's `followUpBehavior`: `steer` unless `queue` was picked), except a send
+ * while an approval is pending steers, since it declines the approval to redirect the agent.
+ * Upstream skips approvals its typing guard holds; the plugin has no such guard, so every
+ * pending one counts.
  */
 fun followUpQueues(setting: String, approvals: List<PendingApproval>): Boolean =
   approvals.isEmpty() && setting == "queue"
