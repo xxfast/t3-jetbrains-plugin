@@ -1,5 +1,7 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import io.github.xxfast.t3code.plugin.fixtures.Scenario
 import io.github.xxfast.t3code.protocol.ServerInfo
 import io.github.xxfast.t3code.protocol.ThreadView
@@ -122,6 +124,43 @@ class BackgroundWorkLogicTest {
   }
 
   @Test
+  fun `the timeline has a footer while the settled thread waits, none while a run is going`() {
+    fun footer(working: Boolean): ThreadNowItem? = work(activeBackgroundTasks(view, working))
+    val line: ThreadNowItem = assertNotNull(footer(working = false))
+    assertTrue(hasTimelineFooter(work = line))
+    assertEquals("background-work:$THREAD", line.id)
+    assertEquals("Waiting on 1 subagent and 2 commands", line.title.text)
+    assertNull(footer(working = true))
+    assertFalse(hasTimelineFooter(work = footer(working = true)))
+    assertFalse(hasTimelineFooter())
+  }
+
+  @Test
+  fun `the work line lists the items, a subagent's linked to its thread`() {
+    var opened: String? = null
+    val line: ThreadNowItem? =
+      work(activeBackgroundTasks(view, working = false), onOpenThread = { opened = it })
+    val description: AnnotatedString = assertNotNull(line?.description)
+    assertEquals(
+      "Code Reviewer, Wait for CI on the pushed commit to finish, " +
+        "Wait for CI on the newest commit to land",
+      description.text,
+    )
+    val link: AnnotatedString.Range<LinkAnnotation> =
+      description.getLinkAnnotations(0, description.length).single()
+    assertEquals("Code Reviewer", description.text.substring(link.start, link.end))
+    assertIs<LinkAnnotation.Clickable>(link.item).linkInteractionListener?.onClick(link.item)
+    assertEquals("thr_01JC5L1S0RUNAPP1", opened)
+  }
+
+  @Test
+  fun `one task with no thread to open has no description`() {
+    val line: ThreadNowItem = assertNotNull(work(listOf(command("./gradlew check"))))
+    assertEquals("Running: ./gradlew check", line.title.text)
+    assertNull(line.description)
+  }
+
+  @Test
   fun `stop is thread stop when the server has it`() {
     val command: Command? = stopBackgroundWorkCommand(view, server(THREAD_STOP), "cmd")
     val stop: Command.ThreadStop = assertIs(command)
@@ -144,6 +183,18 @@ class BackgroundWorkLogicTest {
     val settled: ThreadView = view.copy(thread = view.thread.copy(pendingBackgroundTasks = null))
     assertNull(stopBackgroundWorkCommand(settled, server(), "cmd"))
   }
+
+  private fun work(
+    tasks: List<PendingBackgroundTask>,
+    onOpenThread: (String) -> Unit = {},
+  ): ThreadNowItem? = backgroundWorkNowItem(
+    threadId = THREAD,
+    tasks = tasks,
+    stopDisabled = false,
+    stopping = false,
+    onStop = {},
+    onOpenThread = onOpenThread,
+  )
 
   private fun server(vararg capabilities: String): ServerInfo =
     ServerInfo(

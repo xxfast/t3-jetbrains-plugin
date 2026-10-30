@@ -17,11 +17,11 @@ import org.junit.jupiter.api.Test
 
 class MessagesTimelineLogicTest {
   @Test
-  fun `checkpoints and todo lists never become entries`() {
+  fun `checkpoints never become entries, todo lists are work rows`() {
     val entries: List<TimelineEntry> = deriveTimelineEntries(
       listOf(
         user("u", "r1", "10:00"),
-        item("""{"type":"todo_list","items":[]}""", "todo", "r1", "10:01"),
+        todo("todo", "r1", "10:01", "completed" to "Read", "running" to "Write"),
         item(
           """{"type":"checkpoint","checkpointId":"c","scopeId":"s","files":[]}""",
           "cp", "r1", "10:02",
@@ -29,7 +29,52 @@ class MessagesTimelineLogicTest {
         assistant("a", "r1", "10:03"),
       ),
     )
-    assertEquals(listOf("u", "a"), entries.map { it.id })
+    assertEquals(listOf("u", "todo", "a"), entries.map { it.id })
+    assertEquals("Tasks 1/2 · Write", assertIs<TimelineEntry.Work>(entries[1]).entry.label)
+  }
+
+  @Test
+  fun `a todo list is labelled by what's done and the running step, else the next pending one`() {
+    fun label(vararg steps: Pair<String, String>): String =
+      projectedWorkEntry(todo("todo", "r1", "10:00", *steps)).label
+
+    assertEquals(
+      "Tasks 1/3 · Second",
+      label("completed" to "First", "running" to "Second", "pending" to "Third"),
+    )
+    assertEquals(
+      "Tasks 1/3 · Second",
+      label("pending" to "Third", "completed" to "First", "running" to "Second"),
+    )
+    assertEquals("Tasks 1/3 · B", label("completed" to "A", "pending" to "B", "pending" to "C"))
+    assertEquals("Tasks 2/2", label("completed" to "A", "completed" to "B"))
+    assertEquals("Tasks 0/0", label())
+  }
+
+  @Test
+  fun `every todo update keeps its own row, nothing picks one plan for the thread`() {
+    val entries: List<TimelineEntry> = deriveTimelineEntries(
+      listOf(
+        user("u", "r1", "10:00"),
+        todo("todo-1", "r1", "10:01", "running" to "Read", "pending" to "Write"),
+        command("c1", "r1", "10:02"),
+        todo("todo-2", "r1", "10:03", "completed" to "Read", "running" to "Write"),
+      ),
+    )
+    val tasks: List<WorkLogEntry> = entries
+      .filterIsInstance<TimelineEntry.Work>()
+      .map { it.entry }
+      .filter { it.item is TurnItem.TodoList }
+    assertEquals(listOf("todo-1", "todo-2"), tasks.map { it.id })
+    assertEquals(listOf("Tasks 0/2 · Read", "Tasks 1/2 · Write"), tasks.map { it.label })
+  }
+
+  @Test
+  fun `a todo list opens to its steps, ticked, running and to do`() {
+    val item: TurnItem.TodoList = todo(
+      "todo", "r1", "10:00", "completed" to "Read", "running" to "Write", "pending" to "Ship",
+    )
+    assertEquals("✓ Read\n◉ Write\n○ Ship", todoListSteps(item))
   }
 
   @Test
@@ -162,6 +207,24 @@ class MessagesTimelineLogicTest {
       {
         "type": "user_message", "text": "hi", "messageId": "m-$id", "createdBy": "user",
         "creationSource": "web", "inputIntent": "turn_start", "attachments": []
+      }
+    """,
+    id, runId, time,
+  )
+
+  /** A `todo_list` of plan `p` with a step per status and text pair. */
+  private fun todo(
+    id: String,
+    runId: String,
+    time: String,
+    vararg steps: Pair<String, String>,
+  ): TurnItem.TodoList = item(
+    """
+      {
+        "type": "todo_list", "planId": "p", "status": "running",
+        "steps": [${steps.mapIndexed { index, (status, text) ->
+          """{"id":"s$index","text":"$text","status":"$status"}"""
+        }.joinToString(",")}]
       }
     """,
     id, runId, time,

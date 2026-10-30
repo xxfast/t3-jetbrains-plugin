@@ -178,9 +178,8 @@ fun ChatView(
   stashCount: Int = 0, // prompts in the composer's stash
   queue: QueuedRunsState? = null, // the queued messages above the composer
   queueActions: QueuedRunsActions = QueuedRunsActions(),
-  backgroundWork: BackgroundWorkState? = null, // the provider's pending work, above the composer
+  backgroundWork: BackgroundWorkState? = null, // the provider's pending work, the timeline's end
   backgroundWorkActions: BackgroundWorkActions = BackgroundWorkActions(),
-  tasks: ComposerTasksState? = null, // the active todo_list tasks, above the composer
   mentions: ComposerMentions = ComposerMentions(), // what the composer's `@` and `#` menus read
   memory: TimelineMemory = remember { TimelineMemory() }, // where the timeline was left
   linkFavicons: LinkFaviconSource = NoLinkFavicons, // the favicons in front of external links
@@ -191,8 +190,6 @@ fun ChatView(
   val threadId: String? = view?.thread?.id
   val timeline: LazyListState = remember(threadId) { LazyListState(memory.index, memory.offset) }
   val follow: TimelineFollow = remember(threadId) { TimelineFollow(followEnd = memory.atEnd) }
-  var isTasksExpanded: Boolean by remember(threadId) { mutableStateOf(false) }
-  if (tasks == null || pending != null) isTasksExpanded = false
   // How much of the timeline's bottom the composer covers, in pixels, its padding left out.
   // Upstream's `publishComposerOverlayHeight` sets the inset to the overlay's height as is.
   var composerHeight: Int by remember(threadId) { mutableIntStateOf(0) }
@@ -250,6 +247,17 @@ fun ChatView(
             markdownProcessor = processor,
             markdownBlockRenderer = renderer,
           ) {
+            // `useThreadLifecycle`'s `backgroundWorkNow`, the footer's work line
+            val work: ThreadNowItem? = backgroundWork?.let { state ->
+              backgroundWorkNowItem(
+                threadId = view.thread.id,
+                tasks = state.tasks,
+                stopDisabled = !state.enabled || state.stopping,
+                stopping = state.stopping,
+                onStop = backgroundWorkActions.onStop,
+                onOpenThread = backgroundWorkActions.onOpenThread,
+              )
+            }
             MessagesTimeline(
               view = view,
               state = timeline,
@@ -268,6 +276,7 @@ fun ChatView(
               ),
               worktreeSetup = worktreeSetup,
               working = composer.running || composer.sending,
+              footer = if (hasTimelineFooter(work = work)) ({ ThreadNow(work = work) }) else null,
               bottomInset = with(LocalDensity.current) { composerHeight.toDp() },
               modifier = Modifier.timelineWheel(timeline, follow),
             )
@@ -309,28 +318,7 @@ fun ChatView(
           onSteerQueued = queue?.let { state -> queuedSteerShortcut(state, queueActions) },
           onEditQueued = queue?.let { state -> queuedEditShortcut(state, queueActions) },
           // `ComposerBannerStack`: the queued drawer (`attachedAbove`) over the front banner
-          attachedAbove = if (
-            queue == null &&
-            backgroundWork == null &&
-            (pending != null || tasks == null)
-          ) {
-            null
-          } else {
-            {
-              Column {
-                queue?.let { state -> QueuedRunsControl(state, queueActions) }
-                backgroundWork?.let { state -> BackgroundWorkBanner(state, backgroundWorkActions) }
-                if (pending == null && tasks != null) {
-                  ComposerTasksContent(
-                    progress = tasks.progress,
-                    steps = tasks.steps,
-                    expanded = isTasksExpanded,
-                    onToggle = { isTasksExpanded = !isTasksExpanded },
-                  )
-                }
-              }
-            }
-          },
+          attachedAbove = queue?.let { state -> { QueuedRunsControl(state, queueActions) } },
           extras = extras,
           attachmentActions = attachmentActions,
           contextWindow = contextWindow,
@@ -672,6 +660,7 @@ private fun MessagesTimeline(
   actions: TimelineActions,
   worktreeSetup: WorktreeSetupSnapshot?,
   working: Boolean, // the composer's `isWorking`: a run going or a send on its way
+  footer: (@Composable () -> Unit)?, // the thread's present, after the last row
   bottomInset: Dp,
   modifier: Modifier = Modifier,
 ) {
@@ -763,7 +752,7 @@ private fun MessagesTimeline(
     val side: Dp = if (maxWidth >= 640.dp) 48.dp else 12.dp
     TimelineScrollContainer(
       state = state,
-      keys = rows.map { it.id },
+      keys = rows.map { it.id } + listOfNotNull(TIMELINE_FOOTER.takeIf { footer != null }),
       onScrollUp = follow::cancelForUserNavigation,
       modifier = Modifier.fillMaxSize(),
     ) {
@@ -808,6 +797,11 @@ private fun MessagesTimeline(
               }
             }
           }
+          footer?.let { content ->
+            item(key = TIMELINE_FOOTER) {
+              TimelineListFooter(side) { content() }
+            }
+          }
         }
       }
     }
@@ -828,6 +822,22 @@ private fun Modifier.timelineWheel(
   val deltaY: Float = event.changes.firstOrNull()?.scrollDelta?.y ?: return@onPointerEvent
   // A step up breaks the follow only when there's somewhere to go
   if (deltaY < 0 && state.canScrollBackward) follow.cancelForUserNavigation()
+}
+
+private const val TIMELINE_FOOTER: String = "timeline-footer"
+
+/**
+ * `TimelineListFooter`, MessagesTimeline.tsx:153: the last item in the list, so it scrolls with
+ * the thread. Upstream's list ignores footer layout and `onTimelineFooterGrow`
+ * (useTimelineFollow.ts) follows a growing footer by hand. [FollowTail] follows every layout,
+ * the footer's included, so a new line here never lands under the composer without it. The
+ * composer's inset and the gap under it are the list's bottom padding.
+ */
+@Composable
+private fun TimelineListFooter(side: Dp, content: @Composable () -> Unit) {
+  Column(Modifier.widthIn(max = MAX_CONTENT_WIDTH).fillMaxWidth().padding(horizontal = side)) {
+    content()
+  }
 }
 
 private fun <T> Set<T>.toggle(value: T): Set<T> = if (value in this) this - value else this + value
@@ -1260,11 +1270,12 @@ private fun WorkLogEntry.labelTone(): LabelTone = when {
   else -> LabelTone.Info
 }
 
-/** Notifications without a detail and created threads have nothing to open. */
+/** Notifications without a detail, created threads and empty todo lists have nothing to open. */
 private fun WorkLogEntry.hasDetails(): Boolean = when (val item = item) {
   is TurnItem.TurnItemNotification -> item.detail != null
   is TurnItem.ThreadCreated -> false
   is TurnItem.Reasoning -> item.text.isNotBlank()
+  is TurnItem.TodoList -> item.steps.isNotEmpty()
   else -> true
 }
 
@@ -1434,6 +1445,8 @@ private fun WorkEntryDetails(entry: WorkLogEntry, context: RowContext) {
       item.detail?.let { Text(it, color = muted()) }
     }
 
+    is TurnItem.TodoList -> Column(indent) { Mono(todoListSteps(item), muted()) }
+
     is TurnItem.Error, is TurnItem.SystemNotice, is TurnItem.FileSearch, is TurnItem.WebSearch,
     is TurnItem.Compaction -> Column(indent) {
       entry.detail?.let { Mono(it, muted()) }
@@ -1462,6 +1475,7 @@ private fun workEntryIcon(entry: WorkLogEntry): String {
   if (item is TurnItem.UserInputRequest || item is TurnItem.ApprovalRequest) {
     return "message-circle"
   }
+  if (item is TurnItem.TodoList) return "list-todo"
   return when (entry.action()) {
     ToolAction.Read -> "eye"
     ToolAction.Edit -> "square-pen"

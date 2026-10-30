@@ -26,7 +26,6 @@ import io.github.xxfast.t3code.plugin.actions.performThreadAction
 import io.github.xxfast.t3code.plugin.actions.showThreadMenu
 import io.github.xxfast.t3code.plugin.ui.BackgroundWorkActions
 import io.github.xxfast.t3code.plugin.ui.BackgroundWorkState
-import io.github.xxfast.t3code.plugin.ui.composerTasksState
 import io.github.xxfast.t3code.plugin.ui.ChatHeaderActions
 import io.github.xxfast.t3code.plugin.ide.EditorSelections
 import io.github.xxfast.t3code.plugin.ide.T3Opener
@@ -384,7 +383,6 @@ fun ChatContent(
         },
         onOpenThread = opener::openThread,
       ),
-      tasks = remember(view) { composerTasksState(view) },
       queueActions = QueuedRunsActions(
         onEdit = { queued -> view?.let { queuedRuns.beginEdit(it, queued) } },
         onCancelEdit = { queuedRuns.cancelEdit(threadId) },

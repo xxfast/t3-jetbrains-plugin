@@ -3,7 +3,7 @@
     {
       "id": "tasks-demo",
       "projectId": "prj_01JB2K7Q9V3XKSTORE",
-      "title": "Demo: tasks banner",
+      "title": "Demo: tasks",
       "createdBy": "user",
       "creationSource": "web",
       "providerInstanceId": "codex",
@@ -20,11 +20,11 @@
       "branch": "feature/tasks-demo",
       "latestRunId": "run_tasks_1",
       "activeRunId": "run_tasks_1",
-      "itemCount": 2,
-      "visibleItemCount": 2,
+      "itemCount": 8,
+      "visibleItemCount": 8,
       "hasActionableProposedPlan": false,
       "createdAt": "2026-10-19T08:30:12.000Z",
-      "updatedAt": "2026-10-19T08:43:30.000Z"
+      "updatedAt": "2026-10-19T08:30:24.000Z"
     }
   ],
   "runs": {
@@ -71,66 +71,226 @@
         "planId": "plan_tasks_1",
         "ordinal": 2,
         "status": "running",
+        "startedAt": "2026-10-19T08:30:14.000Z",
         "updatedAt": "2026-10-19T08:30:14.000Z",
         "steps": [
-          { "id": "step_1", "text": "Profile serialization bottlenecks", "status": "inProgress" },
-          { "id": "step_2", "text": "Inline hot path buffer allocations", "status": "pending" },
-          { "id": "step_3", "text": "Verify backward compatibility", "status": "pending" },
-          { "id": "step_4", "text": "Run microbenchmarks suite", "status": "pending" }
+          {
+            "id": "step_1",
+            "text": "Profile serialization bottlenecks",
+            "status": "running"
+          },
+          {
+            "id": "step_2",
+            "text": "Inline hot path buffer allocations",
+            "status": "pending"
+          },
+          {
+            "id": "step_3",
+            "text": "Verify backward compatibility",
+            "status": "pending"
+          },
+          {
+            "id": "step_4",
+            "text": "Run microbenchmarks suite",
+            "status": "pending"
+          }
         ]
+      },
+      {
+        "type": "command_execution",
+        "id": "item_tasks_cmd_1",
+        "threadId": "tasks-demo",
+        "runId": "run_tasks_1",
+        "ordinal": 3,
+        "status": "completed",
+        "title": "Profile the codec",
+        "input": "./gradlew :benchmarks:jmh -Pprofile=gc",
+        "output": "Benchmark                 Mode  Cnt   Score   Units\nCodecBench.encode        thrpt    5  412.3  ops/ms",
+        "exitCode": 0,
+        "completedAt": "2026-10-19T08:30:16.000Z",
+        "startedAt": "2026-10-19T08:30:15.000Z",
+        "updatedAt": "2026-10-19T08:30:16.000Z"
       },
       {
         "after": 1500,
         "type": "todo_list",
-        "id": "item_tasks_todo_1",
+        "id": "item_tasks_todo_2",
         "threadId": "tasks-demo",
         "runId": "run_tasks_1",
         "nodeId": "node_tasks_1",
         "planId": "plan_tasks_1",
-        "ordinal": 2,
+        "ordinal": 4,
         "status": "running",
+        "startedAt": "2026-10-19T08:30:16.000Z",
         "updatedAt": "2026-10-19T08:30:16.000Z",
         "steps": [
-          { "id": "step_1", "text": "Profile serialization bottlenecks", "status": "completed", "durationMs": 1500 },
-          { "id": "step_2", "text": "Inline hot path buffer allocations", "status": "inProgress" },
-          { "id": "step_3", "text": "Verify backward compatibility", "status": "pending" },
-          { "id": "step_4", "text": "Run microbenchmarks suite", "status": "pending" }
+          {
+            "id": "step_1",
+            "text": "Profile serialization bottlenecks",
+            "status": "completed",
+            "durationMs": 1500
+          },
+          {
+            "id": "step_2",
+            "text": "Inline hot path buffer allocations",
+            "status": "running"
+          },
+          {
+            "id": "step_3",
+            "text": "Verify backward compatibility",
+            "status": "pending"
+          },
+          {
+            "id": "step_4",
+            "text": "Run microbenchmarks suite",
+            "status": "pending"
+          }
         ]
       },
       {
-        "after": 3000,
+        "after": 1500,
+        "type": "command_execution",
+        "id": "item_tasks_cmd_2",
+        "threadId": "tasks-demo",
+        "runId": "run_tasks_1",
+        "ordinal": 5,
+        "status": "completed",
+        "title": "Compile :kstore",
+        "input": "./gradlew :kstore:compileKotlinJvm",
+        "output": "BUILD SUCCESSFUL in 9s",
+        "exitCode": 0,
+        "completedAt": "2026-10-19T08:30:19.000Z",
+        "startedAt": "2026-10-19T08:30:17.000Z",
+        "updatedAt": "2026-10-19T08:30:19.000Z"
+      },
+      {
+        "after": 1500,
         "type": "todo_list",
-        "id": "item_tasks_todo_1",
+        "id": "item_tasks_todo_3",
         "threadId": "tasks-demo",
         "runId": "run_tasks_1",
         "nodeId": "node_tasks_1",
         "planId": "plan_tasks_1",
-        "ordinal": 2,
+        "ordinal": 6,
         "status": "running",
+        "startedAt": "2026-10-19T08:30:19.000Z",
         "updatedAt": "2026-10-19T08:30:19.000Z",
         "steps": [
-          { "id": "step_1", "text": "Profile serialization bottlenecks", "status": "completed", "durationMs": 1500 },
-          { "id": "step_2", "text": "Inline hot path buffer allocations", "status": "completed", "durationMs": 2100 },
-          { "id": "step_3", "text": "Verify backward compatibility", "status": "inProgress" },
-          { "id": "step_4", "text": "Run microbenchmarks suite", "status": "pending" }
+          {
+            "id": "step_1",
+            "text": "Profile serialization bottlenecks",
+            "status": "completed",
+            "durationMs": 1500
+          },
+          {
+            "id": "step_2",
+            "text": "Inline hot path buffer allocations",
+            "status": "completed",
+            "durationMs": 2100
+          },
+          {
+            "id": "step_3",
+            "text": "Verify backward compatibility",
+            "status": "running"
+          },
+          {
+            "id": "step_4",
+            "text": "Run microbenchmarks suite",
+            "status": "pending"
+          }
         ]
       },
       {
-        "after": 4500,
+        "after": 2000,
         "type": "todo_list",
-        "id": "item_tasks_todo_1",
+        "id": "item_tasks_todo_3",
         "threadId": "tasks-demo",
         "runId": "run_tasks_1",
         "nodeId": "node_tasks_1",
         "planId": "plan_tasks_1",
-        "ordinal": 2,
+        "ordinal": 6,
         "status": "running",
-        "updatedAt": "2026-10-19T08:30:22.000Z",
+        "startedAt": "2026-10-19T08:30:21.000Z",
+        "updatedAt": "2026-10-19T08:30:21.000Z",
         "steps": [
-          { "id": "step_1", "text": "Profile serialization bottlenecks", "status": "completed", "durationMs": 1500 },
-          { "id": "step_2", "text": "Inline hot path buffer allocations", "status": "completed", "durationMs": 2100 },
-          { "id": "step_3", "text": "Verify backward compatibility", "status": "completed", "durationMs": 1800 },
-          { "id": "step_4", "text": "Run microbenchmarks suite", "status": "inProgress" }
+          {
+            "id": "step_1",
+            "text": "Profile serialization bottlenecks",
+            "status": "completed",
+            "durationMs": 1500
+          },
+          {
+            "id": "step_2",
+            "text": "Inline hot path buffer allocations",
+            "status": "completed",
+            "durationMs": 2100
+          },
+          {
+            "id": "step_3",
+            "text": "Verify backward compatibility",
+            "status": "completed",
+            "durationMs": 1800
+          },
+          {
+            "id": "step_4",
+            "text": "Run microbenchmarks suite",
+            "status": "running"
+          }
+        ]
+      },
+      {
+        "after": 1500,
+        "type": "command_execution",
+        "id": "item_tasks_cmd_3",
+        "threadId": "tasks-demo",
+        "runId": "run_tasks_1",
+        "ordinal": 7,
+        "status": "completed",
+        "title": "Run the benchmarks",
+        "input": "./gradlew :benchmarks:jmh",
+        "output": "CodecBench.encode        thrpt    5  587.9  ops/ms",
+        "exitCode": 0,
+        "completedAt": "2026-10-19T08:30:24.000Z",
+        "startedAt": "2026-10-19T08:30:22.000Z",
+        "updatedAt": "2026-10-19T08:30:24.000Z"
+      },
+      {
+        "after": 1500,
+        "type": "todo_list",
+        "id": "item_tasks_todo_4",
+        "threadId": "tasks-demo",
+        "runId": "run_tasks_1",
+        "nodeId": "node_tasks_1",
+        "planId": "plan_tasks_1",
+        "ordinal": 8,
+        "status": "completed",
+        "startedAt": "2026-10-19T08:30:24.000Z",
+        "updatedAt": "2026-10-19T08:30:24.000Z",
+        "steps": [
+          {
+            "id": "step_1",
+            "text": "Profile serialization bottlenecks",
+            "status": "completed",
+            "durationMs": 1500
+          },
+          {
+            "id": "step_2",
+            "text": "Inline hot path buffer allocations",
+            "status": "completed",
+            "durationMs": 2100
+          },
+          {
+            "id": "step_3",
+            "text": "Verify backward compatibility",
+            "status": "completed",
+            "durationMs": 1800
+          },
+          {
+            "id": "step_4",
+            "text": "Run microbenchmarks suite",
+            "status": "completed",
+            "durationMs": 2400
+          }
         ]
       }
     ]

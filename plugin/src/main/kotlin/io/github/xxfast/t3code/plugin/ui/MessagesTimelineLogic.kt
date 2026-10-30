@@ -1,5 +1,6 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import io.github.xxfast.t3code.protocol.PlanStep
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.generated.CheckpointFileSummary
 import io.github.xxfast.t3code.protocol.generated.TurnItem
@@ -101,7 +102,7 @@ fun deriveTimelineEntries(items: List<TurnItem>): List<TimelineEntry> {
     .toSet()
   return items.mapNotNull { item ->
     when {
-      item.type == "todo_list" || item.type == "checkpoint" -> null
+      item.type == "checkpoint" -> null
       item is TurnItem.UserMessage && item.messageId in foldedAnswerMessageIds -> null
       item is TurnItem.TurnItemNotification -> TimelineEntry.Work(
         WorkLogEntry(item = item, label = item.summary, tone = WorkTone.Info, status = null),
@@ -205,6 +206,14 @@ fun projectedWorkEntry(item: TurnItem): WorkLogEntry {
         changedFiles = if (action == "read" && path != null) listOf(path) else emptyList(),
       )
     }
+    // Each todo update is a quiet row where the agent wrote it; it opens to every step
+    is TurnItem.TodoList -> {
+      val done: Int = item.steps.count { it.status == "completed" }
+      val current: PlanStep? = item.steps.firstOrNull { it.status == "running" }
+        ?: item.steps.firstOrNull { it.status == "pending" }
+      val suffix: String = current?.let { " · ${it.text}" }.orEmpty()
+      common.copy(label = "Tasks $done/${item.steps.size}$suffix")
+    }
     is TurnItem.ApprovalRequest -> common.copy(
       label = title ?: "Approval requested",
       detail = item.prompt ?: item.requestKind,
@@ -214,6 +223,16 @@ fun projectedWorkEntry(item: TurnItem): WorkLogEntry {
     )
     else -> common
   }
+}
+
+/** A `todo_list`'s details, `V2ItemInspector.tsx`: a line a step, ✓ done, ◉ running, ○ to do. */
+fun todoListSteps(item: TurnItem.TodoList): String = item.steps.joinToString("\n") { step ->
+  val mark: String = when (step.status) {
+    "completed" -> "✓"
+    "running" -> "◉"
+    else -> "○"
+  }
+  "$mark ${step.text}"
 }
 
 const val CONTEXT_COMPACTION: String = "context-compaction"
