@@ -58,14 +58,18 @@ sealed interface AttachmentClass {
 }
 
 /**
- * `classifyComposerAttachmentFile` and the `mimeType` it ends up with: HEIC is an image (the
- * controller converts it to JPEG first, see `HeicConversion.kt`), an empty or generic type with
- * an image extension is that image, anything not `image/` is a file (a video's type from its
- * extension when the type is generic, `ChatComposer.tsx:5452`), and an image type the provider
- * can't take is refused.
+ * `classifyComposerAttachmentFile` and the `mimeType` it ends up with: an SVG is a file, decided
+ * before anything else, HEIC is an image (the controller converts it to JPEG first, see
+ * `HeicConversion.kt`), an empty or generic type with an image extension is that image, anything
+ * not `image/` is a file (a video's type from its extension when the type is generic,
+ * `ChatComposer.tsx:5452`), and an image type the provider can't take is refused.
  */
 fun classifyAttachment(name: String, mimeType: String?): AttachmentClass {
   val type: String = mimeType?.lowercase().orEmpty()
+  // `composerFileAttachmentMimeType`: an SVG is a file, sent as `image/svg+xml` whatever it came as
+  if (isSvgAttachment(name, type)) {
+    return AttachmentClass.Accepted(AttachmentKind.FILE, SVG_MIME_TYPE)
+  }
   if (isHeicImageFile(name, type)) {
     val heic: String = if (type.startsWith("image/")) type else HEIC_MIME_TYPE
     return AttachmentClass.Accepted(AttachmentKind.IMAGE, heic)
@@ -283,12 +287,26 @@ fun attachmentBlockReason(attachments: List<DraftAttachment>): String? {
   return null
 }
 
-/** `GENERIC_MIME_TYPES`, packages/shared/src/image.ts:16. */
+/** `GENERIC_MIME_TYPES`, packages/shared/src/image.ts:12. */
 private val GENERIC_MIME_TYPES: Set<String> =
   setOf("application/octet-stream", "binary/octet-stream", "application/unknown")
 
+private const val SVG_MIME_TYPE: String = "image/svg+xml"
+
+private val SVG_EXTENSION: Regex = Regex("""\.svg$""", RegexOption.IGNORE_CASE)
+
 /**
- * `imageMimeType`, packages/shared/src/image.ts:22: the picture type an attachment is, or null.
+ * `isSvgAttachment`, packages/shared/src/image.ts:18: `image/svg+xml`, or an empty or generic
+ * type on a `.svg` name. An SVG previews as a file and never reaches a provider as an image.
+ */
+fun isSvgAttachment(name: String, mimeType: String): Boolean {
+  val type: String = mimeType.substringBefore(';').trim().lowercase()
+  return type == SVG_MIME_TYPE ||
+    ((type.isEmpty() || type in GENERIC_MIME_TYPES) && SVG_EXTENSION.containsMatchIn(name))
+}
+
+/**
+ * `imageMimeType`, packages/shared/src/image.ts:29: the picture type an attachment is, or null.
  * A definite type answers; the name is only evidence when the type is empty or generic.
  */
 fun imageMimeType(name: String, mimeType: String): String? {

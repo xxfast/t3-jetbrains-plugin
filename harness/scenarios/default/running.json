@@ -242,6 +242,13 @@
             "name": "build.log",
             "mimeType": "text/plain",
             "sizeBytes": 4210
+          },
+          {
+            "type": "file",
+            "id": "att_fixture_diagram",
+            "name": "diagram.svg",
+            "mimeType": "image/svg+xml",
+            "sizeBytes": 308
           }
         ],
         "text": "Bump kotlinx-io to 0.8 and fix whatever breaks in `kstore-file/build.gradle.kts`. Follow [ROADMAP.md](t3-context://v1/mention/mention_ROADMAP-md) and the note at [ROADMAP.md L25](t3-context://v1/review-comment/review-comment_file-comment-1) like we did for [#41](t3-context://v1/review-comment/review-comment_pull-request-41), then run $gh-fix-ci and $kmp-targets too. A record this message lost: [old selection](t3-context://v1/review-comment/review-comment_gone)",

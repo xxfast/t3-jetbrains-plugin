@@ -371,12 +371,12 @@ class FixtureClientTest {
   }
 
   @Test
-  fun `the running demo's prompt carries a picture and a file`() = runTest {
+  fun `the running demo's prompt carries a picture, a file and an SVG file`() = runTest {
     val client = FixtureClient(default, backgroundScope)
     val running: ThreadView =
       client.thread(THREAD).first { view -> view.items.any { it is TurnItem.UserMessage } }
     val prompt = running.items.filterIsInstance<TurnItem.UserMessage>().first()
-    assertEquals(listOf(true, false), prompt.attachments.map(::isImageAttachment))
+    assertEquals(listOf(true, false, false), prompt.attachments.map(::isImageAttachment))
   }
 
   private fun image(size: Int) = AttachmentCreateUploadUrlInput.Image(

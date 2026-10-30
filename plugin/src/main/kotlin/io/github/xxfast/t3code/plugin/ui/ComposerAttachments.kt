@@ -36,7 +36,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.ui.awt.RelativePoint
@@ -150,6 +152,8 @@ fun ComposerChips(extras: DraftExtras, enabled: Boolean, actions: AttachmentActi
             null
           },
           onRemove = { actions.onRemoveAttachment(attachment.id) },
+          // `SvgFileChip`: an SVG leads with its drawing, the plain chip when it didn't render
+          thumbnail = attachment.preview,
         )
       }
     }
@@ -288,6 +292,7 @@ private fun Chip(
   onRemove: () -> Unit,
   failed: Boolean = false,
   onClick: (() -> Unit)? = null,
+  thumbnail: ImageBitmap? = null,
 ) {
   val outline: Color = if (failed) {
     JewelTheme.globalColors.text.error
@@ -304,6 +309,16 @@ private fun Chip(
     horizontalArrangement = Arrangement.spacedBy(6.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
+    if (thumbnail != null) {
+      // `ImageChipButton`'s `size-[1em] rounded-sm object-cover`, an em of the chip's text
+      val side: Dp = with(LocalDensity.current) { JewelTheme.typography.small.fontSize.toDp() }
+      Image(
+        bitmap = thumbnail,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier.size(side).clip(RoundedCornerShape(2.dp)),
+      )
+    }
     Text(
       text = label,
       style = JewelTheme.typography.small,

@@ -109,6 +109,15 @@ fun decodePreview(bytes: ByteArray): ImageBitmap? {
 }
 
 /**
+ * An SVG attachment's drawing for its file chip, or null when it doesn't render, so the chip
+ * stays a plain file chip. The chip shows it an em high; this is that on a 2x display, with room.
+ */
+fun decodeSvgPreview(bytes: ByteArray): ImageBitmap? =
+  runCatching { decodeSvg(bytes, SVG_PREVIEW_SIDE) }.getOrNull()
+
+private const val SVG_PREVIEW_SIDE: Int = 64
+
+/**
  * Opens [bytes] in an editor tab, so the IDE's image viewer zooms and pans it. Written once per
  * [key] under the IDE's temp dir with its own name, which is how the viewer knows it's an image.
  */

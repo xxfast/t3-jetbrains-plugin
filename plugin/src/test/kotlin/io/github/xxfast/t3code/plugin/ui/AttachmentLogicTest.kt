@@ -27,11 +27,25 @@ class AttachmentLogicTest {
       AttachmentClass.Accepted(AttachmentKind.FILE, "application/octet-stream"),
       classifyAttachment("blob", null),
     )
-    val svg: AttachmentClass.Refused = assertIs(classifyAttachment("logo.svg", "image/svg+xml"))
+  }
+
+  // composerAttachmentFiles.test.ts, "attaches SVG as a file and rejects other unsupported images"
+  @Test
+  fun svgAttachesAsAFileAndOtherUnsupportedImagesAreRefused() {
+    val svg = AttachmentClass.Accepted(AttachmentKind.FILE, "image/svg+xml")
+    assertEquals(svg, classifyAttachment("diagram.svg", "image/svg+xml"))
+    assertEquals(svg, classifyAttachment("diagram.SVG", ""))
+    assertEquals(svg, classifyAttachment("diagram.SVG", null))
+    assertEquals(svg, classifyAttachment("diagram.svg", "application/octet-stream"))
+    val tiff: AttachmentClass.Refused = assertIs(classifyAttachment("photo.tiff", "image/tiff"))
     assertEquals(
-      "'logo.svg' is not a supported image type. " +
+      "'photo.tiff' is not a supported image type. " +
         "Attach GIF, HEIC, HEIF, JPEG, PNG, or WebP images.",
-      svg.reason,
+      tiff.reason,
+    )
+    assertEquals(
+      AttachmentClass.Accepted(AttachmentKind.FILE, "application/pdf"),
+      classifyAttachment("report.pdf", "application/pdf"),
     )
   }
 
@@ -148,6 +162,26 @@ class ImageAttachmentTest {
     assertEquals("image/webp", imageMimeType("a.WEBP", "application/octet-stream"))
     assertEquals("image/gif", imageMimeType("a.gif", ""))
     assertNull(imageMimeType("png", ""), "No extension, no evidence")
+  }
+
+  // packages/shared/src/image.test.ts
+  @Test
+  fun svgPreviewsWithoutBecomingAProviderImage() {
+    val types: List<String> =
+      listOf("image/svg+xml", "IMAGE/SVG+XML; charset=utf-8", "", "application/octet-stream")
+    for (mimeType in types) {
+      assertTrue(isSvgAttachment("diagram.SVG", mimeType), mimeType)
+      assertNull(imageMimeType("diagram.SVG", mimeType), mimeType)
+    }
+    assertFalse(isSvgAttachment("diagram.svg", "application/pdf"))
+    assertFalse(isSvgAttachment("photo.png", "image/png"))
+  }
+
+  @Test
+  fun aSentSvgIsAFileNotAPicture() {
+    val svg: ChatAttachment =
+      ChatFileAttachment(id = "f", name = "a.svg", mimeType = "image/svg+xml", sizeBytes = 1)
+    assertFalse(isImageAttachment(svg), "It's listed by name with the other files")
   }
 
   @Test

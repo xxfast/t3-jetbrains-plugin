@@ -49,6 +49,7 @@ import io.github.xxfast.t3code.plugin.ui.launchThreadInput
 import io.github.xxfast.t3code.plugin.ui.encodePng
 import io.github.xxfast.t3code.plugin.ui.attachmentLimitError
 import io.github.xxfast.t3code.plugin.ui.classifyAttachment
+import io.github.xxfast.t3code.plugin.ui.isSvgAttachment
 import io.github.xxfast.t3code.plugin.ui.messageContext
 import io.github.xxfast.t3code.plugin.ui.outgoingText
 import io.github.xxfast.t3code.plugin.ui.ThreadContextRecord
@@ -403,8 +404,13 @@ class ChatController(private val project: Project, private val scope: CoroutineS
       kind = accepted.kind,
       mimeType = accepted.mimeType,
       sizeBytes = bytes.size.toLong(),
-      // Upstream's `previewUrl`, an object URL over the local file (`ChatComposer.tsx:5558`)
-      preview = if (accepted.kind == AttachmentKind.IMAGE) decodePreview(bytes) else null,
+      // Upstream's `previewUrl`, an object URL over the local file (`ChatComposer.tsx:5558`), and
+      // an SVG's drawing for its file chip (`SvgFileChip`, `contextChipParts.tsx`)
+      preview = when {
+        accepted.kind == AttachmentKind.IMAGE -> decodePreview(bytes)
+        isSvgAttachment(name, accepted.mimeType) -> decodeSvgPreview(bytes)
+        else -> null
+      },
     )
     // Before the chip shows, so a remove as fast as the eye can't miss it
     transfers[attachment.id] = Transfer(bytes, source)
