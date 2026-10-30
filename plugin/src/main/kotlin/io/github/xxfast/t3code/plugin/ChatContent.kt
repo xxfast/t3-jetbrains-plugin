@@ -494,7 +494,7 @@ private fun rememberContextWindow(
     )
   return ComposerContextWindow(
     usage = usage,
-    modelDisplayName = footer?.modelLabel,
+    modelDisplayName = footer?.contextWindowModelName,
     // `compactThreadContext`: nothing while a run, a send or a request is in the way
     onCompact = if (canCompact) {
       {

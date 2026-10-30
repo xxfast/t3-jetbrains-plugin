@@ -107,7 +107,8 @@ fun modelPickerFlatModels(entries: List<ModelPickerEntry>): List<ModelPickerMode
           driver = entry.driver,
           slug = option.slug,
           name = option.name,
-          shortName = option.shortName,
+          // `toAppModelOption`, apps/web/src/modelSelection.ts:89
+          shortName = resolveModelShortName(option, entry.driver),
           subProvider = option.subProvider,
           isNew = option.badge == "new",
           isLegacy = option.isLegacy == true,
@@ -125,7 +126,21 @@ fun getDisplayModelName(model: ModelPickerModel, preferShortName: Boolean = fals
   return stripLeadingQualifier(name, model.subProvider)
 }
 
-private fun stripLeadingQualifier(value: String, qualifier: String?): String {
+/** [getDisplayModelName] for the server's model: its full name. */
+fun getDisplayModelName(model: ServerProviderModel): String =
+  stripLeadingQualifier(model.name, model.subProvider)
+
+/**
+ * `getTriggerDisplayModelName`, `providerIconUtils.ts:53`: the name you'd say out loud,
+ * [resolveModelShortName] on [driverKind], else the full name.
+ */
+fun getTriggerDisplayModelName(model: ServerProviderModel, driverKind: String?): String {
+  val name: String = resolveModelShortName(model, driverKind) ?: model.name
+  return stripLeadingQualifier(name, model.subProvider)
+}
+
+/** `stripLeadingQualifier`, `providerIconUtils.ts:20`. */
+internal fun stripLeadingQualifier(value: String, qualifier: String?): String {
   val trimmed: String = qualifier?.trim().orEmpty()
   if (trimmed.isEmpty()) return value
   val pattern = Regex("^${Regex.escape(trimmed)}(?:\\s*[.:/-]\\s*|\\s+)", RegexOption.IGNORE_CASE)

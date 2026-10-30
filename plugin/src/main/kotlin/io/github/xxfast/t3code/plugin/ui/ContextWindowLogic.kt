@@ -3,8 +3,10 @@ package io.github.xxfast.t3code.plugin.ui
 import io.github.xxfast.t3code.protocol.ProviderThread
 import io.github.xxfast.t3code.protocol.ProviderTurn
 import io.github.xxfast.t3code.protocol.ThreadView
+import io.github.xxfast.t3code.protocol.generated.ModelSelection
 import io.github.xxfast.t3code.protocol.generated.ProviderTurnTokenUsage
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
+import io.github.xxfast.t3code.protocol.generated.ServerProviderModel
 import io.github.xxfast.t3code.protocol.generated.ThreadTokenUsageSnapshot
 import io.github.xxfast.t3code.protocol.generated.TurnItem
 import java.time.Duration
@@ -127,6 +129,22 @@ fun formatContextWindowPercentage(value: Double?): String? {
   if (value == null || !value.isFinite()) return null
   if (value < 10) return trimZero(String.format(Locale.US, "%.1f", value)) + "%"
   return "${Math.round(value)}%"
+}
+
+/**
+ * `resolveContextWindowModelDisplayName`, ContextWindowMeter.logic.ts:87: the selected model's
+ * full name ([getDisplayModelName]), else its slug.
+ */
+fun resolveContextWindowModelDisplayName(
+  selection: ModelSelection?,
+  providers: List<ServerProvider>,
+): String? {
+  if (selection == null) return null
+  val slug: String? = selection.slug
+  val selectedModel: ServerProviderModel? = selectedProvider(providers, selection.instance)
+    ?.models
+    ?.find { it.slug == slug }
+  return if (selectedModel != null) getDisplayModelName(selectedModel) else slug
 }
 
 /** `formatContextWindowCompactionMessage`, ContextWindowMeter.logic.ts:102. */

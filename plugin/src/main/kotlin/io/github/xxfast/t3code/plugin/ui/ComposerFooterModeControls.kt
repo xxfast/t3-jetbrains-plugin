@@ -15,6 +15,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -77,27 +79,31 @@ fun ComposerControls(
 }
 
 /**
- * `ProviderModelPicker.tsx`'s trigger: the provider's icon, the model's name and a chevron, as a
- * [ComposerControl]. Opens the IDE's chooser (`showModelPicker`), centred like Search
- * Everywhere rather than anchored here.
+ * `ProviderModelPicker.tsx`'s trigger: the provider's icon, the model's short name and a
+ * chevron, as a [ComposerControl], with the full name as its tooltip and accessible name. Opens
+ * the IDE's chooser (`showModelPicker`), centred like Search Everywhere rather than anchored here.
  */
+@OptIn(ExperimentalFoundationApi::class) // Jewel's Tooltip
 @Composable
 fun ProviderModelPicker(
   state: ComposerFooterState,
   enabled: Boolean,
   actions: ComposerFooterActions,
 ) {
-  ComposerControl(
-    onClick = actions.onOpenModelPicker,
-    enabled = enabled && state.pickerEntries.isNotEmpty(),
-  ) {
-    val xs: Boolean = LocalComposerControlSize.current == ComposerControlSize.XS
-    val icon: Dp = if (xs) 12.dp else 16.dp
-    state.provider?.let { provider: ServerProvider ->
-      ProviderIcon(provider, icon, badge = state.providerBadge)
+  Tooltip(tooltip = { Text(state.modelFullLabel) }) {
+    ComposerControl(
+      onClick = actions.onOpenModelPicker,
+      modifier = Modifier.semantics { contentDescription = state.modelFullLabel },
+      enabled = enabled && state.pickerEntries.isNotEmpty(),
+    ) {
+      val xs: Boolean = LocalComposerControlSize.current == ComposerControlSize.XS
+      val icon: Dp = if (xs) 12.dp else 16.dp
+      state.provider?.let { provider: ServerProvider ->
+        ProviderIcon(provider, icon, badge = state.providerBadge)
+      }
+      ComposerControlLabel(state.modelLabel, maxWidth = 192.dp)
+      ComposerControlChevron()
     }
-    ComposerControlLabel(state.modelLabel, maxWidth = 192.dp)
-    ComposerControlChevron()
   }
 }
 

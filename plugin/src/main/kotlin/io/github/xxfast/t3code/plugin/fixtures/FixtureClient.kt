@@ -1361,21 +1361,35 @@ class FixtureClient(
         displayName = "Claude",
         showInteractionModeToggle = false,
         plan = "Max",
+        // Real names; the trigger says "Opus 5.5" and "Sonnet 4.5", `resolveModelShortName`
         models = listOf(
-          model("opus", "Opus", capabilities = CLAUDE_TRAITS),
-          model("sonnet", "Sonnet", capabilities = CLAUDE_TRAITS),
+          model("opus", "Claude Opus 5.5", capabilities = CLAUDE_TRAITS),
+          model("sonnet", "Claude Sonnet 4.5", capabilities = CLAUDE_TRAITS),
         ),
         slashCommands = listOf(ServerProviderSlashCommand("compact", "Summarize the history")),
       ),
-      // Not signed in, so the picker's sidebar dims it and lists none of its models
+      // Other families' models: "Claude Sonnet 4.5" reads "Sonnet 4.5" here too, but
+      // "Gemini 3 Pro" stays whole, "3 Pro" doesn't name a model without Gemini's icon
       provider(
         instanceId = "cursor",
         driver = "cursor",
         displayName = "Cursor",
         showInteractionModeToggle = false,
+        models = listOf(
+          model("composer-1", "Composer 1"),
+          model("claude-4.5-sonnet", "Claude Sonnet 4.5"),
+          model("gemini-3-pro", "Gemini 3 Pro"),
+        ),
+      ),
+      // Not signed in, so the picker's sidebar dims it and lists none of its models
+      provider(
+        instanceId = "grok",
+        driver = "grok",
+        displayName = "Grok",
+        showInteractionModeToggle = false,
         status = "error",
-        message = "Run `cursor-agent login` to sign in.",
-        models = listOf(model("composer-1", "Composer 1")),
+        message = "Run `grok login` to sign in.",
+        models = listOf(model("grok-4", "Grok 4")),
       ),
     ),
     serverResolvedCommandContext = true,

@@ -322,7 +322,8 @@ private class ModelPickerPopupUI(
             key(model) == activeKey -> SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES
             else -> SimpleTextAttributes.REGULAR_ATTRIBUTES
           }
-          append(getDisplayModelName(model, preferShortName = true), name)
+          // `ModelListRow.tsx`: the full name, the trigger says the short one
+          append(getDisplayModelName(model), name)
           if (model.isNew) append("  New", NEW_ATTRIBUTES)
           append(
             "  ${getProviderRowLabel(model.providerDisplayName, model.subProvider)}",

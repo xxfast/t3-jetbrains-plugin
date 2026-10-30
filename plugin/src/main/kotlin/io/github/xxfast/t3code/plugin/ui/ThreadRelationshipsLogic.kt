@@ -8,6 +8,7 @@ import io.github.xxfast.t3code.protocol.ThreadView
 import io.github.xxfast.t3code.protocol.generated.Command
 import io.github.xxfast.t3code.protocol.generated.ProviderRef
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
+import io.github.xxfast.t3code.protocol.generated.ServerProviderModel
 import io.github.xxfast.t3code.protocol.generated.ThreadForkSourcePoint
 import io.github.xxfast.t3code.protocol.generated.ThreadShell
 import java.time.Instant
@@ -291,6 +292,28 @@ fun formatSubagentDisplayTitle(title: String): String {
   val path: MatchResult = ROOT_PATH.find(displayTitle) ?: return displayTitle
   val name: String = path.groupValues[1].replace(SEPARATORS, " ").trim()
   return name.replace(WORD_START) { start -> start.value.uppercase() }.ifEmpty { displayTitle }
+}
+
+/**
+ * `modelLabel` from `resolveSubagentMetadata`, subagentDisplay.ts:51: the reported [model]'s
+ * name in [provider]'s catalog, said out loud ([resolveModelShortName]); a slug the catalog
+ * doesn't know reads through [formatModelSlugName]. A leading sub-provider qualifier goes.
+ */
+fun resolveSubagentModelLabel(model: String?, provider: ServerProvider?): String {
+  val reported: String? = model?.trim()
+  val slug: String? = if (provider != null) {
+    resolveSelectableModel(provider.driver, reported, provider.models)
+  } else {
+    reported
+  }
+  val catalogModel: ServerProviderModel? = provider?.models?.find { it.slug == slug }
+  val reportedLabel: String = when {
+    catalogModel != null ->
+      resolveModelShortName(catalogModel, provider?.driver) ?: catalogModel.name
+    !reported.isNullOrEmpty() -> formatModelSlugName(reported)
+    else -> "Not reported"
+  }
+  return stripLeadingQualifier(reportedLabel, catalogModel?.subProvider)
 }
 
 private val SUBAGENT_PREFIX: Regex = Regex("^Subagent:\\s*", RegexOption.IGNORE_CASE)

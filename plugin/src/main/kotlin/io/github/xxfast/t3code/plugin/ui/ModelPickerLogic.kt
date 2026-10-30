@@ -228,11 +228,32 @@ fun modelPickerItems(
   }
   .filter { it.models.isNotEmpty() }
 
-/** What the picker button says: the current model's name, else its slug. */
+/**
+ * What the picker button says, `triggerTitle` in `ProviderModelPicker.tsx:115`: the current
+ * model's [getTriggerDisplayModelName], else its slug.
+ */
 fun modelPickerLabel(providers: List<ServerProvider>, instanceId: String?, model: String?): String {
   if (model == null) return "Model"
   val provider: ServerProvider = selectedProvider(providers, instanceId) ?: return model
-  return resolveModelPickerSelectedModel(provider.driver, model, provider.models)?.name ?: model
+  val selected: ServerProviderModel =
+    resolveModelPickerSelectedModel(provider.driver, model, provider.models) ?: return model
+  return getTriggerDisplayModelName(selected, provider.driver)
+}
+
+/**
+ * The picker button's tooltip and accessible name, `triggerLabel` in
+ * `ProviderModelPicker.tsx:120`: the current model's full name, else [modelPickerLabel].
+ */
+fun modelPickerFullLabel(
+  providers: List<ServerProvider>,
+  instanceId: String?,
+  model: String?,
+): String {
+  if (model == null) return "Model"
+  val provider: ServerProvider = selectedProvider(providers, instanceId) ?: return model
+  val selected: ServerProviderModel =
+    resolveModelPickerSelectedModel(provider.driver, model, provider.models) ?: return model
+  return getDisplayModelName(selected)
 }
 
 /** Why a model change can't happen in this thread, `getStartedThreadModelChangeBlockReason`. */
@@ -345,6 +366,8 @@ data class ComposerFooterState(
   /** [provider] wears its initials badge, [showInstanceBadge]. */
   val providerBadge: Boolean = false,
   val modelLabel: String,
+  /** [modelPickerFullLabel], what [modelLabel] shortens. */
+  val modelFullLabel: String = modelLabel,
   val models: List<ModelPickerGroup>,
   val runtimeModes: List<RuntimeModeOption>,
   val runtimeMode: String,
@@ -368,6 +391,8 @@ data class ComposerFooterState(
   val showSkillsInSlashMenu: Boolean = true,
   /** Upstream's `composerRichTextEnabled` setting: formatted markdown in the prompt. */
   val composerRichTextEnabled: Boolean = true,
+  /** The context window meter's model, [resolveContextWindowModelDisplayName] of [selection]. */
+  val contextWindowModelName: String? = null,
 )
 
 /**
@@ -394,6 +419,7 @@ fun composerFooter(
     provider = provider,
     providerBadge = provider != null && showInstanceBadge(provider, providers),
     modelLabel = modelPickerLabel(providers, instanceId, model),
+    modelFullLabel = modelPickerFullLabel(providers, instanceId, model),
     models = modelPickerItems(providers, instanceId, model),
     runtimeModes = modes,
     runtimeMode = compatibleRuntimeMode(runtimeMode, modes),
@@ -406,5 +432,6 @@ fun composerFooter(
     reported = reported,
     pickerEntries = modelPickerEntries(providers),
     favorites = favorites,
+    contextWindowModelName = resolveContextWindowModelDisplayName(selection, providers),
   )
 }
