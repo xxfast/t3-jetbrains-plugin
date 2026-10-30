@@ -9,6 +9,7 @@ import io.github.xxfast.t3code.plugin.ui.THREAD_TITLE_REGENERATION
 import io.github.xxfast.t3code.plugin.ui.instance
 import io.github.xxfast.t3code.protocol.ConnectionState
 import io.github.xxfast.t3code.protocol.ConversationMessage
+import io.github.xxfast.t3code.protocol.DEFAULT_SNOOZE_PRESETS
 import io.github.xxfast.t3code.protocol.PlanArtifact
 import io.github.xxfast.t3code.protocol.generated.PlanArtifact as GenPlanArtifact
 import io.github.xxfast.t3code.protocol.generated.TurnItem as GenTurnItem
@@ -1415,6 +1416,7 @@ class FixtureClient(
         ),
       ),
     ),
+    snoozePresets = loaded.value?.snoozePresets ?: DEFAULT_SNOOZE_PRESETS,
   ).let { info -> info.copy(providers = info.providers.map(::withSkills)) }
 
   /**

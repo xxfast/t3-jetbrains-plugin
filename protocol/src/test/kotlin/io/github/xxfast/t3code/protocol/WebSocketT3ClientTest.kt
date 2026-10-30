@@ -353,6 +353,14 @@ class WebSocketT3ClientTest {
     assertEquals(setOf("prj_none", "prj_new"), models.projectSettingsModels.keys)
     assertNull(models.projectSettingsModels["prj_none"], "null overrides to none")
     assertEquals(JsonPrimitive("opus"), models.projectSettingsModels["prj_new"]?.model)
+    assertEquals(
+      listOf(
+        SnoozePresetSetting.After(20),
+        SnoozePresetSetting.At(SnoozePresetDay.Friday, "17:30"),
+      ),
+      info.snoozePresets,
+      "A day this build doesn't know is skipped",
+    )
   }
 
   @Test

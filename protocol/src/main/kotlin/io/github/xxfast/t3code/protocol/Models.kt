@@ -154,6 +154,8 @@ public data class ServerInfo(
   val scriptSettings: ProjectScriptSettings = ProjectScriptSettings(),
   /** The settings that decide a project's default model, see [ProjectModelSettings]. */
   val modelSettings: ProjectModelSettings = ProjectModelSettings(),
+  /** `settings.snoozePresets`, the snooze menu the user picked in T3's settings. */
+  val snoozePresets: List<SnoozePresetSetting> = DEFAULT_SNOOZE_PRESETS,
 )
 
 /**

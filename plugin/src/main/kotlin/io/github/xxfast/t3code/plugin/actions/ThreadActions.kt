@@ -13,6 +13,7 @@ import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.MessageDialogBuilder
 import com.intellij.openapi.ui.Messages
+import io.github.xxfast.t3code.plugin.ChatController
 import io.github.xxfast.t3code.plugin.NewThread
 import io.github.xxfast.t3code.plugin.SidebarRename
 import io.github.xxfast.t3code.plugin.T3
@@ -32,10 +33,13 @@ import io.github.xxfast.t3code.plugin.ui.THREAD_TITLE_REGENERATION
 import io.github.xxfast.t3code.plugin.ui.nextCard
 import io.github.xxfast.t3code.plugin.ui.runtimeStatus
 import io.github.xxfast.t3code.plugin.ui.sections
+import io.github.xxfast.t3code.plugin.ui.pickSnoozePreset
+import io.github.xxfast.t3code.plugin.ui.resolveSnoozePresets
 import io.github.xxfast.t3code.plugin.ui.settled
-import io.github.xxfast.t3code.plugin.ui.snoozePresets
 import io.github.xxfast.t3code.plugin.ui.snoozed
+import io.github.xxfast.t3code.protocol.DEFAULT_SNOOZE_PRESETS
 import io.github.xxfast.t3code.protocol.Project as T3Project
+import io.github.xxfast.t3code.protocol.SnoozePresetSetting
 import io.github.xxfast.t3code.protocol.T3Client
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.archived
@@ -302,8 +306,9 @@ class AutoSettleOnAction : AutoSettleAction(enabled = true)
 class AutoSettleOffAction : AutoSettleAction(enabled = false)
 
 /**
- * "Snooze" (threadActionMenu.logic.ts:131): upstream's presets as of when the menu opens, then
- * "Custom…". Only on a thread that's awake; a snoozed one has [WakeThreadAction] instead.
+ * "Snooze" (threadActionMenu.logic.ts:140): the server's `snoozePresets` as of when the menu
+ * opens, soonest first, then "Custom…". Only on a thread that's awake; a snoozed one has
+ * [WakeThreadAction] instead.
  */
 class SnoozeGroup : ThreadActionGroup(THREAD_SNOOZE) {
   override fun update(e: AnActionEvent) {
@@ -319,20 +324,44 @@ class SnoozeGroup : ThreadActionGroup(THREAD_SNOOZE) {
   }
 
   override fun getChildren(e: AnActionEvent?): Array<AnAction> {
-    val presets: List<AnAction> = snoozePresets(Instant.now()).map(::SnoozePresetAction)
-    return (presets + Separator.getInstance() + CustomSnoozeAction()).toTypedArray()
+    // `snoozeOptions` (Sidebar.snooze.ts:49): the environment's settings, else the defaults
+    val settings: List<SnoozePresetSetting> = e?.project
+      ?.let { project -> ChatController.getInstance(project).catalog.value?.snoozePresets }
+      ?: DEFAULT_SNOOZE_PRESETS
+    val shown: List<SnoozePreset> = resolveSnoozePresets(Instant.now(), settings)
+    val presets: List<AnAction> = shown.map { SnoozePresetAction(it, shown, settings) }
+    // "Custom…" has its separator only after a preset
+    val separator: List<AnAction> =
+      listOfNotNull(Separator.getInstance().takeIf { shown.isNotEmpty() })
+    return (presets + separator + CustomSnoozeAction()).toTypedArray()
   }
 }
 
-/** One of upstream's presets, `attemptSnooze` (Sidebar.tsx:3861) until [preset]'s time. */
-class SnoozePresetAction(private val preset: SnoozePreset) :
-  ThreadAction(ThreadActionKind.Snooze, THREAD_SNOOZE) {
+/**
+ * One of the menu's presets, `attemptSnooze` (Sidebar.tsx:3861). [pickSnoozePreset] resolves it
+ * again when it's picked, as `Sidebar.snooze.ts` does: a duration from then, a set time as shown.
+ */
+class SnoozePresetAction(
+  private val preset: SnoozePreset,
+  private val shown: List<SnoozePreset>,
+  private val settings: List<SnoozePresetSetting>,
+) : ThreadAction(ThreadActionKind.Snooze, THREAD_SNOOZE) {
   init {
     templatePresentation.text = presetText(preset)
   }
 
   override suspend fun perform(target: ThreadTarget) {
-    target.snooze(preset.snoozedUntil)
+    val picked: SnoozePreset? = pickSnoozePreset(shown, preset.id, Instant.now(), settings)
+    if (picked == null) {
+      notify(
+        target.project,
+        "That snooze time has passed. Choose another time.",
+        NotificationType.WARNING,
+        title = "Could not snooze thread",
+      )
+      return
+    }
+    target.snooze(picked.snoozedUntil)
   }
 }
 

@@ -49,6 +49,11 @@
   ],
   "settings": {
     "environmentIcon": "laptop",
+    "snoozePresets": [
+      { "kind": "after", "minutes": 20 },
+      { "kind": "at", "day": "friday", "time": "17:30" },
+      { "kind": "at", "day": "someday", "time": "09:00" }
+    ],
     "defaultModelSelection": { "instanceId": "codex", "model": "gpt-5" },
     "defaultProjectScripts": [
       {

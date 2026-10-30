@@ -12,9 +12,11 @@ import io.github.xxfast.t3code.protocol.ProviderTurn
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ServerSession
+import io.github.xxfast.t3code.protocol.SnoozePresetSetting
 import io.github.xxfast.t3code.protocol.Subagent
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
+import io.github.xxfast.t3code.protocol.decodeSnoozePresets
 import io.github.xxfast.t3code.protocol.generated.ProjectEntry
 import io.github.xxfast.t3code.protocol.generated.PullRequestListEntry
 import io.github.xxfast.t3code.protocol.generated.ServerAuthDescriptor
@@ -33,6 +35,8 @@ import kotlinx.serialization.json.long
 @Serializable
 class ScenarioFile(
   val connection: ScenarioConnection? = null,
+  /** The fixture server's `settings`, as `server.getConfig` has them. Only `snoozePresets` yet. */
+  val settings: JsonObject? = null,
   val projects: List<Project> = emptyList(),
   val threads: List<Thread> = emptyList(),
   val runs: Map<String, List<Run>> = emptyMap(),
@@ -86,6 +90,8 @@ class FixtureItem(val item: TurnItem, val after: Long)
  */
 class Scenario(
   val connection: ConnectionState?,
+  /** `settings.snoozePresets`, `null` when the file doesn't set them. */
+  val snoozePresets: List<SnoozePresetSetting>? = null,
   val projects: List<Project>,
   val threads: List<Thread>,
   val runs: Map<String, List<Run>>,
@@ -114,6 +120,7 @@ class Scenario(
       val file: ScenarioFile = T3Json.decodeFromString(ScenarioFile.serializer(), text)
       return Scenario(
         connection = file.connection?.toState(),
+        snoozePresets = file.settings?.get("snoozePresets")?.let(::decodeSnoozePresets),
         projects = file.projects,
         threads = file.threads,
         runs = file.runs,
@@ -142,11 +149,13 @@ class Scenario(
      * One scenario out of a directory's files, in order. Projects, threads and terminals dedupe
      * by id, first wins. Runs, items, requests, sessions, checkpoints and provider threads append
      * per thread. The
-     * last file that sets a connection wins, and a directory that sets none is connected.
+     * last file that sets a connection wins, and a directory that sets none is connected. So do
+     * snooze presets, and a directory that sets none has upstream's defaults.
      */
     fun merge(parts: List<Scenario>): Scenario = Scenario(
       connection = parts.lastOrNull { it.connection != null }?.connection
         ?: ConnectionState.Connected(defaultSession),
+      snoozePresets = parts.lastOrNull { it.snoozePresets != null }?.snoozePresets,
       projects = parts.flatMap { it.projects }.distinctBy { it.id },
       threads = parts.flatMap { it.threads }.distinctBy { it.id },
       runs = parts.map { it.runs }.fold(emptyMap(), ::append),

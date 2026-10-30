@@ -367,6 +367,7 @@ public class WebSocketT3Client internal constructor(
       machine = settings?.string("environmentIcon") ?: platform?.string("machine") ?: "server",
       scriptSettings = settings?.let(::scriptSettings) ?: ProjectScriptSettings(),
       modelSettings = settings?.let(::modelSettings) ?: ProjectModelSettings(),
+      snoozePresets = decodeSnoozePresets(settings?.get("snoozePresets")),
     )
     info = rpc to fresh
     return fresh

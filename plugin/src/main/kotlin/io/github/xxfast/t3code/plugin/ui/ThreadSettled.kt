@@ -1,5 +1,8 @@
 package io.github.xxfast.t3code.plugin.ui
 
+import io.github.xxfast.t3code.protocol.DEFAULT_SNOOZE_PRESETS
+import io.github.xxfast.t3code.protocol.SnoozePresetDay
+import io.github.xxfast.t3code.protocol.SnoozePresetSetting
 import io.github.xxfast.t3code.protocol.Thread
 import java.time.DayOfWeek
 import java.time.Duration
@@ -116,49 +119,150 @@ data class SnoozePreset(
   val snoozedUntil: Instant,
 )
 
-private const val EVENING_HOUR: Int = 18
-private const val MORNING_HOUR: Int = 9
-
-/** `toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })`. */
+/** `snoozeTimeOfDayLabel`: `toLocaleTimeString` with a numeric hour and 2-digit minute. */
 private fun timeLabel(at: ZonedDateTime, locale: Locale): String =
   at.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale))
 
 private fun weekdayLabel(at: ZonedDateTime, locale: Locale): String =
   at.dayOfWeek.getDisplayName(TextStyle.SHORT, locale)
 
+/** `WEEKDAY_INDEX`, as java.time numbers the week. */
+private val SnoozePresetDay.dayOfWeek: DayOfWeek?
+  get() = when (this) {
+    SnoozePresetDay.Today, SnoozePresetDay.Tomorrow -> null
+    SnoozePresetDay.Monday -> DayOfWeek.MONDAY
+    SnoozePresetDay.Tuesday -> DayOfWeek.TUESDAY
+    SnoozePresetDay.Wednesday -> DayOfWeek.WEDNESDAY
+    SnoozePresetDay.Thursday -> DayOfWeek.THURSDAY
+    SnoozePresetDay.Friday -> DayOfWeek.FRIDAY
+    SnoozePresetDay.Saturday -> DayOfWeek.SATURDAY
+    SnoozePresetDay.Sunday -> DayOfWeek.SUNDAY
+  }
+
+private fun pluralize(count: Int, unit: String): String =
+  "$count $unit${if (count == 1) "" else "s"}"
+
+/** `formatSnoozeDuration`: "3 hours", "90 minutes", "2 days", the largest unit that divides. */
+private fun formatSnoozeDuration(minutes: Int): String = when {
+  minutes % (24 * 60) == 0 -> pluralize(minutes / (24 * 60), "day")
+  minutes % 60 == 0 -> pluralize(minutes / 60, "hour")
+  else -> pluralize(minutes, "minute")
+}
+
+/** `snoozePresetDaysAhead`: a weekday is its next occurrence after today, so never 0. */
+private fun snoozePresetDaysAhead(setting: SnoozePresetSetting.At, now: ZonedDateTime): Int {
+  val weekday: DayOfWeek = setting.day.dayOfWeek
+    ?: return if (setting.day == SnoozePresetDay.Today) 0 else 1
+  return ((weekday.value - now.dayOfWeek.value + 7) % 7).takeIf { it != 0 } ?: 7
+}
+
+/** `snoozePresetLabel`: by the actual day gap, so a Monday option on a Sunday reads "Tomorrow". */
+private fun snoozePresetLabel(setting: SnoozePresetSetting, daysAhead: Int): String {
+  val at: SnoozePresetSetting.At = when (setting) {
+    is SnoozePresetSetting.After -> return "In ${formatSnoozeDuration(setting.minutes)}"
+    is SnoozePresetSetting.At -> setting
+  }
+  if (daysAhead == 0) {
+    val hour: Int = at.time.substring(0, 2).toInt()
+    return if (hour < 12) "This morning" else if (hour < 17) "This afternoon" else "This evening"
+  }
+  if (daysAhead == 1) return "Tomorrow"
+  if (at.day == SnoozePresetDay.Monday) return "Next week"
+  val day: String = at.day.wire.replaceFirstChar { it.uppercaseChar() }
+  return if (daysAhead == 7) "Next $day" else day
+}
+
+/** `snoozePresetId`: `after:180`, `at:tomorrow:09:00`. */
+fun snoozePresetId(setting: SnoozePresetSetting): String = when (setting) {
+  is SnoozePresetSetting.After -> "after:${setting.minutes}"
+  is SnoozePresetSetting.At -> "at:${setting.day.wire}:${setting.time}"
+}
+
 /**
- * `resolveSnoozePresets`: in an hour, in three, this evening while it's more than an hour off,
- * tomorrow morning, and next Monday morning unless that's tomorrow. Days advance on the
- * calendar, not by 24 hours, so DST doesn't skip one.
+ * `resolveSnoozePreset`: when [setting] wakes from [now], or null for an option today whose time
+ * has passed. Days advance on the calendar, not by 24 hours, so DST doesn't skip one.
  */
-fun snoozePresets(
+fun resolveSnoozePreset(
+  setting: SnoozePresetSetting,
   now: Instant,
   zone: ZoneId = ZoneId.systemDefault(),
   locale: Locale = Locale.getDefault(),
-): List<SnoozePreset> {
+  formatTime: (ZonedDateTime) -> String = { at -> timeLabel(at, locale) },
+): SnoozePreset? {
   val local: ZonedDateTime = now.atZone(zone)
-  fun preset(id: String, label: String, at: ZonedDateTime, whenLabel: String? = null) =
-    SnoozePreset(id, label, whenLabel ?: timeLabel(at, locale), at.toInstant())
-  fun atHour(day: ZonedDateTime, hour: Int): ZonedDateTime =
-    day.toLocalDate().atTime(hour, 0).atZone(zone)
-  val presets: MutableList<SnoozePreset> = mutableListOf(
-    preset("hour", "In 1 hour", local.plusHours(1)),
-    preset("three-hours", "In 3 hours", local.plusHours(3)),
+  var daysAhead = 0
+  val wake: ZonedDateTime = when (setting) {
+    is SnoozePresetSetting.After ->
+      now.plus(Duration.ofMinutes(setting.minutes.toLong())).atZone(zone)
+
+    is SnoozePresetSetting.At -> {
+      daysAhead = snoozePresetDaysAhead(setting, local)
+      val time: LocalTime = LocalTime.of(
+        setting.time.substring(0, 2).toInt(),
+        setting.time.substring(3).toInt(),
+      )
+      val at: ZonedDateTime =
+        local.toLocalDate().plusDays(daysAhead.toLong()).atTime(time).atZone(zone)
+      // A today option whose time has passed is left out until tomorrow
+      if (!at.toInstant().isAfter(now)) return null
+      at
+    }
+  }
+  val label: String = snoozePresetLabel(setting, daysAhead)
+  // Durations and "Next week" don't name the wake day, so a wake on another day shows it
+  val labelNamesDay: Boolean = setting is SnoozePresetSetting.At && label != "Next week"
+  val time: String = formatTime(wake)
+  return SnoozePreset(
+    id = snoozePresetId(setting),
+    label = label,
+    whenLabel = if (labelNamesDay || wake.toLocalDate() == local.toLocalDate()) {
+      time
+    } else {
+      "${weekdayLabel(wake, locale)} $time"
+    },
+    snoozedUntil = wake.toInstant(),
   )
-  val evening: ZonedDateTime = atHour(local, EVENING_HOUR)
-  if (Duration.between(local, evening) > Duration.ofHours(1)) {
-    presets += preset("evening", "This evening", evening)
+}
+
+/** By minute, so a duration (which keeps the clock's seconds) and a set time in that minute tie. */
+private val SnoozePreset.wakeMinute: Long
+  get() = Math.floorDiv(snoozedUntil.toEpochMilli(), 60_000L)
+
+/**
+ * `resolveSnoozePresets`: the snooze menu from the server's [presets], soonest first, one row per
+ * wake minute. The sort is stable, so of two that tie, the first in settings stays.
+ */
+fun resolveSnoozePresets(
+  now: Instant,
+  presets: List<SnoozePresetSetting> = DEFAULT_SNOOZE_PRESETS,
+  zone: ZoneId = ZoneId.systemDefault(),
+  locale: Locale = Locale.getDefault(),
+  formatTime: (ZonedDateTime) -> String = { at -> timeLabel(at, locale) },
+): List<SnoozePreset> = presets
+  .mapNotNull { setting -> resolveSnoozePreset(setting, now, zone, locale, formatTime) }
+  .sortedBy { preset -> preset.wakeMinute }
+  .distinctBy { preset -> preset.wakeMinute }
+
+/**
+ * `pickSnoozePreset`: a menu choice as picked. A duration re-resolves from its setting (not the
+ * deduped menu) so it starts at selection. A set time keeps the shown wake, which a day change
+ * would otherwise shift. Null when that wake has passed.
+ */
+fun pickSnoozePreset(
+  shown: List<SnoozePreset>,
+  id: String,
+  now: Instant,
+  presets: List<SnoozePresetSetting> = DEFAULT_SNOOZE_PRESETS,
+  zone: ZoneId = ZoneId.systemDefault(),
+  locale: Locale = Locale.getDefault(),
+  formatTime: (ZonedDateTime) -> String = { at -> timeLabel(at, locale) },
+): SnoozePreset? {
+  val original: SnoozePreset? = shown.find { preset -> preset.id == id }
+  val ahead: SnoozePreset? = original?.takeIf { it.snoozedUntil.isAfter(now) }
+  val setting: SnoozePresetSetting? = presets.find { candidate ->
+    candidate is SnoozePresetSetting.After && snoozePresetId(candidate) == id
   }
-  val tomorrow: ZonedDateTime = atHour(local.plusDays(1), MORNING_HOUR)
-  presets += preset("tomorrow", "Tomorrow", tomorrow)
-  val untilMonday: Int = (DayOfWeek.MONDAY.value - local.dayOfWeek.value + 7) % 7
-  val nextWeek: ZonedDateTime =
-    atHour(local.plusDays(if (untilMonday == 0) 7L else untilMonday.toLong()), MORNING_HOUR)
-  if (nextWeek != tomorrow) {
-    val label = "${weekdayLabel(nextWeek, locale)} ${timeLabel(nextWeek, locale)}"
-    presets += preset("next-week", "Next week", nextWeek, label)
-  }
-  return presets
+  return setting?.let { resolveSnoozePreset(it, now, zone, locale, formatTime) } ?: ahead
 }
 
 /** `snoozeWakeLabel`: how long until it wakes, rounded up: `25m`, `3h`, `2d`, else `now`. */

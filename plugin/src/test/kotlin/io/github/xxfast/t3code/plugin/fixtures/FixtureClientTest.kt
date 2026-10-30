@@ -1,6 +1,8 @@
 package io.github.xxfast.t3code.plugin.fixtures
 
 import io.github.xxfast.t3code.plugin.ui.PendingUserInputDraftAnswer
+import io.github.xxfast.t3code.plugin.ui.SnoozePreset
+import io.github.xxfast.t3code.plugin.ui.resolveSnoozePresets
 import io.github.xxfast.t3code.plugin.ui.PendingApproval
 import io.github.xxfast.t3code.plugin.ui.PendingThreadRequests
 import io.github.xxfast.t3code.plugin.ui.PendingUserInput
@@ -25,9 +27,11 @@ import io.github.xxfast.t3code.plugin.ui.buildPendingUserInputAnswers
 import io.github.xxfast.t3code.plugin.review.checkpointForRun
 import io.github.xxfast.t3code.protocol.Checkpoint
 import io.github.xxfast.t3code.protocol.ConnectionState
+import io.github.xxfast.t3code.protocol.DEFAULT_SNOOZE_PRESETS
 import io.github.xxfast.t3code.protocol.Run
 import io.github.xxfast.t3code.protocol.RuntimeRequest
 import io.github.xxfast.t3code.protocol.ServerSession
+import io.github.xxfast.t3code.protocol.SnoozePresetSetting
 import io.github.xxfast.t3code.protocol.T3Json
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.ThreadView
@@ -57,6 +61,8 @@ import io.github.xxfast.t3code.protocol.pinned
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.FileTime
+import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.io.path.extension
 import kotlin.io.path.getLastModifiedTime
 import kotlin.io.path.isDirectory
@@ -139,6 +145,29 @@ class FixtureClientTest {
       demos,
     )
   }
+
+  @Test
+  fun `default's server has its own snooze presets, and the menu lists them soonest first`() =
+    runTest {
+      val client = FixtureClient(default, backgroundScope)
+      client.connection.first { it is ConnectionState.Connected }
+
+      val presets: List<SnoozePresetSetting> = client.serverInfo().snoozePresets
+
+      val tuesday: Instant = Instant.parse("2026-10-20T10:00:00Z")
+      val shown: List<SnoozePreset> = resolveSnoozePresets(tuesday, presets, ZoneOffset.UTC)
+      assertEquals(listOf("after:20", "after:120", "at:tomorrow:08:00"), shown.map { it.id })
+    }
+
+  @Test
+  fun `a scenario that sets no snooze presets has upstream's`(@TempDir directory: Path) =
+    runTest {
+      directory.resolve("a.json").writeText("""{ "threads": [] }""")
+      val client = FixtureClient(directory, backgroundScope)
+      client.connection.first { it is ConnectionState.Connected }
+
+      assertEquals(DEFAULT_SNOOZE_PRESETS, client.serverInfo().snoozePresets)
+    }
 
   @Test
   fun `connection scenarios list the same threads as default, byte for byte`() {
