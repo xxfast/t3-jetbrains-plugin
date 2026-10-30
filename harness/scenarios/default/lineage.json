@@ -16,7 +16,7 @@
       "lineage": {
         "rootThreadId": "thr_01JC5L1N0PARENT1"
       },
-      "status": "idle",
+      "status": "completed",
       "itemCount": 0,
       "visibleItemCount": 0,
       "hasActionableProposedPlan": false,
@@ -77,7 +77,7 @@
         "parentThreadId": "thr_01JC5L1N1LINEAG1",
         "relationshipToParent": "fork"
       },
-      "status": "idle",
+      "status": "completed",
       "itemCount": 0,
       "visibleItemCount": 0,
       "hasActionableProposedPlan": false,

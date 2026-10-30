@@ -58,6 +58,15 @@ class T3Configurable : BoundConfigurable("T3 Code") {
           .comment("Show formatted Markdown as you type.")
       }
       row {
+        // Upstream's Working section row, SettingsPanels.tsx:863, on by default
+        checkBox("Working section")
+          .bindSelected(T3Settings.get()::sidebarWorkingShelfEnabled)
+          .comment(
+            "Fold working and monitoring threads into a Working section. " +
+              "They return to the top of the inbox when they need you.",
+          )
+      }
+      row {
         // Upstream's legacy plan mode row, SettingsPanels.tsx:734, off by default
         checkBox("Plan mode (legacy)")
           .bindSelected(T3Settings.get()::planModeEnabled)

@@ -23,7 +23,11 @@ const val NEXT_PAGE: Int = 25
  * Which shelves are open: upstream keeps `t3code:sidebar:settled-expanded` and friends in local
  * storage (Sidebar.tsx:366), closed until opened.
  */
-data class Shelves(val settled: Boolean = false, val snoozed: Boolean = false)
+data class Shelves(
+  val settled: Boolean = false,
+  val snoozed: Boolean = false,
+  val working: Boolean = false,
+)
 
 /**
  * What a row's hover buttons do. A null member hides its button: the server doesn't do it, or
@@ -53,13 +57,14 @@ class RowDetails(
 )
 
 /**
- * The sections of the threads panel: the inbox (pinned first), then the snoozed and settled
- * shelves.
+ * The sections of the threads panel: the inbox (pinned first), then the working, snoozed and
+ * settled shelves.
  */
 data class ThreadSections(
   val inbox: List<Thread>,
   val settled: List<Thread>,
   val snoozed: List<Thread> = emptyList(),
+  val working: List<Thread> = emptyList(),
 )
 
 val Thread.active: Boolean get() = activeRunId != null || status in RUNNING
@@ -210,12 +215,15 @@ fun emptyHint(projects: List<Project>, query: String, filter: ProjectFilter): St
 }
 
 /**
- * Splits [threads] matching [query] by title. Inbox is pinned rows (by `pinOrderKey`, keyless
- * ones newest first) then active rows (keyless ones newest by `createdAt`/`unsettledAt`, then by
- * `activeOrderKey`). Snoozed is soonest to wake first, settled newest settled first, each only on
- * a server that does [snooze] or [settlement]; a snooze outranks settled, which outranks a pin
- * (`resolveSidebarThreadSection`, Sidebar.logic.ts:123). Archived and under-parent rows are
- * dropped, and so are rows from projects outside [filter].
+ * Splits [threads] matching [query] by title, as `partitionSidebarThreads` (Sidebar.tsx:594)
+ * does. Inbox is pinned rows (by `pinOrderKey`, keyless ones newest first) then active rows.
+ * With the Working shelf on ([working] is the tracker's observation) active rows that are
+ * working move to the shelf, by `sortWorkingThreadsBySend`, and the rest sort by
+ * `sortInboxThreadsByReturn`; with it off active rows sort keyless ones newest by
+ * `createdAt`/`unsettledAt`, then by `activeOrderKey`. Snoozed is soonest to wake first, settled
+ * newest settled first, each only on a server that does [snooze] or [settlement]; a snooze
+ * outranks settled, which outranks a pin (`resolveSidebarThreadSection`, Sidebar.logic.ts:123).
+ * Archived and under-parent rows are dropped, and so are rows from projects outside [filter].
  */
 fun sections(
   threads: List<Thread>,
@@ -224,6 +232,9 @@ fun sections(
   settlement: Boolean = true,
   snooze: Boolean = true,
   now: Instant = Instant.now(),
+  working: InboxObservation? = null,
+  pendingSubagentRequests: Map<String, PendingSubagentRequest> =
+    pendingSubagentRequestsByThread(threads),
 ): ThreadSections {
   val needle: String = query.trim()
   val visible: List<Thread> = threads.filter {
@@ -232,10 +243,14 @@ fun sections(
       filter.allows(it.projectId) &&
       it.title.contains(needle, ignoreCase = true)
   }
-  val (snoozed: List<Thread>, awake: List<Thread>) = visible.partition { snooze && it.snoozed(now) }
+  val (snoozed: List<Thread>, awake: List<Thread>) =
+    visible.partition { snooze && it.snoozed(now, pendingSubagentRequests[it.id]) }
   val (settled: List<Thread>, inbox: List<Thread>) =
     awake.partition { settlement && it.settled }
-  val (pinned: List<Thread>, active: List<Thread>) = inbox.partition { it.pinned }
+  val (pinned: List<Thread>, unpinned: List<Thread>) = inbox.partition { it.pinned }
+  val (shelved: List<Thread>, active: List<Thread>) = unpinned.partition { thread ->
+    working?.isWorking(thread, pendingSubagentRequests[thread.id]) == true
+  }
   val pinnedOrder: Comparator<Thread> = compareBy<Thread> { it.pinOrderKey == null }
     .thenBy { it.pinOrderKey }
     .thenByDescending { it.createdAt.toInstant() }
@@ -248,11 +263,22 @@ fun sections(
     .thenBy { it.id }
   val snoozedOrder: Comparator<Thread> = compareBy<Thread> { it.snoozedUntil?.toInstantOrNull() }
     .thenBy { it.id }
+  val sortedActive: List<Thread> = when (working) {
+    null -> active.sortedWith(activeOrder)
+    else -> sortInboxThreadsByReturn(active, working.returnedAt)
+  }
   return ThreadSections(
-    inbox = pinned.sortedWith(pinnedOrder) + active.sortedWith(activeOrder),
+    inbox = pinned.sortedWith(pinnedOrder) + sortedActive,
     settled = settled.sortedWith(settledOrder),
     snoozed = snoozed.sortedWith(snoozedOrder),
+    working = sortWorkingThreadsBySend(shelved),
   )
+}
+
+/** `routeThreadOnly`, Sidebar.tsx:388: what a collapsed shelf still shows, the open thread. */
+fun routeThreadOnly(threads: List<Thread>, routeThreadId: String?): List<Thread> {
+  if (routeThreadId == null) return emptyList()
+  return listOfNotNull(threads.find { it.id == routeThreadId })
 }
 
 /**
@@ -273,8 +299,8 @@ fun shelfLabel(name: String, open: Boolean, count: Int): String =
 /** How many rows "Show N more" reveals, `0` when all [total] are already [shown]. */
 fun moreCount(total: Int, shown: Int): Int = (total - shown).coerceIn(0, NEXT_PAGE)
 
-/** Run statuses `resolveSidebarThreadStatus` reads as working. */
-private val WORKING: Set<String> = setOf("preparing", "queued", "starting", "running", "waiting")
+/** Run statuses `resolveSidebarThreadStatus` reads as working, `threadRunStatusIsActive`. */
+internal val WORKING: Set<String> = setOf("preparing", "queued", "starting", "running", "waiting")
 
 /** Run statuses that ended: `terminalRunStatus`, packages/client-runtime/src/state/models.ts. */
 private val TERMINAL: Set<String> =

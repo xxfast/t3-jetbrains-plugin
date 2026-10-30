@@ -19,7 +19,7 @@
       "lineage": {
         "rootThreadId": "thr_01JC6B1K0BGWORK01"
       },
-      "status": "idle",
+      "status": "completed",
       "branch": "ci-flake",
       "latestRunId": "run_01JC6B1K1DONE",
       "activeRunId": null,

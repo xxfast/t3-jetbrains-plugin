@@ -356,7 +356,7 @@ class FixtureClient(
             .fold(overlay) { next, item -> next.upsertItem(command.threadId, item) }
             .upsertRun(command.threadId, run.copy(status = "interrupted", completedAt = now))
             .withRow(command.threadId) { row ->
-              row.copy(status = "idle", activeRunId = null, latestRunCompletedAt = now)
+              row.copy(status = "interrupted", activeRunId = null, latestRunCompletedAt = now)
             }
             .let { next ->
               if (command.holdQueue == true) holdQueue(next, command.threadId) else next
@@ -910,8 +910,10 @@ class FixtureClient(
           .upsertItem(threadId, reply(text, false, done, ordinal))
           .upsertRun(threadId, run.copy(status = "completed", completedAt = done))
           .withRow(threadId) { thread ->
+            // The shell's status is the latest run's; "idle" means no run at all
+            // (`shellStatusFromStoredRunStatus`, ProjectionStore.ts)
             thread.copy(
-              status = "idle",
+              status = "completed",
               activeRunId = null,
               latestRunCompletedAt = done,
               latestVisibleMessage = LatestVisibleMessageSummary(replyId, "assistant", text, done),

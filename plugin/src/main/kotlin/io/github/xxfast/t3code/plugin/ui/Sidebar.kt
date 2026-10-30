@@ -37,6 +37,7 @@ import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -73,6 +74,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.intellij.ui.JBColor
+import com.intellij.util.concurrency.AppExecutorUtil
 import io.github.xxfast.t3code.protocol.Project
 import io.github.xxfast.t3code.protocol.Thread
 import io.github.xxfast.t3code.protocol.generated.ServerProvider
@@ -80,6 +82,8 @@ import io.github.xxfast.t3code.protocol.pinned
 import java.awt.event.MouseEvent
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 import org.jetbrains.jewel.bridge.toComposeColor
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.Orientation
@@ -97,6 +101,16 @@ import org.jetbrains.jewel.ui.icon.IconKey
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import org.jetbrains.jewel.ui.theme.menuStyle
 import org.jetbrains.jewel.ui.typography
+
+/**
+ * Upstream's module-scope `inboxReturns` (Sidebar.tsx:323), so shelf placement outlives a closed
+ * Sidebar and every window's Sidebar shares it.
+ */
+private val inboxReturns: InboxReturnTracker = createInboxReturnTracker { delayMillis, task ->
+  val scheduled: ScheduledFuture<*> = AppExecutorUtil.getAppScheduledExecutorService()
+    .schedule(task, delayMillis, TimeUnit.MILLISECONDS)
+  return@createInboxReturnTracker { scheduled.cancel(false) }
+}
 
 /**
  * T3's sidebar, as apps/web/src/components/Sidebar.tsx lays it out: the thread header (search,
@@ -128,14 +142,23 @@ fun Sidebar(
   onShelvesChange: (Shelves) -> Unit = {},
   renaming: String? = null, // the row being renamed in place
   details: RowDetails = RowDetails(), // terminals, machine and checkout, for the rows' extras
+  workingShelf: Boolean = true, // upstream's `sidebarWorkingShelfEnabled`
 ) {
   val search: TextFieldState = rememberTextFieldState()
   val query: String = search.text.toString()
   // Snoozes wake on the minute; a half-minute tick is close enough to move them back in time
   val minute: Instant by rememberNow(30_000)
-  val sections: ThreadSections = remember(threads, query, filter, settlement, snooze, minute) {
-    sections(threads, query, filter, settlement, snooze, minute)
-  }
+  // The tracker's expiry repartitions too, upstream's `inboxReturnsVersion` in the clock key
+  val returns: Int by inboxReturns.version.collectAsState()
+  val requests: Map<String, PendingSubagentRequest> =
+    remember(threads) { pendingSubagentRequestsByThread(threads) }
+  val sections: ThreadSections =
+    remember(threads, query, filter, settlement, snooze, minute, workingShelf, returns) {
+      val observation: InboxObservation =
+        inboxReturns.observe(if (workingShelf) threads else null, requests)
+      val working: InboxObservation? = if (workingShelf) observation else null
+      sections(threads, query, filter, settlement, snooze, minute, working, requests)
+    }
   Column(Modifier.fillMaxSize()) {
     header()
     ThreadHeader(
@@ -143,8 +166,8 @@ fun Sidebar(
     )
     Box(Modifier.weight(1f)) {
       when {
-        sections.inbox.isNotEmpty() || sections.snoozed.isNotEmpty() ||
-          sections.settled.isNotEmpty() ->
+        sections.inbox.isNotEmpty() || sections.working.isNotEmpty() ||
+          sections.snoozed.isNotEmpty() || sections.settled.isNotEmpty() ->
           Sections(
             projects, favicons, providers, sections, selectedThreadId, onOpenThread, onContextMenu,
             actions, shelves, onShelvesChange, renaming, details,
@@ -393,7 +416,8 @@ private fun Sections(
   val byId: Map<String, Project> = remember(projects) { projects.associateBy { it.id } }
   // Only the Working and Waiting clocks need seconds; everything else is happy with minutes
   val ticking: Set<ThreadStatus> = setOf(ThreadStatus.Working, ThreadStatus.Waiting)
-  val period: Long = if (sections.inbox.none { it.sidebarStatus() in ticking }) 30_000 else 1_000
+  val cards: List<Thread> = sections.inbox + sections.working
+  val period: Long = if (cards.none { it.sidebarStatus() in ticking }) 30_000 else 1_000
   val now: Instant by rememberNow(period)
   var shown: Int by remember { mutableIntStateOf(FIRST_PAGE) }
   val more: Int = moreCount(sections.settled.size, shown)
@@ -404,27 +428,44 @@ private fun Sections(
     val viewport: Dp = maxHeight
     VerticallyScrollableContainer(scrollState = scroll, modifier = Modifier.fillMaxSize()) {
       val items: List<MotionItem> = buildList {
-        for (thread in sections.inbox) {
+        // Working rows are cards too, `isCard` at Sidebar.tsx:3196
+        fun card(thread: Thread, section: String) = MotionItem("$section:${thread.id}") {
+          InboxCard(
+            thread = thread,
+            project = byId[thread.projectId],
+            favicon = favicons[thread.projectId],
+            providers = providers,
+            now = now,
+            selected = thread.id == selectedThreadId,
+            onClick = { onOpenThread(thread.id) },
+            onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
+            actions = actions,
+            renaming = thread.id == renaming,
+            details = details,
+          )
+        }
+        sections.inbox.forEach { add(card(it, "inbox")) }
+        if (sections.working.isNotEmpty() || sections.snoozed.isNotEmpty() ||
+          sections.settled.isNotEmpty()
+        ) {
+          add(MotionItem("shelf-gap", fill = true))
+        }
+        if (sections.working.isNotEmpty()) {
           add(
-            MotionItem("inbox:${thread.id}") {
-              InboxCard(
-                thread = thread,
-                project = byId[thread.projectId],
-                favicon = favicons[thread.projectId],
-                providers = providers,
-                now = now,
-                selected = thread.id == selectedThreadId,
-                onClick = { onOpenThread(thread.id) },
-                onContextMenu = { x, y -> onContextMenu(thread.id, x, y) },
-                actions = actions,
-                renaming = thread.id == renaming,
-                details = details,
+            MotionItem("working-header") {
+              ShelfHeader(
+                label = shelfLabel("Working", shelves.working, sections.working.size),
+                open = shelves.working,
+                onToggle = { onShelvesChange(shelves.copy(working = !shelves.working)) },
               )
             },
           )
-        }
-        if (sections.snoozed.isNotEmpty() || sections.settled.isNotEmpty()) {
-          add(MotionItem("shelf-gap", fill = true))
+          // A collapsed shelf still shows the open thread
+          val working: List<Thread> = when {
+            shelves.working -> sections.working
+            else -> routeThreadOnly(sections.working, selectedThreadId)
+          }
+          working.forEach { add(card(it, "working")) }
         }
         fun slim(thread: Thread, shelf: Shelf) = MotionItem("${shelf.name}:${thread.id}") {
           SlimRow(

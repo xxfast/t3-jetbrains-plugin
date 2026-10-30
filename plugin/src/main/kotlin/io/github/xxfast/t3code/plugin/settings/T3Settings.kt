@@ -19,6 +19,11 @@ import kotlinx.coroutines.flow.asStateFlow
   storages = [Storage("t3code.xml", roamingType = RoamingType.DISABLED)],
 )
 class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
+  private val workingShelf: MutableStateFlow<Boolean> = MutableStateFlow(true)
+
+  /** [sidebarWorkingShelfEnabled] as it changes, so an open Sidebar folds or unfolds at once. */
+  val sidebarWorkingShelf: StateFlow<Boolean> = workingShelf.asStateFlow()
+
   class State : BaseState() {
     var serverUrl: String? by string(DEFAULT_SERVER_URL)
 
@@ -30,6 +35,7 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
     var followUpBehavior: String? by string(FOLLOW_UP_STEER)
     var planModeEnabled: Boolean by property(false)
     var effortDisplay: String? by string(EffortDisplay.LABEL.value)
+    var sidebarWorkingShelfEnabled: Boolean by property(true)
 
     // Upstream's `favorites` (`ModelFavorites`, settings.ts:277), as `instanceId:slug` keys
     var modelFavorites: MutableList<String> by list()
@@ -48,6 +54,7 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
   override fun loadState(state: State) {
     super.loadState(state)
     _threadDetailsItems.value = state.threadDetailsItems.toMap()
+    workingShelf.value = state.sidebarWorkingShelfEnabled
   }
 
   var serverUrl: String
@@ -99,6 +106,14 @@ class T3Settings : SimplePersistentStateComponent<T3Settings.State>(State()) {
     get() = EffortDisplay.of(state.effortDisplay)
     set(value) {
       state.effortDisplay = value.value
+    }
+
+  /** Upstream's "Working section": working threads fold into a shelf under the inbox. */
+  var sidebarWorkingShelfEnabled: Boolean
+    get() = state.sidebarWorkingShelfEnabled
+    set(value) {
+      state.sidebarWorkingShelfEnabled = value
+      workingShelf.value = value
     }
 
   /** The favourite models in the picker, keyed by `providerModelKey`. */

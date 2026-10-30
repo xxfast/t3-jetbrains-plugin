@@ -142,7 +142,7 @@ class FixtureClientTest {
     val scenario: Scenario = Scenario.merge(parts)
     val connected: ConnectionState.Connected = assertIs(scenario.connection)
     assertTrue(connected.session.has("orchestration:operate"), "Thread actions work in default")
-    assertEquals(48, scenario.threads.size)
+    assertEquals(50, scenario.threads.size)
     val demos: Set<String> = scenario.threads
       .filter { it.title.startsWith("Demo: ") }
       .map { it.id }
@@ -150,7 +150,7 @@ class FixtureClientTest {
     assertEquals(
       setOf(THREAD, WAITING, QUESTION, UNKNOWN, MANY, WORKTREE, QUEUED, LINEAGE,
         BACKGROUND_WORK, STOPPED, "secret-demo", "tasks-demo", "thr_01JC7C0M0COMPACT1",
-        "thr_01JC6P0RMSNOTRAITS"),
+        "thr_01JC6P0RMSNOTRAITS", "thr_01JC7A1P0SUBWAIT01"),
       demos,
     )
   }
@@ -332,12 +332,12 @@ class FixtureClientTest {
       .items[1] as TurnItem.AssistantMessage
     assertTrue(streaming.streaming)
 
-    val done: ThreadView = client.thread(IDLE).first { view -> view.thread.status == "idle" }
+    val done: ThreadView = client.thread(IDLE).first { view -> view.thread.status == "completed" }
     val reply: TurnItem.AssistantMessage = assertIs(done.items.last())
     assertEquals("Fixture reply to: hello", reply.text)
     assertFalse(reply.streaming)
     assertEquals("completed", done.runs.single().status)
-    client.threads.first { row(it).status == "idle" }
+    client.threads.first { row(it).status == "completed" }
   }
 
   @Test
@@ -449,7 +449,7 @@ class FixtureClientTest {
     assertFalse(reply.streaming)
     assertEquals("Fixture rep", reply.text, "The second half never arrives")
     assertEquals("interrupted", view.runs.single().status)
-    assertEquals("idle", view.thread.status)
+    assertEquals("interrupted", view.thread.status)
   }
 
   @Test

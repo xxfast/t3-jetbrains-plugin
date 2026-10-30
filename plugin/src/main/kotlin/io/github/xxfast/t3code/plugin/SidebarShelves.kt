@@ -21,6 +21,7 @@ class SidebarShelves {
       Shelves(
         settled = properties.getBoolean(SETTLED, false),
         snoozed = properties.getBoolean(SNOOZED, false),
+        working = properties.getBoolean(WORKING, false),
       ),
     )
   val shelves: StateFlow<Shelves> = state.asStateFlow()
@@ -29,11 +30,13 @@ class SidebarShelves {
     state.value = shelves
     properties.setValue(SETTLED, shelves.settled, false)
     properties.setValue(SNOOZED, shelves.snoozed, false)
+    properties.setValue(WORKING, shelves.working, false)
   }
 
   companion object {
     private const val SETTLED: String = "t3code:sidebar:settled-expanded"
     private const val SNOOZED: String = "t3code:sidebar:snoozed-expanded"
+    private const val WORKING: String = "t3code:sidebar:working-expanded"
 
     fun get(): SidebarShelves = service()
   }

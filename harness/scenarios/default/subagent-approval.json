@@ -1,0 +1,66 @@
+{
+  "threads": [
+    {
+      "id": "thr_01JC7A1P0SUBWAIT01",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Demo: subagent waiting on approval",
+      "createdBy": "user",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC7A1P0SUBWAIT01"
+      },
+      "status": "running",
+      "branch": "codec-audit",
+      "latestRunId": "run_01JC7A1P1PARENT",
+      "activeRunId": "run_01JC7A1P1PARENT",
+      "latestRunRequestedAt": "2026-10-21T09:00:00.000Z",
+      "latestRunStartedAt": "2026-10-21T09:00:01.000Z",
+      "latestUserMessageAt": "2026-10-21T09:00:00.000Z",
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T09:00:00.000Z",
+      "updatedAt": "2026-10-21T09:04:00.000Z"
+    },
+    {
+      "id": "thr_01JC7A1P2SUBCHILD1",
+      "projectId": "prj_01JB2K7Q9V3XKSTORE",
+      "title": "Subagent: run the codec benchmarks",
+      "createdBy": "agent",
+      "creationSource": "web",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5"
+      },
+      "runtimeMode": "approval-required",
+      "interactionMode": "default",
+      "lineage": {
+        "rootThreadId": "thr_01JC7A1P0SUBWAIT01",
+        "parentThreadId": "thr_01JC7A1P0SUBWAIT01",
+        "relationshipToParent": "subagent"
+      },
+      "status": "waiting",
+      "latestRunId": "run_01JC7A1P3CHILD",
+      "activeRunId": "run_01JC7A1P3CHILD",
+      "activityRunStatus": "waiting",
+      "pendingRuntimeRequest": {
+        "id": "req_01JC7A1P4BENCH",
+        "kind": "command",
+        "createdAt": "2026-10-21T09:04:00.000Z"
+      },
+      "itemCount": 0,
+      "visibleItemCount": 0,
+      "hasActionableProposedPlan": false,
+      "createdAt": "2026-10-21T09:02:00.000Z",
+      "updatedAt": "2026-10-21T09:04:00.000Z"
+    }
+  ]
+}

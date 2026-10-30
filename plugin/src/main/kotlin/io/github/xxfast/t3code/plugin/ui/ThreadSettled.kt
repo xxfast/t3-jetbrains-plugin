@@ -4,6 +4,7 @@ import io.github.xxfast.t3code.protocol.DEFAULT_SNOOZE_PRESETS
 import io.github.xxfast.t3code.protocol.SnoozePresetDay
 import io.github.xxfast.t3code.protocol.SnoozePresetSetting
 import io.github.xxfast.t3code.protocol.Thread
+import io.github.xxfast.t3code.protocol.generated.PendingRuntimeRequestSummary
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.Instant
@@ -18,25 +19,35 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 // Snooze, as packages/client-runtime/src/state/threadSettled.ts at the pinned tag. Upstream reads
-// the presented shell (`presentThreadShell`, models.ts:200); the row's own fields stand in, and
-// `pendingSubagentRequest` isn't ported, since the plugin hides subagent rows.
+// the presented shell (`presentThreadShell`, models.ts:200); the row's own fields stand in, with
+// its `pendingSubagentRequest` passed alongside (`pendingSubagentRequestsByThread`).
 
 /** `QUEUED_TURN_START_GRACE_MS`: a message unadopted after this long is a failed start. */
 val QUEUED_TURN_START_GRACE: Duration = Duration.ofMinutes(2)
 
 /** The presented shell's `hasPendingApprovals`, from the pending request's kind. */
-private val Thread.pendingApproval: Boolean
+internal val Thread.hasPendingApprovals: Boolean
   get() {
     val kind: String = pendingRuntimeRequest?.kind ?: return false
     return kind != "user_input" && kind != "auth_refresh"
   }
 
-/** The presented shell's `hasPendingUserInput`. */
-private val Thread.pendingUserInput: Boolean
-  get() = pendingRuntimeRequest?.kind == "user_input"
+/** Runtime statuses `presentThreadShell` reads as working; a waiting run only drains effects. */
+private val RUNTIME_WORKING: Set<String> = setOf("preparing", "starting", "running")
+
+/**
+ * The presented shell's `hasPendingUserInput`: a question, unless it's an async one the run
+ * keeps working past.
+ */
+internal val Thread.hasPendingUserInput: Boolean
+  get() {
+    val request: PendingRuntimeRequestSummary = pendingRuntimeRequest ?: return false
+    if (request.kind != "user_input") return false
+    return request.blocking != false || runtimeStatus() !in RUNTIME_WORKING
+  }
 
 /** `latestRun.status` as `presentThreadShell` derives it: an idle thread's last run completed. */
-private val Thread.latestRunStatus: String?
+internal val Thread.latestRunStatus: String?
   get() = if (latestRunId == null) null else if (status == "idle") "completed" else status
 
 /** `hasQueuedTurnStart`: a message sent after the latest run and still waiting to start one. */
@@ -56,8 +67,11 @@ fun Thread.hasQueuedTurnStart(now: Instant): Boolean {
  * `threadRaisedHandWhileSnoozed`: it asked for something, failed since it was snoozed, or a run
  * finished since.
  */
-fun Thread.raisedHandWhileSnoozed(): Boolean {
-  if (pendingApproval || pendingUserInput) return true
+fun Thread.raisedHandWhileSnoozed(
+  pendingSubagentRequest: PendingSubagentRequest? = null,
+): Boolean {
+  if (hasPendingApprovals || hasPendingUserInput) return true
+  if (pendingSubagentRequest != null) return true
   val snoozed: Instant? = snoozedAt?.toInstantOrNull()
   val runtime: String? = runtimeStatus()
   if ((runtime == "error" || runtime == "failed") &&
@@ -72,13 +86,16 @@ fun Thread.raisedHandWhileSnoozed(): Boolean {
 
 /** `canSnooze`: nothing asked of you and no turn about to start. */
 fun Thread.canSnooze(now: Instant): Boolean =
-  !pendingApproval && !pendingUserInput && !hasQueuedTurnStart(now)
+  !hasPendingApprovals && !hasPendingUserInput && !hasQueuedTurnStart(now)
 
 /** `effectiveSnoozed`: a wake time still ahead, and no hand raised since. */
-fun Thread.snoozed(now: Instant): Boolean {
+fun Thread.snoozed(
+  now: Instant,
+  pendingSubagentRequest: PendingSubagentRequest? = null,
+): Boolean {
   val wake: Instant = snoozedUntil?.toInstantOrNull() ?: return false
   if (!wake.isAfter(now)) return false
-  return !raisedHandWhileSnoozed()
+  return !raisedHandWhileSnoozed(pendingSubagentRequest)
 }
 
 /**

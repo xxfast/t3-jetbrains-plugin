@@ -22,6 +22,7 @@ import io.github.xxfast.t3code.plugin.ide.ProjectAwareness
 import io.github.xxfast.t3code.plugin.ide.RunningTerminals
 import io.github.xxfast.t3code.plugin.ide.T3Opener
 import io.github.xxfast.t3code.plugin.ide.ThreadVisits
+import io.github.xxfast.t3code.plugin.settings.T3Settings
 import io.github.xxfast.t3code.plugin.ui.ConnectionBanner
 import io.github.xxfast.t3code.plugin.ui.ProjectFilter
 import io.github.xxfast.t3code.plugin.ui.RowActions
@@ -118,6 +119,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
       }
       val renaming: String? by renamer.renaming.collectAsState()
       val shelves: Shelves by SidebarShelves.get().shelves.collectAsState()
+      val workingShelf: Boolean by T3Settings.get().sidebarWorkingShelf.collectAsState()
       Sidebar(
         projects = projects,
         threads = threads,
@@ -139,6 +141,7 @@ class SidebarToolWindowFactory : ToolWindowFactory, DumbAware {
         onShelvesChange = SidebarShelves.get()::change,
         renaming = renaming,
         details = details,
+        workingShelf = workingShelf,
       )
     }
     val content: Content = ContentFactory.getInstance().createContent(panel, null, false)

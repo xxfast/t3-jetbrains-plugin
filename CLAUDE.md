@@ -73,7 +73,8 @@ How it fits together:
   a failed one and an `onReturn` one compacting over `after` delays, `background-work.json`
   with a settled run whose provider still waits on two commands and a subagent (the work line
   at the end of the timeline), `tasks.json` with `todo_list` updates that land as Tasks rows
-  over `after` delays, `worktree-setup.json` with a
+  over `after` delays, `subagent-approval.json` with a running parent whose subagent waits on
+  an approval (it stays in the inbox, out of the Working shelf), `worktree-setup.json` with a
   first turn whose worktree is still being prepared, `permissions.json` with a thread on a model
   without traits (the fixture server's `defaultRuntimeMode` is Supervised, so most threads hide
   the permissions chip, the full access ones show it and this one keeps an icon), `skills.json`
